@@ -1,0 +1,30 @@
+{
+  // Browser side. TypeScript 7 defaults `types` to [] and turns on
+  // noUncheckedSideEffectImports, so the Vite ambient types (which declare
+  // `*.css`) have to be pulled in explicitly.
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["vite/client"],
+
+    "jsx": "react-jsx",
+    "rootDir": "./",
+    "noEmit": true,
+
+    // TypeScript 7 removed `baseUrl`, so `paths` entries are resolved relative
+    // to this file instead.
+    "paths": { "@/*": ["./src/*"] },
+
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src", "shared"]
+}

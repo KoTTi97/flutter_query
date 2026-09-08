@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sensoren — TanStack Query Referenz</title>
+    <script>
+      // shadcn themes off a `.dark` class rather than a media query. Applied
+      // before first paint so there is no flash of the wrong theme.
+      const dark = window.matchMedia('(prefers-color-scheme: dark)')
+      const apply = (matches) => document.documentElement.classList.toggle('dark', matches)
+      apply(dark.matches)
+      dark.addEventListener('change', (event) => apply(event.matches))
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

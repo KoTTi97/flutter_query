@@ -1,5 +1,6 @@
 query
-react-demo
+# react-demo is vendored (its own .git was removed); node_modules is
+# ignored via react-demo/.gitignore and the rule below.
 node_modules
 .DS_Store
 
