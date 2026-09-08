@@ -93,4 +93,9 @@ class NotifyManager {
   /// Replaces when the next batch runs. The Flutter binding installs a
   /// build-phase-aware scheduler here.
   void setScheduler(ScheduleFunction fn) => _scheduleFn = fn;
+
+  /// The scheduler in force. A caller that installs one keeps this to put back
+  /// when it goes away — a stale scheduler outliving whoever set it would keep
+  /// deferring notifications to a frame that never comes.
+  ScheduleFunction get scheduler => _scheduleFn;
 }

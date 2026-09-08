@@ -288,11 +288,33 @@ class Query<TQueryData> extends Removable {
     }
   }
 
-  /// Cancels silently and stops the gc timer. Called by the cache on removal.
+  /// Cancels silently and stops the gc timer.
   @override
   void destroy() {
     super.destroy();
     cancel(silent: true).ignore();
+  }
+
+  /// Called by the cache when this query is dropped for good.
+  ///
+  /// Beyond [destroy], it stops the query re-arming its own collection: the
+  /// cancelled fetch's `finally` schedules one on its way out, and a query that
+  /// is no longer in a cache has nothing left to be collected from — the timer
+  /// would just outlive it.
+  @internal
+  void markRemoved() {
+    _removed = true;
+    destroy();
+  }
+
+  bool _removed = false;
+
+  @override
+  void scheduleGc() {
+    if (_removed) {
+      return;
+    }
+    super.scheduleGc();
   }
 
   /// Back to the state this query was created with.

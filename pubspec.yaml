@@ -7,3 +7,4 @@ environment:
 workspace:
   - packages/tanstack_query_core
   - packages/tanstack_query_flutter
+  - examples/sensor_demo

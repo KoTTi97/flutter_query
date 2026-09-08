@@ -11,7 +11,7 @@ work is first-class here, not an add-on.
 |---|---|
 | **`packages/tanstack_query_core/`** — the pure-Dart core | **done.** 380 tests, every applicable upstream suite ported, analyzer clean at `--fatal-infos` |
 | **`packages/tanstack_query_flutter/`** — the Flutter binding | **first cut done.** 15 widget tests; four equal call styles, no dependency beyond Flutter |
-| **`examples/sensor_demo/`** — the react-demo port | not started; next |
+| **`examples/sensor_demo/`** — the react-demo port | **done.** 14 widget tests, one per row of the MVP checklist |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
@@ -25,6 +25,10 @@ cd packages/tanstack_query_core && dart test
 
 ```bash
 cd packages/tanstack_query_flutter && flutter test
+```
+
+```bash
+cd examples/sensor_demo && flutter test
 ```
 
 ```bash
@@ -110,6 +114,7 @@ by `/domain-modeling` when the first term or decision is resolved. See
 |---|---|---|
 | `packages/tanstack_query_core/` | The pure-Dart core. | yes |
 | `packages/tanstack_query_flutter/` | The Flutter binding. | yes |
+| `examples/sensor_demo/` | The react-demo port, and the MVP acceptance suite. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |
 | `docs/research/` | Research findings behind the map's tickets. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |

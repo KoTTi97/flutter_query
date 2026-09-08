@@ -275,7 +275,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(app(
         client,
-        MutationBuilder<String, String>(
+        MutationBuilder<String, String, Object?>(
           options: MutationOptions<String, String, Object?>(
             mutationFn: (name) async => 'renamed to $name',
           ),
@@ -453,7 +453,7 @@ class _ContextMutationScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rename = context.mutation<String, String>(
+    final rename = context.mutation<String, String, Object?>(
       MutationOptions<String, String, Object?>(
         mutationKey: QueryKey(const <Object?>['rename']),
         mutationFn: (name) async => 'renamed to $name',

@@ -164,7 +164,8 @@ class _QuerySelectBuilderState<TQueryData, TData>
 ///   ),
 /// )
 /// ```
-class MutationBuilder<TData, TVariables> extends StatefulWidget {
+class MutationBuilder<TData, TVariables, TOnMutateResult>
+    extends StatefulWidget {
   const MutationBuilder({
     super.key,
     required this.options,
@@ -172,26 +173,26 @@ class MutationBuilder<TData, TVariables> extends StatefulWidget {
     this.client,
   });
 
-  final MutationOptions<TData, TVariables, Object?> options;
+  final MutationOptions<TData, TVariables, TOnMutateResult> options;
   final Widget Function(
     BuildContext context,
-    MutationController<TData, TVariables, Object?> mutation,
+    MutationController<TData, TVariables, TOnMutateResult> mutation,
   ) builder;
   final QueryClient? client;
 
   @override
-  State<MutationBuilder<TData, TVariables>> createState() =>
-      _MutationBuilderState<TData, TVariables>();
+  State<MutationBuilder<TData, TVariables, TOnMutateResult>> createState() =>
+      _MutationBuilderState<TData, TVariables, TOnMutateResult>();
 }
 
-class _MutationBuilderState<TData, TVariables>
-    extends State<MutationBuilder<TData, TVariables>> {
-  MutationController<TData, TVariables, Object?>? _controller;
+class _MutationBuilderState<TData, TVariables, TOnMutateResult>
+    extends State<MutationBuilder<TData, TVariables, TOnMutateResult>> {
+  MutationController<TData, TVariables, TOnMutateResult>? _controller;
 
   QueryClient get _client => widget.client ?? QueryClientProvider.of(context);
 
-  MutationController<TData, TVariables, Object?> get _current =>
-      _controller ??= MutationController<TData, TVariables, Object?>(
+  MutationController<TData, TVariables, TOnMutateResult> get _current =>
+      _controller ??= MutationController<TData, TVariables, TOnMutateResult>(
         _client,
         widget.options,
       )..addListener(_onResult);
@@ -203,7 +204,8 @@ class _MutationBuilderState<TData, TVariables>
   }
 
   @override
-  void didUpdateWidget(MutationBuilder<TData, TVariables> oldWidget) {
+  void didUpdateWidget(
+      MutationBuilder<TData, TVariables, TOnMutateResult> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.client != widget.client) {
       _dispose();

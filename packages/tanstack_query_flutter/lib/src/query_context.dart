@@ -51,13 +51,17 @@ extension QueryContext on BuildContext {
   ///
   /// Mutations are not shared: each widget that asks gets its own, disposed
   /// when the widget unmounts. Pass [id] when one widget runs several.
-  MutationController<TData, TVariables, Object?> mutation<TData, TVariables>(
-    MutationOptions<TData, TVariables, Object?> options, {
+  MutationController<TData, TVariables, TOnMutateResult>
+      mutation<TData, TVariables, TOnMutateResult>(
+    MutationOptions<TData, TVariables, TOnMutateResult> options, {
     Object? id,
   }) {
     final element = _scopeElement(this);
-    final controller =
-        element.readMutation<TData, TVariables>(options, this as Element, id);
+    final controller = element.readMutation<TData, TVariables, TOnMutateResult>(
+      options,
+      this as Element,
+      id,
+    );
     dependOnInheritedWidgetOfExactType<QueryScope>();
     return controller;
   }
@@ -156,9 +160,9 @@ class QueryScopeElement extends InheritedElement {
   }
 
   /// A mutation controller owned by [reader].
-  MutationController<TData, TVariables, Object?>
-      readMutation<TData, TVariables>(
-    MutationOptions<TData, TVariables, Object?> options,
+  MutationController<TData, TVariables, TOnMutateResult>
+      readMutation<TData, TVariables, TOnMutateResult>(
+    MutationOptions<TData, TVariables, TOnMutateResult> options,
     Element reader,
     Object? id,
   ) {
@@ -172,13 +176,13 @@ class QueryScopeElement extends InheritedElement {
     final existing = owned[identity];
     if (existing != null) {
       final controller = existing
-          as MutationController<TData, TVariables, Object?>
+          as MutationController<TData, TVariables, TOnMutateResult>
         ..setOptions(options);
       return controller;
     }
 
     final controller =
-        MutationController<TData, TVariables, Object?>(client, options);
+        MutationController<TData, TVariables, TOnMutateResult>(client, options);
     controller.addListener(() {
       if (reader.mounted) {
         reader.markNeedsBuild();

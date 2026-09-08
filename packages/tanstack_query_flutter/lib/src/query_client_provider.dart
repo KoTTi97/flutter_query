@@ -78,6 +78,7 @@ class QueryClientProvider extends StatefulWidget {
 class _QueryClientProviderState extends State<QueryClientProvider> {
   AppLifecycleListener? _lifecycle;
   StreamSubscription<bool>? _onlineSubscription;
+  ScheduleFunction? _previousScheduler;
 
   @override
   void initState() {
@@ -86,6 +87,10 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   }
 
   void _install() {
+    // Kept so it can be put back: notify managers are shared by default, and a
+    // scheduler that outlived the provider that set it would keep deferring
+    // notifications to a frame that is never coming.
+    _previousScheduler = widget.client.notifyManager.scheduler;
     widget.client.notifyManager.setScheduler(_scheduleNotification);
     widget.client.mount();
 
@@ -108,7 +113,16 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     _lifecycle = null;
     _onlineSubscription?.cancel();
     _onlineSubscription = null;
+    _restoreScheduler(widget.client);
     widget.client.unmount();
+  }
+
+  void _restoreScheduler(QueryClient client) {
+    final previous = _previousScheduler;
+    if (previous != null) {
+      client.notifyManager.setScheduler(previous);
+      _previousScheduler = null;
+    }
   }
 
   /// Runs [callback] now when that is safe, and after this frame when it is
@@ -140,6 +154,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     _lifecycle = null;
     _onlineSubscription?.cancel();
     _onlineSubscription = null;
+    _restoreScheduler(previous.client);
     previous.client.unmount();
   }
 

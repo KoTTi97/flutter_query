@@ -73,9 +73,9 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// Mutations have no key of their own, so pass an [id] when a widget runs
   /// more than one; it defaults to the options' `mutationKey`, and then to the
   /// call's data types.
-  MutationController<TData, TVariables, Object?>
-      watchMutation<TData, TVariables>(
-    MutationOptions<TData, TVariables, Object?> options, {
+  MutationController<TData, TVariables, TOnMutateResult>
+      watchMutation<TData, TVariables, TOnMutateResult>(
+    MutationOptions<TData, TVariables, TOnMutateResult> options, {
     Object? id,
   }) {
     final identity =
@@ -83,12 +83,12 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     final existing = _mutations[identity];
     if (existing != null) {
       final controller = existing
-          as MutationController<TData, TVariables, Object?>
+          as MutationController<TData, TVariables, TOnMutateResult>
         ..setOptions(options);
       return controller;
     }
 
-    final controller = MutationController<TData, TVariables, Object?>(
+    final controller = MutationController<TData, TVariables, TOnMutateResult>(
       queryClient,
       options,
     )..addListener(_rebuild);
