@@ -25,7 +25,7 @@ is a bug in this file.
 | `removable.test.tsx` | `removable_test.dart` | 11 / 12 | done |
 | `retryer.test.tsx` | `retryer_test.dart` | 13 / 13 | done |
 | `query.test.tsx` | — | 0 / 51 | not started |
-| `queryCache.test.tsx` | — | 0 / 16 | not started |
+| `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
 | `queryObserver.test.tsx` | — | 0 / 75 | not started |
 | `queryClient.test.tsx` | — | 0 / 156 | not started |
 | `mutation.test.tsx` | — | 0 / 28 | not started |
@@ -108,6 +108,33 @@ fog).
   exports it, so `should reflect network availability in canFetch and canStart`
   ports unchanged apart from taking the manager as an argument.
 
+### `queryCache.test.tsx`
+
+- **omitted — hashKey identity (2):**
+  `build > should compute queryHash from queryKey when queryHash is not
+  provided` and `build > should use provided queryHash instead of computing
+  it`. There is no `queryHash` here: the cache is keyed by the [QueryKey] value
+  itself and `queryKeyHashFn` was dropped, so a per-query hash override has
+  nothing to override
+  ([#8](https://github.com/KoTTi97/flutter_query/issues/8)). What the two cases
+  actually guard — one key, one query — is covered by `QueryCache.add` below
+  and by `smoke_test.dart`'s key-equality cases.
+- **adapted:** `QueryCache.remove > should only delete the instance currently
+  stored under its queryHash` → `... under its key`, same reason.
+- **adapted:** `QueryCache.add > should not try to add a query already added to
+  the cache`. Upstream shallow-clones the query with `Object.assign({}, query)`,
+  which Dart cannot do to a class instance; the port builds a second `Query`
+  under the same key instead. Same assertion, and it additionally checks the
+  original instance is the one that stayed.
+- **adapted:** the two `QueryCacheConfig` callback suites. Upstream's callbacks
+  take `(data, query)` / `(error, query)`; here `onError` and `onSettled` also
+  carry the `StackTrace`
+  ([#7](https://github.com/KoTTi97/flutter_query/issues/7)), and the payload is
+  asserted field by field because Dart records compare with `==` and two equal
+  `Map`s are not `==`.
+- **adapted:** every `queryClient.query({...})` call site — upstream's
+  `void queryClient.query(...).catch(noop)` is `queryClient.query(...).ignore()`.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -123,3 +150,5 @@ suite does not have to go looking:
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | module-level managers | instances the `QueryClient` owns | [#19](https://github.com/KoTTi97/flutter_query/issues/19) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
+| `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
+| `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |

@@ -369,11 +369,23 @@ class QueryClient {
     await Future.wait(refetches);
   }
 
-  /// Fetches and caches, completing with the data.
-  Future<TQueryData> fetchQuery<TQueryData>(
-    QueryOptions<TQueryData> options,
-  ) {
-    final defaulted = defaultQueryOptions<TQueryData>(options);
+  /// Fetches and caches [options]'s query, completing with its data.
+  ///
+  /// The imperative counterpart of an observer: no `enabled`, no refetch
+  /// triggers, and — as upstream does — **no retries unless asked for**, since
+  /// there is no widget to catch a thrown error and try again.
+  ///
+  /// Upstream's `fetchQuery`, `prefetchQuery` and `ensureQueryData` are
+  /// deprecated in favour of this one method
+  /// (https://github.com/KoTTi97/flutter_query/issues/17):
+  ///
+  /// - to prefetch, ignore the future: `client.query(options).ignore()`;
+  /// - to fetch only when nothing is cached, pass
+  ///   `staleTime: StaleTime.static`;
+  /// - to reshape the result, `await` it and map it — Dart needs no `select`
+  ///   here.
+  Future<TQueryData> query<TQueryData>(QueryOptions<TQueryData> options) {
+    final defaulted = _executeQueryOptions<TQueryData>(options);
     final query = queryCache.build<TQueryData>(this, defaulted);
 
     if (query.isStaleByTime(defaulted.staleTime.resolve(query))) {
@@ -382,20 +394,19 @@ class QueryClient {
     return Future<TQueryData>.value(query.state.data as TQueryData);
   }
 
-  /// Fetches without surfacing errors — for warming the cache.
-  Future<void> prefetchQuery<TQueryData>(QueryOptions<TQueryData> options) =>
-      fetchQuery<TQueryData>(options).then((_) {}).catchError((Object _) {});
-
-  /// The cached data if it is fresh, otherwise a fetch.
-  Future<TQueryData> ensureQueryData<TQueryData>(
+  /// [defaultQueryOptions] with upstream's imperative-path retry rule applied:
+  /// a caller who configured nothing gets no retries at all.
+  DefaultedQueryOptions<TQueryData> _executeQueryOptions<TQueryData>(
     QueryOptions<TQueryData> options,
   ) {
     final defaulted = defaultQueryOptions<TQueryData>(options);
-    final query = queryCache.build<TQueryData>(this, defaulted);
-    if (query.state.hasData) {
-      return Future<TQueryData>.value(query.state.data as TQueryData);
-    }
-    return fetchQuery<TQueryData>(options);
+    final configured = options.retry ??
+        (_defaultOptions.queries ?? const QueryDefaults())
+            .mergedWith(getQueryDefaults(defaulted.queryKey))
+            .retry;
+    return configured == null
+        ? defaulted.withRetry(RetryPolicy.never)
+        : defaulted;
   }
 
   Future<void> resumePausedMutations() => mutationCache.resumePaused();

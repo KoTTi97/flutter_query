@@ -344,6 +344,26 @@ class DefaultedQueryOptions<TQueryData> {
   final StructuralSharing<TQueryData>? structuralSharing;
   final Object? meta;
   final FetchBehavior<TQueryData>? behavior;
+
+  /// This, with a different [retry]. Used by `QueryClient.query`, whose
+  /// imperative path disables retries the caller did not ask for.
+  @internal
+  DefaultedQueryOptions<TQueryData> withRetry(RetryPolicy retry) =>
+      DefaultedQueryOptions<TQueryData>(
+        queryKey: queryKey,
+        queryFn: queryFn,
+        enabled: enabled,
+        staleTime: staleTime,
+        gcTime: gcTime,
+        retry: retry,
+        retryDelay: retryDelay,
+        networkMode: networkMode,
+        initialData: initialData,
+        initialDataUpdatedAt: initialDataUpdatedAt,
+        structuralSharing: structuralSharing,
+        meta: meta,
+        behavior: behavior,
+      );
 }
 
 /// [DefaultedQueryOptions] plus the observer-only options.
