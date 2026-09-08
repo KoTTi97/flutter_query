@@ -23,21 +23,21 @@ work is first-class here, not an add-on.
 |---|---|---|
 | `flutter-port/` | **The port.** Dart pub workspace. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |
-| `react-demo/` | The React sensor demo + the shared express gateway. Defines the MVP bar. | **no** — nested clone, gitignored |
+| `react-demo/` | The React sensor demo + the shared express gateway. Defines the MVP bar. | yes — vendored (its own `.git` was removed); only `node_modules` is ignored |
 
-`query/` and `react-demo/` are separate git checkouts that this repo ignores. They
-are *required* to work on the port — every ported test names its upstream source
-file — so if either is missing, clone it before starting:
+`react-demo/` is tracked here, so a fresh checkout has the demo, the express
+gateway under `react-demo/server/`, and the cache policy the Flutter app has to
+reproduce (`react-demo/react/src/queries.ts` + `api.ts`). It originally lived in
+its own repo (`KoTTi97/tanstack-query-demo`, branch `development`); that remote
+is no longer the source of truth for this copy.
+
+`query/` is a separate git checkout that this repo ignores. It is *required* to
+work on the port — every ported test names its upstream source file — so if it is
+missing, clone it before starting:
 
 ```bash
 git clone https://github.com/TanStack/query.git query
-git clone -b development https://github.com/KoTTi97/tanstack-query-demo.git react-demo
 ```
-
-> **Caveat on `react-demo`:** a fresh clone will *not* have the express gateway.
-> The tRPC→express extraction is currently uncommitted on the `development`
-> branch of the working copy on Christian's machine — see "Known loose ends"
-> below. Until it is pushed, `react-demo/server/` exists only there.
 
 **The upstream revision is load-bearing.** Every fidelity claim is against
 `query/` at commit `5bb950be8` (`release-2026-08-24-1925-6-g5bb950be8`). Checking
@@ -135,9 +135,5 @@ makes upstream's expectation inapplicable — and then write it down.
 
 ## Known loose ends
 
-- **`react-demo/` has uncommitted work on branch `development`:** the
-  tRPC→express extraction (the whole `server/` directory is untracked there).
-  It is a separate repo with its own remote; committing it is the owner's call,
-  but until then that work exists only on this machine.
 - The design doc also lives as a published artifact. `DESIGN.md` is the
   canonical copy; if you change one, change the other.

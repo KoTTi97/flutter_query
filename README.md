@@ -30,10 +30,11 @@ the demo app are next.
 - `query/` — upstream TanStack Query, and the source of the ported tests.
   A nested clone, gitignored; pinned to `5bb950be8`.
 - `react-demo/` — the React sensor demo and its shared express gateway, which
-  define the MVP acceptance bar. Also a nested clone, gitignored.
+  define the MVP acceptance bar. Vendored into this repo, so it is tracked;
+  only its `node_modules` is ignored.
 
-Both nested checkouts are needed to work on the port; CLAUDE.md has the clone
-commands and the pinned revision.
+The `query/` checkout is needed to work on the port; CLAUDE.md has the clone
+command and the pinned revision.
 
 ## Quick start
 
