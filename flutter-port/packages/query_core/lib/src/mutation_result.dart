@@ -210,6 +210,5 @@ final class MutationError<TData, TVariables, TOnMutateResult>
   int get hashCode => Object.hash(MutationError, error, _baseHash);
 
   @override
-  String toString() =>
-      'MutationError(error: $error, variables: $variables)';
+  String toString() => 'MutationError(error: $error, variables: $variables)';
 }

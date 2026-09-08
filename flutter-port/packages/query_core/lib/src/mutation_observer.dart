@@ -89,8 +89,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   late MutationResult<TData, TVariables, TOnMutateResult> _currentResult;
 
   final Set<MutationObserverListener<TData, TVariables, TOnMutateResult>>
-  _listeners =
-      <MutationObserverListener<TData, TVariables, TOnMutateResult>>{};
+  _listeners = <MutationObserverListener<TData, TVariables, TOnMutateResult>>{};
 
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult> get options =>
       _options;
@@ -217,18 +216,17 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
           isPaused: state.isPaused,
           submittedAt: state.submittedAt,
         ),
-      MutationStatus.error =>
-        MutationError<TData, TVariables, TOnMutateResult>(
-          error: state.error ?? const MissingMutationFunctionError(),
-          stackTrace: state.errorStackTrace,
-          variables: state.variables,
-          onMutateResult: state.onMutateResult,
-          failureCount: state.failureCount,
-          failureReason: state.failureReason,
-          failureStackTrace: state.failureStackTrace,
-          isPaused: state.isPaused,
-          submittedAt: state.submittedAt,
-        ),
+      MutationStatus.error => MutationError<TData, TVariables, TOnMutateResult>(
+        error: state.error ?? const MissingMutationFunctionError(),
+        stackTrace: state.errorStackTrace,
+        variables: state.variables,
+        onMutateResult: state.onMutateResult,
+        failureCount: state.failureCount,
+        failureReason: state.failureReason,
+        failureStackTrace: state.failureStackTrace,
+        isPaused: state.isPaused,
+        submittedAt: state.submittedAt,
+      ),
     };
   }
 

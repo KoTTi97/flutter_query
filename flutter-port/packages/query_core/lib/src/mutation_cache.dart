@@ -51,7 +51,8 @@ class MutationObserverOptionsUpdated extends MutationCacheEvent {
 /// Unlike [QueryCache] this is a set, not a map: mutations are never
 /// deduplicated, so there is no key to store them under. What the cache does
 /// arbitrate is *ordering* — two writes to the same resource should not race.
-class MutationCache extends Subscribable<void Function(MutationCacheEvent event)>
+class MutationCache
+    extends Subscribable<void Function(MutationCacheEvent event)>
     implements MutationHost {
   MutationCache({this.onMutate, this.onSuccess, this.onError, this.onSettled});
 
@@ -198,16 +199,18 @@ class MutationCache extends Subscribable<void Function(MutationCacheEvent event)
   Future<void> resumePausedMutations() {
     final paused = mutations.where((m) => m.state.isPaused).toList();
 
-    return notifyManager.batch(
-      () => Future.wait(
-        paused.map(
-          (mutation) => mutation.resume().then<void>(
-            (_) {},
-            onError: (Object _, StackTrace _) {},
+    return notifyManager
+        .batch(
+          () => Future.wait(
+            paused.map(
+              (mutation) => mutation.resume().then<void>(
+                (_) {},
+                onError: (Object _, StackTrace _) {},
+              ),
+            ),
           ),
-        ),
-      ),
-    ).then((_) {});
+        )
+        .then((_) {});
   }
 
   // --- MutationHost ---------------------------------------------------------
@@ -263,11 +266,11 @@ class MutationCache extends Subscribable<void Function(MutationCacheEvent event)
   ) => notify(MutationObserverRemoved(mutation, observer));
 
   @override
-  Future<void> onMutationMutate(
+  FutureOr<void> onMutationMutate(
     Mutation<Object?, Object?, Object?> mutation,
     Object? variables,
     MutationFunctionContext context,
-  ) async => onMutate?.call(variables, mutation, context);
+  ) => onMutate?.call(variables, mutation, context);
 
   @override
   Future<void> onMutationSuccess(

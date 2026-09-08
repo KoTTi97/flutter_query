@@ -84,7 +84,12 @@ abstract interface class MutationHost {
 
   /// Cache-wide lifecycle callbacks, awaited immediately before the mutation's
   /// own callback of the same name.
-  Future<void> onMutationMutate(
+  ///
+  /// [onMutationMutate] returns `FutureOr` on purpose: with no cache-level
+  /// callback registered there is nothing to await, and the mutation's own
+  /// `onMutate` has to still run in the same turn as `mutate()` — an optimistic
+  /// update that waits a microtask is an update the screen flickers through.
+  FutureOr<void> onMutationMutate(
     Mutation<Object?, Object?, Object?> mutation,
     Object? variables,
     MutationFunctionContext context,
@@ -129,8 +134,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     MutationState<TData, TVariables, TOnMutateResult>? state,
   }) : _host = host,
        _options = options,
-       _state =
-           state ?? MutationState<TData, TVariables, TOnMutateResult>() {
+       _state = state ?? MutationState<TData, TVariables, TOnMutateResult>() {
     updateGcTime(options.gcTime);
     scheduleGc();
   }
@@ -183,10 +187,16 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     if (_state.status == MutationStatus.pending) {
       // A mutation still in flight outlives its observers: the write should
       // land even if the screen that started it is gone.
-      scheduleGc();
-    } else {
-      _host.onMutationRemovalRequested(this);
+      //
+      // Upstream re-arms the same timer here and polls until the mutation
+      // settles. That relies on the browser clamping `setTimeout(0)` to a few
+      // milliseconds; Dart does not clamp `Timer(Duration.zero)`, so polling
+      // would spin the event loop. The collection clock restarts when the
+      // mutation settles instead — see the end of [execute] — which reaches
+      // the same outcome without the busy loop.
+      return;
     }
+    _host.onMutationRemovalRequested(this);
   }
 
   /// Continues a paused mutation. Upstream calls this `continue`, which Dart
@@ -250,7 +260,14 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
             variables: variables,
           ),
         );
-        await _host.onMutationMutate(this, variables, functionContext);
+        final cacheOnMutate = _host.onMutationMutate(
+          this,
+          variables,
+          functionContext,
+        );
+        if (cacheOnMutate is Future<void>) {
+          await cacheOnMutate;
+        }
 
         final onMutateResult = await _options.onMutate?.call(
           variables,
@@ -356,6 +373,10 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       if (identical(_retryer, retryer)) {
         _retryer = null;
       }
+      // Now that it has settled, an unobserved mutation is a collection
+      // candidate again.
+      scheduleGc();
+
       // Ignored, not awaited: the resumed mutation reports to whoever is
       // holding its own future, and this one has already finished.
       _host.runNext(this).ignore();

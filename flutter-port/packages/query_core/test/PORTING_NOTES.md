@@ -4,19 +4,22 @@ Where the Dart tests diverge from the upstream suites in
 `query/packages/query-core/src/__tests__/`, and why. The rule: every upstream
 test is either ported, or listed here with a reason. No silent omissions.
 
-## Coverage of the four priority suites
+## Coverage of the six priority suites
 
 | Upstream file | Cases | Ported | Dart file |
 |---|---:|---:|---|
 | `query.test.tsx` | 50 | 44 | `query_test.dart` |
 | `queryCache.test.tsx` | 16 | 14 | `query_cache_test.dart` |
 | `queryObserver.test.tsx` | 73 | 52 | `query_observer_test.dart` |
-| `queryClient.test.tsx` | 156 | 100 | `query_client_test.dart` |
-| **Total** | **295** | **210** | |
+| `queryClient.test.tsx` | 156 | 110 | `query_client_test.dart` |
+| `mutation.test.tsx` | 28 | 27 | `mutation_test.dart` |
+| `mutationCache.test.tsx` | 16 | 16 | `mutation_cache_test.dart` |
+| `mutationObserver.test.tsx` | 16 | 16 | `mutation_observer_test.dart` |
+| **Total** | **355** | **279** | |
 
-The 85 unported cases are enumerated by category below. They fall into four
-groups: features the port drops by design, features not yet built (mutations),
-JavaScript semantics with no Dart analogue, and type-level tests.
+The 76 unported cases are enumerated by category below. They fall into three
+groups: features the port drops by design, JavaScript semantics with no Dart
+analogue, and type-level tests.
 
 ## Test-by-test provenance
 
@@ -32,6 +35,9 @@ JavaScript semantics with no Dart analogue, and type-level tests.
 | `query_cache_test.dart` | `queryCache.test.tsx` | Faithful port, case for case. |
 | `query_observer_test.dart` | `queryObserver.test.tsx` | Faithful port, case for case. |
 | `query_client_test.dart` | `queryClient.test.tsx` | Faithful port of everything in MVP scope. |
+| `mutation_test.dart` | `mutation.test.tsx` | Faithful port, case for case. |
+| `mutation_cache_test.dart` | `mutationCache.test.tsx` | Faithful port, case for case. |
+| `mutation_observer_test.dart` | `mutationObserver.test.tsx` | Faithful port, case for case. |
 | `port_specifics_test.dart` | — | New. Behaviour the port introduces where a design decision replaced a JavaScript idiom: `null` in place of `undefined`, sealed option values in place of magic numbers/strings, typed cache entries in place of one hashed key. |
 
 ## Skipped upstream tests
@@ -89,7 +95,7 @@ JavaScript semantics with no Dart analogue, and type-level tests.
   **Reason:** duplicate — it differs from `should be able to fetch with a
   selector` only in JavaScript call syntax, which the Dart API does not have.
 
-### `queryClient.test.tsx` — 56 of 156
+### `queryClient.test.tsx` — 46 of 156
 - **Infinite queries, 26 cases:** the whole of `ensureInfiniteQueryData`,
   `infiniteQuery with static staleTime`, `fetchInfiniteQuery`, `infiniteQuery`,
   `prefetchInfiniteQuery`, and `infiniteQuery used for prefetching`.
@@ -102,12 +108,12 @@ JavaScript semantics with no Dart analogue, and type-level tests.
   **Reason:** no `skipToken` in the port — not running is expressed as
   `Enabled.off`. The `resetQueries` case that used `skipToken` incidentally is
   ported with a disabled observer instead.
-- **Mutations, 9 cases:** `isMutating`, both `setMutationDefaults` cases, and
-  the six mutation-driven cases in `focusManager and onlineManager`.
-  **Reason:** mutations arrive in M6. The two focus/online cases that also
-  assert on the query cache are ported with the mutation half removed, and
-  `QueryClient.mount` already awaits `resumePausedMutations()` before
-  `queryCache.onFocus()`/`onOnline()` so the ordering is right when they land.
+- **Mutations: all ported.** `isMutating`, both `setMutationDefaults` cases and
+  the six mutation-driven cases in `focusManager and onlineManager` landed with
+  M6. The hydration-based one (`should resumePausedMutations when coming online
+  after having restored cache`) is adapted: the port has no hydration, so the
+  restored paused mutation is built directly on the new client's cache — which
+  is exactly the state hydration would produce.
 - **`defaultQueryOptions` persister cases, 3.**
   **Reason:** persister dropped, so there is no persister-driven `networkMode`
   default.
@@ -146,6 +152,17 @@ JavaScript semantics with no Dart analogue, and type-level tests.
   **Reason:** replaced by the single `deferFlush` seam (D8); the replacement is
   tested.
 
+### `mutation.test.tsx` — 1 of 28
+- `mutate update the mutation state even without an active subscription 2`.
+  **Reason:** duplicate — upstream's cases 1 and 2 are byte-identical, and the
+  port has the single copy.
+
+### `mutationCache.test.tsx` / `mutationObserver.test.tsx` — all ported
+The context assertions drop one field: upstream's `MutationFunctionContext`
+also carries the `QueryClient`, which the port leaves out so `Mutation` does
+not depend on the client. A mutation function that needs the client closes over
+it, as the demo does.
+
 ### Whole files not ported
 - `hydration.test.tsx`, `infiniteQueryBehavior.test.tsx`,
   `infiniteQueryObserver.test.tsx`, `queriesObserver.test.tsx`,
@@ -154,8 +171,6 @@ JavaScript semantics with no Dart analogue, and type-level tests.
   **Reason:** the corresponding features are out of MVP scope or dropped by
   design (see the plan's scope table). Type-level tests have no Dart analogue —
   the type system checks these at compile time.
-- `mutation.test.tsx`, `mutationCache.test.tsx`, `mutationObserver.test.tsx`.
-  **Reason:** not yet — mutations are M6.
 
 ## Port bugs the ported suites caught
 
@@ -187,3 +202,28 @@ writing fresh tests:
 8. **`Query.isDisabled()` used AND where upstream uses OR.** A never-fetched
    query with no observers was treated as enabled, so `refetchQueries` fetched
    queries it should have skipped.
+9. **The cache-level `onMutate` hook made the mutation's own `onMutate` async.**
+   Upstream only awaits the cache hook when one is registered; the port awaited
+   an `async` wrapper unconditionally, which pushed every optimistic update a
+   microtask past `mutate()` — long enough for a frame to render the old value.
+
+## Deliberate divergences from upstream
+
+Behaviour where the port does *not* match upstream, and why:
+
+1. **A pending mutation's collection clock.** Upstream re-arms the gc timer
+   every time it fires while a mutation is still pending, effectively polling.
+   That is safe in a browser, which clamps `setTimeout(0)` to a few
+   milliseconds; Dart does not clamp `Timer(Duration.zero)`, so with
+   `gcTime: 0` the same code spins the event loop (and hangs `fake_async`
+   outright). The port instead restarts the clock when the mutation settles, in
+   `Mutation.execute`'s `finally` — the same place `Query.fetch` already does
+   it. Same observable outcome, no busy loop; the four upstream gc tests pass
+   unchanged.
+2. **Mutation callbacks are `FutureOr<void>`, not `Promise<unknown> | unknown`.**
+   Upstream lets a callback *return* a promise, which it then awaits. Dart
+   cannot type "returns anything, and the value is ignored" without warning on
+   every non-returning `async` body, so a callback that needs to wait says so
+   with `await` inside its body. The three upstream "callback return types"
+   cases are ported in that form; what they actually pin — that the mutation
+   waits for the callback before settling — is unchanged.

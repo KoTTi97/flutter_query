@@ -26,6 +26,17 @@ class _SpyCache extends QueryCache {
   }
 }
 
+/// Counts the mutation resumptions the client is supposed to trigger.
+class _SpyMutationCache extends MutationCache {
+  int resumeCalls = 0;
+
+  @override
+  Future<void> resumePausedMutations() {
+    resumeCalls++;
+    return super.resumePausedMutations();
+  }
+}
+
 class Boxed {
   const Boxed(this.value);
   final String value;
@@ -401,6 +412,36 @@ void main() {
 
       await time.advance(ms(5));
       expect(queryClient.isFetching(), 0);
+    });
+  });
+
+  group('isMutating', () {
+    testFakeAsync('should return the number of running mutations', (
+      time,
+    ) async {
+      expect(queryClient.isMutating(), 0);
+
+      MutationObserver<String, Object?, Object?>(
+        queryClient,
+        MutationOptions<String, Object?, Object?>(
+          mutationFn: (_, _) => sleep(ms(10)).then((_) => 'data'),
+        ),
+      ).mutate(null).ignore();
+      expect(queryClient.isMutating(), 1);
+
+      MutationObserver<String, Object?, Object?>(
+        queryClient,
+        MutationOptions<String, Object?, Object?>(
+          mutationFn: (_, _) => sleep(ms(5)).then((_) => 'data'),
+        ),
+      ).mutate(null).ignore();
+      expect(queryClient.isMutating(), 2);
+
+      await time.advance(ms(5));
+      expect(queryClient.isMutating(), 1);
+
+      await time.advance(ms(5));
+      expect(queryClient.isMutating(), 0);
     });
   });
 
@@ -2303,6 +2344,322 @@ void main() {
         focusManager.setFocused(true);
         await time.advance(Duration.zero);
         expect(cache.focusCalls, 0);
+      },
+    );
+
+    testFakeAsync('should resume paused mutations when the app comes back on', (
+      time,
+    ) async {
+      final mutations = _SpyMutationCache();
+      final testClient = QueryClient(mutationCache: mutations)..mount();
+
+      focusManager.setFocused(false);
+      expect(mutations.resumeCalls, 0);
+
+      focusManager.setFocused(true);
+      await time.advance(Duration.zero);
+      expect(mutations.resumeCalls, 1);
+
+      testClient.unmount();
+    });
+
+    testFakeAsync('should resume paused mutations when coming online', (
+      time,
+    ) async {
+      onlineManager.setOnline(false);
+
+      MutationObserver<int, Object?, Object?> build(int value) =>
+          MutationObserver<int, Object?, Object?>(
+            queryClient,
+            MutationOptions<int, Object?, Object?>(
+              mutationFn: (_, _) async => value,
+            ),
+          );
+
+      final observer1 = build(1);
+      final observer2 = build(2);
+      observer1.mutate(null).ignore();
+      observer2.mutate(null).ignore();
+
+      expect(observer1.result.isPaused, isTrue);
+      expect(observer2.result.isPaused, isTrue);
+
+      onlineManager.setOnline(true);
+
+      await time.advance(Duration.zero);
+      expect(observer1.result.status, MutationStatus.success);
+      expect(observer2.result.status, MutationStatus.success);
+    });
+
+    testFakeAsync('should resume paused mutations in parallel', (time) async {
+      onlineManager.setOnline(false);
+      final orders = <String>[];
+
+      MutationObserver<int, Object?, Object?> build(
+        String label,
+        Duration delay,
+        int value,
+      ) => MutationObserver<int, Object?, Object?>(
+        queryClient,
+        MutationOptions<int, Object?, Object?>(
+          mutationFn: (_, _) async {
+            orders.add('${label}start');
+            await sleep(delay);
+            orders.add('${label}end');
+            return value;
+          },
+        ),
+      );
+
+      final observer1 = build('1', ms(50), 1);
+      final observer2 = build('2', ms(20), 2);
+      observer1.mutate(null).ignore();
+      observer2.mutate(null).ignore();
+
+      expect(observer1.result.isPaused, isTrue);
+      expect(observer2.result.isPaused, isTrue);
+
+      onlineManager.setOnline(true);
+
+      await time.advance(ms(50));
+      expect(observer1.result.status, MutationStatus.success);
+      expect(observer2.result.status, MutationStatus.success);
+      expect(orders, ['1start', '2start', '2end', '1end']);
+    });
+
+    testFakeAsync(
+      'should resume paused mutations one after the other when in the same '
+      'scope',
+      (time) async {
+        onlineManager.setOnline(false);
+        final orders = <String>[];
+
+        MutationObserver<int, Object?, Object?> build(
+          String label,
+          Duration delay,
+          int value,
+        ) => MutationObserver<int, Object?, Object?>(
+          queryClient,
+          MutationOptions<int, Object?, Object?>(
+            scope: 'scope',
+            mutationFn: (_, _) async {
+              orders.add('${label}start');
+              await sleep(delay);
+              orders.add('${label}end');
+              return value;
+            },
+          ),
+        );
+
+        final observer1 = build('1', ms(50), 1);
+        final observer2 = build('2', ms(20), 2);
+        observer1.mutate(null).ignore();
+        observer2.mutate(null).ignore();
+
+        expect(observer1.result.isPaused, isTrue);
+        expect(observer2.result.isPaused, isTrue);
+
+        onlineManager.setOnline(true);
+        queryClient.resumePausedMutations().ignore();
+
+        await time.advance(ms(70));
+        expect(observer1.result.status, MutationStatus.success);
+        expect(observer2.result.status, MutationStatus.success);
+        expect(orders, ['1start', '1end', '2start', '2end']);
+      },
+    );
+
+    testFakeAsync(
+      'should resume when coming online after resumePausedMutations was called '
+      'while offline',
+      (time) async {
+        onlineManager.setOnline(false);
+
+        final observer = MutationObserver<int, Object?, Object?>(
+          queryClient,
+          MutationOptions<int, Object?, Object?>(mutationFn: (_, _) async => 1),
+        );
+
+        observer.mutate(null).ignore();
+        expect(observer.result.isPaused, isTrue);
+
+        await queryClient.resumePausedMutations();
+
+        // Still paused, because it is still offline.
+        expect(observer.result.isPaused, isTrue);
+
+        onlineManager.setOnline(true);
+
+        await time.advance(Duration.zero);
+        expect(observer.result.status, MutationStatus.success);
+      },
+    );
+
+    testFakeAsync(
+      'should resume when coming online after a restored mutation was resumed '
+      'while offline',
+      (time) async {
+        onlineManager.setOnline(false);
+
+        // Upstream dehydrates a paused mutation and hydrates it into a fresh
+        // client; the port has no hydration, so the restored state is built
+        // directly — which is exactly what hydration would produce.
+        final newQueryClient = QueryClient(
+          defaultMutationOptionsBag: MutationDefaults(
+            mutationFn: (_, _) async => 1,
+          ),
+        )..mount();
+
+        final restored = newQueryClient.mutationCache
+            .build<int, Object?, Object?>(
+              newQueryClient.defaultMutationOptions(
+                const MutationOptions<int, Object?, Object?>(),
+              ),
+              state: MutationState<int, Object?, Object?>(
+                isPaused: true,
+                status: MutationStatus.pending,
+                submittedAt: DateTime.utc(2020),
+              ),
+            );
+
+        expect(restored.state.isPaused, isTrue);
+
+        await newQueryClient.resumePausedMutations();
+
+        onlineManager.setOnline(true);
+
+        await time.advance(Duration.zero);
+        expect(restored.state.status, MutationStatus.success);
+
+        newQueryClient.unmount();
+      },
+    );
+
+    testFakeAsync(
+      'should notify the query cache only after resumePausedMutations has '
+      'finished when coming online',
+      (time) async {
+        final key = queryKey();
+        var count = 0;
+        final results = <String>[];
+
+        final queryObserver = QueryObserver<String, String>(
+          queryClient,
+          str(
+            key,
+            queryFn: (_) async {
+              count++;
+              results.add('data$count');
+              await sleep(ms(10));
+              return 'data$count';
+            },
+          ),
+        );
+
+        final unsubscribe = queryObserver.subscribe((_) {});
+
+        await time.advance(ms(10));
+        expect(queryClient.getQueryData<String>(key), 'data1');
+
+        onlineManager.setOnline(false);
+
+        MutationObserver<int, Object?, Object?> build(
+          String label,
+          int value, {
+          String? scope,
+        }) => MutationObserver<int, Object?, Object?>(
+          queryClient,
+          MutationOptions<int, Object?, Object?>(
+            scope: scope,
+            mutationFn: (_, _) async {
+              results.add('$label-start');
+              await sleep(ms(50));
+              results.add('$label-end');
+              return value;
+            },
+          ),
+        );
+
+        final observer = build('mutation1', 1);
+        observer.mutate(null).ignore();
+        final observer2 = build('mutation2', 2, scope: 'scope');
+        observer2.mutate(null).ignore();
+        final observer3 = build('mutation3', 3, scope: 'scope');
+        observer3.mutate(null).ignore();
+
+        expect(observer.result.isPaused, isTrue);
+        expect(observer2.result.isPaused, isTrue);
+        expect(observer3.result.isPaused, isTrue);
+
+        onlineManager.setOnline(true);
+
+        await time.advance(ms(110));
+        expect(queryClient.getQueryData<String>(key), 'data2');
+
+        // The refetch triggered by coming back online happens only once every
+        // queued write has landed.
+        expect(results, [
+          'data1',
+          'mutation1-start',
+          'mutation2-start',
+          'mutation1-end',
+          'mutation2-end',
+          // 3 starts after 2 because they share a scope.
+          'mutation3-start',
+          'mutation3-end',
+          'data2',
+        ]);
+
+        unsubscribe();
+      },
+    );
+  });
+
+  group('setMutationDefaults', () {
+    test('should update existing mutation defaults', () {
+      final key = queryKey();
+
+      queryClient.setMutationDefaults(
+        key,
+        MutationDefaults(mutationFn: (_, _) async => 'data'),
+      );
+      queryClient.setMutationDefaults(
+        key,
+        const MutationDefaults(retry: RetryOption.never),
+      );
+
+      final defaults = queryClient.getMutationDefaults(key);
+      expect(defaults.retry, RetryOption.never);
+      expect(
+        defaults.mutationFn,
+        isNull,
+        reason: 'a second registration replaces the first, it does not merge',
+      );
+    });
+
+    test(
+      'should return only matching defaults when several are registered',
+      () {
+        final key1 = queryKey();
+        final key2 = queryKey();
+
+        queryClient.setMutationDefaults(
+          key1,
+          const MutationDefaults(retry: RetryOption.count(1)),
+        );
+        queryClient.setMutationDefaults(
+          key2,
+          const MutationDefaults(retry: RetryOption.count(2)),
+        );
+
+        expect(
+          queryClient.getMutationDefaults(key1).retry,
+          const RetryOption.count(1),
+        );
+        expect(
+          queryClient.getMutationDefaults(key2).retry,
+          const RetryOption.count(2),
+        );
       },
     );
   });

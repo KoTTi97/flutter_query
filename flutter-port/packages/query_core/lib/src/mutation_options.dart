@@ -22,7 +22,10 @@ class MutationFunctionContext {
 }
 
 typedef MutationFn<TData, TVariables> =
-    Future<TData> Function(TVariables variables, MutationFunctionContext context);
+    Future<TData> Function(
+      TVariables variables,
+      MutationFunctionContext context,
+    );
 
 /// Runs before the mutation function, and returns whatever the later callbacks
 /// need to undo an optimistic update.
@@ -32,6 +35,11 @@ typedef OnMutate<TVariables, TOnMutateResult> =
       MutationFunctionContext context,
     );
 
+/// A callback may be `async`, and the mutation awaits it before moving on —
+/// that is how "invalidate these queries, then settle" is expressed. Upstream
+/// lets a callback *return* a promise to the same effect; Dart says it with
+/// `await` inside the body instead, which is both clearer and the only form
+/// that type-checks against a void return.
 typedef OnMutationSuccess<TData, TVariables, TOnMutateResult> =
     FutureOr<void> Function(
       TData data,
@@ -249,5 +257,30 @@ resolveMutationOptions<TData, TVariables, TOnMutateResult>(
     onSuccess: options.onSuccess ?? defaultOnSuccess,
     onError: options.onError ?? defaultOnError,
     onSettled: options.onSettled ?? defaultOnSettled,
+  );
+}
+
+/// Layers [other] on top of [base]; anything [other] leaves unset keeps
+/// [base]'s value. Later registrations win, as upstream.
+MutationDefaults mergeMutationDefaults(
+  MutationDefaults base,
+  MutationDefaults? other,
+) {
+  if (other == null) {
+    return base;
+  }
+  return MutationDefaults(
+    mutationKey: other.mutationKey ?? base.mutationKey,
+    mutationFn: other.mutationFn ?? base.mutationFn,
+    gcTime: other.gcTime ?? base.gcTime,
+    retry: other.retry ?? base.retry,
+    retryDelay: other.retryDelay ?? base.retryDelay,
+    networkMode: other.networkMode ?? base.networkMode,
+    scope: other.scope ?? base.scope,
+    meta: other.meta ?? base.meta,
+    onMutate: other.onMutate ?? base.onMutate,
+    onSuccess: other.onSuccess ?? base.onSuccess,
+    onError: other.onError ?? base.onError,
+    onSettled: other.onSettled ?? base.onSettled,
   );
 }

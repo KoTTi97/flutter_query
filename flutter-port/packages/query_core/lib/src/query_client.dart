@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'filters.dart';
 import 'focus_manager.dart';
+import 'mutation_cache.dart';
+import 'mutation_observer.dart';
+import 'mutation_options.dart';
+import 'mutation_state.dart';
 import 'notify_manager.dart';
 import 'online_manager.dart';
 import 'option_values.dart';
@@ -21,18 +25,25 @@ import 'query_state.dart';
 /// The client also owns the option-defaulting chain: library fallbacks, then
 /// client-wide defaults, then any key defaults registered with
 /// [setQueryDefaults], then what the caller passed.
-class QueryClient implements ObserverClient {
+class QueryClient implements ObserverClient, MutationObserverClient {
   QueryClient({
     QueryCache? queryCache,
+    MutationCache? mutationCache,
     this.defaultOptions = QueryDefaults.empty,
-  }) : _queryCache = queryCache ?? QueryCache();
+    this.defaultMutationOptionsBag = const MutationDefaults(),
+  }) : _queryCache = queryCache ?? QueryCache(),
+       _mutationCache = mutationCache ?? MutationCache();
 
   final QueryCache _queryCache;
+  final MutationCache _mutationCache;
 
   /// Key defaults in registration order — later registrations win, so the
   /// iteration order of this map is load-bearing.
   final Map<QueryKey, QueryDefaults> _queryDefaults =
       <QueryKey, QueryDefaults>{};
+
+  final Map<MutationKey, MutationDefaults> _mutationDefaults =
+      <MutationKey, MutationDefaults>{};
 
   int _mountCount = 0;
   void Function()? _unsubscribeFocus;
@@ -41,8 +52,14 @@ class QueryClient implements ObserverClient {
   @override
   QueryCache get queryCache => _queryCache;
 
+  @override
+  MutationCache get mutationCache => _mutationCache;
+
   /// Defaults applied to every query, before any key defaults.
   QueryDefaults defaultOptions;
+
+  /// Defaults applied to every mutation, before any key defaults.
+  MutationDefaults defaultMutationOptionsBag;
 
   // --- Lifecycle ------------------------------------------------------------
 
@@ -88,10 +105,13 @@ class QueryClient implements ObserverClient {
 
   /// Resumes mutations that paused while offline.
   ///
-  /// Mutations arrive with the mutation cache; until then there are none to
-  /// resume. It exists now because [mount] awaits it, and that ordering — writes
-  /// before reads — is the part worth getting right up front.
-  Future<void> resumePausedMutations() async {}
+  /// Only while online: resuming them offline would just pause them again.
+  Future<void> resumePausedMutations() {
+    if (onlineManager.isOnline) {
+      return _mutationCache.resumePausedMutations();
+    }
+    return Future<void>.value();
+  }
 
   // --- Reading --------------------------------------------------------------
 
@@ -99,6 +119,12 @@ class QueryClient implements ObserverClient {
   int isFetching({QueryFilters filters = const QueryFilters()}) => _queryCache
       .findAll(filters.copyWith(fetchStatus: FetchStatus.fetching))
       .length;
+
+  /// How many mutations matching [filters] are running right now.
+  int isMutating({MutationFilters filters = const MutationFilters()}) =>
+      _mutationCache
+          .findAll(filters.copyWith(status: MutationStatus.pending))
+          .length;
 
   /// The data cached under [queryKey], or null if there is none.
   ///
@@ -365,6 +391,38 @@ class QueryClient implements ObserverClient {
   QueryDefaults _defaultsFor(QueryKey queryKey) =>
       defaultOptions.mergedWith(getQueryDefaults(queryKey));
 
+  /// Registers defaults for every mutation whose key starts with [mutationKey].
+  void setMutationDefaults(MutationKey mutationKey, MutationDefaults defaults) {
+    _mutationDefaults[mutationKey] = defaults;
+  }
+
+  /// Every registered default whose key is a prefix of [mutationKey], merged in
+  /// registration order.
+  MutationDefaults getMutationDefaults(MutationKey mutationKey) {
+    var result = const MutationDefaults();
+    for (final entry in _mutationDefaults.entries) {
+      if (entry.key.isPrefixOf(mutationKey)) {
+        result = mergeMutationDefaults(result, entry.value);
+      }
+    }
+    return result;
+  }
+
+  @override
+  DefaultedMutationOptions<TData, TVariables, TOnMutateResult>
+  defaultMutationOptions<TData, TVariables, TOnMutateResult>(
+    MutationOptions<TData, TVariables, TOnMutateResult> options,
+  ) {
+    final mutationKey = options.mutationKey;
+    final defaults = mutationKey == null
+        ? defaultMutationOptionsBag
+        : mergeMutationDefaults(
+            defaultMutationOptionsBag,
+            getMutationDefaults(mutationKey),
+          );
+    return resolveMutationOptions(options, defaults: defaults);
+  }
+
   /// Defaulting for a single awaited fetch, which does not retry unless
   /// something asked it to.
   DefaultedQueryObserverOptions<TQueryData, TData> _oneOffOptions<
@@ -380,6 +438,9 @@ class QueryClient implements ObserverClient {
     return resolveQueryObserverOptions(options, defaults: defaults);
   }
 
-  /// Empties the cache.
-  void clear() => _queryCache.clear();
+  /// Empties both caches.
+  void clear() {
+    _queryCache.clear();
+    _mutationCache.clear();
+  }
 }

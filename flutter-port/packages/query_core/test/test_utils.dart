@@ -122,6 +122,56 @@ bool runFakeAsyncBody(Future<void> Function(FakeTime time) body) {
   return completed;
 }
 
+/// Like [testFakeAsync], but also collects errors reported to the zone with
+/// `Zone.handleUncaughtError`.
+///
+/// Several upstream mutation tests listen for Node's `unhandledRejection` to
+/// check that a failing callback is reported without derailing the ones after
+/// it; this is the Dart equivalent of installing that listener.
+@isTest
+void testFakeAsyncGuarded(
+  String description,
+  Future<void> Function(FakeTime time, List<Object> uncaught) body, {
+  Object? skip,
+}) {
+  test(description, () {
+    final uncaught = <Object>[];
+    final completed = runFakeAsyncBody((time) {
+      final completer = Completer<void>();
+      runZonedGuarded(() async {
+        try {
+          await body(time, uncaught);
+          completer.complete();
+        } catch (error, stackTrace) {
+          // Failures of the test body itself must fail the test, not land
+          // in the collected list.
+          completer.completeError(error, stackTrace);
+        }
+      }, (error, _) => uncaught.add(error));
+      return completer.future;
+    });
+    expect(
+      completed,
+      isTrue,
+      reason:
+          'the test body never completed — it is awaiting a future '
+          'that virtual time cannot resolve.',
+    );
+  }, skip: skip);
+}
+
+/// Builds a mutation on the cache and runs it, with no observer attached.
+/// Port of upstream's `executeMutation` test helper.
+Future<TData> executeMutation<TData, TVariables, TOnMutateResult>(
+  QueryClient client,
+  MutationOptions<TData, TVariables, TOnMutateResult> options,
+  TVariables variables,
+) => client.mutationCache
+    .build<TData, TVariables, TOnMutateResult>(
+      client.defaultMutationOptions(options),
+    )
+    .execute(variables);
+
 int _keyCounter = 0;
 
 /// A unique key per call, so tests never collide in a shared cache.
