@@ -12,7 +12,10 @@ import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import '../api.dart';
 import '../app_state.dart';
+import '../models.dart';
 import '../queries.dart';
+import '../theme.dart';
+import 'overview.dart' show iconFor;
 
 class SensorDetail extends StatefulWidget {
   const SensorDetail({super.key, required this.id, required this.api});
@@ -52,120 +55,382 @@ class _SensorDetailState extends State<SensorDetail> with QueryMixin {
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: AppScope.of(context).closeSensor),
-        title: Text(data?.name ?? 'Sensor'),
+        title: const Text('Alle Sensoren'),
+        shape: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      body: switch (sensor) {
-        // In practice this is almost never seen: opening a sensor from the
-        // overview renders from the entry the list already seeded. It shows up
-        // when a detail screen is the first thing loaded.
-        QueryPending() => const Center(child: CircularProgressIndicator()),
-        QueryError(:final error, staleData: null) =>
-          Center(child: Text('$error')),
-        QuerySuccess(:final data) ||
-        QueryError(staleData: final data!) =>
-          ListView(
-            padding: const EdgeInsets.all(16),
-            children: <Widget>[
-              if (rename.value case MutationError(:final error))
-                _Banner(text: '$error'),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      TextField(
-                        controller: _name,
-                        // A failed submit's banner goes away as soon as the
-                        // user edits again.
-                        onChanged: (_) {
-                          if (rename.value.isError) {
-                            rename.reset();
-                          }
-                        },
-                        decoration: const InputDecoration(
-                          labelText: 'Name',
-                          border: OutlineInputBorder(),
-                          helperText: 'Der Name "fail" lässt das Gateway '
-                              'ablehnen — für den Rollback.',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: rename.value.isPending
-                            ? null
-                            : () => rename.mutate(
-                                  (id: data.id, name: _name.text.trim()),
-                                ),
-                        child: Text(
-                          rename.value.isPending
-                              ? 'Wird gespeichert…'
-                              : 'Umbenennen',
-                        ),
-                      ),
-                    ],
-                  ),
+      body: ContentWidth(
+        child: switch (sensor) {
+          // In practice this is almost never seen: opening a sensor from the
+          // overview renders from the entry the list already seeded. It shows
+          // up when a detail screen is the first thing loaded.
+          QueryPending() => const _DetailSkeleton(),
+          QueryError(:final error, staleData: null) => _DetailError('$error'),
+          QuerySuccess(:final data) ||
+          QueryError(staleData: final data!) =>
+            ListView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+              children: <Widget>[
+                _Hero(sensor: data),
+                const SizedBox(height: 14),
+                if (rename.value case MutationError(:final error)) ...<Widget>[
+                  _Notice(text: '$error'),
+                  const SizedBox(height: 14),
+                ],
+                _RenameCard(
+                  controller: _name,
+                  pending: rename.value.isPending,
+                  // A failed submit's banner goes away as soon as the user
+                  // edits again.
+                  onChanged: rename.value.isError ? rename.reset : null,
+                  onSubmit: () =>
+                      rename.mutate((id: data.id, name: _name.text.trim())),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                child: SwitchListTile(
-                  title: const Text('Matter-Weiterleitung'),
-                  subtitle: Text(
-                    data.matterForwardingPending
-                        ? 'Wird vom Gerät bestätigt…'
-                        : 'Bestätigter Gerätezustand',
-                  ),
-                  // `target ?? confirmed`: the requested value outranks the
-                  // confirmed one while a write is outstanding, which is what
-                  // stops the switch flickering during the poll.
-                  value: data.displayedMatterForwarding,
-                  onChanged: matter.value.isPending
-                      ? null
-                      : (value) => matter.mutate((id: data.id, value: value)),
-                  secondary: data.matterForwardingPending
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : null,
+                const SizedBox(height: 14),
+                _MatterCard(
+                  sensor: data,
+                  pending: matter.value.isPending,
+                  onChanged: (value) =>
+                      matter.mutate((id: data.id, value: value)),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text('Typ: ${data.type.label}'),
-                      Text('Raum: ${data.room}'),
-                      Text('Batterie: ${data.battery} %'),
-                      Text('Temperatur: ${data.temperature} °C'),
-                      Text(data.connected ? 'Verbunden' : 'Offline'),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-      },
+                const SizedBox(height: 14),
+                _FactsCard(sensor: data),
+              ],
+            ),
+        },
+      ),
     );
   }
 }
 
-class _Banner extends StatelessWidget {
-  const _Banner({required this.text});
+class _Hero extends StatelessWidget {
+  const _Hero({required this.sensor});
+
+  final Sensor sensor;
+
+  @override
+  Widget build(BuildContext context) => SurfaceCard(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: <Widget>[
+            Container(
+              height: 52,
+              width: 52,
+              decoration: BoxDecoration(
+                color:
+                    sensor.connected ? AppColors.accentSoft : AppColors.ground,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                iconFor(sensor.type),
+                size: 26,
+                color: sensor.connected ? AppColors.accent : AppColors.muted,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    sensor.name,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text('${sensor.type.label} · ${sensor.room}',
+                      style: mutedText),
+                ],
+              ),
+            ),
+            if (sensor.matterForwardingPending)
+              const StatusPill(
+                label: 'wird bestätigt',
+                color: AppColors.warning,
+                background: AppColors.warningSoft,
+                dot: true,
+              )
+            else if (!sensor.connected)
+              const StatusPill(label: 'offline'),
+          ],
+        ),
+      );
+}
+
+class _RenameCard extends StatelessWidget {
+  const _RenameCard({
+    required this.controller,
+    required this.pending,
+    required this.onChanged,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final bool pending;
+  final VoidCallback? onChanged;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) => SurfaceCard(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const Text('Name', style: titleText),
+            const SizedBox(height: 3),
+            const Text(
+              'Wird sofort angezeigt und zurückgerollt, wenn das Gateway '
+              'ablehnt. Der Name "fail" wird immer abgelehnt.',
+              style: mutedText,
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    onChanged: onChanged == null ? null : (_) => onChanged!(),
+                    onSubmitted: (_) => onSubmit(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  onPressed: pending ? null : onSubmit,
+                  child: pending
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Umbenennen'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _MatterCard extends StatelessWidget {
+  const _MatterCard({
+    required this.sensor,
+    required this.pending,
+    required this.onChanged,
+  });
+
+  final Sensor sensor;
+  final bool pending;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SurfaceCard(
+        padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text('Matter-Weiterleitung', style: titleText),
+                  const SizedBox(height: 3),
+                  Text(
+                    sensor.matterForwardingPending
+                        ? 'Wird vom Gerät bestätigt…'
+                        : 'Bestätigter Gerätezustand',
+                    style: mutedText.copyWith(
+                      color: sensor.matterForwardingPending
+                          ? AppColors.warning
+                          : AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (sensor.matterForwardingPending)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  height: 15,
+                  width: 15,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.warning,
+                  ),
+                ),
+              ),
+            Switch(
+              // `target ?? confirmed`: the requested value outranks the
+              // confirmed one while a write is outstanding, which is what stops
+              // the switch flickering during the poll.
+              value: sensor.displayedMatterForwarding,
+              activeTrackColor: AppColors.accent,
+              onChanged: pending ? null : onChanged,
+            ),
+          ],
+        ),
+      );
+}
+
+class _FactsCard extends StatelessWidget {
+  const _FactsCard({required this.sensor});
+
+  final Sensor sensor;
+
+  @override
+  Widget build(BuildContext context) => SurfaceCard(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        child: Column(
+          children: <Widget>[
+            _Fact(
+              label: 'Batterie',
+              value: '${sensor.battery} %',
+              danger: sensor.battery < 20,
+            ),
+            const Divider(),
+            _Fact(
+              label: 'Temperatur',
+              value: '${sensor.temperature.toStringAsFixed(1)} °C',
+            ),
+            const Divider(),
+            _Fact(label: 'Raum', value: sensor.room),
+            const Divider(),
+            _Fact(
+              label: 'Funk',
+              value: sensor.connected ? 'Verbunden' : 'Offline',
+            ),
+          ],
+        ),
+      );
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value, this.danger = false});
+
+  final String label;
+  final String value;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            Text(label, style: mutedText.copyWith(fontSize: 14)),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: danger ? AppColors.danger : AppColors.text,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _DetailSkeleton extends StatelessWidget {
+  const _DetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+        children: <Widget>[
+          SurfaceCard(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  height: 52,
+                  width: 52,
+                  decoration: BoxDecoration(
+                    color: AppColors.skeleton,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    SkeletonBox(width: 170, height: 16),
+                    SizedBox(height: 9),
+                    SkeletonBox(width: 120, height: 12),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          const SurfaceCard(
+            padding: EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SkeletonBox(width: 90, height: 13),
+                SizedBox(height: 12),
+                SkeletonBox(width: double.infinity, height: 40),
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
+class _DetailError extends StatelessWidget {
+  const _DetailError(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: SurfaceCard(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.cloud_off, size: 26, color: AppColors.danger),
+                const SizedBox(height: 12),
+                Text(message, textAlign: TextAlign.center, style: titleText),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _Notice extends StatelessWidget {
+  const _Notice({required this.text});
 
   final String text;
 
   @override
   Widget build(BuildContext context) => Container(
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 12),
-        color: Theme.of(context).colorScheme.errorContainer,
-        padding: const EdgeInsets.all(12),
-        child: Text(text),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.dangerSoft,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(fontSize: 13, color: AppColors.danger),
+              ),
+            ),
+          ],
+        ),
       );
 }

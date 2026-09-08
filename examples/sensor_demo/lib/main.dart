@@ -19,6 +19,7 @@ import 'src/api.dart';
 import 'src/app_state.dart';
 import 'src/screens/detail.dart';
 import 'src/screens/overview.dart';
+import 'src/theme.dart';
 import 'src/widgets/header.dart';
 
 void main() => runApp(SensorDemoApp(api: SensorApi()));
@@ -52,10 +53,8 @@ class _SensorDemoAppState extends State<SensorDemoApp> {
           state: _state,
           child: MaterialApp(
             title: 'Sensor-Gateway',
-            theme: ThemeData(
-              colorSchemeSeed: Colors.teal,
-              useMaterial3: true,
-            ),
+            debugShowCheckedModeBanner: false,
+            theme: buildAppTheme(),
             home: _Home(api: widget.api),
           ),
         ),

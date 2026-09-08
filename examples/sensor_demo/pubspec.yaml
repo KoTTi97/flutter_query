@@ -22,3 +22,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   lints: ^6.0.0
+
+flutter:
+  # Bundles the Material icon font. Without it every Icon renders as a tofu box
+  # — the pubspec here was hand-written, and `flutter create` does not add this
+  # to an existing one.
+  uses-material-design: true

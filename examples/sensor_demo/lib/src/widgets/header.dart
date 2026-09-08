@@ -12,6 +12,7 @@ import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 import '../api.dart';
 import '../models.dart';
 import '../queries.dart';
+import '../theme.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   const AppHeader({super.key, required this.api});
@@ -25,29 +26,50 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final client = QueryClientProvider.of(context);
     return AppBar(
-      title: const Text('Sensor-Gateway'),
+      shape: const Border(bottom: BorderSide(color: AppColors.border)),
+      title: Row(
+        children: <Widget>[
+          Container(
+            height: 26,
+            width: 26,
+            decoration: BoxDecoration(
+              color: AppColors.accentSoft,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.router_outlined,
+              size: 15,
+              color: AppColors.accent,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text('Sensor-Gateway'),
+        ],
+      ),
       actions: <Widget>[
         Padding(
-          padding: const EdgeInsets.only(right: 16),
+          padding: const EdgeInsets.only(right: 20),
           child: Center(
             child: QuerySelectBuilder<SensorListResponse,
                 ({int connected, int total})>(
               options: connectedSensorsQuery(client, api),
               builder: (context, result) => switch (result) {
-                QuerySuccess(:final data) => Chip(
-                    visualDensity: VisualDensity.compact,
-                    label:
-                        Text('${data.connected} von ${data.total} verbunden'),
+                QuerySuccess(:final data) => StatusPill(
+                    label: '${data.connected} von ${data.total} verbunden',
+                    color: data.connected == data.total
+                        ? AppColors.accent
+                        : AppColors.muted,
+                    background: data.connected == data.total
+                        ? AppColors.accentSoft
+                        : AppColors.ground,
+                    dot: true,
                   ),
-                QueryError() => const Chip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text('Gateway offline'),
+                QueryError() => const StatusPill(
+                    label: 'Gateway offline',
+                    color: AppColors.danger,
+                    background: AppColors.dangerSoft,
                   ),
-                QueryPending() => const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                QueryPending() => const SkeletonBox(width: 128, height: 22),
               },
             ),
           ),
