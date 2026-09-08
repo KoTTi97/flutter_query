@@ -10,6 +10,14 @@ import 'option_values.dart';
 
 enum RetryerStatus { pending, resolved, rejected }
 
+/// Whether a fetch may begin under [networkMode] right now.
+///
+/// Upstream exports the same helper from `retryer.ts`; `Query`'s reducer and
+/// the observer's optimistic result both ask it, so it lives here rather than
+/// being inlined at each site.
+bool canFetch(NetworkMode networkMode, OnlineManager onlineManager) =>
+    networkMode != NetworkMode.online || onlineManager.isOnline();
+
 /// Runs a fetch, retries it, and pauses it while the app is backgrounded or
 /// offline.
 ///
@@ -96,8 +104,7 @@ class Retryer<TData> {
     return future;
   }
 
-  bool _canFetch() =>
-      networkMode != NetworkMode.online || onlineManager.isOnline();
+  bool _canFetch() => canFetch(networkMode, onlineManager);
 
   bool _canContinue() =>
       focusManager.isFocused() &&

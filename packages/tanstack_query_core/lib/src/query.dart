@@ -273,8 +273,9 @@ class Query<TQueryData> extends Removable {
   }
 
   /// Cancels silently and stops the gc timer. Called by the cache on removal.
+  @override
   void destroy() {
-    clearGcTimeout();
+    super.destroy();
     cancel(silent: true).ignore();
   }
 
@@ -561,8 +562,7 @@ class Query<TQueryData> extends Removable {
         return state.copyWith(fetchStatus: FetchStatus.fetching);
 
       case QueryFetchAction(:final meta):
-        final fetching = _options.networkMode != NetworkMode.online ||
-                client.onlineManager.isOnline()
+        final fetching = canFetch(_options.networkMode, client.onlineManager)
             ? FetchStatus.fetching
             : FetchStatus.paused;
         return state.copyWith(

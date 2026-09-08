@@ -47,6 +47,10 @@ abstract class Removable {
     _gcTimer = null;
   }
 
+  /// Cancels the pending collection, if any.
+  @protected
+  void destroy() => clearGcTimeout();
+
   /// Removes this from its cache if nothing is using it.
   @protected
   void optionalRemove();

@@ -23,5 +23,6 @@ export 'src/query_observer.dart';
 export 'src/query_options.dart';
 export 'src/query_result.dart';
 export 'src/query_state.dart';
+export 'src/removable.dart';
 export 'src/retryer.dart';
 export 'src/subscribable.dart';

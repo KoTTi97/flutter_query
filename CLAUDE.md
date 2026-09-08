@@ -63,10 +63,15 @@ The fresh port lives in a pub workspace at the repository root — **not** in
 | `packages/tanstack_query_flutter/` | the Flutter binding (not started) |
 | `examples/sensor_demo/` | the react-demo port (not started) |
 
-Everything runs from the repository root:
+Tests run from the package (`dart test` resolves the package it is invoked
+in); analyzer and formatter run from anywhere:
 
 ```bash
-dart test packages/tanstack_query_core && dart analyze --fatal-infos packages/tanstack_query_core && dart format --set-exit-if-changed packages/tanstack_query_core
+cd packages/tanstack_query_core && dart test
+```
+
+```bash
+dart analyze --fatal-infos packages/tanstack_query_core && dart format --set-exit-if-changed packages/tanstack_query_core
 ```
 
 Names, layout and licence are settled on

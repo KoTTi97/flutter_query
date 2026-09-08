@@ -11,6 +11,7 @@ import 'query_client.dart';
 import 'query_options.dart';
 import 'query_result.dart';
 import 'query_state.dart';
+import 'retryer.dart';
 
 typedef QueryObserverListener<TData> = void Function(QueryResult<TData> result);
 
@@ -277,10 +278,9 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           _shouldFetchOptionally(query, _currentQuery, options, _options);
 
       if (fetchOnMount || fetchOptionally) {
-        final canFetch = options.networkMode != NetworkMode.online ||
-            _client.onlineManager.isOnline();
+        final fetchable = canFetch(options.networkMode, _client.onlineManager);
         state = state.copyWith(
-          fetchStatus: canFetch ? FetchStatus.fetching : FetchStatus.paused,
+          fetchStatus: fetchable ? FetchStatus.fetching : FetchStatus.paused,
           fetchFailureCount: 0,
           clearFetchFailure: true,
           status: state.hasData ? null : QueryStatus.pending,

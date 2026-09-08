@@ -178,6 +178,10 @@ Future<void> sleep(Duration duration) => Future<void>.delayed(duration);
 /// tests readable.
 Duration ms(int milliseconds) => Duration(milliseconds: milliseconds);
 
+/// `scheduleMicrotask` as a value, for tests that install it as a scheduler.
+void scheduleMicrotaskShim(void Function() callback) =>
+    scheduleMicrotask(callback);
+
 /// A client with its own managers, so nothing leaks between tests
 /// (https://github.com/KoTTi97/flutter_query/issues/19).
 QueryClient testClient({
