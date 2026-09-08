@@ -116,7 +116,10 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     MutationState<TData, TVariables, TOnMutateResult> state,
   ) {
     final callbacks = _callCallbacks;
-    if (callbacks == null || !state.hasVariables) {
+    // Per-call callbacks belong to a live subscription: a `mutate` whose widget
+    // is already gone must still update the cache, but must not call back into
+    // it. Upstream gates them on `hasListeners()` for the same reason.
+    if (callbacks == null || !hasListeners || !state.hasVariables) {
       return;
     }
     final variables = state.variables as TVariables;

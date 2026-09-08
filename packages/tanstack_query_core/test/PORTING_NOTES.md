@@ -28,7 +28,7 @@ is a bug in this file.
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
 | `queryObserver.test.tsx` | `query_observer_test.dart` | 60 / 75 | done |
 | `queryClient.test.tsx` | `query_client_test.dart` | 95 / 156 | done bar the infinite blocks |
-| `mutation.test.tsx` | — | 0 / 28 | not started |
+| `mutation.test.tsx` | `mutation_test.dart` | 28 / 28 | done |
 | `mutationCache.test.tsx` | — | 0 / 16 | not started |
 | `mutationObserver.test.tsx` | — | 0 / 16 | not started |
 | `infiniteQueryBehavior.test.tsx` | — | 0 / 9 | not started |
@@ -358,6 +358,57 @@ the same reason. A debug assert that fired when several key prefixes matched one
 query also had to go: upstream merges them deliberately, and
 `['todos']` + `['todos', 'detail']` is the intended shape.
 
+### `mutation.test.tsx`
+
+All 28 ported — the first suite with no omissions at all.
+
+- **adapted:** `setMutationDefaults should be able to set defaults` drops the
+  assertion on the mutation function's second argument. Upstream passes a
+  `MutationFunctionContext` (`client`, `meta`, `mutationKey`) alongside the
+  variables; `MutationFn` here takes variables only (see the divergence table).
+- **adapted:** `mutate should throw an error if no mutationFn found` expects
+  `MissingMutationFunctionError` rather than upstream's string-matched
+  `Error('No mutationFn found')` — the query side has the same named error.
+- **adapted (3):** the three "return value is ignored" callback cases.
+  `FutureOr<void>` callbacks cannot return a value in Dart, so the type system
+  makes the point the assertion was making; the *timing* those cases pin down is
+  ported unchanged.
+- **adapted:** `should handle Promise.all() and Promise.allSettled() patterns` →
+  `should handle Future.wait() patterns`.
+- **adapted (3):** the cases that assert on `process.on('unhandledRejection')`
+  use `testFakeAsyncGuarded`, which collects what the zone reports — the same
+  thing, spelled in Dart. `Zone.current.handleUncaughtError` is this port's
+  `void Promise.reject(e)`.
+- **adapted (2):** the mutation-state assertions compare the fields that exist
+  here rather than a whole object literal: `context` is `onMutateResult`,
+  `submittedAt` is a `DateTime`, and errors carry a `StackTrace` beside them.
+
+**Six port bugs this suite caught,** all of them in how a mutation's callbacks
+and its retryer are sequenced:
+
+1. `Mutation.execute` ran `onMutate` and the cache's `onMutate` *outside* its
+   `try`, so a failing `onMutate` skipped the whole error path — no `onError`,
+   no `onSettled`, no error state.
+2. The error path let a failing callback replace the error the caller was
+   waiting for. Each callback is now isolated, reporting its own failure to the
+   zone exactly as upstream re-throws it into a fresh execution context.
+3. The cache's `onSuccess`/`onSettled` ran back-to-back, so a global `onSettled`
+   preceded the *local* `onSuccess`. They now interleave: cache hook, then
+   per-mutation hook, for each of success and settled.
+4. A restored (persisted, paused) mutation was never unpaused, because nothing
+   dispatched `continue` on the restart path.
+5. `MutationObserver`'s per-call `onSuccess`/`onSettled` fired even with no
+   subscription. They belong to a live subscription — a `mutate` whose widget is
+   gone must still update the cache, but must not call back into it.
+6. `Mutation.continueMutation` did nothing when there was no retryer, which is
+   exactly the state a mutation restored from persistence is in. It now runs the
+   mutation, which is how an offline mutation survives a restart — while a
+   *settled* one still refuses to run twice.
+
+The suite also needed two things the port did not have: mutation-observer cache
+events (`observerAdded` / `observerRemoved`, mirroring the query cache) and a
+named `MissingMutationFunctionError`.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -370,6 +421,7 @@ suite does not have to go looking:
 | `replaceEqualDeep` structural sharing | value equality plus an optional `structuralSharing` hook | [#12](https://github.com/KoTTi97/flutter_query/issues/12) |
 | `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
+| `MutationFunctionContext` (a mutation function's second argument) | not ported: `MutationFn` takes variables only |  [#14](https://github.com/KoTTi97/flutter_query/issues/14) |
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | module-level managers | instances the `QueryClient` owns | [#19](https://github.com/KoTTi97/flutter_query/issues/19) |
 | `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |

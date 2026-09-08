@@ -198,6 +198,22 @@ QueryClient testClient({
       notifyManager: NotifyManager(),
     );
 
+/// Builds a mutation and runs it, the way upstream's `executeMutation` helper
+/// does — a mutation with no observer, straight from the cache.
+Future<TData> executeMutation<TData, TVariables, TOnMutateResult>(
+  QueryClient client,
+  MutationOptions<TData, TVariables, TOnMutateResult> options,
+  TVariables variables,
+) =>
+    client.mutationCache
+        .build<TData, TVariables, TOnMutateResult>(
+          client,
+          client.defaultMutationOptions<TData, TVariables, TOnMutateResult>(
+            options,
+          ),
+        )
+        .execute(variables);
+
 /// The upstream name of a cache event, so ported tests can assert on the same
 /// event-sequence strings.
 String eventName(QueryCacheEvent event) => switch (event) {

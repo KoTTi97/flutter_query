@@ -8,6 +8,7 @@ import 'package:meta/meta.dart';
 
 import 'mutation_options.dart';
 import 'query_client.dart';
+import 'query_key.dart';
 import 'removable.dart';
 import 'retryer.dart';
 
@@ -25,6 +26,14 @@ abstract interface class MutationCacheRef {
     MutationAction action,
   );
   void onMutationRemovalRequested(Mutation<Object?, Object?, Object?> mutation);
+  void onMutationObserverAdded(
+    Mutation<Object?, Object?, Object?> mutation,
+    MutationObserverRef observer,
+  );
+  void onMutationObserverRemoved(
+    Mutation<Object?, Object?, Object?> mutation,
+    MutationObserverRef observer,
+  );
   bool canRunMutation(Mutation<Object?, Object?, Object?> mutation);
   void onMutationSettled(Mutation<Object?, Object?, Object?> mutation);
   FutureOr<void> onMutationStarting(
@@ -41,6 +50,14 @@ abstract interface class MutationCacheRef {
     Mutation<Object?, Object?, Object?> mutation,
     Object error,
     StackTrace stackTrace,
+    Object? variables,
+    Object? onMutateResult,
+  );
+  FutureOr<void> onMutationSettledCallback(
+    Mutation<Object?, Object?, Object?> mutation,
+    Object? data,
+    Object? error,
+    StackTrace? stackTrace,
     Object? variables,
     Object? onMutateResult,
   );
@@ -206,12 +223,18 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     if (!observers.contains(observer)) {
       observers.add(observer);
       clearGcTimeout();
+      _cache.onMutationObserverAdded(
+          this as Mutation<Object?, Object?, Object?>, observer);
     }
   }
 
   @internal
   void removeObserver(MutationObserverRef observer) {
-    observers.remove(observer);
+    if (!observers.remove(observer)) {
+      return;
+    }
+    _cache.onMutationObserverRemoved(
+        this as Mutation<Object?, Object?, Object?>, observer);
     if (observers.isEmpty) {
       if (_state.status == MutationStatus.pending) {
         scheduleGc();
@@ -228,8 +251,33 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     }
   }
 
-  /// Releases a paused mutation.
-  Future<TData>? continueMutation() => _retryer?.continueFetch();
+  /// Releases a paused mutation, completing when it settles.
+  ///
+  /// A mutation restored from persistence is `pending` with no retryer at all;
+  /// continuing it means running it, which is how an offline mutation survives
+  /// a restart. A settled one has nothing to continue and must never run twice.
+  Future<void> continueMutation() {
+    final retryer = _retryer;
+    if (retryer != null) {
+      return retryer.continueFetch().then((_) {}).catchError((Object _) {});
+    }
+    if (_state.status == MutationStatus.pending && _state.hasVariables) {
+      return execute(_state.variables as TVariables)
+          .then((_) {})
+          .catchError((Object _) {});
+    }
+    return Future<void>.value();
+  }
+
+  /// Runs [body], reporting anything it throws to the zone instead of letting
+  /// it replace the error already on its way to the caller.
+  static Future<void> _reportingFailures(FutureOr<void> Function() body) async {
+    try {
+      await body();
+    } catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+    }
+  }
 
   /// Back to idle.
   void reset() {
@@ -240,7 +288,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   Future<TData> execute(TVariables variables) async {
     final mutationFn = _options.mutationFn;
     if (mutationFn == null) {
-      throw StateError('No mutationFn was provided for this mutation');
+      throw MissingMutationFunctionError(_options.mutationKey);
     }
 
     // The retryer exists before the first `await`, exactly as upstream builds
@@ -266,36 +314,43 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     final isRestart = _state.status == MutationStatus.pending;
     TOnMutateResult? onMutateResult = _state.onMutateResult;
 
-    if (!isRestart) {
-      _dispatch(
-        MutationPendingAction(
-          variables: variables,
-          onMutateResult: null,
-          isPaused: !retryer.canStart(),
-        ),
-      );
-
-      await _cache.onMutationStarting(
-        this as Mutation<Object?, Object?, Object?>,
-        variables,
-      );
-
-      onMutateResult = await _options.onMutate?.call(variables);
-
-      if (onMutateResult != _state.onMutateResult) {
+    try {
+      if (isRestart) {
+        // A restored mutation is `pending` and paused; running it again is what
+        // unpauses it, and nothing else would clear the flag.
+        _dispatch(const MutationContinueAction());
+      } else {
         _dispatch(
           MutationPendingAction(
             variables: variables,
-            onMutateResult: onMutateResult,
+            onMutateResult: null,
             isPaused: !retryer.canStart(),
           ),
         );
-      }
-    }
 
-    try {
+        await _cache.onMutationStarting(
+          this as Mutation<Object?, Object?, Object?>,
+          variables,
+        );
+
+        onMutateResult = await _options.onMutate?.call(variables);
+
+        if (onMutateResult != _state.onMutateResult) {
+          _dispatch(
+            MutationPendingAction(
+              variables: variables,
+              onMutateResult: onMutateResult,
+              isPaused: !retryer.canStart(),
+            ),
+          );
+        }
+      }
+
       final data = await retryer.start();
 
+      // Cache hook then per-mutation hook, for each of success and settled —
+      // interleaved exactly as upstream runs them, so a global handler can set
+      // something up that the local one consumes.
       await _cache.onMutationSuccess(
         this as Mutation<Object?, Object?, Object?>,
         data,
@@ -303,6 +358,14 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
         onMutateResult,
       );
       await _options.onSuccess?.call(data, variables, onMutateResult);
+      await _cache.onMutationSettledCallback(
+        this as Mutation<Object?, Object?, Object?>,
+        data,
+        null,
+        null,
+        variables,
+        onMutateResult,
+      );
       await _options.onSettled?.call(
         data,
         null,
@@ -314,30 +377,46 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       _dispatch(MutationSuccessAction(data));
       return data;
     } catch (error, stackTrace) {
-      try {
-        await _cache.onMutationError(
+      // Each callback is isolated: one that throws reports its own failure to
+      // the zone and is not allowed to replace the error the caller is waiting
+      // for. Upstream does the same with `void Promise.reject(e)`.
+      await _reportingFailures(
+        () => _cache.onMutationError(
           this as Mutation<Object?, Object?, Object?>,
           error,
           stackTrace,
           variables,
           onMutateResult,
-        );
-        await _options.onError?.call(
+        ),
+      );
+      await _reportingFailures(
+        () => _options.onError?.call(
           error,
           stackTrace,
           variables,
           onMutateResult,
-        );
-        await _options.onSettled?.call(
+        ),
+      );
+      await _reportingFailures(
+        () => _cache.onMutationSettledCallback(
+          this as Mutation<Object?, Object?, Object?>,
           null,
           error,
           stackTrace,
           variables,
           onMutateResult,
-        );
-      } finally {
-        _dispatch(MutationErrorAction(error, stackTrace));
-      }
+        ),
+      );
+      await _reportingFailures(
+        () => _options.onSettled?.call(
+          null,
+          error,
+          stackTrace,
+          variables,
+          onMutateResult,
+        ),
+      );
+      _dispatch(MutationErrorAction(error, stackTrace));
       rethrow;
     } finally {
       _cache.onMutationSettled(this as Mutation<Object?, Object?, Object?>);
@@ -410,4 +489,17 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   @override
   String toString() => 'Mutation($mutationId, ${_state.status})';
+}
+
+/// Thrown when a mutation runs without a `mutationFn`.
+final class MissingMutationFunctionError implements Exception {
+  const MissingMutationFunctionError(this.mutationKey);
+
+  final QueryKey? mutationKey;
+
+  @override
+  String toString() => 'No mutationFn was provided'
+      '${mutationKey == null ? '' : ' for $mutationKey'}. Pass one in the '
+      'mutation options, or set a default with '
+      'QueryClient.setMutationDefaults.';
 }

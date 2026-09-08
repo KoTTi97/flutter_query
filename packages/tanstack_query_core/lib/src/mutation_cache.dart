@@ -30,6 +30,21 @@ final class MutationUpdated extends MutationCacheEvent {
   final MutationAction action;
 }
 
+final class MutationObserverAdded extends MutationCacheEvent {
+  const MutationObserverAdded(super.mutation, this.observer);
+  final MutationObserverRef observer;
+}
+
+final class MutationObserverRemoved extends MutationCacheEvent {
+  const MutationObserverRemoved(super.mutation, this.observer);
+  final MutationObserverRef observer;
+}
+
+final class MutationObserverOptionsUpdated extends MutationCacheEvent {
+  const MutationObserverOptionsUpdated(super.mutation, this.observer);
+  final MutationObserverRef observer;
+}
+
 /// Every mutation, in submission order.
 class MutationCache
     extends Subscribable<void Function(MutationCacheEvent event)>
@@ -88,6 +103,13 @@ class MutationCache
     return mutation;
   }
 
+  @internal
+  void notifyObserverOptionsUpdated(
+    Mutation<Object?, Object?, Object?> mutation,
+    MutationObserverRef observer,
+  ) =>
+      notify(MutationObserverOptionsUpdated(mutation, observer));
+
   void add(Mutation<Object?, Object?, Object?> mutation) {
     _mutations.add(mutation);
     notify(MutationAdded(mutation));
@@ -136,13 +158,9 @@ class MutationCache
     final paused =
         _mutations.where((mutation) => mutation.state.isPaused).toList();
     await Future.wait<void>(
-      paused.map((mutation) {
-        final resumed = mutation.continueMutation();
-        // The error belongs to the mutation's state, not to whoever resumed it.
-        return resumed == null
-            ? Future<void>.value()
-            : resumed.then((_) {}).catchError((Object _) {});
-      }),
+      // Errors belong to each mutation's state, not to whoever resumed it;
+      // `continueMutation` already swallows them.
+      paused.map((mutation) => mutation.continueMutation()),
     );
   }
 
@@ -173,7 +191,7 @@ class MutationCache
       if (!identical(other, mutation) &&
           _scopeOf(other) == scope &&
           other.state.isPaused) {
-        other.continueMutation()?.ignore();
+        other.continueMutation().ignore();
         break;
       }
     }
@@ -185,6 +203,20 @@ class MutationCache
     MutationAction action,
   ) =>
       notify(MutationUpdated(mutation, action));
+
+  @override
+  void onMutationObserverAdded(
+    Mutation<Object?, Object?, Object?> mutation,
+    MutationObserverRef observer,
+  ) =>
+      notify(MutationObserverAdded(mutation, observer));
+
+  @override
+  void onMutationObserverRemoved(
+    Mutation<Object?, Object?, Object?> mutation,
+    MutationObserverRef observer,
+  ) =>
+      notify(MutationObserverRemoved(mutation, observer));
 
   @override
   void onMutationRemovalRequested(
@@ -207,8 +239,25 @@ class MutationCache
     Object? onMutateResult,
   ) async {
     await onSuccess?.call(data, variables, onMutateResult, mutation);
+  }
+
+  @override
+  FutureOr<void> onMutationSettledCallback(
+    Mutation<Object?, Object?, Object?> mutation,
+    Object? data,
+    Object? error,
+    StackTrace? stackTrace,
+    Object? variables,
+    Object? onMutateResult,
+  ) async {
     await onSettled?.call(
-        data, null, null, variables, onMutateResult, mutation);
+      data,
+      error,
+      stackTrace,
+      variables,
+      onMutateResult,
+      mutation,
+    );
   }
 
   @override
@@ -220,13 +269,5 @@ class MutationCache
     Object? onMutateResult,
   ) async {
     await onError?.call(error, stackTrace, variables, onMutateResult, mutation);
-    await onSettled?.call(
-      null,
-      error,
-      stackTrace,
-      variables,
-      onMutateResult,
-      mutation,
-    );
   }
 }
