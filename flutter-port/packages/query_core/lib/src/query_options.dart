@@ -14,8 +14,8 @@ class QueryFunctionContext {
     required QueryCancelToken cancelToken,
     required void Function() onTokenConsumed,
     this.meta,
-  }) : _cancelToken = cancelToken,
-       _onTokenConsumed = onTokenConsumed;
+  })  : _cancelToken = cancelToken,
+        _onTokenConsumed = onTokenConsumed;
 
   final QueryKey queryKey;
   final Object? meta;
@@ -32,8 +32,8 @@ class QueryFunctionContext {
   }
 }
 
-typedef QueryFn<TQueryData> =
-    Future<TQueryData> Function(QueryFunctionContext context);
+typedef QueryFn<TQueryData> = Future<TQueryData> Function(
+    QueryFunctionContext context);
 
 /// Thrown when a query is fetched but no query function can be found for it —
 /// the port of upstream's "Missing queryFn" error.
@@ -88,7 +88,7 @@ class QueryOptions<TQueryData> {
   /// Optional replacement for new data, given the old — the escape hatch for
   /// preserving references across fetches. Off by default.
   final TQueryData Function(TQueryData? oldData, TQueryData newData)?
-  structuralSharing;
+      structuralSharing;
 
   final Object? meta;
 }
@@ -270,7 +270,7 @@ class DefaultedQueryOptions<TQueryData> {
   final TQueryData? Function()? initialData;
   final DateTime? Function()? initialDataUpdatedAt;
   final TQueryData Function(TQueryData? oldData, TQueryData newData)?
-  structuralSharing;
+      structuralSharing;
   final Object? meta;
 }
 
@@ -343,26 +343,26 @@ class DefaultedQueryObserverOptions<TQueryData, TData>
 
   @override
   int get hashCode => Object.hash(
-    queryKey,
-    gcTime,
-    retry,
-    retryDelay,
-    networkMode,
-    queryFn,
-    initialData,
-    initialDataUpdatedAt,
-    structuralSharing,
-    meta,
-    enabled,
-    staleTime,
-    refetchOnMount,
-    refetchOnAppFocus,
-    refetchOnReconnect,
-    refetchInterval,
-    refetchIntervalInBackground,
-    retryOnMount,
-    select,
-  );
+        queryKey,
+        gcTime,
+        retry,
+        retryDelay,
+        networkMode,
+        queryFn,
+        initialData,
+        initialDataUpdatedAt,
+        structuralSharing,
+        meta,
+        enabled,
+        staleTime,
+        refetchOnMount,
+        refetchOnAppFocus,
+        refetchOnReconnect,
+        refetchInterval,
+        refetchIntervalInBackground,
+        retryOnMount,
+        select,
+      );
 }
 
 /// The library-wide fallbacks, applied when neither the caller nor any
@@ -384,12 +384,11 @@ abstract final class QueryOptionDefaults {
 /// [defaults] is expected to be pre-merged by the client: client-wide defaults
 /// with every matching key default layered on in registration order.
 DefaultedQueryObserverOptions<TQueryData, TData>
-resolveQueryObserverOptions<TQueryData, TData>(
+    resolveQueryObserverOptions<TQueryData, TData>(
   QueryObserverOptions<TQueryData, TData> options, {
   QueryDefaults defaults = QueryDefaults.empty,
 }) {
-  final networkMode =
-      options.networkMode ??
+  final networkMode = options.networkMode ??
       defaults.networkMode ??
       QueryOptionDefaults.networkMode;
 
@@ -398,38 +397,31 @@ resolveQueryObserverOptions<TQueryData, TData>(
     queryFn: options.queryFn ?? defaults.typedQueryFn<TQueryData>(),
     gcTime: options.gcTime ?? defaults.gcTime ?? QueryOptionDefaults.gcTime,
     retry: options.retry ?? defaults.retry ?? QueryOptionDefaults.retry,
-    retryDelay:
-        options.retryDelay ??
+    retryDelay: options.retryDelay ??
         defaults.retryDelay ??
         QueryOptionDefaults.retryDelay,
     networkMode: networkMode,
     enabled: options.enabled ?? defaults.enabled ?? Enabled.on,
-    staleTime:
-        options.staleTime ??
+    staleTime: options.staleTime ??
         defaults.staleTime ??
         QueryOptionDefaults.staleTime,
-    refetchOnMount:
-        options.refetchOnMount ??
+    refetchOnMount: options.refetchOnMount ??
         defaults.refetchOnMount ??
         QueryOptionDefaults.refetchOn,
-    refetchOnAppFocus:
-        options.refetchOnAppFocus ??
+    refetchOnAppFocus: options.refetchOnAppFocus ??
         defaults.refetchOnAppFocus ??
         QueryOptionDefaults.refetchOn,
     // Depends on the resolved network mode: a query that ignores connectivity
     // has no reason to refetch when it returns.
-    refetchOnReconnect:
-        options.refetchOnReconnect ??
+    refetchOnReconnect: options.refetchOnReconnect ??
         defaults.refetchOnReconnect ??
         (networkMode == NetworkMode.always
             ? RefetchOn.never
             : QueryOptionDefaults.refetchOn),
-    refetchInterval:
-        options.refetchInterval ??
+    refetchInterval: options.refetchInterval ??
         defaults.refetchInterval ??
         QueryOptionDefaults.refetchInterval,
-    refetchIntervalInBackground:
-        options.refetchIntervalInBackground ??
+    refetchIntervalInBackground: options.refetchIntervalInBackground ??
         defaults.refetchIntervalInBackground ??
         false,
     retryOnMount: options.retryOnMount ?? defaults.retryOnMount ?? Enabled.on,

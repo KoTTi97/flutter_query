@@ -130,11 +130,11 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     required this.mutationId,
     required MutationHost host,
     required DefaultedMutationOptions<TData, TVariables, TOnMutateResult>
-    options,
+        options,
     MutationState<TData, TVariables, TOnMutateResult>? state,
-  }) : _host = host,
-       _options = options,
-       _state = state ?? MutationState<TData, TVariables, TOnMutateResult>() {
+  })  : _host = host,
+        _options = options,
+        _state = state ?? MutationState<TData, TVariables, TOnMutateResult>() {
     updateGcTime(options.gcTime);
     scheduleGc();
   }

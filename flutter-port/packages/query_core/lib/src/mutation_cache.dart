@@ -63,8 +63,7 @@ class MutationCache
     Object? variables,
     Mutation<Object?, Object?, Object?> mutation,
     MutationFunctionContext context,
-  )?
-  onMutate;
+  )? onMutate;
 
   final FutureOr<void> Function(
     Object? data,
@@ -72,8 +71,7 @@ class MutationCache
     Object? onMutateResult,
     Mutation<Object?, Object?, Object?> mutation,
     MutationFunctionContext context,
-  )?
-  onSuccess;
+  )? onSuccess;
 
   final FutureOr<void> Function(
     Object error,
@@ -82,8 +80,7 @@ class MutationCache
     Object? onMutateResult,
     Mutation<Object?, Object?, Object?> mutation,
     MutationFunctionContext context,
-  )?
-  onError;
+  )? onError;
 
   final FutureOr<void> Function(
     Object? data,
@@ -93,8 +90,7 @@ class MutationCache
     Object? onMutateResult,
     Mutation<Object?, Object?, Object?> mutation,
     MutationFunctionContext context,
-  )?
-  onSettled;
+  )? onSettled;
 
   final Set<Mutation<Object?, Object?, Object?>> _mutations =
       <Mutation<Object?, Object?, Object?>>{};
@@ -107,7 +103,7 @@ class MutationCache
   /// Creates a mutation and adds it. Always a new one — mutations are never
   /// reused.
   Mutation<TData, TVariables, TOnMutateResult>
-  build<TData, TVariables, TOnMutateResult>(
+      build<TData, TVariables, TOnMutateResult>(
     DefaultedMutationOptions<TData, TVariables, TOnMutateResult> options, {
     MutationState<TData, TVariables, TOnMutateResult>? state,
   }) {
@@ -204,9 +200,9 @@ class MutationCache
           () => Future.wait(
             paused.map(
               (mutation) => mutation.resume().then<void>(
-                (_) {},
-                onError: (Object _, StackTrace _) {},
-              ),
+                    (_) {},
+                    onError: (Object _, StackTrace _) {},
+                  ),
             ),
           ),
         )
@@ -245,32 +241,37 @@ class MutationCache
   @override
   void onMutationRemovalRequested(
     Mutation<Object?, Object?, Object?> mutation,
-  ) => remove(mutation);
+  ) =>
+      remove(mutation);
 
   @override
   void onMutationUpdated(
     Mutation<Object?, Object?, Object?> mutation,
     MutationAction action,
-  ) => notify(MutationUpdated(mutation, action));
+  ) =>
+      notify(MutationUpdated(mutation, action));
 
   @override
   void onMutationObserverAdded(
     Mutation<Object?, Object?, Object?> mutation,
     MutationObserverRef observer,
-  ) => notify(MutationObserverAdded(mutation, observer));
+  ) =>
+      notify(MutationObserverAdded(mutation, observer));
 
   @override
   void onMutationObserverRemoved(
     Mutation<Object?, Object?, Object?> mutation,
     MutationObserverRef observer,
-  ) => notify(MutationObserverRemoved(mutation, observer));
+  ) =>
+      notify(MutationObserverRemoved(mutation, observer));
 
   @override
   FutureOr<void> onMutationMutate(
     Mutation<Object?, Object?, Object?> mutation,
     Object? variables,
     MutationFunctionContext context,
-  ) => onMutate?.call(variables, mutation, context);
+  ) =>
+      onMutate?.call(variables, mutation, context);
 
   @override
   Future<void> onMutationSuccess(
@@ -290,14 +291,15 @@ class MutationCache
     Object? variables,
     Object? onMutateResult,
     MutationFunctionContext context,
-  ) async => onError?.call(
-    error,
-    stackTrace,
-    variables,
-    onMutateResult,
-    mutation,
-    context,
-  );
+  ) async =>
+      onError?.call(
+        error,
+        stackTrace,
+        variables,
+        onMutateResult,
+        mutation,
+        context,
+      );
 
   @override
   Future<void> onMutationSettled(
@@ -308,13 +310,14 @@ class MutationCache
     Object? variables,
     Object? onMutateResult,
     MutationFunctionContext context,
-  ) async => onSettled?.call(
-    data,
-    error,
-    stackTrace,
-    variables,
-    onMutateResult,
-    mutation,
-    context,
-  );
+  ) async =>
+      onSettled?.call(
+        data,
+        error,
+        stackTrace,
+        variables,
+        onMutateResult,
+        mutation,
+        context,
+      );
 }

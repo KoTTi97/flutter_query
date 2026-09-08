@@ -82,9 +82,8 @@ class MutationState<TData, TVariables, TOnMutateResult> {
           ? this.errorStackTrace
           : errorStackTrace as StackTrace?,
       failureCount: failureCount ?? this.failureCount,
-      failureReason: identical(failureReason, _unset)
-          ? this.failureReason
-          : failureReason,
+      failureReason:
+          identical(failureReason, _unset) ? this.failureReason : failureReason,
       failureStackTrace: identical(failureStackTrace, _unset)
           ? this.failureStackTrace
           : failureStackTrace as StackTrace?,
@@ -100,7 +99,6 @@ class MutationState<TData, TVariables, TOnMutateResult> {
   }
 
   @override
-  String toString() =>
-      'MutationState(status: $status, isPaused: $isPaused, '
+  String toString() => 'MutationState(status: $status, isPaused: $isPaused, '
       'hasData: $hasData, failureCount: $failureCount)';
 }

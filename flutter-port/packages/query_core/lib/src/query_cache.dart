@@ -60,11 +60,10 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     Object error,
     StackTrace stackTrace,
     Query<Object?> query,
-  )?
-  onError;
+  )? onError;
   final void Function(Object? data, Query<Object?> query)? onSuccess;
   final void Function(Object? data, Object? error, Query<Object?> query)?
-  onSettled;
+      onSettled;
 
   final Map<QueryKey, Query<Object?>> _queries = <QueryKey, Query<Object?>>{};
 
@@ -217,5 +216,6 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   void onQueryObserverRemoved(
     Query<Object?> query,
     QueryObserverRef observer,
-  ) => notify(QueryObserverRemoved(query, observer));
+  ) =>
+      notify(QueryObserverRemoved(query, observer));
 }

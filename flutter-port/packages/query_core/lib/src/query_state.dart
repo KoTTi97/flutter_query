@@ -106,8 +106,7 @@ class QueryState<TQueryData> {
   }
 
   @override
-  String toString() =>
-      'QueryState(status: $status, fetchStatus: $fetchStatus, '
+  String toString() => 'QueryState(status: $status, fetchStatus: $fetchStatus, '
       'hasData: $hasData, dataUpdateCount: $dataUpdateCount, '
       'errorUpdateCount: $errorUpdateCount, isInvalidated: $isInvalidated)';
 }

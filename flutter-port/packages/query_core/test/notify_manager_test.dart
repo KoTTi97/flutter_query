@@ -76,9 +76,12 @@ void main() {
       );
 
       await time.flushMicrotasks();
-      expect(calls, [
-        'scheduled',
-      ], reason: 'a throwing transaction must not strand the queue');
+      expect(
+          calls,
+          [
+            'scheduled',
+          ],
+          reason: 'a throwing transaction must not strand the queue');
     });
 
     testFakeAsync('drains callbacks scheduled from within a flush', (
@@ -93,10 +96,13 @@ void main() {
       });
 
       await time.flushMicrotasks();
-      expect(calls, [
-        'first',
-        'second',
-      ], reason: 're-entrant schedules join the same flush');
+      expect(
+          calls,
+          [
+            'first',
+            'second',
+          ],
+          reason: 're-entrant schedules join the same flush');
     });
 
     testFakeAsync('deferFlush is the scheduling seam', (time) async {

@@ -57,13 +57,13 @@ sealed class MutationResult<TData, TVariables, TOnMutateResult> {
       submittedAt == other.submittedAt;
 
   int get _baseHash => Object.hash(
-    variables,
-    onMutateResult,
-    failureCount,
-    failureReason,
-    isPaused,
-    submittedAt,
-  );
+        variables,
+        onMutateResult,
+        failureCount,
+        failureReason,
+        isPaused,
+        submittedAt,
+      );
 }
 
 /// Nothing has been submitted yet.

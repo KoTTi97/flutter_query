@@ -64,10 +64,13 @@ void main() {
       manager.subscribe(events.add);
 
       manager.setFocused(false);
-      expect(events, [
-        false,
-        false,
-      ], reason: 'both listeners see the event the removal happened during');
+      expect(
+          events,
+          [
+            false,
+            false,
+          ],
+          reason: 'both listeners see the event the removal happened during');
 
       manager.setFocused(true);
       expect(events, [false, false, true], reason: 'only the survivor remains');

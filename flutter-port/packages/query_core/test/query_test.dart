@@ -55,19 +55,20 @@ void main() {
     DateTime? Function()? initialDataUpdatedAt,
     Object? meta,
     String Function(String? oldData, String newData)? structuralSharing,
-  }) => QueryObserverOptions<String, String>(
-    queryKey: key,
-    queryFn: queryFn,
-    gcTime: gcTime,
-    staleTime: staleTime,
-    retry: retry,
-    retryDelay: retryDelay,
-    enabled: enabled,
-    initialData: initialData,
-    initialDataUpdatedAt: initialDataUpdatedAt,
-    meta: meta,
-    structuralSharing: structuralSharing,
-  );
+  }) =>
+      QueryObserverOptions<String, String>(
+        queryKey: key,
+        queryFn: queryFn,
+        gcTime: gcTime,
+        staleTime: staleTime,
+        retry: retry,
+        retryDelay: retryDelay,
+        enabled: enabled,
+        initialData: initialData,
+        initialDataUpdatedAt: initialDataUpdatedAt,
+        meta: meta,
+        structuralSharing: structuralSharing,
+      );
 
   testFakeAsync('should use the longest garbage collection time it has seen', (
     time,
@@ -388,7 +389,8 @@ void main() {
     },
   );
 
-  testFakeAsync('should provide a cancel token to the queryFn that reports the '
+  testFakeAsync(
+      'should provide a cancel token to the queryFn that reports the '
       'cancellation state', (time) async {
     final key = queryKey();
     QueryCancelToken? seenToken;
@@ -726,9 +728,9 @@ void main() {
   test('should return proper count of observers', () {
     final key = queryKey();
     QueryObserver<String, String> build() => QueryObserver<String, String>(
-      queryClient,
-      options(key, queryFn: (_) async => 'data'),
-    );
+          queryClient,
+          options(key, queryFn: (_) async => 'data'),
+        );
 
     final observer = build();
     final observer2 = build();

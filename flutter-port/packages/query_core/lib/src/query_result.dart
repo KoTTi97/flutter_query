@@ -5,8 +5,8 @@ import 'option_values.dart';
 /// Refetches the query behind a result. Errors surface in the returned result
 /// rather than as a thrown exception, so a widget callback can await it without
 /// a try/catch.
-typedef QueryRefetch<TData> =
-    Future<QueryResult<TData>> Function({bool cancelRefetch});
+typedef QueryRefetch<TData> = Future<QueryResult<TData>> Function(
+    {bool cancelRefetch});
 
 /// What an observer exposes to whoever is watching it.
 ///
@@ -105,17 +105,17 @@ sealed class QueryResult<TData> {
       isFetchedAfterMount == other.isFetchedAfterMount;
 
   int get _baseHash => Object.hash(
-    fetchStatus,
-    dataUpdatedAt,
-    errorUpdatedAt,
-    failureCount,
-    failureReason,
-    errorUpdateCount,
-    isStale,
-    isEnabled,
-    isFetched,
-    isFetchedAfterMount,
-  );
+        fetchStatus,
+        dataUpdatedAt,
+        errorUpdatedAt,
+        failureCount,
+        failureReason,
+        errorUpdateCount,
+        isStale,
+        isEnabled,
+        isFetched,
+        isFetchedAfterMount,
+      );
 }
 
 /// No data and no error yet. [QueryResult.isLoading] separates the first load
@@ -194,8 +194,7 @@ final class QuerySuccess<TData> extends QueryResult<TData> {
   int get hashCode => Object.hash(QuerySuccess, data, _baseHash);
 
   @override
-  String toString() =>
-      'QuerySuccess(data: $data, fetchStatus: $fetchStatus, '
+  String toString() => 'QuerySuccess(data: $data, fetchStatus: $fetchStatus, '
       'isStale: $isStale)';
 }
 
@@ -262,7 +261,6 @@ final class QueryError<TData> extends QueryResult<TData> {
       Object.hash(QueryError, error, hasStaleData, staleData, _baseHash);
 
   @override
-  String toString() =>
-      'QueryError(error: $error, hasStaleData: $hasStaleData, '
+  String toString() => 'QueryError(error: $error, hasStaleData: $hasStaleData, '
       'fetchStatus: $fetchStatus)';
 }

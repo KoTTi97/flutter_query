@@ -85,18 +85,19 @@ void main() {
     Enabled? retryOnMount,
     String? Function()? initialData,
     Object? meta,
-  }) => QueryObserverOptions<String, String>(
-    queryKey: key,
-    queryFn: queryFn,
-    gcTime: gcTime,
-    staleTime: staleTime,
-    retry: retry,
-    enabled: enabled,
-    refetchOnMount: refetchOnMount,
-    retryOnMount: retryOnMount,
-    initialData: initialData,
-    meta: meta,
-  );
+  }) =>
+      QueryObserverOptions<String, String>(
+        queryKey: key,
+        queryFn: queryFn,
+        gcTime: gcTime,
+        staleTime: staleTime,
+        retry: retry,
+        enabled: enabled,
+        refetchOnMount: refetchOnMount,
+        retryOnMount: retryOnMount,
+        initialData: initialData,
+        meta: meta,
+      );
 
   group('defaultOptions', () {
     testFakeAsync('should merge defaultOptions', (time) async {
@@ -1591,7 +1592,8 @@ void main() {
       expect(calls2, 1);
     });
 
-    testFakeAsync('should be able to refetch all active and inactive queries '
+    testFakeAsync(
+        'should be able to refetch all active and inactive queries '
         '(refetchQueries())', (time) async {
       final key1 = queryKey();
       final key2 = queryKey();
@@ -2399,17 +2401,18 @@ void main() {
         String label,
         Duration delay,
         int value,
-      ) => MutationObserver<int, Object?, Object?>(
-        queryClient,
-        MutationOptions<int, Object?, Object?>(
-          mutationFn: (_, _) async {
-            orders.add('${label}start');
-            await sleep(delay);
-            orders.add('${label}end');
-            return value;
-          },
-        ),
-      );
+      ) =>
+          MutationObserver<int, Object?, Object?>(
+            queryClient,
+            MutationOptions<int, Object?, Object?>(
+              mutationFn: (_, _) async {
+                orders.add('${label}start');
+                await sleep(delay);
+                orders.add('${label}end');
+                return value;
+              },
+            ),
+          );
 
       final observer1 = build('1', ms(50), 1);
       final observer2 = build('2', ms(20), 2);
@@ -2438,18 +2441,19 @@ void main() {
           String label,
           Duration delay,
           int value,
-        ) => MutationObserver<int, Object?, Object?>(
-          queryClient,
-          MutationOptions<int, Object?, Object?>(
-            scope: 'scope',
-            mutationFn: (_, _) async {
-              orders.add('${label}start');
-              await sleep(delay);
-              orders.add('${label}end');
-              return value;
-            },
-          ),
-        );
+        ) =>
+            MutationObserver<int, Object?, Object?>(
+              queryClient,
+              MutationOptions<int, Object?, Object?>(
+                scope: 'scope',
+                mutationFn: (_, _) async {
+                  orders.add('${label}start');
+                  await sleep(delay);
+                  orders.add('${label}end');
+                  return value;
+                },
+              ),
+            );
 
         final observer1 = build('1', ms(50), 1);
         final observer2 = build('2', ms(20), 2);
@@ -2510,17 +2514,17 @@ void main() {
           ),
         )..mount();
 
-        final restored = newQueryClient.mutationCache
-            .build<int, Object?, Object?>(
-              newQueryClient.defaultMutationOptions(
-                const MutationOptions<int, Object?, Object?>(),
-              ),
-              state: MutationState<int, Object?, Object?>(
-                isPaused: true,
-                status: MutationStatus.pending,
-                submittedAt: DateTime.utc(2020),
-              ),
-            );
+        final restored =
+            newQueryClient.mutationCache.build<int, Object?, Object?>(
+          newQueryClient.defaultMutationOptions(
+            const MutationOptions<int, Object?, Object?>(),
+          ),
+          state: MutationState<int, Object?, Object?>(
+            isPaused: true,
+            status: MutationStatus.pending,
+            submittedAt: DateTime.utc(2020),
+          ),
+        );
 
         expect(restored.state.isPaused, isTrue);
 
@@ -2567,18 +2571,19 @@ void main() {
           String label,
           int value, {
           String? scope,
-        }) => MutationObserver<int, Object?, Object?>(
-          queryClient,
-          MutationOptions<int, Object?, Object?>(
-            scope: scope,
-            mutationFn: (_, _) async {
-              results.add('$label-start');
-              await sleep(ms(50));
-              results.add('$label-end');
-              return value;
-            },
-          ),
-        );
+        }) =>
+            MutationObserver<int, Object?, Object?>(
+              queryClient,
+              MutationOptions<int, Object?, Object?>(
+                scope: scope,
+                mutationFn: (_, _) async {
+                  results.add('$label-start');
+                  await sleep(ms(50));
+                  results.add('$label-end');
+                  return value;
+                },
+              ),
+            );
 
         final observer = build('mutation1', 1);
         observer.mutate(null).ignore();

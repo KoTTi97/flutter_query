@@ -23,30 +23,30 @@ void main() {
       final testCache = MutationCache(
         onError: (error, _, variables, onMutateResult, mutation, context) =>
             errorCalls.add([
-              error,
-              variables,
-              onMutateResult,
-              mutation,
-              context,
-            ]),
+          error,
+          variables,
+          onMutateResult,
+          mutation,
+          context,
+        ]),
         onSuccess: (data, variables, onMutateResult, mutation, context) =>
             successCalls.add([
-              data,
-              variables,
-              onMutateResult,
-              mutation,
-              context,
-            ]),
+          data,
+          variables,
+          onMutateResult,
+          mutation,
+          context,
+        ]),
         onSettled:
             (data, error, _, variables, onMutateResult, mutation, context) =>
                 settledCalls.add([
-                  data,
-                  error,
-                  variables,
-                  onMutateResult,
-                  mutation,
-                  context,
-                ]),
+          data,
+          error,
+          variables,
+          onMutateResult,
+          mutation,
+          context,
+        ]),
       );
       final testClient = QueryClient(mutationCache: testCache);
 
@@ -130,21 +130,21 @@ void main() {
               errorCalls.add([error, variables, onMutateResult]),
           onSuccess: (data, variables, onMutateResult, mutation, context) =>
               successCalls.add([
-                data,
-                variables,
-                onMutateResult,
-                mutation,
-                context,
-              ]),
+            data,
+            variables,
+            onMutateResult,
+            mutation,
+            context,
+          ]),
           onSettled:
               (data, error, _, variables, onMutateResult, mutation, context) =>
                   settledCalls.add([
-                    data,
-                    error,
-                    variables,
-                    onMutateResult,
-                    mutation,
-                  ]),
+            data,
+            error,
+            variables,
+            onMutateResult,
+            mutation,
+          ]),
         );
         final testClient = QueryClient(mutationCache: testCache);
 

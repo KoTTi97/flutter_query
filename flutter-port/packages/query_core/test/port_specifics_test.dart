@@ -25,16 +25,17 @@ void main() {
     QueryFn<String>? queryFn,
     String? Function()? initialData,
     String Function(String? oldData, String newData)? structuralSharing,
-  }) => queryCache.build<String>(
-    queryClient.defaultQueryOptions(
-      QueryObserverOptions<String, String>(
-        queryKey: key,
-        queryFn: queryFn,
-        initialData: initialData,
-        structuralSharing: structuralSharing,
-      ),
-    ),
-  );
+  }) =>
+      queryCache.build<String>(
+        queryClient.defaultQueryOptions(
+          QueryObserverOptions<String, String>(
+            queryKey: key,
+            queryFn: queryFn,
+            initialData: initialData,
+            structuralSharing: structuralSharing,
+          ),
+        ),
+      );
 
   group('null in place of undefined', () {
     test('initialData returning null means no data', () {

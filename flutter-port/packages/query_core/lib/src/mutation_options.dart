@@ -21,51 +21,49 @@ class MutationFunctionContext {
   final Object? meta;
 }
 
-typedef MutationFn<TData, TVariables> =
-    Future<TData> Function(
-      TVariables variables,
-      MutationFunctionContext context,
-    );
+typedef MutationFn<TData, TVariables> = Future<TData> Function(
+  TVariables variables,
+  MutationFunctionContext context,
+);
 
 /// Runs before the mutation function, and returns whatever the later callbacks
 /// need to undo an optimistic update.
-typedef OnMutate<TVariables, TOnMutateResult> =
-    FutureOr<TOnMutateResult?> Function(
-      TVariables variables,
-      MutationFunctionContext context,
-    );
+typedef OnMutate<TVariables, TOnMutateResult> = FutureOr<TOnMutateResult?>
+    Function(
+  TVariables variables,
+  MutationFunctionContext context,
+);
 
 /// A callback may be `async`, and the mutation awaits it before moving on —
 /// that is how "invalidate these queries, then settle" is expressed. Upstream
 /// lets a callback *return* a promise to the same effect; Dart says it with
 /// `await` inside the body instead, which is both clearer and the only form
 /// that type-checks against a void return.
-typedef OnMutationSuccess<TData, TVariables, TOnMutateResult> =
-    FutureOr<void> Function(
-      TData data,
-      TVariables variables,
-      TOnMutateResult? onMutateResult,
-      MutationFunctionContext context,
-    );
+typedef OnMutationSuccess<TData, TVariables, TOnMutateResult> = FutureOr<void>
+    Function(
+  TData data,
+  TVariables variables,
+  TOnMutateResult? onMutateResult,
+  MutationFunctionContext context,
+);
 
-typedef OnMutationError<TVariables, TOnMutateResult> =
-    FutureOr<void> Function(
-      Object error,
-      StackTrace stackTrace,
-      TVariables variables,
-      TOnMutateResult? onMutateResult,
-      MutationFunctionContext context,
-    );
+typedef OnMutationError<TVariables, TOnMutateResult> = FutureOr<void> Function(
+  Object error,
+  StackTrace stackTrace,
+  TVariables variables,
+  TOnMutateResult? onMutateResult,
+  MutationFunctionContext context,
+);
 
-typedef OnMutationSettled<TData, TVariables, TOnMutateResult> =
-    FutureOr<void> Function(
-      TData? data,
-      Object? error,
-      StackTrace? stackTrace,
-      TVariables variables,
-      TOnMutateResult? onMutateResult,
-      MutationFunctionContext context,
-    );
+typedef OnMutationSettled<TData, TVariables, TOnMutateResult> = FutureOr<void>
+    Function(
+  TData? data,
+  Object? error,
+  StackTrace? stackTrace,
+  TVariables variables,
+  TOnMutateResult? onMutateResult,
+  MutationFunctionContext context,
+);
 
 /// Thrown when a mutation runs with no mutation function to call.
 class MissingMutationFunctionError implements Exception {
@@ -185,19 +183,19 @@ class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
 
   @override
   int get hashCode => Object.hash(
-    gcTime,
-    retry,
-    retryDelay,
-    networkMode,
-    mutationKey,
-    mutationFn,
-    scope,
-    meta,
-    onMutate,
-    onSuccess,
-    onError,
-    onSettled,
-  );
+        gcTime,
+        retry,
+        retryDelay,
+        networkMode,
+        mutationKey,
+        mutationFn,
+        scope,
+        meta,
+        onMutate,
+        onSuccess,
+        onError,
+        onSettled,
+      );
 }
 
 /// The library-wide mutation fallbacks.
@@ -217,7 +215,7 @@ abstract final class MutationOptionDefaults {
 /// [defaults] is expected to be pre-merged by the client: client-wide defaults
 /// with every matching key default layered on in registration order.
 DefaultedMutationOptions<TData, TVariables, TOnMutateResult>
-resolveMutationOptions<TData, TVariables, TOnMutateResult>(
+    resolveMutationOptions<TData, TVariables, TOnMutateResult>(
   MutationOptions<TData, TVariables, TOnMutateResult> options, {
   MutationDefaults defaults = const MutationDefaults(),
 }) {
@@ -229,31 +227,26 @@ resolveMutationOptions<TData, TVariables, TOnMutateResult>(
 
   return DefaultedMutationOptions<TData, TVariables, TOnMutateResult>(
     mutationKey: options.mutationKey ?? defaults.mutationKey,
-    mutationFn:
-        options.mutationFn ??
+    mutationFn: options.mutationFn ??
         (defaultMutationFn == null
             ? null
             : (variables, context) async =>
-                  await defaultMutationFn(variables, context) as TData),
+                await defaultMutationFn(variables, context) as TData),
     gcTime: options.gcTime ?? defaults.gcTime ?? MutationOptionDefaults.gcTime,
     retry: options.retry ?? defaults.retry ?? MutationOptionDefaults.retry,
-    retryDelay:
-        options.retryDelay ??
+    retryDelay: options.retryDelay ??
         defaults.retryDelay ??
         MutationOptionDefaults.retryDelay,
-    networkMode:
-        options.networkMode ??
+    networkMode: options.networkMode ??
         defaults.networkMode ??
         MutationOptionDefaults.networkMode,
     scope: options.scope ?? defaults.scope,
     meta: options.meta ?? defaults.meta,
-    onMutate:
-        options.onMutate ??
+    onMutate: options.onMutate ??
         (defaultOnMutate == null
             ? null
             : (variables, context) async =>
-                  await defaultOnMutate(variables, context)
-                      as TOnMutateResult?),
+                await defaultOnMutate(variables, context) as TOnMutateResult?),
     onSuccess: options.onSuccess ?? defaultOnSuccess,
     onError: options.onError ?? defaultOnError,
     onSettled: options.onSettled ?? defaultOnSettled,

@@ -1093,22 +1093,22 @@ void main() {
     (time) async {
       var calls = 0;
 
-      final mutation = queryClient.mutationCache
-          .build<String, Object?, Object?>(
-            queryClient.defaultMutationOptions(
-              MutationOptions<String, Object?, Object?>(
-                mutationFn: (_, _) {
-                  calls++;
-                  return sleep(ms(10)).then((_) => 'data');
-                },
-              ),
-            ),
-            state: MutationState<String, Object?, Object?>(
-              isPaused: true,
-              status: MutationStatus.pending,
-              submittedAt: DateTime.utc(2020),
-            ),
-          );
+      final mutation =
+          queryClient.mutationCache.build<String, Object?, Object?>(
+        queryClient.defaultMutationOptions(
+          MutationOptions<String, Object?, Object?>(
+            mutationFn: (_, _) {
+              calls++;
+              return sleep(ms(10)).then((_) => 'data');
+            },
+          ),
+        ),
+        state: MutationState<String, Object?, Object?>(
+          isPaused: true,
+          status: MutationStatus.pending,
+          submittedAt: DateTime.utc(2020),
+        ),
+      );
 
       final resumed = mutation.resume();
       await time.advance(ms(10));

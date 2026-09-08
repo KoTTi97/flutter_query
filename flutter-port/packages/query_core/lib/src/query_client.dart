@@ -31,8 +31,8 @@ class QueryClient implements ObserverClient, MutationObserverClient {
     MutationCache? mutationCache,
     this.defaultOptions = QueryDefaults.empty,
     this.defaultMutationOptionsBag = const MutationDefaults(),
-  }) : _queryCache = queryCache ?? QueryCache(),
-       _mutationCache = mutationCache ?? MutationCache();
+  })  : _queryCache = queryCache ?? QueryCache(),
+        _mutationCache = mutationCache ?? MutationCache();
 
   final QueryCache _queryCache;
   final MutationCache _mutationCache;
@@ -139,10 +139,11 @@ class QueryClient implements ObserverClient, MutationObserverClient {
   /// seeds another, as when a list response fills in the per-item entries.
   List<(QueryKey, TQueryData?)> getQueriesData<TQueryData>(
     QueryFilters filters,
-  ) => _queryCache
-      .findAll(filters)
-      .map((query) => (query.queryKey, query.state.data as TQueryData?))
-      .toList();
+  ) =>
+      _queryCache
+          .findAll(filters)
+          .map((query) => (query.queryKey, query.state.data as TQueryData?))
+          .toList();
 
   // --- Writing --------------------------------------------------------------
 
@@ -304,21 +305,20 @@ class QueryClient implements ObserverClient, MutationObserverClient {
           .findAll(filters)
           .where((query) => !query.isDisabled() && !query.isStatic())
           .map((query) {
-            var future = query.fetch(cancelRefetch: cancelRefetch);
-            if (!throwOnError) {
-              future = future.then<Object?>(
-                (value) => value,
-                onError: (Object _, StackTrace _) => null,
-              );
-            }
+        var future = query.fetch(cancelRefetch: cancelRefetch);
+        if (!throwOnError) {
+          future = future.then<Object?>(
+            (value) => value,
+            onError: (Object _, StackTrace _) => null,
+          );
+        }
 
-            if (query.state.fetchStatus == FetchStatus.paused) {
-              future.ignore();
-              return Future<Object?>.value();
-            }
-            return future;
-          })
-          .toList(),
+        if (query.state.fetchStatus == FetchStatus.paused) {
+          future.ignore();
+          return Future<Object?>.value();
+        }
+        return future;
+      }).toList(),
     );
 
     return Future.wait(futures).then((_) {});
@@ -348,13 +348,15 @@ class QueryClient implements ObserverClient, MutationObserverClient {
   /// [query] without a `select` step.
   Future<TQueryData> fetchQuery<TQueryData>(
     QueryObserverOptions<TQueryData, TQueryData> options,
-  ) => query(options);
+  ) =>
+      query(options);
 
   /// Warms the cache and swallows failures — a prefetch that fails is not the
   /// caller's problem, the eventual observer will surface it.
   Future<void> prefetchQuery<TQueryData>(
     QueryObserverOptions<TQueryData, TQueryData> options,
-  ) => fetchQuery(options).then((_) {}, onError: (Object _, StackTrace _) {});
+  ) =>
+      fetchQuery(options).then((_) {}, onError: (Object _, StackTrace _) {});
 
   // --- Defaults -------------------------------------------------------------
 
@@ -379,14 +381,13 @@ class QueryClient implements ObserverClient, MutationObserverClient {
   }
 
   @override
-  DefaultedQueryObserverOptions<TQueryData, TData> defaultQueryOptions<
-    TQueryData,
-    TData
-  >(QueryObserverOptions<TQueryData, TData> options) =>
-      resolveQueryObserverOptions(
-        options,
-        defaults: _defaultsFor(options.queryKey),
-      );
+  DefaultedQueryObserverOptions<TQueryData, TData>
+      defaultQueryOptions<TQueryData, TData>(
+              QueryObserverOptions<TQueryData, TData> options) =>
+          resolveQueryObserverOptions(
+            options,
+            defaults: _defaultsFor(options.queryKey),
+          );
 
   QueryDefaults _defaultsFor(QueryKey queryKey) =>
       defaultOptions.mergedWith(getQueryDefaults(queryKey));
@@ -410,7 +411,7 @@ class QueryClient implements ObserverClient, MutationObserverClient {
 
   @override
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult>
-  defaultMutationOptions<TData, TVariables, TOnMutateResult>(
+      defaultMutationOptions<TData, TVariables, TOnMutateResult>(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) {
     final mutationKey = options.mutationKey;
@@ -425,10 +426,9 @@ class QueryClient implements ObserverClient, MutationObserverClient {
 
   /// Defaulting for a single awaited fetch, which does not retry unless
   /// something asked it to.
-  DefaultedQueryObserverOptions<TQueryData, TData> _oneOffOptions<
-    TQueryData,
-    TData
-  >(QueryObserverOptions<TQueryData, TData> options) {
+  DefaultedQueryObserverOptions<TQueryData, TData>
+      _oneOffOptions<TQueryData, TData>(
+          QueryObserverOptions<TQueryData, TData> options) {
     var defaults = _defaultsFor(options.queryKey);
     if (options.retry == null && defaults.retry == null) {
       defaults = defaults.mergedWith(

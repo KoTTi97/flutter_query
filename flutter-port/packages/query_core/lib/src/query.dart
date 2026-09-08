@@ -117,8 +117,8 @@ class Query<TQueryData> extends Removable {
     required QueryHost host,
     required DefaultedQueryOptions<TQueryData> options,
     QueryState<TQueryData>? initialState,
-  }) : _host = host,
-       _options = options {
+  })  : _host = host,
+        _options = options {
     _initialState = initialState ?? _defaultState(options);
     _state = _initialState;
     updateGcTime(options.gcTime);
@@ -254,9 +254,9 @@ class Query<TQueryData> extends Removable {
 
   /// Whether any observer has pinned this query as never-refetching.
   bool isStatic() => observers.any(
-    (observer) =>
-        observer.staleTimeOption.resolveWith(this) is StaleDurationStatic,
-  );
+        (observer) =>
+            observer.staleTimeOption.resolveWith(this) is StaleDurationStatic,
+      );
 
   bool isStale() {
     // Observers know best: their staleness accounts for enabled and staleTime.
@@ -596,9 +596,8 @@ QueryState<TQueryData> _defaultState<TQueryData>(
   return QueryState<TQueryData>(
     hasData: hasData,
     data: initialData,
-    dataUpdatedAt: hasData
-        ? (options.initialDataUpdatedAt?.call() ?? clock.now())
-        : null,
+    dataUpdatedAt:
+        hasData ? (options.initialDataUpdatedAt?.call() ?? clock.now()) : null,
     status: hasData ? QueryStatus.success : QueryStatus.pending,
   );
 }

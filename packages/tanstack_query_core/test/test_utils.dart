@@ -1,34 +1,50 @@
+/// The test harness every ported suite uses.
+///
+/// Decided on https://github.com/KoTTi97/flutter_query/issues/9: upstream's
+/// suites are written against `await vi.advanceTimersByTimeAsync(n)`, which
+/// fires timers *and* drains microtasks in between. `FakeAsync.elapse` cannot
+/// be called re-entrantly, and a ported test body runs inside the zone — so the
+/// body parks on `await time.advance(d)` and an outer driver owns the single
+/// top-level `elapse`.
+library;
+
 import 'dart:async';
 
 import 'package:clock/clock.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:meta/meta.dart';
-import 'package:query_core/query_core.dart';
+import 'package:tanstack_query_core/tanstack_query_core.dart';
 import 'package:test/test.dart';
 
 /// Drives virtual time from inside a [testFakeAsync] body.
-///
-/// [advance] is the equivalent of vitest's `await vi.advanceTimersByTimeAsync`:
-/// it fires timers *and* lets microtasks run in between, which is what the
-/// ported upstream tests rely on.
 class FakeTime {
   FakeTime._();
 
   _AdvanceRequest? _pending;
+  FakeAsync? _async;
 
-  /// Elapses virtual time by [duration], interleaving microtask flushes.
+  /// Elapses virtual time by [duration], interleaving microtask flushes —
+  /// the equivalent of `await vi.advanceTimersByTimeAsync(ms)`.
   Future<void> advance(Duration duration) {
     final request = _AdvanceRequest(duration);
     _pending = request;
     return request.completer.future;
   }
 
-  /// Lets pending microtasks run without elapsing the clock — the idiom for
-  /// "flush notifications" (upstream: `advanceTimersByTimeAsync(0)`).
+  /// Lets pending microtasks run without elapsing the clock
+  /// (upstream: `advanceTimersByTimeAsync(0)`).
   Future<void> flushMicrotasks() => advance(Duration.zero);
 
   /// Virtual now. Core code reads time through `clock`, so this matches.
   DateTime get now => clock.now();
+
+  /// How many timers are still scheduled.
+  ///
+  /// Not asserted automatically: a query schedules a `gcTime` timer as a matter
+  /// of course, so "no pending timers" is false for almost every honest test.
+  /// Suites that care about a *specific* leak (a refetch interval that should
+  /// have been cancelled) call this.
+  int get pendingTimers => _async?.pendingTimers.length ?? 0;
 
   _AdvanceRequest? _takePending() {
     final pending = _pending;
@@ -45,12 +61,6 @@ class _AdvanceRequest {
 }
 
 /// Runs [body] inside a [FakeAsync] zone with a fake clock.
-///
-/// The body is an ordinary async function; every `await time.advance(...)`
-/// suspends it and hands control back to this driver, which elapses virtual
-/// time at the top level. That indirection is required because `FakeAsync`
-/// forbids re-entrant `elapse` calls, and the body itself runs *inside* the
-/// zone.
 @isTest
 void testFakeAsync(
   String description,
@@ -65,9 +75,9 @@ void testFakeAsync(
       expect(
         completed,
         isTrue,
-        reason: 'the test body never completed — it is awaiting a future '
-            'that virtual time cannot resolve (real I/O, or a timer nothing '
-            'advances). Use time.advance() to drive it.',
+        reason: 'the test body never completed — it is awaiting a future that '
+            'virtual time cannot resolve (real I/O, or a timer nothing '
+            'advances). Drive it with time.advance().',
       );
     },
     skip: skip,
@@ -76,7 +86,7 @@ void testFakeAsync(
 }
 
 /// Runs [body] in a fake-async zone, driving every [FakeTime.advance] it asks
-/// for. Returns whether the body ran to completion; rethrows whatever it threw.
+/// for. Returns whether the body ran to completion; rethrows what it threw.
 ///
 /// Exposed so the deadlock guard itself can be tested.
 bool runFakeAsyncBody(Future<void> Function(FakeTime time) body) {
@@ -85,7 +95,7 @@ bool runFakeAsyncBody(Future<void> Function(FakeTime time) body) {
   StackTrace? stackTrace;
 
   fakeAsync((async) {
-    final time = FakeTime._();
+    final time = FakeTime._().._async = async;
 
     unawaited(
       body(time).then(
@@ -98,7 +108,7 @@ bool runFakeAsyncBody(Future<void> Function(FakeTime time) body) {
     );
 
     while (true) {
-      // Run the body up to its next `advance` (or to completion).
+      // Run the body up to its next `advance`, or to completion.
       async.flushMicrotasks();
       if (completed || error != null) {
         break;
@@ -121,12 +131,7 @@ bool runFakeAsyncBody(Future<void> Function(FakeTime time) body) {
   return completed;
 }
 
-/// Like [testFakeAsync], but also collects errors reported to the zone with
-/// `Zone.handleUncaughtError`.
-///
-/// Several upstream mutation tests listen for Node's `unhandledRejection` to
-/// check that a failing callback is reported without derailing the ones after
-/// it; this is the Dart equivalent of installing that listener.
+/// Like [testFakeAsync], but also collects errors reported to the zone.
 @isTest
 void testFakeAsyncGuarded(
   String description,
@@ -137,52 +142,57 @@ void testFakeAsyncGuarded(
     final uncaught = <Object>[];
     final completed = runFakeAsyncBody((time) {
       final completer = Completer<void>();
-      runZonedGuarded(() async {
-        try {
-          await body(time, uncaught);
-          completer.complete();
-        } catch (error, stackTrace) {
-          // Failures of the test body itself must fail the test, not land
-          // in the collected list.
-          completer.completeError(error, stackTrace);
-        }
-      }, (error, _) => uncaught.add(error));
+      runZonedGuarded(
+        () async {
+          try {
+            await body(time, uncaught);
+            completer.complete();
+          } catch (error, stackTrace) {
+            // A failure of the body itself must fail the test rather than land
+            // in the collected list.
+            completer.completeError(error, stackTrace);
+          }
+        },
+        (error, _) => uncaught.add(error),
+      );
       return completer.future;
     });
     expect(
       completed,
       isTrue,
-      reason: 'the test body never completed — it is awaiting a future '
-          'that virtual time cannot resolve.',
+      reason: 'the test body never completed — see testFakeAsync.',
     );
   }, skip: skip);
 }
 
-/// Builds a mutation on the cache and runs it, with no observer attached.
-/// Port of upstream's `executeMutation` test helper.
-Future<TData> executeMutation<TData, TVariables, TOnMutateResult>(
-  QueryClient client,
-  MutationOptions<TData, TVariables, TOnMutateResult> options,
-  TVariables variables,
-) =>
-    client.mutationCache
-        .build<TData, TVariables, TOnMutateResult>(
-          client.defaultMutationOptions(options),
-        )
-        .execute(variables);
-
 int _keyCounter = 0;
 
 /// A unique key per call, so tests never collide in a shared cache.
-/// Port of upstream's `queryKey()` test helper.
-QueryKey queryKey() => QueryKey(['query_${++_keyCounter}']);
+/// Port of upstream's `queryKey()` helper.
+QueryKey queryKey() => QueryKey(<Object?>['query_${++_keyCounter}']);
 
-/// Virtual-time sleep. Resolves when the fake clock passes [duration].
+/// Virtual-time sleep.
 Future<void> sleep(Duration duration) => Future<void>.delayed(duration);
 
-/// Milliseconds, short enough to keep ported timings readable — upstream writes
-/// them as bare numbers.
+/// Upstream writes timings as bare millisecond numbers; this keeps ported
+/// tests readable.
 Duration ms(int milliseconds) => Duration(milliseconds: milliseconds);
+
+/// A client with its own managers, so nothing leaks between tests
+/// (https://github.com/KoTTi97/flutter_query/issues/19).
+QueryClient testClient({
+  DefaultOptions? defaultOptions,
+  QueryCache? queryCache,
+  MutationCache? mutationCache,
+}) =>
+    QueryClient(
+      queryCache: queryCache,
+      mutationCache: mutationCache,
+      defaultOptions: defaultOptions,
+      focusManager: AppFocusManager(),
+      onlineManager: OnlineManager(),
+      notifyManager: NotifyManager(),
+    );
 
 /// The upstream name of a cache event, so ported tests can assert on the same
 /// event-sequence strings.
@@ -193,17 +203,4 @@ String eventName(QueryCacheEvent event) => switch (event) {
       QueryObserverAdded() => 'observerAdded',
       QueryObserverRemoved() => 'observerRemoved',
       QueryObserverResultsUpdated() => 'observerResultsUpdated',
-      QueryObserverOptionsUpdated() => 'observerOptionsUpdated',
     };
-
-/// Runs [body] with the online manager forced to [online], restoring the
-/// previous state afterwards. Port of `mockOnlineManagerIsOnline`.
-T mockOnline<T>(bool online, T Function() body) {
-  final previous = onlineManager.isOnline;
-  onlineManager.setOnline(online);
-  try {
-    return body();
-  } finally {
-    onlineManager.setOnline(previous);
-  }
-}

@@ -19,10 +19,9 @@ import 'query_state.dart';
 abstract interface class ObserverClient {
   QueryCache get queryCache;
 
-  DefaultedQueryObserverOptions<TQueryData, TData> defaultQueryOptions<
-    TQueryData,
-    TData
-  >(QueryObserverOptions<TQueryData, TData> options);
+  DefaultedQueryObserverOptions<TQueryData, TData>
+      defaultQueryOptions<TQueryData, TData>(
+          QueryObserverOptions<TQueryData, TData> options);
 }
 
 /// Holds a selected value so "no value" and "a null value" stay distinct.
@@ -255,8 +254,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // Upstream adds a millisecond because the timer sometimes fires just before
     // the staleness boundary, which would leave the result fresh and the timer
     // spent.
-    final timeout =
-        (remaining.isNegative ? Duration.zero : remaining) +
+    final timeout = (remaining.isNegative ? Duration.zero : remaining) +
         const Duration(milliseconds: 1);
 
     _staleTimer = Timer(timeout, () {
@@ -359,7 +357,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
     final isFetchedAfterMount =
         state.dataUpdateCount > queryInitialState.dataUpdateCount ||
-        state.errorUpdateCount > queryInitialState.errorUpdateCount;
+            state.errorUpdateCount > queryInitialState.errorUpdateCount;
 
     if (status == QueryStatus.error && error != null) {
       return QueryError<TData>(

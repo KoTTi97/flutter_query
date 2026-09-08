@@ -10,8 +10,8 @@ enum RetryerStatus { pending, resolved, rejected }
 /// Whether a fetch may start at all under [mode].
 bool canFetch(NetworkMode? mode) =>
     (mode ?? NetworkMode.online) == NetworkMode.online
-    ? onlineManager.isOnline
-    : true;
+        ? onlineManager.isOnline
+        : true;
 
 /// Runs a function, retrying on failure and pausing while the app is offline or
 /// in the background.
@@ -30,19 +30,19 @@ class Retryer<TData> {
     RetryDelay? retryDelay,
     void Function(CancelledError error)? onCancel,
     void Function(int failureCount, Object error, StackTrace stackTrace)?
-    onFail,
+        onFail,
     void Function()? onPause,
     void Function()? onContinue,
-  }) : _fn = fn,
-       _canRun = canRun,
-       _initialFuture = initialFuture,
-       _networkMode = networkMode,
-       _retry = retry,
-       _retryDelay = retryDelay,
-       _onCancel = onCancel,
-       _onFail = onFail,
-       _onPause = onPause,
-       _onContinue = onContinue {
+  })  : _fn = fn,
+        _canRun = canRun,
+        _initialFuture = initialFuture,
+        _networkMode = networkMode,
+        _retry = retry,
+        _retryDelay = retryDelay,
+        _onCancel = onCancel,
+        _onFail = onFail,
+        _onPause = onPause,
+        _onContinue = onContinue {
     // The future completes with an error whether or not anyone is awaiting it
     // (a fetch nobody listens to still fails). Without this, Dart reports it as
     // an unhandled error and fails tests (D13).
@@ -57,7 +57,7 @@ class Retryer<TData> {
   final RetryDelay? _retryDelay;
   final void Function(CancelledError error)? _onCancel;
   final void Function(int failureCount, Object error, StackTrace stackTrace)?
-  _onFail;
+      _onFail;
   final void Function()? _onPause;
   final void Function()? _onContinue;
 
@@ -174,36 +174,34 @@ class Retryer<TData> {
       attempt = Future<TData>.error(error, stackTrace);
     }
 
-    attempt
-        .then<void>(
-          _resolve,
-          onError: (Object error, StackTrace stackTrace) {
-            if (_isResolved) {
-              return;
-            }
+    attempt.then<void>(
+      _resolve,
+      onError: (Object error, StackTrace stackTrace) {
+        if (_isResolved) {
+          return;
+        }
 
-            final retry = _retry ?? const RetryOption.count(3);
-            final retryDelay = _retryDelay ?? RetryDelay.exponential;
+        final retry = _retry ?? const RetryOption.count(3);
+        final retryDelay = _retryDelay ?? RetryDelay.exponential;
 
-            if (_isRetryCancelled || !retry.shouldRetry(_failureCount, error)) {
-              _reject(error, stackTrace);
-              return;
-            }
+        if (_isRetryCancelled || !retry.shouldRetry(_failureCount, error)) {
+          _reject(error, stackTrace);
+          return;
+        }
 
-            _failureCount++;
-            _onFail?.call(_failureCount, error, stackTrace);
+        _failureCount++;
+        _onFail?.call(_failureCount, error, stackTrace);
 
-            Future<void>.delayed(
-              retryDelay.delayFor(_failureCount - 1, error),
-            ).then((_) => _canContinue() ? null : _pause()).then((_) {
-              if (_isRetryCancelled) {
-                _reject(error, stackTrace);
-              } else {
-                _run();
-              }
-            }).ignore();
-          },
-        )
-        .ignore();
+        Future<void>.delayed(
+          retryDelay.delayFor(_failureCount - 1, error),
+        ).then((_) => _canContinue() ? null : _pause()).then((_) {
+          if (_isRetryCancelled) {
+            _reject(error, stackTrace);
+          } else {
+            _run();
+          }
+        }).ignore();
+      },
+    ).ignore();
   }
 }

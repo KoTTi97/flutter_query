@@ -30,6 +30,14 @@ What the map settles:
 - **Standing rule:** closeness to upstream is a tiebreaker, not a goal. The best
   Flutter-world result wins; diverge wherever a Dart/Flutter idiom is better and
   record why.
+- **AFK: nobody is in the loop (Christian, 2026-09-08).** Every ticket, grilling
+  ones included, is decided by the agent — never ask which option to take, never
+  stop for an answer. What replaces the live exchange: the resolution comment
+  states the options, the answer, and why it beats the alternatives, so the
+  decision can be reopened from the record alone.
+- **Decide, then build.** The map was originally "plan, don't do". It is now
+  "decide the ticket, then write the code it governs": production Dart lands in
+  this repo as soon as the decisions covering it are closed.
 - **The existing `flutter-port/` code is prior art, not the plan of record.** It
   may be reused wherever a ticket evaluates it as good and suitable; the
   evaluation is recorded on that ticket, nothing carries over silently.
@@ -43,6 +51,27 @@ What the map settles:
 The wayfinder, grilling, prototype and research flows come from the
 `mattpocock-skills` plugin; the map's Notes name which skill each ticket type
 uses.
+
+### The code the map is producing
+
+The fresh port lives in a pub workspace at the repository root — **not** in
+`flutter-port/`, which is the previous attempt:
+
+| Path | What |
+|---|---|
+| `packages/tanstack_query_core/` | the pure-Dart core (active) |
+| `packages/tanstack_query_flutter/` | the Flutter binding (not started) |
+| `examples/sensor_demo/` | the react-demo port (not started) |
+
+Everything runs from the repository root:
+
+```bash
+dart test packages/tanstack_query_core && dart analyze --fatal-infos packages/tanstack_query_core && dart format --set-exit-if-changed packages/tanstack_query_core
+```
+
+Names, layout and licence are settled on
+[#13](https://github.com/KoTTi97/flutter_query/issues/13); every module cites
+the ticket that decided its shape in its dartdoc.
 
 ## Agent skills
 

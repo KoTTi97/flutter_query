@@ -22,12 +22,13 @@ void main() {
     MutationKey? mutationKey,
     Object? meta,
     GcDuration? gcTime,
-  }) => MutationOptions<String, String, Object?>(
-    mutationKey: mutationKey,
-    meta: meta,
-    gcTime: gcTime,
-    mutationFn: (text, _) => sleep(delay).then((_) => text),
-  );
+  }) =>
+      MutationOptions<String, String, Object?>(
+        mutationKey: mutationKey,
+        meta: meta,
+        gcTime: gcTime,
+        mutationFn: (text, _) => sleep(delay).then((_) => text),
+      );
 
   testFakeAsync(
     'onUnsubscribe should not remove the current mutation observer if there is '
@@ -366,12 +367,12 @@ void main() {
                   successCalls.add([data, variables, onMutateResult, context]),
               onSettled: (data, error, _, variables, onMutateResult, context) =>
                   settledCalls.add([
-                    data,
-                    error,
-                    variables,
-                    onMutateResult,
-                    context,
-                  ]),
+                data,
+                error,
+                variables,
+                onMutateResult,
+                context,
+              ]),
             ),
           )
           .ignore();
@@ -421,12 +422,12 @@ void main() {
                   errorCalls.add([error, variables, onMutateResult, context]),
               onSettled: (data, error, _, variables, onMutateResult, context) =>
                   settledCalls.add([
-                    data,
-                    error,
-                    variables,
-                    onMutateResult,
-                    context,
-                  ]),
+                data,
+                error,
+                variables,
+                onMutateResult,
+                context,
+              ]),
             ),
           )
           .ignore();
@@ -541,7 +542,8 @@ void main() {
     );
   });
 
-  test('should not notify the cache when setOptions is called with the same '
+  test(
+      'should not notify the cache when setOptions is called with the same '
       'options', () {
     final observer = MutationObserver<String, String, Object?>(
       queryClient,

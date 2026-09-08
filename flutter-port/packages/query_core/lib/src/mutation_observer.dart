@@ -14,7 +14,7 @@ abstract interface class MutationObserverClient {
   MutationCache get mutationCache;
 
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult>
-  defaultMutationOptions<TData, TVariables, TOnMutateResult>(
+      defaultMutationOptions<TData, TVariables, TOnMutateResult>(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   );
 }
@@ -33,8 +33,7 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
     TVariables variables,
     TOnMutateResult? onMutateResult,
     MutationFunctionContext context,
-  )?
-  onSuccess;
+  )? onSuccess;
 
   final void Function(
     Object error,
@@ -42,8 +41,7 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
     TVariables variables,
     TOnMutateResult? onMutateResult,
     MutationFunctionContext context,
-  )?
-  onError;
+  )? onError;
 
   final void Function(
     TData? data,
@@ -52,12 +50,11 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
     TVariables variables,
     TOnMutateResult? onMutateResult,
     MutationFunctionContext context,
-  )?
-  onSettled;
+  )? onSettled;
 }
 
-typedef MutationObserverListener<TData, TVariables, TOnMutateResult> =
-    void Function(MutationResult<TData, TVariables, TOnMutateResult> result);
+typedef MutationObserverListener<TData, TVariables, TOnMutateResult> = void
+    Function(MutationResult<TData, TVariables, TOnMutateResult> result);
 
 /// One use site's view of mutating.
 ///
@@ -89,7 +86,8 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   late MutationResult<TData, TVariables, TOnMutateResult> _currentResult;
 
   final Set<MutationObserverListener<TData, TVariables, TOnMutateResult>>
-  _listeners = <MutationObserverListener<TData, TVariables, TOnMutateResult>>{};
+      _listeners =
+      <MutationObserverListener<TData, TVariables, TOnMutateResult>>{};
 
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult> get options =>
       _options;
@@ -181,20 +179,19 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   }
 
   void _updateResult() {
-    final state =
-        _currentMutation?.state ??
+    final state = _currentMutation?.state ??
         MutationState<TData, TVariables, TOnMutateResult>();
 
     _currentResult = switch (state.status) {
       MutationStatus.idle => MutationIdle<TData, TVariables, TOnMutateResult>(
-        variables: state.variables,
-        onMutateResult: state.onMutateResult,
-        failureCount: state.failureCount,
-        failureReason: state.failureReason,
-        failureStackTrace: state.failureStackTrace,
-        isPaused: state.isPaused,
-        submittedAt: state.submittedAt,
-      ),
+          variables: state.variables,
+          onMutateResult: state.onMutateResult,
+          failureCount: state.failureCount,
+          failureReason: state.failureReason,
+          failureStackTrace: state.failureStackTrace,
+          isPaused: state.isPaused,
+          submittedAt: state.submittedAt,
+        ),
       MutationStatus.pending =>
         MutationPending<TData, TVariables, TOnMutateResult>(
           variables: state.variables,
@@ -217,16 +214,16 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
           submittedAt: state.submittedAt,
         ),
       MutationStatus.error => MutationError<TData, TVariables, TOnMutateResult>(
-        error: state.error ?? const MissingMutationFunctionError(),
-        stackTrace: state.errorStackTrace,
-        variables: state.variables,
-        onMutateResult: state.onMutateResult,
-        failureCount: state.failureCount,
-        failureReason: state.failureReason,
-        failureStackTrace: state.failureStackTrace,
-        isPaused: state.isPaused,
-        submittedAt: state.submittedAt,
-      ),
+          error: state.error ?? const MissingMutationFunctionError(),
+          stackTrace: state.errorStackTrace,
+          variables: state.variables,
+          onMutateResult: state.onMutateResult,
+          failureCount: state.failureCount,
+          failureReason: state.failureReason,
+          failureStackTrace: state.failureStackTrace,
+          isPaused: state.isPaused,
+          submittedAt: state.submittedAt,
+        ),
     };
   }
 
