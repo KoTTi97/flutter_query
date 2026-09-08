@@ -42,6 +42,7 @@ final class CancelledError implements Exception {
 /// discarded, which is exactly what upstream does for the same case.
 class QueryCancelToken {
   final Completer<void> _completer = Completer<void>();
+  final List<void Function()> _callbacks = <void Function()>[];
 
   bool get isCancelled => _completer.isCompleted;
 
@@ -49,11 +50,15 @@ class QueryCancelToken {
   Future<void> get whenCancelled => _completer.future;
 
   /// Runs [callback] on cancellation — immediately, if already cancelled.
+  ///
+  /// Callbacks run *synchronously* inside [cancel], the way a browser's
+  /// `AbortController` dispatches its abort event. A microtask's delay would be
+  /// long enough for an in-flight page loop to start one more page.
   void onCancel(void Function() callback) {
     if (isCancelled) {
       callback();
     } else {
-      _completer.future.then((_) => callback()).ignore();
+      _callbacks.add(callback);
     }
   }
 
@@ -66,8 +71,14 @@ class QueryCancelToken {
 
   /// Cancels this token. Called by the library, not by query functions.
   void cancel() {
-    if (!_completer.isCompleted) {
-      _completer.complete();
+    if (_completer.isCompleted) {
+      return;
+    }
+    _completer.complete();
+    final callbacks = List<void Function()>.of(_callbacks);
+    _callbacks.clear();
+    for (final callback in callbacks) {
+      callback();
     }
   }
 }

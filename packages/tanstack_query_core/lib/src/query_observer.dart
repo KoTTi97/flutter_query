@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:clock/clock.dart';
+import 'package:meta/meta.dart';
 
 import 'option_values.dart';
 import 'query.dart';
@@ -35,6 +36,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   }
 
   final QueryClient _client;
+
+  /// The client this observer reads through. Infinite observers need it to
+  /// re-default their options.
+  @protected
+  QueryClient get client => _client;
 
   // Observers manage their own listeners instead of extending `Subscribable`:
   // Dart has no declaration-site variance, and `Subscribable<void
@@ -88,7 +94,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       _currentQuery.addObserver(this);
 
       if (_shouldFetchOnMount(_currentQuery, _options)) {
-        _executeFetch();
+        executeFetch();
       } else {
         updateResult();
       }
@@ -131,7 +137,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     if (mounted &&
         _shouldFetchOptionally(
             _currentQuery, prevQuery, _options, prevOptions)) {
-      _executeFetch();
+      executeFetch();
     }
 
     updateResult();
@@ -167,7 +173,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     );
     final query =
         _client.queryCache.build<TQueryData>(_client, defaulted.queryOptions);
-    final result = _createResult(query, defaulted, optimistic: true);
+    final result = createResult(query, defaulted, optimistic: true);
 
     if (result != _currentResult) {
       _currentResult = result;
@@ -179,19 +185,26 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   /// Refetches, completing with the result the refetch produced.
   Future<QueryResult<TData>> refetch({bool cancelRefetch = true}) async {
-    await _executeFetch(cancelRefetch: cancelRefetch);
+    await executeFetch(cancelRefetch: cancelRefetch);
     updateResult();
     return _currentResult;
   }
 
   // Defaults to false, as upstream's unset `cancelRefetch` does: only an
   // explicit `refetch()` cancels a fetch that is already running.
-  Future<void> _executeFetch({bool cancelRefetch = false}) async {
+  //
+  // [meta] rides along into `QueryState.fetchMeta`; infinite queries put the
+  // page direction there.
+  @protected
+  Future<void> executeFetch({bool cancelRefetch = false, Object? meta}) async {
     _updateQuery();
     try {
       await _currentQuery.fetch(
         options: _options.queryOptions,
-        fetchOptions: FetchOptions<TQueryData>(cancelRefetch: cancelRefetch),
+        fetchOptions: FetchOptions<TQueryData>(
+          cancelRefetch: cancelRefetch,
+          meta: meta,
+        ),
       );
     } catch (_) {
       // The error is in the query's state; an observer never rethrows it.
@@ -246,7 +259,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _refetchTimer = Timer.periodic(nextInterval, (_) {
       if (_options.refetchIntervalInBackground ||
           _client.focusManager.isFocused()) {
-        _executeFetch().ignore();
+        executeFetch().ignore();
       }
     });
   }
@@ -268,7 +281,12 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   // ---------------------------------------------------------------- result
 
-  QueryResult<TData> _createResult(
+  /// Turns a query's state into the result an observer reports.
+  ///
+  /// `@protected` rather than private so `InfiniteQueryObserver` can extend it
+  /// (https://github.com/KoTTi97/flutter_query/issues/16).
+  @protected
+  QueryResult<TData> createResult(
     Query<TQueryData> query,
     DefaultedQueryObserverOptions<TQueryData, TData> options, {
     bool optimistic = false,
@@ -466,7 +484,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// Recomputes the result and notifies listeners if it changed.
   void updateResult() {
     final prevResult = _previousResult;
-    final nextResult = _createResult(_currentQuery, _options);
+    final nextResult = createResult(_currentQuery, _options);
 
     _currentResultState = _currentQuery.state;
     _currentResultOptions = _options;
@@ -547,7 +565,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       _shouldFetchOn(_currentQuery, _options, _options.refetchOnReconnect);
 
   @override
-  void refetchOnEvent() => _executeFetch(cancelRefetch: false).ignore();
+  void refetchOnEvent() => executeFetch(cancelRefetch: false).ignore();
 
   @override
   DefaultedQueryOptions<Object?> get observerQueryOptions =>

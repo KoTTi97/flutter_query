@@ -7,6 +7,7 @@ import 'package:meta/meta.dart';
 
 import 'filters.dart';
 import 'focus_manager.dart';
+import 'infinite_query.dart';
 import 'mutation.dart';
 import 'mutation_cache.dart';
 import 'mutation_options.dart';
@@ -675,6 +676,71 @@ class QueryClient {
       onSettled: options.onSettled,
     );
   }
+
+  /// Resolves infinite-query options into the observer options a
+  /// `Query<InfiniteData<…>>` runs on, attaching the paging behaviour.
+  @internal
+  QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>
+      infiniteObserverOptions<TPageData, TPageParam, TData>(
+    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+  ) =>
+          QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>(
+            queryKey: options.queryKey,
+            queryFn: null,
+            behavior: InfiniteQueryBehavior<TPageData, TPageParam>(
+              options,
+              pages: options.pages,
+            ),
+            enabled: options.enabled,
+            staleTime: options.staleTime,
+            gcTime: options.gcTime,
+            retry: options.retry,
+            retryDelay: options.retryDelay,
+            networkMode: options.networkMode,
+            initialData: options.initialData,
+            initialDataUpdatedAt: options.initialDataUpdatedAt,
+            structuralSharing: options.structuralSharing,
+            meta: options.meta,
+            select: options.select,
+            placeholderData: options.placeholderData,
+            refetchOnMount: options.refetchOnMount,
+            refetchOnWindowFocus: options.refetchOnWindowFocus,
+            refetchOnReconnect: options.refetchOnReconnect,
+            refetchInterval: options.refetchInterval,
+            refetchIntervalInBackground: options.refetchIntervalInBackground,
+            retryOnMount: options.retryOnMount,
+          );
+
+  /// Fetches and caches an infinite query, completing with its pages.
+  ///
+  /// The infinite twin of [query]: same rules (no retries unless asked for,
+  /// cached data returned when it is still fresh), and the same replacement
+  /// for `prefetchInfiniteQuery` and `ensureInfiniteQueryData` — `.ignore()`
+  /// and `staleTime: StaleTime.static`
+  /// (https://github.com/KoTTi97/flutter_query/issues/17).
+  Future<InfiniteData<TPageData, TPageParam>>
+      infiniteQuery<TPageData, TPageParam>(
+    InfiniteQueryOptions<TPageData, TPageParam> options,
+  ) =>
+          query<InfiniteData<TPageData, TPageParam>>(
+            QueryOptions<InfiniteData<TPageData, TPageParam>>(
+              queryKey: options.queryKey,
+              behavior: InfiniteQueryBehavior<TPageData, TPageParam>(
+                options,
+                pages: options.pages,
+              ),
+              enabled: options.enabled,
+              staleTime: options.staleTime,
+              gcTime: options.gcTime,
+              retry: options.retry,
+              retryDelay: options.retryDelay,
+              networkMode: options.networkMode,
+              initialData: options.initialData,
+              initialDataUpdatedAt: options.initialDataUpdatedAt,
+              structuralSharing: options.structuralSharing,
+              meta: options.meta,
+            ),
+          );
 
   /// A one-off observer for [options]. The caller owns its lifetime.
   QueryObserver<TQueryData, TData> observe<TQueryData, TData>(

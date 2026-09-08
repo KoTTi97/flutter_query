@@ -27,13 +27,13 @@ is a bug in this file.
 | `query.test.tsx` | `query_test.dart` | 43 / 51 | done |
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
 | `queryObserver.test.tsx` | `query_observer_test.dart` | 60 / 75 | done |
-| `queryClient.test.tsx` | `query_client_test.dart` | 95 / 156 | done bar the infinite blocks |
+| `queryClient.test.tsx` | `query_client_test.dart` | 104 / 156 | done |
 | `mutation.test.tsx` | `mutation_test.dart` | 28 / 28 | done |
 | `mutationCache.test.tsx` | `mutation_cache_test.dart` | 16 / 16 | done |
 | `mutationObserver.test.tsx` | `mutation_observer_test.dart` | 16 / 16 | done |
-| `infiniteQueryBehavior.test.tsx` | — | 0 / 9 | not started |
-| `infiniteQueryObserver.test.tsx` | — | 0 / 7 | not started |
-| `utils.test.tsx` | `utils_test.dart` | 16 / 78 | done bar `addToEnd`/`addToStart` |
+| `infiniteQueryBehavior.test.tsx` | `infinite_query_behavior_test.dart` | 7 / 9 | done |
+| `infiniteQueryObserver.test.tsx` | `infinite_query_observer_test.dart` | 6 / 7 | done |
+| `utils.test.tsx` | `utils_test.dart` | 24 / 78 | done |
 
 Suites not ported at all, each for one recorded reason:
 `hydration.test.tsx` (hydration is out of v1 scope, #17),
@@ -503,6 +503,44 @@ port are already methods on a value type here.
   also what `==` says about the two keys, so partial matching agrees with exact
   matching rather than contradicting it.
 
+### `infiniteQueryBehavior.test.tsx` and `infiniteQueryObserver.test.tsx`
+
+7 of 9 and 6 of 7.
+
+- **omitted — type-level (2):** `should throw an error if the queryFn is not
+  defined` (an `InfiniteQueryOptions` cannot be built without a `pageFn`) and
+  `should stop refetching if undefined is returned from getNextPageParam`,
+  which is the `null` case again in a language that has both.
+- **omitted — option not ported (1):** `should use persister when provided`.
+- **adapted:** `should surface the abort reason when cancellation happens
+  between refetched pages` drives a real observer instead of hand-building a
+  `FetchContext`, and asserts the same thing: the page loop stops rather than
+  fetching the next page.
+- **adapted:** the page function's arguments are asserted directly rather than
+  through a spy's recorded call objects, and `queryFn` reads as `pageFn`
+  throughout — it returns one page, not the whole `InfiniteData`.
+- **adapted:** `should make getNextPageParam and getPreviousPageParam receive
+  current pageParams` records a shorter sequence. Upstream recomputes
+  `hasNextPage`/`hasPreviousPage` while building *every* result, so its expected
+  sequence counts those calls; here they are lazy getters on the observer, so
+  the sequence is what the paging itself asked for plus the explicit reads the
+  test makes.
+- **adapted:** `getOptimisticResult` becomes `getOptimisticInfiniteResult`, and
+  the paging fields it asserts on (`hasNextPage` and friends) are read from the
+  observer rather than from the result.
+
+**One port bug this suite caught:** `QueryCancelToken.onCancel` ran its
+callbacks a microtask after `cancel()`, which was long enough for an in-flight
+page loop to start one more page. They now run synchronously inside `cancel`,
+the way a browser's `AbortController` dispatches its abort event.
+
+The nine infinite cases deferred from `queryClient.test.tsx` and the eight
+`addToEnd`/`addToStart` cases deferred from `utils.test.tsx` are ported with
+them; both files' status lines are now plain "done". `addToEnd`/`addToStart`
+drop exactly *one* item when `max` would be exceeded, not "down to max" —
+upstream's `slice(1)` arithmetic, which is right because pages arrive one at a
+time.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -520,6 +558,8 @@ suite does not have to go looking:
 | module-level managers | instances the `QueryClient` owns | [#19](https://github.com/KoTTi97/flutter_query/issues/19) |
 | `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |
 | `persister`, `initialDataUpdatedAt` as a function | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
+| `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
+| an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |

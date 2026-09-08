@@ -7,6 +7,8 @@ library;
 export 'src/cancel_token.dart';
 export 'src/filters.dart';
 export 'src/focus_manager.dart';
+export 'src/infinite_query.dart' hide InfiniteQueryBehavior;
+export 'src/infinite_query_observer.dart';
 export 'src/mutation.dart';
 export 'src/mutation_cache.dart';
 export 'src/mutation_observer.dart';

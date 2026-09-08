@@ -2357,5 +2357,279 @@ void main() {
         unsubscribe();
       });
     });
+
+    group('infiniteQuery with static staleTime', () {
+      testFakeAsync('should return the cached query data if the query is found',
+          (time) async {
+        final key = queryKey();
+        var calls = 0;
+
+        queryClient.setQueryData<InfiniteData<String, int>>(
+          key.append(<Object?>['id']),
+          const InfiniteData<String, int>(
+            pages: <String>['bar'],
+            pageParams: <int>[0],
+          ),
+        );
+
+        expect(
+          await queryClient.infiniteQuery<String, int>(
+            InfiniteQueryOptions<String, int>(
+              queryKey: key.append(<Object?>['id']),
+              pageFn: (_) {
+                calls++;
+                return Future<String>.value('data');
+              },
+              staleTime: StaleTime.static,
+              initialPageParam: 1,
+              getNextPageParam: (_, __, ___, ____) => null,
+            ),
+          ),
+          const InfiniteData<String, int>(
+            pages: <String>['bar'],
+            pageParams: <int>[0],
+          ),
+        );
+        expect(calls, 0);
+      });
+
+      testFakeAsync(
+          'should fetch the query and return its results if the query is not found',
+          (time) async {
+        final key = queryKey();
+        var calls = 0;
+
+        expect(
+          await queryClient.infiniteQuery<String, int>(
+            InfiniteQueryOptions<String, int>(
+              queryKey: key.append(<Object?>['id']),
+              pageFn: (_) {
+                calls++;
+                return Future<String>.value('data');
+              },
+              staleTime: StaleTime.static,
+              initialPageParam: 1,
+              getNextPageParam: (_, __, ___, ____) => null,
+            ),
+          ),
+          const InfiniteData<String, int>(
+            pages: <String>['data'],
+            pageParams: <int>[1],
+          ),
+        );
+        expect(calls, 1);
+      });
+    });
+
+    group('infiniteQuery', () {
+      testFakeAsync('should return infinite query data', (time) async {
+        final key = queryKey();
+        final result = await queryClient.infiniteQuery<int, int>(
+          InfiniteQueryOptions<int, int>(
+            queryKey: key,
+            initialPageParam: 10,
+            pageFn: (context) => context.pageParam,
+            getNextPageParam: (_, __, ___, ____) => null,
+          ),
+        );
+        final cached = queryClient.getQueryData<InfiniteData<int, int>>(key);
+
+        const expected =
+            InfiniteData<int, int>(pages: <int>[10], pageParams: <int>[10]);
+
+        expect(result, expected);
+        expect(cached, expected);
+      });
+
+      testFakeAsync('should fetch when disabled', (time) async {
+        final key = queryKey();
+        var calls = 0;
+
+        expect(
+          await queryClient.infiniteQuery<int, int>(
+            InfiniteQueryOptions<int, int>(
+              queryKey: key,
+              pageFn: (context) {
+                calls++;
+                return context.pageParam;
+              },
+              initialPageParam: 0,
+              getNextPageParam: (_, __, ___, ____) => null,
+              // `enabled` is not part of the imperative contract.
+              enabled: Enabled.no,
+            ),
+          ),
+          const InfiniteData<int, int>(pages: <int>[0], pageParams: <int>[0]),
+        );
+
+        expect(calls, 1);
+      });
+
+      testFakeAsync(
+          'should evaluate staleTime callback and refetch when it returns stale',
+          (time) async {
+        final key = queryKey();
+
+        queryClient.setQueryData<InfiniteData<String, int>>(
+          key,
+          const InfiniteData<String, int>(
+            pages: <String>['old-page'],
+            pageParams: <int>[0],
+          ),
+        );
+
+        await time.advance(ms(1));
+
+        var calls = 0;
+        var staleTimeCalls = 0;
+
+        final result = await queryClient.infiniteQuery<String, int>(
+          InfiniteQueryOptions<String, int>(
+            queryKey: key,
+            pageFn: (context) {
+              calls++;
+              return Future<String>.value('new-page-${context.pageParam}');
+            },
+            initialPageParam: 0,
+            getNextPageParam: (_, __, ___, ____) => null,
+            staleTime: StaleTime.dynamic((_) {
+              staleTimeCalls++;
+              return StaleTime.zero;
+            }),
+          ),
+        );
+
+        expect(
+          result,
+          const InfiniteData<String, int>(
+            pages: <String>['new-page-0'],
+            pageParams: <int>[0],
+          ),
+        );
+        expect(staleTimeCalls, greaterThan(0));
+        expect(calls, 1);
+      });
+
+      testFakeAsync(
+          'should read from cache with static staleTime even if invalidated',
+          (time) async {
+        final key = queryKey();
+        var calls = 0;
+
+        Future<String> pageFn(InfinitePageContext<int> context) {
+          calls++;
+          return Future<String>.value('fetched-${context.pageParam}');
+        }
+
+        final first = await queryClient.infiniteQuery<String, int>(
+          InfiniteQueryOptions<String, int>(
+            queryKey: key,
+            pageFn: pageFn,
+            initialPageParam: 0,
+            getNextPageParam: (_, __, ___, ____) => null,
+            staleTime: StaleTime.static,
+          ),
+        );
+
+        expect(
+          first,
+          const InfiniteData<String, int>(
+            pages: <String>['fetched-0'],
+            pageParams: <int>[0],
+          ),
+        );
+        expect(calls, 1);
+
+        await queryClient.invalidateQueries(
+          filters: QueryFilters(queryKey: key),
+          refetchType: RefetchType.none,
+        );
+
+        final second = await queryClient.infiniteQuery<String, int>(
+          InfiniteQueryOptions<String, int>(
+            queryKey: key,
+            pageFn: pageFn,
+            initialPageParam: 0,
+            getNextPageParam: (_, __, ___, ____) => null,
+            staleTime: StaleTime.static,
+          ),
+        );
+
+        expect(calls, 1);
+        expect(second, same(first));
+      });
+    });
+
+    group('infiniteQuery used for prefetching', () {
+      testFakeAsync('should return infinite query data', (time) async {
+        final key = queryKey();
+
+        await queryClient.infiniteQuery<int, int>(
+          InfiniteQueryOptions<int, int>(
+            queryKey: key,
+            pageFn: (context) => context.pageParam,
+            initialPageParam: 10,
+            getNextPageParam: (_, __, ___, ____) => null,
+          ),
+        );
+
+        expect(
+          queryClient.getQueryData<InfiniteData<int, int>>(key),
+          const InfiniteData<int, int>(pages: <int>[10], pageParams: <int>[10]),
+        );
+      });
+
+      testFakeAsync('should prefetch multiple pages', (time) async {
+        final key = queryKey();
+
+        await queryClient.infiniteQuery<String, int>(
+          InfiniteQueryOptions<String, int>(
+            queryKey: key,
+            pageFn: (context) => '${context.pageParam}',
+            getNextPageParam: (_, __, lastPageParam, ___) => lastPageParam + 5,
+            initialPageParam: 10,
+            pages: 3,
+          ),
+        );
+
+        expect(
+          queryClient.getQueryData<InfiniteData<String, int>>(key),
+          const InfiniteData<String, int>(
+            pages: <String>['10', '15', '20'],
+            pageParams: <int>[10, 15, 20],
+          ),
+        );
+      });
+
+      testFakeAsync('should stop prefetching if getNextPageParam returns null',
+          (time) async {
+        final key = queryKey();
+        var calls = 0;
+
+        await queryClient.infiniteQuery<String, int>(
+          InfiniteQueryOptions<String, int>(
+            queryKey: key,
+            pageFn: (context) => '${context.pageParam}',
+            getNextPageParam: (_, __, lastPageParam, ___) {
+              calls++;
+              return lastPageParam >= 20 ? null : lastPageParam + 5;
+            },
+            initialPageParam: 10,
+            pages: 5,
+          ),
+        );
+
+        expect(
+          queryClient.getQueryData<InfiniteData<String, int>>(key),
+          const InfiniteData<String, int>(
+            pages: <String>['10', '15', '20'],
+            pageParams: <int>[10, 15, 20],
+          ),
+        );
+
+        // this check ensures the fetch loop exits early
+        expect(calls, 3);
+      });
+    });
   });
 }

@@ -241,5 +241,43 @@ void main() {
         expect(cancelled, isTrue);
       });
     });
+
+    group('addToEnd', () {
+      test('should add item to the end of the array', () {
+        expect(addToEnd<int>(<int>[1, 2, 3], 4), <int>[1, 2, 3, 4]);
+      });
+
+      test('should not exceed max if provided', () {
+        expect(addToEnd<int>(<int>[1, 2, 3], 4, 3), <int>[2, 3, 4]);
+      });
+
+      test('should add item to the end of the array when max = 0', () {
+        expect(addToEnd<int>(<int>[1, 2, 3], 4, 0), <int>[1, 2, 3, 4]);
+      });
+
+      test('should add item to the end of the array when max is undefined', () {
+        expect(addToEnd<int>(<int>[1, 2, 3], 4), <int>[1, 2, 3, 4]);
+      });
+    });
+
+    group('addToStart', () {
+      test('should add an item to the start of the array', () {
+        expect(addToStart<int>(<int>[1, 2, 3], 4), <int>[4, 1, 2, 3]);
+      });
+
+      test('should respect the max argument', () {
+        // One item falls off per call, not "trim down to max": pages arrive
+        // one at a time.
+        expect(addToStart<int>(<int>[1, 2, 3], 4, 2), <int>[4, 1, 2]);
+      });
+
+      test('should not remove any items if max = 0', () {
+        expect(addToStart<int>(<int>[1, 2, 3], 4, 0), <int>[4, 1, 2, 3]);
+      });
+
+      test('should not remove any items if max is undefined', () {
+        expect(addToStart<int>(<int>[1, 2, 3], 4), <int>[4, 1, 2, 3]);
+      });
+    });
   });
 }
