@@ -41,6 +41,11 @@ final class QueryObserverRemoved extends QueryCacheEvent {
   final QueryObserverRef observer;
 }
 
+final class QueryObserverOptionsUpdated extends QueryCacheEvent {
+  const QueryObserverOptionsUpdated(super.query, this.observer);
+  final QueryObserverRef observer;
+}
+
 final class QueryObserverResultsUpdated extends QueryCacheEvent {
   const QueryObserverResultsUpdated(super.query);
 }
@@ -170,6 +175,13 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   @internal
   void notifyObserverRemoved(Query<Object?> query, QueryObserverRef observer) =>
       notify(QueryObserverRemoved(query, observer));
+
+  @internal
+  void notifyObserverOptionsUpdated(
+    Query<Object?> query,
+    QueryObserverRef observer,
+  ) =>
+      notify(QueryObserverOptionsUpdated(query, observer));
 
   @internal
   void notifyObserverResultsUpdated(Query<Object?> query) =>

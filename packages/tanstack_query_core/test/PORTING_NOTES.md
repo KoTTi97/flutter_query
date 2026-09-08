@@ -24,7 +24,7 @@ is a bug in this file.
 | `onlineManager.test.tsx` | `online_manager_test.dart` | 6 / 11 | done |
 | `removable.test.tsx` | `removable_test.dart` | 11 / 12 | done |
 | `retryer.test.tsx` | `retryer_test.dart` | 13 / 13 | done |
-| `query.test.tsx` | — | 0 / 51 | not started |
+| `query.test.tsx` | `query_test.dart` | 43 / 51 | done |
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
 | `queryObserver.test.tsx` | — | 0 / 75 | not started |
 | `queryClient.test.tsx` | — | 0 / 156 | not started |
@@ -135,6 +135,82 @@ fog).
 - **adapted:** every `queryClient.query({...})` call site — upstream's
   `void queryClient.query(...).catch(noop)` is `queryClient.query(...).ignore()`.
 
+### `query.test.tsx`
+
+- **omitted — SSR (2):** `should not retry on the server`,
+  `should use an infinite garbage collection time on the server`. There is no
+  `isServer` here; `environmentManager` is not ported
+  ([#9](https://github.com/KoTTi97/flutter_query/issues/9)).
+- **omitted — hydration (1):** `should reset to default state when created from
+  hydration`. Hydration is out of the v1 scope
+  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)); the state door it
+  would use (`QueryCache.build(..., state:)`) exists and is covered by
+  `smoke_test.dart`.
+- **omitted — undefined guards (1):** `fetch should dispatch an error if the
+  queryFn returns undefined`. `Future<T>` with a non-nullable `T` cannot produce
+  it, and with a nullable one `null` is a legitimate value
+  ([#7](https://github.com/KoTTi97/flutter_query/issues/7)).
+- **omitted — type-level (1):** `should log error when queryKey is not an
+  array`. `QueryKey` is a value type; a `String` does not typecheck
+  ([#8](https://github.com/KoTTi97/flutter_query/issues/8)).
+- **omitted — replaceEqualDeep (1):** `should have an error log when queryFn
+  data is not serializable`. Nothing here requires data to be JSON
+  serializable ([#12](https://github.com/KoTTi97/flutter_query/issues/12)); the
+  case it guards — a throwing structural-sharing step ending in an error state
+  — is the *next* upstream case, which is ported.
+- **omitted — option not ported (1):** `should use persister if provided`. The
+  `persister` option belongs to upstream's experimental persister package and
+  is not part of the v1 surface
+  ([#15](https://github.com/KoTTi97/flutter_query/issues/15)).
+- **omitted — option not ported (1):** `constructor should call
+  initialDataUpdatedAt if defined as a function`. `initialDataUpdatedAt` is a
+  plain `DateTime?` here: the callback form exists upstream to defer work, and
+  the expensive half — producing the data — is already deferred by
+  `InitialData.compute`.
+- **adapted:** `should work with initialDataUpdatedAt set to zero` → `... set to
+  the epoch`. The case guards a JS falsy-zero hazard; `DateTime` has no such
+  hazard, so it asserts the epoch survives as a timestamp.
+- **adapted (4):** upstream's page-visibility and `navigator.onLine` mocks are
+  `client.focusManager.setFocused(...)` and `client.onlineManager.setOnline(...)`
+  on the client's own managers
+  ([#19](https://github.com/KoTTi97/flutter_query/issues/19)).
+- **adapted (3):** the three `vi.spyOn` cases. There is no spy here, so each
+  asserts the effect instead: `should refetch the observer when online method is
+  called` lets the first fetch settle and counts query-function calls (asserting
+  mid-flight would prove nothing — a refetch with `cancelRefetch: false`
+  piggybacks on the running fetch, upstream too); `should not try to remove an
+  observer that does not exist` subscribes to the cache and asserts no event;
+  the `AbortSignal` listener case uses `QueryCancelToken.onCancel`.
+- **adapted (2):** `should use queryFn from observer if not provided in options`
+  and `should call initialData function when it is a function` construct a
+  `Query` directly upstream. A `Query` here is always born into a cache, so both
+  build through `QueryCache.build`.
+- **note:** the suite's name `should not throw a CancelledError when fetchQuery
+  is in progress ...` is kept verbatim even though the method is now
+  `QueryClient.query`.
+
+**Four port bugs this suite caught** — all four invisible to a test written
+from the Dart side:
+
+1. `#abortSignalConsumed` was set *after* the query function returned, so
+   `removeObserver` could not tell a cancellable fetch from an uncancellable
+   one. It is now set by the `signal` getter itself, and reset per attempt
+   exactly where upstream resets it.
+2. The silent-cancel branch of `Query.fetch` only piggybacked on a *different*
+   retryer, so a silent cancel with no successor dispatched an error into the
+   query's state. Upstream returns `this.#retryer.promise` unconditionally.
+3. `Query.fetch` awaited its own `cancel(silent: true)`, which let the
+   cancelled fetch's `catch` run before the replacement retryer was installed.
+   Upstream does not await it.
+4. `QueryObserver`'s constructor never called `query.setOptions(...)`, so a
+   late `initialData` never reached a query created by a bare prefetch — and
+   the seeding itself replaced the whole state instead of merging the success
+   fields, which would have wiped a fetch in flight.
+
+Two smaller ones came with them: `_executeFetch` defaulted `cancelRefetch` to
+`true` where upstream's unset value is falsy, and `invalidateQueries` refetched
+with `cancelRefetch: false` where upstream's default is `true`.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -149,6 +225,8 @@ suite does not have to go looking:
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | module-level managers | instances the `QueryClient` owns | [#19](https://github.com/KoTTi97/flutter_query/issues/19) |
+| `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |
+| `persister`, `initialDataUpdatedAt` as a function | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |

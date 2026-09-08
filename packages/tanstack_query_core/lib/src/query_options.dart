@@ -32,7 +32,9 @@ class QueryFunctionContext {
     this.meta,
     this.pageParam,
     this.direction,
-  }) : _signal = signal;
+    void Function()? onSignalRead,
+  })  : _signal = signal,
+        _onSignalRead = onSignalRead;
 
   final QueryClient client;
   final QueryKey queryKey;
@@ -45,10 +47,16 @@ class QueryFunctionContext {
   final FetchDirection? direction;
 
   final QueryCancelToken _signal;
+
+  /// Told the moment [signal] is read, so the query can react *during* the
+  /// fetch rather than after it — upstream's `#abortSignalConsumed` is set by
+  /// the same getter.
+  final void Function()? _onSignalRead;
   bool _signalConsumed = false;
 
   QueryCancelToken get signal {
     _signalConsumed = true;
+    _onSignalRead?.call();
     return _signal;
   }
 
@@ -345,6 +353,45 @@ class DefaultedQueryOptions<TQueryData> {
   final Object? meta;
   final FetchBehavior<TQueryData>? behavior;
 
+  /// Field-by-field equality, functions compared by identity — the direct
+  /// analogue of upstream's `shallowEqualObjects` over defaulted options. It
+  /// is what tells a rebuild that nothing actually changed.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DefaultedQueryOptions<TQueryData> &&
+          other.runtimeType == runtimeType &&
+          other.queryKey == queryKey &&
+          other.queryFn == queryFn &&
+          other.enabled == enabled &&
+          other.staleTime == staleTime &&
+          other.gcTime == gcTime &&
+          other.retry == retry &&
+          other.retryDelay == retryDelay &&
+          other.networkMode == networkMode &&
+          other.initialData == initialData &&
+          other.initialDataUpdatedAt == initialDataUpdatedAt &&
+          other.structuralSharing == structuralSharing &&
+          other.meta == meta &&
+          other.behavior == behavior;
+
+  @override
+  int get hashCode => Object.hash(
+        queryKey,
+        queryFn,
+        enabled,
+        staleTime,
+        gcTime,
+        retry,
+        retryDelay,
+        networkMode,
+        initialData,
+        initialDataUpdatedAt,
+        structuralSharing,
+        meta,
+        behavior,
+      );
+
   /// This, with a different [retry]. Used by `QueryClient.query`, whose
   /// imperative path disables retries the caller did not ask for.
   @internal
@@ -420,5 +467,31 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
         structuralSharing: structuralSharing,
         meta: meta,
         behavior: behavior,
+      );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DefaultedQueryObserverOptions<TQueryData, TData> &&
+          super == other &&
+          other.select == select &&
+          other.placeholderData == placeholderData &&
+          other.refetchOnMount == refetchOnMount &&
+          other.refetchOnWindowFocus == refetchOnWindowFocus &&
+          other.refetchOnReconnect == refetchOnReconnect &&
+          other.refetchInterval == refetchInterval &&
+          other.refetchIntervalInBackground == refetchIntervalInBackground &&
+          other.retryOnMount == retryOnMount;
+
+  @override
+  int get hashCode => Object.hash(
+        super.hashCode,
+        select,
+        placeholderData,
+        refetchOnMount,
+        refetchOnWindowFocus,
+        refetchOnReconnect,
+        refetchInterval,
+        refetchIntervalInBackground,
+        retryOnMount,
       );
 }

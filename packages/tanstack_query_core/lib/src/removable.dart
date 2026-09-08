@@ -16,8 +16,8 @@ abstract class Removable {
   Timer? _gcTimer;
 
   /// How long this may sit unused before it is collected. `null` until
-  /// options are applied.
-  @protected
+  /// options are applied. Public, as upstream has it: devtools and tests read
+  /// the value that actually won.
   GcTime? gcTime;
 
   @protected

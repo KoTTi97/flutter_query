@@ -323,49 +323,62 @@ class QueryClient {
     await Future.wait(refetches);
   }
 
-  /// Marks matching queries stale and refetches the active ones.
+  /// Marks matching queries stale and refetches the ones [refetchType] names,
+  /// which defaults to the filter's own type and then to
+  /// [QueryTypeFilter.active].
   Future<void> invalidateQueries({
     QueryFilters filters = const QueryFilters(),
-    bool refetchActive = true,
-  }) async {
-    final refetches = notifyManager.batch(() {
-      final futures = <Future<void>>[];
+    RefetchType? refetchType,
+    bool cancelRefetch = true,
+  }) {
+    final refetch = notifyManager.batch(() {
       for (final query in queryCache.findAll(filters)) {
         query.invalidate();
-        if (refetchActive && query.isActive()) {
-          futures.add(
-            query
-                .fetch(
-                    fetchOptions:
-                        const FetchOptions<Never>(cancelRefetch: false))
-                .then((_) {})
-                .catchError((Object _) {}),
-          );
-        }
       }
-      return futures;
+      if (refetchType == RefetchType.none) {
+        return null;
+      }
+      return switch (refetchType) {
+        RefetchType.active => QueryTypeFilter.active,
+        RefetchType.inactive => QueryTypeFilter.inactive,
+        RefetchType.all => QueryTypeFilter.all,
+        RefetchType.none || null => filters.type ?? QueryTypeFilter.active,
+      };
     });
-    await Future.wait(refetches);
+    if (refetch == null) {
+      return Future<void>.value();
+    }
+    return refetchQueries(
+      filters: filters.withType(refetch),
+      cancelRefetch: cancelRefetch,
+    );
   }
 
+  /// Refetches every matching query that can actually fetch.
   Future<void> refetchQueries({
     QueryFilters filters = const QueryFilters(),
     bool cancelRefetch = true,
   }) async {
-    final refetches = notifyManager.batch(() {
-      return queryCache
+    final refetches = notifyManager.batch(
+      () => queryCache
           .findAll(filters)
-          .map(
-            (query) => query
-                .fetch(
-                  fetchOptions:
-                      FetchOptions<Never>(cancelRefetch: cancelRefetch),
-                )
-                .then((_) {})
-                .catchError((Object _) {}),
-          )
-          .toList();
-    });
+          // A disabled query has nothing to refetch, and a static one declared
+          // itself permanently fresh.
+          .where((query) => !query.isDisabled() && !query.isStatic())
+          .map((query) {
+        final fetch = query
+            .fetch(
+              fetchOptions: FetchOptions<Never>(cancelRefetch: cancelRefetch),
+            )
+            .then((_) {})
+            .catchError((Object _) {});
+        // A paused fetch settles whenever the network comes back, which is
+        // never in a test and unbounded in an app: do not wait on it.
+        return query.state.fetchStatus == FetchStatus.paused
+            ? Future<void>.value()
+            : fetch;
+      }).toList(),
+    );
     await Future.wait(refetches);
   }
 

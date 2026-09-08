@@ -27,6 +27,10 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   ) {
     _options = _client.defaultQueryObserverOptions<TQueryData, TData>(options);
     _updateQuery();
+    // The query takes the observer's options even when it already existed:
+    // this is how a late `initialData` seeds a query created by a bare
+    // prefetch, and how `gcTime` grows to the longest anyone asked for.
+    _currentQuery.setOptions(_options.queryOptions);
     updateResult();
   }
 
@@ -117,6 +121,10 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _updateQuery();
     _currentQuery.setOptions(_options.queryOptions);
 
+    if (_options != prevOptions) {
+      _client.queryCache.notifyObserverOptionsUpdated(_currentQuery, this);
+    }
+
     final mounted = hasListeners;
 
     if (mounted &&
@@ -175,7 +183,9 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     return _currentResult;
   }
 
-  Future<void> _executeFetch({bool cancelRefetch = true}) async {
+  // Defaults to false, as upstream's unset `cancelRefetch` does: only an
+  // explicit `refetch()` cancels a fetch that is already running.
+  Future<void> _executeFetch({bool cancelRefetch = false}) async {
     _updateQuery();
     try {
       await _currentQuery.fetch(
@@ -524,7 +534,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   bool get isEnabledForQuery => _options.enabled.resolve(_currentQuery);
 
   @override
-  bool get isStaticForQuery => _options.staleTime is StaleTimeStatic;
+  bool get isStaticForQuery => _options.staleTime.isStaticFor(_currentQuery);
 
   @override
   bool get currentResultIsStale => _currentResult.isStale;
@@ -566,7 +576,7 @@ bool _shouldFetchOn(
   DefaultedQueryObserverOptions<Object?, Object?> options,
   RefetchOn field,
 ) {
-  if (options.enabled.resolve(query) && options.staleTime is! StaleTimeStatic) {
+  if (options.enabled.resolve(query) && !options.staleTime.isStaticFor(query)) {
     final value = field.resolve(query);
     return value is RefetchOnAlways ||
         (value is! RefetchOnNever && _isStale(query, options));

@@ -206,5 +206,6 @@ String eventName(QueryCacheEvent event) => switch (event) {
       QueryUpdated() => 'updated',
       QueryObserverAdded() => 'observerAdded',
       QueryObserverRemoved() => 'observerRemoved',
+      QueryObserverOptionsUpdated() => 'observerOptionsUpdated',
       QueryObserverResultsUpdated() => 'observerResultsUpdated',
     };

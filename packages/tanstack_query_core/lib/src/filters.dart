@@ -9,8 +9,13 @@ import 'query.dart';
 import 'query_key.dart';
 import 'query_state.dart';
 
-/// Which queries a filtered operation applies to.
+/// Which queries a filtered operation applies to. `null` on a filter means
+/// "all of them", so a default-constructed [QueryFilters] matches everything.
 enum QueryTypeFilter { all, active, inactive }
+
+/// Which queries `invalidateQueries` refetches once it has marked them stale.
+/// [RefetchType.none] marks without refetching anything.
+enum RefetchType { active, inactive, all, none }
 
 /// Selects a set of queries.
 ///
@@ -22,7 +27,7 @@ class QueryFilters {
   const QueryFilters({
     this.queryKey,
     this.exact = false,
-    this.type = QueryTypeFilter.all,
+    this.type,
     this.stale,
     this.fetchStatus,
     this.status,
@@ -32,7 +37,7 @@ class QueryFilters {
   /// Matched as a prefix unless [exact] is set.
   final QueryKey? queryKey;
   final bool exact;
-  final QueryTypeFilter type;
+  final QueryTypeFilter? type;
   final bool? stale;
   final FetchStatus? fetchStatus;
   final QueryStatus? status;
@@ -40,6 +45,17 @@ class QueryFilters {
   /// Receives the erased query: a predicate spanning mixed data types cannot
   /// be given a useful type parameter.
   final bool Function(Query<Object?> query)? predicate;
+
+  /// This filter, restricted to a different [type].
+  QueryFilters withType(QueryTypeFilter? type) => QueryFilters(
+        queryKey: queryKey,
+        exact: exact,
+        type: type,
+        stale: stale,
+        fetchStatus: fetchStatus,
+        status: status,
+        predicate: predicate,
+      );
 
   bool matches(Query<Object?> query) {
     final queryKey = this.queryKey;
@@ -53,6 +69,7 @@ class QueryFilters {
       case QueryTypeFilter.inactive:
         if (query.isActive()) return false;
       case QueryTypeFilter.all:
+      case null:
         break;
     }
 

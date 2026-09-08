@@ -24,8 +24,12 @@ sealed class StaleTime {
   static const StaleTime zero = StaleTimeDuration(Duration.zero);
 
   /// Never stale and never refetched in the background — upstream's
-  /// `staleTime: 'static'`.
+  /// `staleTime: 'static'`. Even an explicit `refetchQueries` skips it.
   static const StaleTime static = StaleTimeStatic();
+
+  /// Never stale by time, but still refetched when asked — upstream's
+  /// `staleTime: Infinity`, which Dart has no `Duration` for.
+  static const StaleTime infinite = StaleTimeInfinite();
 
   /// Computed per query, from its current state.
   const factory StaleTime.dynamic(
@@ -36,7 +40,17 @@ sealed class StaleTime {
   Duration? resolve(Query<Object?> query) => switch (this) {
         StaleTimeDuration(:final duration) => duration,
         StaleTimeStatic() => null,
+        StaleTimeInfinite() => null,
         StaleTimeDynamic(:final compute) => compute(query).resolve(query),
+      };
+
+  /// Whether this resolves to [StaleTime.static] for [query] — the one thing
+  /// that separates it from [StaleTime.infinite]: a static query is skipped by
+  /// `refetchQueries` and by every refetch trigger.
+  bool isStaticFor(Query<Object?> query) => switch (this) {
+        StaleTimeStatic() => true,
+        StaleTimeDynamic(:final compute) => compute(query).isStaticFor(query),
+        _ => false,
       };
 }
 
@@ -57,6 +71,14 @@ final class StaleTimeStatic extends StaleTime {
   bool operator ==(Object other) => other is StaleTimeStatic;
   @override
   int get hashCode => (StaleTimeStatic).hashCode;
+}
+
+final class StaleTimeInfinite extends StaleTime {
+  const StaleTimeInfinite();
+  @override
+  bool operator ==(Object other) => other is StaleTimeInfinite;
+  @override
+  int get hashCode => (StaleTimeInfinite).hashCode;
 }
 
 final class StaleTimeDynamic extends StaleTime {

@@ -71,7 +71,9 @@ class FetchContext<TQueryData> {
     required this.fetchOptions,
     required this.fetchFn,
     required QueryCancelToken signal,
-  }) : _signal = signal;
+    void Function()? onSignalRead,
+  })  : _signal = signal,
+        _onSignalRead = onSignalRead;
 
   final QueryClient client;
   final QueryKey queryKey;
@@ -83,10 +85,12 @@ class FetchContext<TQueryData> {
   Future<TQueryData> Function() fetchFn;
 
   final QueryCancelToken _signal;
+  final void Function()? _onSignalRead;
   bool _signalConsumed = false;
 
   QueryCancelToken get signal {
     _signalConsumed = true;
+    _onSignalRead?.call();
     return _signal;
   }
 
@@ -214,10 +218,22 @@ class Query<TQueryData> extends Removable {
     updateGcTime(options.gcTime);
 
     // Late-arriving initialData still seeds a query that has never resolved.
+    // Only the success fields are written: a fetch already in flight keeps its
+    // `fetchStatus`, and `dataUpdateCount` stays where it was, because seeding
+    // is not fetching.
     if (!_state.hasData) {
       final defaultState = _defaultState(options);
       if (defaultState.hasData) {
-        setState(defaultState);
+        setState(
+          _state.copyWith(
+            hasData: true,
+            data: defaultState.data,
+            dataUpdatedAt: defaultState.dataUpdatedAt ?? clock.now(),
+            clearError: true,
+            isInvalidated: false,
+            status: QueryStatus.success,
+          ),
+        );
         _initialState = defaultState;
       }
     }
@@ -400,7 +416,10 @@ class Query<TQueryData> extends Removable {
     if (_state.fetchStatus != FetchStatus.idle &&
         _retryer?.status != RetryerStatus.rejected) {
       if (_state.hasData && (fetchOptions?.cancelRefetch ?? false)) {
-        await cancel(silent: true);
+        // Deliberately not awaited, as upstream does not: the replacement
+        // retryer has to be installed before the cancelled fetch's `catch`
+        // runs, or that fetch has nothing to piggyback on and rejects.
+        cancel(silent: true).ignore();
       } else {
         final retryer = _retryer;
         if (retryer != null) {
@@ -440,12 +459,13 @@ class Query<TQueryData> extends Removable {
         queryKey: queryKey,
         signal: cancelToken,
         meta: _options.meta,
+        onSignalRead: () => _signalConsumed = true,
       );
-      final result = await queryFn(context);
-      if (context.signalConsumed) {
-        _signalConsumed = true;
-      }
-      return result;
+      // Reset per attempt, exactly where upstream resets it: a retry that
+      // never touches the token is as uncancellable as a first try that
+      // did not.
+      _signalConsumed = false;
+      return queryFn(context);
     }
 
     final context = FetchContext<TQueryData>(
@@ -456,12 +476,10 @@ class Query<TQueryData> extends Removable {
       fetchOptions: fetchOptions,
       fetchFn: runQueryFn,
       signal: cancelToken,
+      onSignalRead: () => _signalConsumed = true,
     );
 
     _options.behavior?.onFetch(context, this);
-    if (context.signalConsumed) {
-      _signalConsumed = true;
-    }
 
     // Kept in case this fetch has to be reverted.
     _revertState = _state;
@@ -504,9 +522,13 @@ class Query<TQueryData> extends Removable {
     } catch (error, stackTrace) {
       if (error is CancelledError) {
         if (error.silent) {
-          // A silent cancel means a new fetch is starting; ride along with it.
+          // A silent cancel means a new fetch is starting: ride along with it.
+          // When no new fetch replaced this one, `_retryer` is still this
+          // rejected retryer, so the caller sees the CancelledError — and no
+          // error is dispatched into the query's state, which is what a silent
+          // cancel means.
           final replacement = _retryer;
-          if (replacement != null && !identical(replacement, retryer)) {
+          if (replacement != null) {
             return replacement.future;
           }
         } else if (error.revert) {
