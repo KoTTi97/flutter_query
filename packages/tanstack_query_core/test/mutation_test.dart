@@ -699,7 +699,8 @@ void main() {
             },
             onSettled: (_, __, ___, ____, _____) {
               results.add('onSettled-promise');
-              return Future<String>.value('also-ignored');
+              // upstream returns a `Promise<string>` here to show it is
+              // ignored; a `FutureOr<void>` callback cannot.
             },
           ),
           'vars',
@@ -724,19 +725,26 @@ void main() {
           MutationOptions<String, String, void>(
             mutationKey: key,
             mutationFn: (_) => Future<String>.value('success'),
-            onSuccess: (_, __, ___) {
+            onSuccess: (_, __, ___) async {
               results.add('onSuccess-start');
-              return Future.wait<void>(<Future<void>>[
-                sleep(ms(20)).then((_) => results.add('invalidate-queries')),
-                sleep(ms(10)).then((_) => results.add('track-analytics')),
+              await Future.wait<void>(<Future<void>>[
+                sleep(ms(20)).then((_) {
+                  results.add('invalidate-queries');
+                }),
+                sleep(ms(10)).then((_) {
+                  results.add('track-analytics');
+                }),
               ]);
             },
-            onSettled: (_, __, ___, ____, _____) {
+            onSettled: (_, __, ___, ____, _____) async {
               results.add('onSettled-start');
-              return Future.wait<void>(<Future<void>>[
-                sleep(ms(10)).then((_) => results.add('cleanup-1')),
-                Future<void>.error('error')
-                    .catchError((Object _) => results.add('cleanup-2-failed')),
+              await Future.wait<void>(<Future<void>>[
+                sleep(ms(10)).then((_) {
+                  results.add('cleanup-1');
+                }),
+                Future<void>.error('error').catchError((Object _) {
+                  results.add('cleanup-2-failed');
+                }),
               ]);
             },
           ),
@@ -822,8 +830,12 @@ void main() {
               results.add('onError-async');
               await sleep(ms(10));
               await Future.wait<void>(<Future<void>>[
-                sleep(ms(10)).then((_) => results.add('error-cleanup-1')),
-                sleep(ms(20)).then((_) => results.add('error-cleanup-2')),
+                sleep(ms(10)).then((_) {
+                  results.add('error-cleanup-1');
+                }),
+                sleep(ms(20)).then((_) {
+                  results.add('error-cleanup-2');
+                }),
               ]);
             },
             onSettled: (_, __, ___, ____, onMutateResult) {
@@ -836,7 +848,7 @@ void main() {
           onError: (Object error) {
             caught = error;
           },
-        );
+        ).ignore();
 
         await time.advance(ms(30));
 
@@ -897,7 +909,7 @@ void main() {
           onError: (Object error) {
             caught = error;
           },
-        );
+        ).ignore();
 
         await time.advance(ms(30));
 
@@ -949,7 +961,7 @@ void main() {
           onError: (Object error) {
             caught = error;
           },
-        );
+        ).ignore();
 
         await time.advance(ms(30));
 
@@ -1013,7 +1025,7 @@ void main() {
           onError: (Object error) {
             caught = error;
           },
-        );
+        ).ignore();
 
         await time.advance(ms(60));
 
@@ -1074,7 +1086,7 @@ void main() {
           onError: (Object error) {
             caught = error;
           },
-        );
+        ).ignore();
 
         await time.advance(ms(60));
 
@@ -1144,7 +1156,7 @@ void main() {
           onError: (Object error) {
             caught = error;
           },
-        );
+        ).ignore();
 
         await time.advance(ms(30));
 
