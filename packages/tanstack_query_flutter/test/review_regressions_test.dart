@@ -3,8 +3,6 @@
 /// `tanstack_query_core/test/port_specifics_test.dart`.
 library;
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
