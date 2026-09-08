@@ -30,7 +30,7 @@ is a bug in this file.
 | `queryClient.test.tsx` | `query_client_test.dart` | 95 / 156 | done bar the infinite blocks |
 | `mutation.test.tsx` | `mutation_test.dart` | 28 / 28 | done |
 | `mutationCache.test.tsx` | `mutation_cache_test.dart` | 16 / 16 | done |
-| `mutationObserver.test.tsx` | — | 0 / 16 | not started |
+| `mutationObserver.test.tsx` | `mutation_observer_test.dart` | 16 / 16 | done |
 | `infiniteQueryBehavior.test.tsx` | — | 0 / 9 | not started |
 | `infiniteQueryObserver.test.tsx` | — | 0 / 7 | not started |
 | `utils.test.tsx` | — | 0 / 78 | not started |
@@ -435,6 +435,38 @@ All 16 ported.
 3. `MutationCache.remove` notified only when the mutation was still in the
    cache. Upstream notifies either way: a caller that asked for a removal is
    told it happened.
+
+### `mutationObserver.test.tsx`
+
+All 16 ported.
+
+- **adapted (2):** the callback-argument cases drop the
+  `MutationFunctionContext` argument (see the divergence table) and use
+  `MutationObserver<…, Object?>` so the `onMutateResult` slot is a value rather
+  than `void`.
+- **adapted (2):** the two "transferred to a different execution context"
+  cases collect what the zone reports, through `testFakeAsyncGuarded`.
+- **adapted:** `should not notify cache when setOptions is called with same
+  options` reads the events the cache emitted instead of spying on `notify`.
+
+**Four port bugs this suite caught:**
+
+1. `MutationObserver.setOptions` pushed the new options onto the observed
+   mutation whatever its state, so changing `meta` rewrote the record of a
+   mutation that had already finished. Only a *pending* mutation takes new
+   options.
+2. Changing the `mutationKey` did not reset the observer. A different key means
+   a different mutation, and there is no way back to the old one.
+3. Re-subscribing never re-attached the observer to its mutation, so an
+   observer that lost its last listener stopped seeing the mutation it had
+   started — including the result it settled with while nobody was watching.
+4. A per-call `onSuccess`/`onError`/`onSettled` that threw took the caller's
+   future down with it. Those failures now go to the zone, like the mutation's
+   own callbacks.
+
+The observer also needed `observerOptionsUpdated` and value equality on
+`DefaultedMutationOptions` — the analogue of upstream's `shallowEqualObjects`,
+without which every rebuild would report an options change.
 
 ## Deliberate divergences that will show up in later suites
 

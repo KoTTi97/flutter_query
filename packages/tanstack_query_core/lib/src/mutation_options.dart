@@ -166,4 +166,40 @@ class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   final GcTime gcTime;
   final MutationScope? scope;
   final Object? meta;
+
+  /// Field-by-field equality, functions compared by identity — upstream's
+  /// `shallowEqualObjects` over defaulted options, which is what tells a
+  /// rebuild that nothing actually changed.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DefaultedMutationOptions<TData, TVariables, TOnMutateResult> &&
+          other.mutationKey == mutationKey &&
+          other.mutationFn == mutationFn &&
+          other.onMutate == onMutate &&
+          other.onSuccess == onSuccess &&
+          other.onError == onError &&
+          other.onSettled == onSettled &&
+          other.retry == retry &&
+          other.retryDelay == retryDelay &&
+          other.networkMode == networkMode &&
+          other.gcTime == gcTime &&
+          other.scope == scope &&
+          other.meta == meta;
+
+  @override
+  int get hashCode => Object.hash(
+        mutationKey,
+        mutationFn,
+        onMutate,
+        onSuccess,
+        onError,
+        onSettled,
+        retry,
+        retryDelay,
+        networkMode,
+        gcTime,
+        scope,
+        meta,
+      );
 }

@@ -19,8 +19,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     this._client,
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) {
-    _options = _client
-        .defaultMutationOptions<TData, TVariables, TOnMutateResult>(options);
+    setOptions(options);
     _currentResult = _createResult(
       const MutationState<Never, Never, Never>().status,
       MutationState<TData, TVariables, TOnMutateResult>(),
@@ -40,6 +39,15 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   void Function() subscribe(
       MutationObserverListener<TData, TVariables> listener) {
     listeners.add(listener);
+    if (listeners.length == 1) {
+      // Re-attaching after an unsubscribe: the mutation may have moved on, or
+      // even settled, while nobody was watching.
+      final mutation = _currentMutation;
+      if (mutation != null) {
+        mutation.addObserver(this);
+        _updateResult(mutation.state);
+      }
+    }
     return () {
       listeners.remove(listener);
       if (!hasListeners) {
@@ -61,10 +69,36 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   void setOptions(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) {
+    final prevOptions = _hasOptions ? _options : null;
     _options = _client
         .defaultMutationOptions<TData, TVariables, TOnMutateResult>(options);
-    _currentMutation?.setOptions(_options);
+    _hasOptions = true;
+
+    // Upstream reports this event with `mutation: undefined` when the observer
+    // has never run one; an event about no mutation is not actionable, so it is
+    // simply not sent.
+    final observed = _currentMutation;
+    if (observed != null && _options != prevOptions) {
+      _client.mutationCache.notifyObserverOptionsUpdated(
+        observed as Mutation<Object?, Object?, Object?>,
+        this,
+      );
+    }
+
+    final previousKey = prevOptions?.mutationKey;
+    final nextKey = _options.mutationKey;
+    if (previousKey != null && nextKey != null && previousKey != nextKey) {
+      // A different key means a different mutation: there is no way back to the
+      // old one, so the observer starts over.
+      reset();
+    } else if (_currentMutation?.state.status == MutationStatus.pending) {
+      // Only a mutation still in flight takes new options; a settled one keeps
+      // the ones it ran with, which is what its recorded `meta` means.
+      _currentMutation?.setOptions(_options);
+    }
   }
+
+  bool _hasOptions = false;
 
   void _mutate(TVariables variables) => mutate(variables);
 
@@ -94,7 +128,10 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     return mutation.execute(variables);
   }
 
-  /// Back to idle.
+  /// Detaches from the mutation being observed and goes back to idle.
+  ///
+  /// The mutation itself keeps running and still fires its own callbacks; this
+  /// observer just stops reflecting it, and the next `mutate` builds a new one.
   void reset() {
     _currentMutation?.removeObserver(this);
     _currentMutation = null;
@@ -127,30 +164,51 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     switch (action) {
       case MutationSuccessAction(:final data):
         final typed = data as TData;
-        callbacks.onSuccess?.call(typed, variables, state.onMutateResult);
-        callbacks.onSettled?.call(
-          typed,
-          null,
-          null,
-          variables,
-          state.onMutateResult,
+        _reporting(() =>
+            callbacks.onSuccess?.call(typed, variables, state.onMutateResult));
+        _reporting(
+          () => callbacks.onSettled?.call(
+            typed,
+            null,
+            null,
+            variables,
+            state.onMutateResult,
+          ),
         );
       case MutationErrorAction(:final error, :final stackTrace):
-        callbacks.onError?.call(
-          error,
-          stackTrace,
-          variables,
-          state.onMutateResult,
+        _reporting(
+          () => callbacks.onError?.call(
+            error,
+            stackTrace,
+            variables,
+            state.onMutateResult,
+          ),
         );
-        callbacks.onSettled?.call(
-          null,
-          error,
-          stackTrace,
-          variables,
-          state.onMutateResult,
+        _reporting(
+          () => callbacks.onSettled?.call(
+            null,
+            error,
+            stackTrace,
+            variables,
+            state.onMutateResult,
+          ),
         );
       default:
         break;
+    }
+  }
+
+  /// A per-call callback that throws must not take the caller's future down
+  /// with it: the failure goes to the zone, as upstream re-throws it into a
+  /// fresh execution context.
+  static void _reporting(FutureOr<void> Function() body) {
+    try {
+      final result = body();
+      if (result is Future<void>) {
+        result.catchError(Zone.current.handleUncaughtError);
+      }
+    } catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
 
