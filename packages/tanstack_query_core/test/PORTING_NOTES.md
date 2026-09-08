@@ -33,7 +33,7 @@ is a bug in this file.
 | `mutationObserver.test.tsx` | `mutation_observer_test.dart` | 16 / 16 | done |
 | `infiniteQueryBehavior.test.tsx` | — | 0 / 9 | not started |
 | `infiniteQueryObserver.test.tsx` | — | 0 / 7 | not started |
-| `utils.test.tsx` | — | 0 / 78 | not started |
+| `utils.test.tsx` | `utils_test.dart` | 16 / 78 | done bar `addToEnd`/`addToStart` |
 
 Suites not ported at all, each for one recorded reason:
 `hydration.test.tsx` (hydration is out of v1 scope, #17),
@@ -467,6 +467,41 @@ All 16 ported.
 The observer also needed `observerOptionsUpdated` and value equality on
 `DefaultedMutationOptions` — the analogue of upstream's `shallowEqualObjects`,
 without which every rebuild would report an options change.
+
+### `utils.test.tsx`
+
+16 ported, 8 deferred, 54 omitted. This is the one upstream file that is mostly
+*not* applicable: it tests JavaScript helpers, and the ones that survive the
+port are already methods on a value type here.
+
+- **ported:** `partialMatchKey` (8) as `QueryKey.matches`, `hashKey` (4) as
+  `QueryKey.debugString`, `matchMutation` (1), and the three
+  `addConsumeAwareSignal` cases as the query function context's `signal` getter
+  plus `QueryCancelToken.onCancel`.
+- **deferred — infinite queries (8):** `addToEnd` and `addToStart`, which are
+  the `maxPages` helpers; they land with
+  [#16](https://github.com/KoTTi97/flutter_query/issues/16).
+- **omitted — no counterpart (26):** `isPlainObject` (7), `isPlainArray` (2),
+  `shallowEqualObjects` (4), `isValidTimeout` (6), `hashQueryKeyByOptions` (2),
+  `keepPreviousData` (1), `ensureQueryFn` (3), `shouldThrowError` (2). Dart has
+  no plain-object introspection, `Duration` cannot be `NaN` or a string, and
+  the rest belong to features this port dropped (`queryKeyHashFn`, `skipToken`,
+  `throwOnError`) or expresses differently (`keepPreviousData` is
+  `PlaceholderData.compute((previous, _) => previous)`, shallow equality is
+  `==` on the defaulted options).
+- **omitted — replaceEqualDeep (21):** the whole block
+  ([#12](https://github.com/KoTTi97/flutter_query/issues/12)).
+- **omitted — undefined guards (1):** `hashKey > should hash undefined object
+  properties the same as missing properties`. Dropping `null` entries from the
+  debug rendering would misrepresent a key: `null` is a value here, and two
+  keys that differ by one would print the same.
+- **adapted:** `partialMatchKey > should treat undefined object properties as
+  matching missing properties` becomes `should not treat a null object property
+  as a missing property`, and asserts the asymmetry. Upstream reads both
+  directions as `undefined === undefined`; here a filter that names
+  `filters: null` is asking for an entry the other key does not have — which is
+  also what `==` says about the two keys, so partial matching agrees with exact
+  matching rather than contradicting it.
 
 ## Deliberate divergences that will show up in later suites
 
