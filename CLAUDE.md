@@ -38,6 +38,15 @@ What the map settles:
 - **Decide, then build.** The map was originally "plan, don't do". It is now
   "decide the ticket, then write the code it governs": production Dart lands in
   this repo as soon as the decisions covering it are closed.
+- **The one AFK exception — the Flutter binding's API shape.**
+  [#21](https://github.com/KoTTi97/flutter_query/issues/21) (builders vs hooks
+  vs controller) and its prototype
+  [#23](https://github.com/KoTTi97/flutter_query/issues/23) are **HITL**:
+  Christian asked on 2026-09-08 to be part of that decision, `flutter_hooks` in
+  particular. They carry the `hitl` label and a stop banner. Do not resolve
+  them alone and do not build widgets on an unratified API shape; bring him a
+  written comparison with real call-site code and let him choose. Every other
+  ticket stays AFK.
 - **The existing `flutter-port/` code is prior art, not the plan of record.** It
   may be reused wherever a ticket evaluates it as good and suitable; the
   evaluation is recorded on that ticket, nothing carries over silently.
