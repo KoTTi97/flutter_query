@@ -137,3 +137,18 @@ makes upstream's expectation inapplicable — and then write it down.
 
 - The design doc also lives as a published artifact. `DESIGN.md` is the
   canonical copy; if you change one, change the other.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (`KoTTi97/flutter_query`, via the
+`gh` CLI). See `docs/agents/issue-tracker.md` — its "Wayfinding operations"
+section is what `/wayfinder` sessions follow. The current wayfinder map is the
+issue labelled `wayfinder:map`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created lazily
+by `/domain-modeling` when the first term or decision is resolved. See
+`docs/agents/domain.md`.
