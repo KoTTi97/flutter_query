@@ -116,7 +116,9 @@ class MutationCache
   }
 
   void remove(Mutation<Object?, Object?, Object?> mutation) {
-    _mutations.remove(mutation);
+    if (_mutations.remove(mutation)) {
+      mutation.destroy();
+    }
     // Notified even when it was not in the cache: a caller that asked for a
     // removal gets told the removal happened, exactly once, either way.
     notify(MutationRemoved(mutation));

@@ -1,0 +1,23 @@
+/// The Flutter binding for `tanstack_query_core`.
+///
+/// Four equal ways to reach a query, none of which needs a package beyond
+/// Flutter (https://github.com/KoTTi97/flutter_query/issues/21):
+///
+/// * [QueryController] / [MutationController] — a `ValueListenable`, the
+///   foundation the other three stand on, and what makes signals, provider,
+///   riverpod and bloc integration free.
+/// * [QueryBuilder] / [MutationBuilder] — the `StreamBuilder` shape.
+/// * [QueryMixin] — `watchQuery(...)` straight in `build`.
+/// * `context.query(...)` — the same, in a `StatelessWidget`, rebuilding only
+///   the widgets that read that key.
+///
+/// The core's whole surface is re-exported, so one import is enough.
+library;
+
+export 'package:tanstack_query_core/tanstack_query_core.dart';
+
+export 'src/query_builder.dart';
+export 'src/query_client_provider.dart';
+export 'src/query_context.dart';
+export 'src/query_controller.dart';
+export 'src/query_mixin.dart';

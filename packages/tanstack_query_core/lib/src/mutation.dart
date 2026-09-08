@@ -273,6 +273,15 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     return Future<void>.value();
   }
 
+  /// Cancels the pending collection.
+  ///
+  /// Called by the cache when this mutation is removed, so a removed mutation
+  /// leaves no timer behind that would later ask to be removed again. Upstream
+  /// does not do this — in a browser nobody notices a stray `setTimeout`, but
+  /// Flutter's own widget tests assert that no timer outlives the tree.
+  @override
+  void destroy() => super.destroy();
+
   /// Runs [body], reporting anything it throws to the zone instead of letting
   /// it replace the error already on its way to the caller.
   static Future<void> _reportingFailures(FutureOr<void> Function() body) async {
