@@ -12,16 +12,30 @@ Start the gateway the React demo uses (port 5174):
 cd ../../react-demo/server && npm install && npm run dev
 ```
 
-```bash
-flutter run -d macos     # or chrome, or an emulator
-```
-
-An Android emulator reaches the host through `10.0.2.2`, which the app picks by
-itself. For a real device, point it at your machine:
+Then run the app. **iOS is the platform that is generated** — for macOS, web or
+Android, run `flutter create --platforms=macos,web,android .` first.
 
 ```bash
-flutter run --dart-define=GATEWAY=http://192.168.1.5:5174/api
+flutter run                          # pick the simulator when asked
 ```
+
+On the **simulator**, `localhost` is your Mac, so the default gateway URL just
+works.
+
+On a **physical iPhone or iPad**, `localhost` is the device itself, so point it
+at your Mac's address on the network — and expect iOS to ask once for local
+network permission:
+
+```bash
+flutter run --dart-define=GATEWAY=http://192.168.240.11:5174/api
+```
+
+(`ipconfig getifaddr en0` prints that address. An Android emulator needs no flag:
+it reaches the host through `10.0.2.2`, which the app picks by itself.)
+
+`ios/Runner/Info.plist` carries an `NSAllowsLocalNetworking` exception, because
+the gateway is plain HTTP and iOS blocks cleartext by default. It is scoped to
+local networking — arbitrary loads stay off.
 
 The gateway is deliberately slow (~900 ms a list fetch, ~700 ms a write) and has
 scripted failures: renaming a sensor to **`fail`** is rejected, and **every
