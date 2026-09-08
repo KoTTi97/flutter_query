@@ -29,7 +29,7 @@ is a bug in this file.
 | `queryObserver.test.tsx` | `query_observer_test.dart` | 60 / 75 | done |
 | `queryClient.test.tsx` | `query_client_test.dart` | 95 / 156 | done bar the infinite blocks |
 | `mutation.test.tsx` | `mutation_test.dart` | 28 / 28 | done |
-| `mutationCache.test.tsx` | — | 0 / 16 | not started |
+| `mutationCache.test.tsx` | `mutation_cache_test.dart` | 16 / 16 | done |
 | `mutationObserver.test.tsx` | — | 0 / 16 | not started |
 | `infiniteQueryBehavior.test.tsx` | — | 0 / 9 | not started |
 | `infiniteQueryObserver.test.tsx` | — | 0 / 7 | not started |
@@ -408,6 +408,33 @@ and its retryer are sequenced:
 The suite also needed two things the port did not have: mutation-observer cache
 events (`observerAdded` / `observerRemoved`, mirroring the query cache) and a
 named `MissingMutationFunctionError`.
+
+### `mutationCache.test.tsx`
+
+All 16 ported.
+
+- **adapted (3):** the callback cases drop the assertion on the
+  `MutationFunctionContext` argument, which is not ported (see the divergence
+  table), and compare the payload field by field — two equal Dart `Map`s are
+  not `==`.
+- **adapted:** `should be garbage collected later ...` and its neighbours read
+  `MutationCache.mutations` where upstream calls `getAll()`.
+
+**Three port bugs this suite caught:**
+
+1. `Mutation.removeObserver` removed a settled mutation from the cache *on the
+   spot* instead of scheduling its collection, so unmounting a widget could cut
+   a mutation's own callbacks short. The pending-vs-settled decision belongs in
+   `optionalRemove`, where the gc timer lands — and while pending it now does
+   nothing at all, because `execute` schedules the next collection when it
+   settles. Re-arming there would spin forever on `gcTime: Duration.zero`.
+2. The cache-level `onMutate` hook was always awaited, even when nothing was
+   registered, which pushed a *synchronous* per-mutation `onMutate` behind a
+   microtask — long enough for a caller to read the pre-optimistic state. Both
+   are now awaited only when they actually return a future.
+3. `MutationCache.remove` notified only when the mutation was still in the
+   cache. Upstream notifies either way: a caller that asked for a removal is
+   told it happened.
 
 ## Deliberate divergences that will show up in later suites
 

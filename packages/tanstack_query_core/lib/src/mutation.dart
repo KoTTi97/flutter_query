@@ -235,20 +235,24 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     }
     _cache.onMutationObserverRemoved(
         this as Mutation<Object?, Object?, Object?>, observer);
-    if (observers.isEmpty) {
-      if (_state.status == MutationStatus.pending) {
-        scheduleGc();
-      } else {
-        _cache.onMutationRemovalRequested(this);
-      }
-    }
+    // Never removed on the spot: an unmounted widget must not cut a mutation's
+    // callbacks short. The gc timer decides, and `optionalRemove` lets a
+    // pending one keep going.
+    scheduleGc();
   }
 
   @override
   void optionalRemove() {
-    if (observers.isEmpty && _state.status != MutationStatus.pending) {
-      _cache.onMutationRemovalRequested(this);
+    if (observers.isNotEmpty) {
+      return;
     }
+    if (_state.status == MutationStatus.pending) {
+      // Still running: leave it alone. `execute` schedules the next collection
+      // when it settles, which is why this does not re-arm the timer itself —
+      // with `gcTime: Duration.zero` that would spin forever.
+      return;
+    }
+    _cache.onMutationRemovalRequested(this);
   }
 
   /// Releases a paused mutation, completing when it settles.
@@ -328,12 +332,23 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
           ),
         );
 
-        await _cache.onMutationStarting(
+        // Awaited only when there is something to await: with no cache-level
+        // `onMutate`, the per-mutation one has to run synchronously, so that a
+        // caller can read the optimistic state it wrote on the next line.
+        final starting = _cache.onMutationStarting(
           this as Mutation<Object?, Object?, Object?>,
           variables,
         );
+        if (starting is Future<void>) {
+          await starting;
+        }
 
-        onMutateResult = await _options.onMutate?.call(variables);
+        final mutating = _options.onMutate?.call(variables);
+        if (mutating is Future<TOnMutateResult>) {
+          onMutateResult = await mutating;
+        } else {
+          onMutateResult = mutating as TOnMutateResult?;
+        }
 
         if (onMutateResult != _state.onMutateResult) {
           _dispatch(
