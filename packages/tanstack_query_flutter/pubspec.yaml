@@ -23,3 +23,4 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   lints: ^6.0.0
+  meta: ^1.16.0

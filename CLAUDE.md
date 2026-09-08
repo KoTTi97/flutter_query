@@ -10,8 +10,8 @@ work is first-class here, not an add-on.
 | Phase | State |
 |---|---|
 | **`packages/tanstack_query_core/`** — the pure-Dart core | **done.** 380 tests, every applicable upstream suite ported, analyzer clean at `--fatal-infos` |
-| **`packages/tanstack_query_flutter/`** — the Flutter binding | **not started, and blocked**: its API shape is [#21](https://github.com/KoTTi97/flutter_query/issues/21), which Christian decides |
-| **`examples/sensor_demo/`** — the react-demo port | not started; sits behind the binding |
+| **`packages/tanstack_query_flutter/`** — the Flutter binding | **first cut done.** 15 widget tests; four equal call styles, no dependency beyond Flutter |
+| **`examples/sensor_demo/`** — the react-demo port | not started; next |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
@@ -24,11 +24,21 @@ cd packages/tanstack_query_core && dart test
 ```
 
 ```bash
-dart analyze --fatal-infos packages/tanstack_query_core && dart format --set-exit-if-changed packages/tanstack_query_core
+cd packages/tanstack_query_flutter && flutter test
 ```
 
-Those two are the per-module gate: tests, analyzer, formatter, and a
-PORTING_NOTES entry, all in the same commit.
+```bash
+dart analyze --fatal-infos packages && dart format --set-exit-if-changed packages
+```
+
+That is the per-module gate: tests, analyzer, formatter, and a PORTING_NOTES
+entry, all in the same commit.
+
+**Widget tests need one extra step.** A `QueryClient` outlives the tree and owns
+`gcTime` timers; Flutter's test binding asserts no timer is pending when the
+tree comes down, *before* any `tearDown` runs. So a widget test ends with
+`await tester.pumpWidget(const SizedBox()); client.clear();` — see the
+`widgetTest` helper in `packages/tanstack_query_flutter/test/binding_test.dart`.
 
 ## The wayfinder map
 
@@ -54,15 +64,15 @@ What the map settles:
   alternatives, so the decision can be reopened from the record alone.
 - **Decide, then build.** Production Dart lands as soon as the decisions
   covering it are closed.
-- **The one AFK exception — the Flutter binding's API shape.**
-  [#21](https://github.com/KoTTi97/flutter_query/issues/21) (builders vs hooks
-  vs controller) and its prototype
-  [#23](https://github.com/KoTTi97/flutter_query/issues/23) are **HITL**:
-  Christian asked on 2026-09-08 to be part of that decision, `flutter_hooks` in
-  particular. They carry the `hitl` label and a stop banner. Do not resolve
-  them alone and do not build widgets on an unratified API shape; bring him a
-  written comparison with real call-site code and let him choose. Every other
-  ticket stays AFK.
+- **The binding's API shape was Christian's call, and he made it (2026-09-08).**
+  [#21](https://github.com/KoTTi97/flutter_query/issues/21) and
+  [#23](https://github.com/KoTTi97/flutter_query/issues/23) are closed. What he
+  ruled: **no third-party package required by the main package** — not
+  `flutter_hooks`, not signals, and by the same reasoning not
+  `connectivity_plus`; hooks and signals may come later as opt-in packages. And
+  **no default in the documentation**: the four call styles are presented as
+  equal alternatives. Both rules hold for anything built on top, including the
+  demo.
 - **Upstream pin:** `query/` at `50680b98c` (`main`, 2026-09-08).
 - **Research findings** from charting live under [`docs/research/`](docs/research/)
   (upstream inventory, Dart library survey, adapter contract, runtime facts,
@@ -99,6 +109,7 @@ by `/domain-modeling` when the first term or decision is resolved. See
 | Path | What it is | In git? |
 |---|---|---|
 | `packages/tanstack_query_core/` | The pure-Dart core. | yes |
+| `packages/tanstack_query_flutter/` | The Flutter binding. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |
 | `docs/research/` | Research findings behind the map's tickets. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |
