@@ -441,7 +441,7 @@ class QueryClient {
     final defaulted = _executeQueryOptions<TQueryData>(options);
     final query = queryCache.build<TQueryData>(this, defaulted);
 
-    if (query.isStaleByTime(defaulted.staleTime.resolve(query))) {
+    if (query.isStaleByTime(defaulted.staleTime)) {
       return query.fetch(options: defaulted);
     }
     return Future<TQueryData>.value(query.state.data as TQueryData);

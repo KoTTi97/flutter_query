@@ -82,11 +82,9 @@ class InfinitePageContext<TPageParam> {
     required this.queryKey,
     required this.pageParam,
     required this.direction,
-    required QueryCancelToken signal,
+    required QueryCancelToken Function() signalProvider,
     this.meta,
-    void Function()? onSignalRead,
-  })  : _signal = signal,
-        _onSignalRead = onSignalRead;
+  }) : _signalProvider = signalProvider;
 
   final QueryClient client;
   final QueryKey queryKey;
@@ -99,15 +97,13 @@ class InfinitePageContext<TPageParam> {
 
   final Object? meta;
 
-  final QueryCancelToken _signal;
-  final void Function()? _onSignalRead;
+  final QueryCancelToken Function() _signalProvider;
 
   /// Reading this marks the fetch as cancellable, exactly as it does for an
-  /// ordinary query function.
-  QueryCancelToken get signal {
-    _onSignalRead?.call();
-    return _signal;
-  }
+  /// ordinary query function — and not reading it leaves the fetch
+  /// uncancellable, so a page that is already in flight still lands in the
+  /// cache when the last observer goes away.
+  QueryCancelToken get signal => _signalProvider();
 }
 
 /// Fetches one page.
@@ -257,9 +253,25 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
     final oldPages = existing?.pages ?? const <Never>[];
     final oldPageParams = existing?.pageParams ?? const <Never>[];
 
+    // Progress lives outside `fetchFn`, exactly as upstream keeps it in
+    // `onFetch`: a retry continues from the page that failed instead of
+    // starting the whole run again. Pages already fetched are not re-requested.
+    var result = const InfiniteData<Never, Never>(
+      pages: <Never>[],
+      pageParams: <Never>[],
+    ) as InfiniteData<TPageData, TPageParam>;
+    var currentPage = 0;
+
     context.fetchFn = () async {
       var cancelled = false;
-      final token = context.signal;
+
+      // Read lazily: touching `context.signal` is what marks this fetch as
+      // cancellable, and a page function that never asks for the token must
+      // not have that decided for it. An uncancellable fetch whose last
+      // observer goes away still finishes and fills the cache.
+      QueryCancelToken? token;
+      QueryCancelToken readSignal() =>
+          token ??= (context.signal..onCancel(() => cancelled = true));
 
       Future<InfiniteData<TPageData, TPageParam>> fetchPage(
         InfiniteData<TPageData, TPageParam> data,
@@ -280,8 +292,7 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
           direction:
               previous ? FetchDirection.backward : FetchDirection.forward,
           meta: context.options.meta,
-          signal: token,
-          onSignalRead: () => token.onCancel(() => cancelled = true),
+          signalProvider: readSignal,
         );
 
         final page = await options.pageFn(pageContext);
@@ -297,11 +308,6 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
         );
       }
 
-      var result = const InfiniteData<Never, Never>(
-        pages: <Never>[],
-        pageParams: <Never>[],
-      ) as InfiniteData<TPageData, TPageParam>;
-
       if (direction != null && oldPages.isNotEmpty) {
         final previous = direction == FetchDirection.backward;
         final oldData = InfiniteData<TPageData, TPageParam>(
@@ -315,7 +321,6 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
         result = await fetchPage(oldData, param, previous: previous);
       } else {
         final remaining = pages ?? oldPages.length;
-        var currentPage = 0;
         do {
           final param = currentPage == 0
               ? (oldPageParams.isEmpty

@@ -174,6 +174,14 @@ class Retryer<TData> {
 
       await Future<void>.delayed(delay);
 
+      // The wait is long enough for the fetch to have been cancelled. Upstream
+      // omits this check and a cancelled retry can still flip its query from
+      // `idle` to `paused` on the way out; leaving a known state corruption in
+      // for the sake of matching would be the wrong kind of fidelity.
+      if (isResolved) {
+        return;
+      }
+
       if (!_canContinue()) {
         await _pause();
       }

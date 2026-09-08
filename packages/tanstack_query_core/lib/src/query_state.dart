@@ -86,6 +86,10 @@ final class QueryState<TQueryData> {
   /// Whether anything has ever been fetched, successfully or not.
   bool get isFetched => dataUpdateCount + errorUpdateCount > 0;
 
+  /// This state with the given fields replaced.
+  ///
+  /// Pass [hasData] whenever you pass [data]: the two are one unit, and only
+  /// [hasData] can tell "set it to null" from "leave it alone".
   QueryState<TQueryData> copyWith({
     bool? hasData,
     TQueryData? data,
@@ -109,7 +113,12 @@ final class QueryState<TQueryData> {
   }) {
     return QueryState<TQueryData>(
       hasData: hasData ?? (clearData ? false : this.hasData),
-      data: clearData ? null : (data ?? this.data),
+      // `data` and `hasData` travel together: passing `hasData: true` makes
+      // `data` authoritative, including when it is `null`. Without that rule a
+      // query whose data type is nullable could never resolve *to* null — the
+      // `??` would read a legitimate value as "not passed" and keep the
+      // previous one.
+      data: clearData ? null : (hasData == true ? data : (data ?? this.data)),
       dataUpdateCount: dataUpdateCount ?? this.dataUpdateCount,
       dataUpdatedAt: dataUpdatedAt ?? this.dataUpdatedAt,
       error: clearError ? null : (error ?? this.error),

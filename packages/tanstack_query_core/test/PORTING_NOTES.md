@@ -11,8 +11,9 @@ is a bug in this file.
   [#18](https://github.com/KoTTi97/flutter_query/issues/18).
 - One Dart file per upstream file; upstream test names kept verbatim; a failing
   ported test means the port is wrong until proven otherwise.
-- Port-only tests (no upstream counterpart) live in `smoke_test.dart` and, as
-  the suite grows, `port_specifics_test.dart`.
+- Port-only tests (no upstream counterpart) live in `smoke_test.dart`, and
+  regressions found by review rather than by a ported case live in
+  `port_specifics_test.dart`.
 
 ## Status
 
@@ -541,6 +542,44 @@ drop exactly *one* item when `max` would be exceeded, not "down to max" —
 upstream's `slice(1)` arithmetic, which is right because pages arrive one at a
 time.
 
+## Regressions found by review
+
+`port_specifics_test.dart` pins five bugs an external review of `c69a3ca` found.
+None was caught by a ported upstream case, and it is worth recording why:
+
+1. **A nullable query could not resolve to `null`.** `QueryState.copyWith` read
+   `data ?? this.data`, so a successful fetch returning `null` kept the previous
+   value. Upstream cannot hit this — `undefined` there means "no data" and a
+   `null` result is a distinct value — so no ported case covers it. `data` and
+   `hasData` now travel as one unit.
+2. **`StaleTime.infinite` ignored invalidations.** Both `infinite` and `static`
+   resolved to a `null` duration, and `isStaleByTime` returned early on `null`
+   before looking at `isInvalidated`. This is a divergence the port introduced
+   when it split upstream's `number | 'static'` into three sealed values, and it
+   made an invalidated query look fresh forever. `isStaleByTime` now takes the
+   `StaleTime` and resolves it once, keeping the three apart.
+3. **An infinite-query retry restarted from the first page.** `result` and
+   `currentPage` were declared inside `fetchFn`, so every retry attempt began
+   again: `[0, 1, 0, 1, 2]` instead of `[0, 1, 1, 2]`. Upstream declares both in
+   `onFetch`, outside the retried function. Ported faithfully now.
+4. **Infinite queries always marked the fetch cancellable.** The behaviour read
+   `context.signal` eagerly to build the page context, which is exactly the
+   thing that marks a fetch as cancellable — so a page that never asked for the
+   token still lost its result when the last observer went away. The token is
+   now read on first access by `pageFn`, which is what upstream's
+   `addConsumeAwareSignal` getter does.
+5. **A cancelled retry could still pause its query.** After the retry delay the
+   retryer paused without checking whether it had been resolved meanwhile, so a
+   `cancelQueries` followed by going offline flipped an idle query to `paused`.
+   Upstream has the same hole; this one is a deliberate divergence rather than a
+   port bug, and it is in the table above.
+
+The pattern is worth naming: four of the five sit exactly where this port
+*differs* from upstream — nullable data, the three-way stale time, a page loop
+written as Dart closures, a lazily-consumed cancellation token. Ported tests
+prove the ported behaviour; they cannot prove the seams the port itself
+introduced. Those need tests of their own.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -562,5 +601,6 @@ suite does not have to go looking:
 | an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | `MutationCache.remove` leaves the mutation's gc timer running | the timer is cancelled, so a removed mutation cannot ask to be removed again | [#22](https://github.com/KoTTi97/flutter_query/issues/22) |
+| a cancelled retry can still flip its query from `idle` to `paused` after its delay | the retryer checks `isResolved` after the delay | review, 2026-09-08 |
 | `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |

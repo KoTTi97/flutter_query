@@ -327,22 +327,33 @@ class Query<TQueryData> extends Removable {
     return !_state.hasData || _state.isInvalidated;
   }
 
-  /// Whether the data is older than [staleTime]. `null` means never stale.
-  bool isStaleByTime(Duration? staleTime) {
+  /// Whether the data is older than [staleTime].
+  ///
+  /// Takes the [StaleTime] rather than a resolved [Duration] because the two
+  /// "never stale by time" values are not the same thing: [StaleTime.static]
+  /// outranks an invalidation, while [StaleTime.infinite] does not. Resolving
+  /// first would collapse them, and an invalidated query would look fresh
+  /// forever.
+  bool isStaleByTime(StaleTime staleTime) {
     if (!_state.hasData) {
       return true;
     }
-    if (staleTime == null) {
+    // Resolved once: a dynamic stale time is user code.
+    final resolved = staleTime.resolveFor(this);
+    if (resolved is StaleTimeStatic) {
       return false;
     }
     if (_state.isInvalidated) {
       return true;
     }
+    if (resolved is! StaleTimeDuration) {
+      return false;
+    }
     final updatedAt = _state.dataUpdatedAt;
     if (updatedAt == null) {
       return true;
     }
-    return !clock.now().isBefore(updatedAt.add(staleTime));
+    return !clock.now().isBefore(updatedAt.add(resolved.duration));
   }
 
   @internal

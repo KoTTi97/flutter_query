@@ -35,23 +35,31 @@ sealed class StaleTime {
   const factory StaleTime.dynamic(
       StaleTime Function(Query<Object?> query) compute) = StaleTimeDynamic;
 
-  /// Resolves this to a plain duration for [query]. `null` means "never
-  /// stale".
-  Duration? resolve(Query<Object?> query) => switch (this) {
+  /// This with any [StaleTime.dynamic] layer peeled off for [query], so the
+  /// result is one of [StaleTimeDuration], [StaleTimeStatic] or
+  /// [StaleTimeInfinite].
+  ///
+  /// Callers that need more than one fact about a stale time resolve *once*
+  /// and then ask the result — a dynamic stale time is user code, and calling
+  /// it twice per decision would be visible to whoever wrote it.
+  StaleTime resolveFor(Query<Object?> query) => switch (this) {
+        StaleTimeDynamic(:final compute) => compute(query).resolveFor(query),
+        _ => this,
+      };
+
+  /// Resolves this to a plain duration for [query]. `null` means "never stale
+  /// by time", which both [StaleTime.static] and [StaleTime.infinite] are.
+  Duration? resolve(Query<Object?> query) => switch (resolveFor(query)) {
         StaleTimeDuration(:final duration) => duration,
-        StaleTimeStatic() => null,
-        StaleTimeInfinite() => null,
-        StaleTimeDynamic(:final compute) => compute(query).resolve(query),
+        _ => null,
       };
 
   /// Whether this resolves to [StaleTime.static] for [query] — the one thing
   /// that separates it from [StaleTime.infinite]: a static query is skipped by
-  /// `refetchQueries` and by every refetch trigger.
-  bool isStaticFor(Query<Object?> query) => switch (this) {
-        StaleTimeStatic() => true,
-        StaleTimeDynamic(:final compute) => compute(query).isStaticFor(query),
-        _ => false,
-      };
+  /// `refetchQueries` and by every refetch trigger, and outranks an
+  /// invalidation.
+  bool isStaticFor(Query<Object?> query) =>
+      resolveFor(query) is StaleTimeStatic;
 }
 
 final class StaleTimeDuration extends StaleTime {

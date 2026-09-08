@@ -614,5 +614,4 @@ bool _isStale(
   Query<Object?> query,
   DefaultedQueryObserverOptions<Object?, Object?> options,
 ) =>
-    options.enabled.resolve(query) &&
-    query.isStaleByTime(options.staleTime.resolve(query));
+    options.enabled.resolve(query) && query.isStaleByTime(options.staleTime);
