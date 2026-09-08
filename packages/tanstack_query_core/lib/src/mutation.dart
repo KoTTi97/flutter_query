@@ -7,7 +7,6 @@ import 'package:clock/clock.dart';
 import 'package:meta/meta.dart';
 
 import 'mutation_options.dart';
-import 'option_values.dart';
 import 'query_client.dart';
 import 'removable.dart';
 import 'retryer.dart';
@@ -244,36 +243,10 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       throw StateError('No mutationFn was provided for this mutation');
     }
 
-    final isRestart = _state.status == MutationStatus.pending;
-    TOnMutateResult? onMutateResult = _state.onMutateResult;
-
-    if (!isRestart) {
-      _dispatch(
-        MutationPendingAction(
-          variables: variables,
-          onMutateResult: null,
-          isPaused: !_canFetch(),
-        ),
-      );
-
-      await _cache.onMutationStarting(
-        this as Mutation<Object?, Object?, Object?>,
-        variables,
-      );
-
-      onMutateResult = await _options.onMutate?.call(variables);
-
-      if (onMutateResult != _state.onMutateResult) {
-        _dispatch(
-          MutationPendingAction(
-            variables: variables,
-            onMutateResult: onMutateResult,
-            isPaused: !_canFetch(),
-          ),
-        );
-      }
-    }
-
+    // The retryer exists before the first `await`, exactly as upstream builds
+    // it: a mutation that pauses while its `onMutate` is still running must
+    // still be resumable, and `continueMutation` has nothing to continue
+    // without it.
     final retryer = Retryer<TData>(
       fn: () async => mutationFn(variables),
       focusManager: client.focusManager,
@@ -289,6 +262,36 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       onContinue: () => _dispatch(const MutationContinueAction()),
     );
     _retryer = retryer;
+
+    final isRestart = _state.status == MutationStatus.pending;
+    TOnMutateResult? onMutateResult = _state.onMutateResult;
+
+    if (!isRestart) {
+      _dispatch(
+        MutationPendingAction(
+          variables: variables,
+          onMutateResult: null,
+          isPaused: !retryer.canStart(),
+        ),
+      );
+
+      await _cache.onMutationStarting(
+        this as Mutation<Object?, Object?, Object?>,
+        variables,
+      );
+
+      onMutateResult = await _options.onMutate?.call(variables);
+
+      if (onMutateResult != _state.onMutateResult) {
+        _dispatch(
+          MutationPendingAction(
+            variables: variables,
+            onMutateResult: onMutateResult,
+            isPaused: !retryer.canStart(),
+          ),
+        );
+      }
+    }
 
     try {
       final data = await retryer.start();
@@ -344,10 +347,6 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       scheduleGc();
     }
   }
-
-  bool _canFetch() =>
-      _options.networkMode != NetworkMode.online ||
-      client.onlineManager.isOnline();
 
   void _dispatch(MutationAction action) {
     _state = _reduce(_state, action);

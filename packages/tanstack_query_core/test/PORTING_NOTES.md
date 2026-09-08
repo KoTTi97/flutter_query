@@ -27,7 +27,7 @@ is a bug in this file.
 | `query.test.tsx` | `query_test.dart` | 43 / 51 | done |
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
 | `queryObserver.test.tsx` | `query_observer_test.dart` | 60 / 75 | done |
-| `queryClient.test.tsx` | — | 0 / 156 | not started |
+| `queryClient.test.tsx` | `query_client_test.dart` | 95 / 156 | done bar the infinite blocks |
 | `mutation.test.tsx` | — | 0 / 28 | not started |
 | `mutationCache.test.tsx` | — | 0 / 16 | not started |
 | `mutationObserver.test.tsx` | — | 0 / 16 | not started |
@@ -259,6 +259,104 @@ select error from a previous query — and the select-error branch dropped the
 last good select result instead of keeping it behind the error. Both are now
 upstream's shape: one `select` step over "query data or placeholder", and
 `data = selectResult` when a selector throws.
+
+### `queryClient.test.tsx`
+
+95 ported, **25 deferred** and 36 omitted.
+
+- **deferred — infinite queries (25):** the `ensureInfiniteQueryData`,
+  `infiniteQuery with static staleTime`, `fetchInfiniteQuery`, `infiniteQuery`,
+  `prefetchInfiniteQuery` and `infiniteQuery used for prefetching` blocks. These
+  are not omissions: they land with
+  [#16](https://github.com/KoTTi97/flutter_query/issues/16), which builds
+  infinite queries, and this file's status line stays "done bar the infinite
+  blocks" until they do.
+- **omitted — deprecated upstream API (17):** the whole `fetchQuery` (9),
+  `ensureQueryData` (5) and `prefetchQuery` (3) blocks. Upstream deprecated all
+  three at this pin in favour of `queryClient.query`, and pairs each block with
+  a modern equivalent — `query with static staleTime`, `query`, `query used for
+  prefetching` — which *are* ported
+  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The one case with
+  no modern counterpart is `ensureQueryData`'s `revalidateIfStale`, an option
+  that went away with the method.
+- **omitted — option not ported (3):** the three `defaultQueryOptions` cases,
+  all about `persister` defaulting `networkMode` to `offlineFirst`.
+- **omitted — hashKey identity (1):** `setQueryData > should use default
+  options`, which sets a `queryKeyHashFn`
+  ([#8](https://github.com/KoTTi97/flutter_query/issues/8)).
+- **omitted — undefined/falsy guards (3):** the two `setQueryData` cases that
+  pass `undefined` as data, and `query with static staleTime`'s "cached query
+  data is falsy". `setQueryData` takes a non-nullable value here and
+  `updateQueryData` returning `null` means "leave it alone" — both of which are
+  ported; and `null` is a value like any other in Dart, not a falsy hole.
+- **omitted — skipToken (6):** four in `query`, one in `invalidateQueries`, and
+  the third observer of `resetQueries > should refetch all active queries`
+  (adapted by dropping it). `skipToken` is `Enabled.no` here
+  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)), and the
+  imperative path has no equivalent — it fetches by definition.
+- **omitted — no `select` on the imperative path (3):** `should fetch when
+  disabled and apply select`, `should apply select when data is fresh in cache`,
+  `should apply select to freshly fetched data`. `query()` keeps one type
+  parameter and the transform is a `.then` at the call site
+  ([#7](https://github.com/KoTTi97/flutter_query/issues/7)), so these would
+  assert Dart's `await`, not the library's.
+- **omitted — type-level (2):** the two surviving `should not type-error with
+  strict query key` cases.
+- **omitted — dropped observer feature (1):** `refetchQueries > should throw an
+  error if throwOnError option is set to true`
+  ([#15](https://github.com/KoTTi97/flutter_query/issues/15)).
+- **omitted — hydration (1):** `should resumePausedMutations when coming online
+  after having restored cache (and resumed) while offline`.
+- **adapted:** `setQueriesData` reads as `updateQueriesData`, and
+  `setQueryData(key, updaterFn)` as `updateQueryData` — Dart cannot overload on
+  "a value or a function"
+  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)).
+- **adapted:** `setQueryDefaults > should merge defaultOptions` uses `retry`
+  where upstream uses `suspense`, which is dropped.
+- **adapted:** `should set the new data without comparison if structuralSharing
+  is set to false` → `... is not set`. There is no `structuralSharing: false`
+  here; not configuring it *is* "no comparison"
+  ([#12](https://github.com/KoTTi97/flutter_query/issues/12)).
+- **adapted (4):** the `focusManager`/`onlineManager` spy cases. Without
+  `vi.spyOn` there is nothing to count, so each asserts the effect: a refetch
+  happens (or does not) after the event, and the mount/unmount balance is read
+  the same way. The "resumePausedMutations was called" half of the first two is
+  unobservable when nothing is paused, and is covered by the online cases that
+  watch a real resumption.
+- **adapted:** `should throw an error if throwOnError option is set to true`'s
+  neighbours use `expectLater(..., throwsA(...))` where upstream uses
+  `rejects.toEqual`.
+
+**Four port bugs this suite caught:**
+
+1. `QueryClient.cancelQueries` defaulted `silent: true`. Upstream defaults only
+   `revert: true` — a silent cancel means "a new fetch is taking over", which an
+   explicit cancel is not, so the cancelled fetch neither reverted nor
+   dispatched its error.
+2. `Mutation.execute` created its retryer *after* `onMutate` and the cache's
+   `onMutationStarting`, so a mutation that paused before that point had nothing
+   for `continueMutation` to continue — it was resumed only by accident, when a
+   later `canStart()` happened to be true.
+3. `MutationCache.resumePaused` resumed paused mutations one after another,
+   making each wait for the slowest one before it. Upstream resumes them all at
+   once; what serialises mutations is the scope rule, not the resume order.
+4. `QueryClient.mount`'s focus and online listeners fired `queryCache.onFocus` /
+   `onOnline` without waiting for the paused mutations to finish, so a refetch
+   could overtake the mutation it was meant to reflect and show the server's
+   pre-mutation state. Fixing it needed the guard upstream has too:
+   `resumePausedMutations` is a no-op while still offline, or the listener would
+   await a future that cannot complete.
+
+**One design gap it exposed:** neither `QueryDefaults` nor `MutationDefaults`
+could carry a `queryFn` / `mutationFn`, so `setQueryDefaults(key, {queryFn})` —
+a shared fetcher per key prefix, and upstream's own idiom in these tests — was
+not expressible. Both now carry an *erased* one (`QueryFn<Object?>`), adapted to
+the call site's type by `defaultQueryOptions` and throwing `QueryDataTypeError`
+on a mismatch: the same bargain [#7](https://github.com/KoTTi97/flutter_query/issues/7)
+already struck for the cache's typed reads. `structuralSharing` joined them for
+the same reason. A debug assert that fired when several key prefixes matched one
+query also had to go: upstream merges them deliberately, and
+`['todos']` + `['todos', 'detail']` is the intended shape.
 
 ## Deliberate divergences that will show up in later suites
 

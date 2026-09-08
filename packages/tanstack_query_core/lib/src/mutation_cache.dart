@@ -126,19 +126,24 @@ class MutationCache
   }
 
   /// Replays paused mutations in submission order.
+  /// Releases every paused mutation at once.
+  ///
+  /// All of them are continued together, as upstream does: what serialises
+  /// mutations is [canRunMutation]'s scope rule, not the order they are
+  /// resumed in. Resuming them one after another would make every paused
+  /// mutation wait for the slowest one before it.
   Future<void> resumePaused() async {
     final paused =
         _mutations.where((mutation) => mutation.state.isPaused).toList();
-    for (final mutation in paused) {
-      final resumed = mutation.continueMutation();
-      if (resumed != null) {
-        try {
-          await resumed;
-        } catch (_) {
-          // The error belongs to the mutation's state.
-        }
-      }
-    }
+    await Future.wait<void>(
+      paused.map((mutation) {
+        final resumed = mutation.continueMutation();
+        // The error belongs to the mutation's state, not to whoever resumed it.
+        return resumed == null
+            ? Future<void>.value()
+            : resumed.then((_) {}).catchError((Object _) {});
+      }),
+    );
   }
 
   /// The scope a mutation is serialised under: its own scope, or its identity.

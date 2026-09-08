@@ -759,7 +759,7 @@ void main() {
       expect(observer.currentResult.status, QueryStatus.error);
 
       shouldThrow = false;
-      queryClient.resetQueries(QueryFilters(queryKey: key)).ignore();
+      queryClient.resetQueries(filters: QueryFilters(queryKey: key)).ignore();
 
       expect(observer.currentResult.status, QueryStatus.pending);
       expect(observer.currentResult.dataOrNull, isNull);

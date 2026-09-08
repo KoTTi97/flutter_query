@@ -23,13 +23,17 @@ import 'query_state.dart';
 /// Type-agnostic query defaults.
 ///
 /// Upstream types its defaults `QueryObserverOptions<unknown, …>`; Dart cannot
-/// express "options for any data type", so defaults carry exactly the options
-/// that do not mention the data type. Anything that does (`queryFn`,
-/// `initialData`, `select`, `placeholderData`) belongs to a single query and is
-/// passed at the call site.
+/// express "options for any data type", so defaults carry the options that do
+/// not mention the data type, plus the two that are worth erasing for
+/// ([queryFn] and [structuralSharing] — a shared fetcher per key prefix is the
+/// single most useful default there is). The rest (`initialData`, `select`,
+/// `placeholderData`) belongs to a single query and is passed at the call
+/// site.
 @immutable
 class QueryDefaults {
   const QueryDefaults({
+    this.queryFn,
+    this.structuralSharing,
     this.enabled,
     this.staleTime,
     this.gcTime,
@@ -44,6 +48,18 @@ class QueryDefaults {
     this.refetchIntervalInBackground,
     this.meta,
   });
+
+  /// A fetcher for every query this default covers.
+  ///
+  /// Erased to `Object?`, because one default serves every data type under a
+  /// key prefix; `QueryClient.defaultQueryOptions` adapts it to the call site
+  /// and throws [QueryDataTypeError] if it hands back the wrong type — the
+  /// same bargain the cache's typed reads make
+  /// (https://github.com/KoTTi97/flutter_query/issues/7).
+  final QueryFn<Object?>? queryFn;
+
+  /// Erased for the same reason as [queryFn].
+  final Object? Function(Object? previous, Object? next)? structuralSharing;
 
   final Enabled? enabled;
   final StaleTime? staleTime;
@@ -62,6 +78,8 @@ class QueryDefaults {
   QueryDefaults mergedWith(QueryDefaults? other) {
     if (other == null) return this;
     return QueryDefaults(
+      queryFn: other.queryFn ?? queryFn,
+      structuralSharing: other.structuralSharing ?? structuralSharing,
       enabled: other.enabled ?? enabled,
       staleTime: other.staleTime ?? staleTime,
       gcTime: other.gcTime ?? gcTime,
@@ -84,6 +102,7 @@ class QueryDefaults {
 @immutable
 class MutationDefaults {
   const MutationDefaults({
+    this.mutationFn,
     this.retry,
     this.retryDelay,
     this.networkMode,
@@ -91,6 +110,12 @@ class MutationDefaults {
     this.scope,
     this.meta,
   });
+
+  /// A default mutation function for every mutation under this key.
+  ///
+  /// Erased for the same reason as [QueryDefaults.queryFn]: one default serves
+  /// every variable and result type under a key prefix.
+  final MutationFn<Object?, Object?>? mutationFn;
 
   final RetryPolicy? retry;
   final RetryDelay? retryDelay;
@@ -102,6 +127,7 @@ class MutationDefaults {
   MutationDefaults mergedWith(MutationDefaults? other) {
     if (other == null) return this;
     return MutationDefaults(
+      mutationFn: other.mutationFn ?? mutationFn,
       retry: other.retry ?? retry,
       retryDelay: other.retryDelay ?? retryDelay,
       networkMode: other.networkMode ?? networkMode,
@@ -162,16 +188,19 @@ class QueryClient {
       return;
     }
 
-    _unsubscribeFocus = focusManager.subscribe((focused) {
+    // Paused mutations go first and the queries wait for them: a refetch that
+    // overtook the mutation it was meant to reflect would show the server's
+    // pre-mutation state.
+    _unsubscribeFocus = focusManager.subscribe((focused) async {
       if (focused) {
-        mutationCache.resumePaused().ignore();
+        await resumePausedMutations();
         queryCache.onFocus();
       }
     });
 
-    _unsubscribeOnline = onlineManager.subscribe((online) {
+    _unsubscribeOnline = onlineManager.subscribe((online) async {
       if (online) {
-        mutationCache.resumePaused().ignore();
+        await resumePausedMutations();
         queryCache.onOnline();
       }
     });
@@ -288,10 +317,17 @@ class QueryClient {
 
   // ---------------------------------------------------------- operations
 
+  /// Cancels every matching in-flight fetch, completing once they have all
+  /// settled.
+  ///
+  /// [revert] puts each query back to the state it held before the cancelled
+  /// fetch — upstream's default too. [silent] is *not* on by default: a silent
+  /// cancel means "a new fetch is taking over", which is not what an explicit
+  /// cancel is.
   Future<void> cancelQueries({
     QueryFilters filters = const QueryFilters(),
     bool revert = true,
-    bool silent = true,
+    bool silent = false,
   }) async {
     await Future.wait<void>(
       queryCache
@@ -307,21 +343,28 @@ class QueryClient {
         }
       });
 
-  Future<void> resetQueries([
+  /// Puts matching queries back to the state they were created with, then
+  /// refetches the active ones.
+  Future<void> resetQueries({
     QueryFilters filters = const QueryFilters(),
-  ]) async {
-    final refetches = notifyManager.batch(() {
-      final futures = <Future<void>>[];
-      for (final query in queryCache.findAll(filters)) {
-        query.reset();
-        if (query.isActive()) {
-          futures.add(query.fetch().then((_) {}).catchError((Object _) {}));
+    bool cancelRefetch = true,
+  }) =>
+      notifyManager.batch(() {
+        // The matched set is captured *before* resetting, because a filter that
+        // looks at state (`status: error`, a predicate over `query.state`) no
+        // longer matches once the reset has happened.
+        final matched = queryCache.findAll(filters);
+        for (final query in matched) {
+          query.reset();
         }
-      }
-      return futures;
-    });
-    await Future.wait(refetches);
-  }
+        return refetchQueries(
+          filters: QueryFilters(
+            type: QueryTypeFilter.active,
+            predicate: matched.contains,
+          ),
+          cancelRefetch: cancelRefetch,
+        );
+      });
 
   /// Marks matching queries stale and refetches the ones [refetchType] names,
   /// which defaults to the filter's own type and then to
@@ -330,29 +373,25 @@ class QueryClient {
     QueryFilters filters = const QueryFilters(),
     RefetchType? refetchType,
     bool cancelRefetch = true,
-  }) {
-    final refetch = notifyManager.batch(() {
-      for (final query in queryCache.findAll(filters)) {
-        query.invalidate();
-      }
-      if (refetchType == RefetchType.none) {
-        return null;
-      }
-      return switch (refetchType) {
-        RefetchType.active => QueryTypeFilter.active,
-        RefetchType.inactive => QueryTypeFilter.inactive,
-        RefetchType.all => QueryTypeFilter.all,
-        RefetchType.none || null => filters.type ?? QueryTypeFilter.active,
-      };
-    });
-    if (refetch == null) {
-      return Future<void>.value();
-    }
-    return refetchQueries(
-      filters: filters.withType(refetch),
-      cancelRefetch: cancelRefetch,
-    );
-  }
+  }) =>
+      notifyManager.batch(() {
+        for (final query in queryCache.findAll(filters)) {
+          query.invalidate();
+        }
+        if (refetchType == RefetchType.none) {
+          return Future<void>.value();
+        }
+        final type = switch (refetchType) {
+          RefetchType.active => QueryTypeFilter.active,
+          RefetchType.inactive => QueryTypeFilter.inactive,
+          RefetchType.all => QueryTypeFilter.all,
+          RefetchType.none || null => filters.type ?? QueryTypeFilter.active,
+        };
+        return refetchQueries(
+          filters: filters.withType(type),
+          cancelRefetch: cancelRefetch,
+        );
+      });
 
   /// Refetches every matching query that can actually fetch.
   Future<void> refetchQueries({
@@ -422,7 +461,14 @@ class QueryClient {
         : defaulted;
   }
 
-  Future<void> resumePausedMutations() => mutationCache.resumePaused();
+  /// Resumes every mutation that paused while offline.
+  ///
+  /// A no-op while still offline — resuming would only park on the same wait,
+  /// and callers (including [mount]'s own listeners) would hang on a future
+  /// that cannot complete until the network returns.
+  Future<void> resumePausedMutations() => onlineManager.isOnline()
+      ? mutationCache.resumePaused()
+      : Future<void>.value();
 
   void clear() {
     queryCache.clear();
@@ -441,21 +487,17 @@ class QueryClient {
 
   /// The registered defaults matching [queryKey], merged in registration
   /// order.
+  ///
+  /// Several prefixes matching one key is the intended usage, not a mistake:
+  /// register `['todos']` and then `['todos', 'detail']` and a detail query
+  /// gets both, the later registration winning per field.
   QueryDefaults? getQueryDefaults(QueryKey queryKey) {
     QueryDefaults? merged;
-    var matches = 0;
     for (final entry in _queryDefaults.entries) {
       if (queryKey.matches(entry.key)) {
-        matches++;
         merged = merged == null ? entry.value : merged.mergedWith(entry.value);
       }
     }
-    assert(
-      matches <= 1,
-      'Several query defaults match $queryKey. They are merged in registration '
-      'order, which is rarely what you want — register one prefix per query '
-      'family instead.',
-    );
     return merged;
   }
 
@@ -485,7 +527,7 @@ class QueryClient {
 
     return DefaultedQueryOptions<TQueryData>(
       queryKey: queryKey,
-      queryFn: options.queryFn,
+      queryFn: options.queryFn ?? _adoptQueryFn<TQueryData>(queryKey, defaults),
       enabled: options.enabled ?? defaults.enabled ?? Enabled.yes,
       staleTime: options.staleTime ?? defaults.staleTime ?? StaleTime.zero,
       gcTime: options.gcTime ?? defaults.gcTime ?? GcTime.defaultValue,
@@ -496,10 +538,68 @@ class QueryClient {
           options.networkMode ?? defaults.networkMode ?? NetworkMode.online,
       initialData: options.initialData,
       initialDataUpdatedAt: options.initialDataUpdatedAt,
-      structuralSharing: options.structuralSharing,
+      structuralSharing: options.structuralSharing ??
+          _adoptStructuralSharing<TQueryData>(queryKey, defaults),
       meta: options.meta ?? defaults.meta,
       behavior: options.behavior,
     );
+  }
+
+  /// Wraps an erased default [QueryDefaults.queryFn] as a typed one. A plain
+  /// cast cannot work — `FutureOr<Object?> Function(…)` is not a subtype of
+  /// `FutureOr<TQueryData> Function(…)` — so the value is checked on the way
+  /// out, and a synchronous default stays synchronous.
+  QueryFn<TQueryData>? _adoptQueryFn<TQueryData>(
+    QueryKey queryKey,
+    QueryDefaults defaults,
+  ) {
+    final queryFn = defaults.queryFn;
+    if (queryFn == null) {
+      return null;
+    }
+    return (context) {
+      final result = queryFn(context);
+      return result is Future<Object?>
+          ? result.then((value) => _asData<TQueryData>(queryKey, value))
+          : _asData<TQueryData>(queryKey, result);
+    };
+  }
+
+  StructuralSharing<TQueryData>? _adoptStructuralSharing<TQueryData>(
+    QueryKey queryKey,
+    QueryDefaults defaults,
+  ) {
+    final sharing = defaults.structuralSharing;
+    if (sharing == null) {
+      return null;
+    }
+    return (previous, next) =>
+        _asData<TQueryData>(queryKey, sharing(previous, next));
+  }
+
+  /// The mutation twin of [_adoptQueryFn].
+  MutationFn<TData, TVariables>? _adoptMutationFn<TData, TVariables>(
+    QueryKey? mutationKey,
+    MutationDefaults defaults,
+  ) {
+    final mutationFn = defaults.mutationFn;
+    if (mutationFn == null) {
+      return null;
+    }
+    final key = mutationKey ?? QueryKey(const <Object?>['<no mutation key>']);
+    return (variables) {
+      final result = mutationFn(variables);
+      return result is Future<Object?>
+          ? result.then((value) => _asData<TData>(key, value))
+          : _asData<TData>(key, result);
+    };
+  }
+
+  static TQueryData _asData<TQueryData>(QueryKey queryKey, Object? value) {
+    if (value is TQueryData) {
+      return value;
+    }
+    throw QueryDataTypeError(queryKey, TQueryData, value.runtimeType);
   }
 
   /// Resolves observer options against the client and key defaults.
@@ -559,7 +659,8 @@ class QueryClient {
 
     return DefaultedMutationOptions<TData, TVariables, TOnMutateResult>(
       mutationKey: mutationKey,
-      mutationFn: options.mutationFn,
+      mutationFn: options.mutationFn ??
+          _adoptMutationFn<TData, TVariables>(mutationKey, defaults),
       retry: options.retry ?? defaults.retry ?? RetryPolicy.never,
       retryDelay:
           options.retryDelay ?? defaults.retryDelay ?? RetryDelay.defaultValue,
