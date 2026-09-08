@@ -26,7 +26,7 @@ is a bug in this file.
 | `retryer.test.tsx` | `retryer_test.dart` | 13 / 13 | done |
 | `query.test.tsx` | `query_test.dart` | 43 / 51 | done |
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
-| `queryObserver.test.tsx` | — | 0 / 75 | not started |
+| `queryObserver.test.tsx` | `query_observer_test.dart` | 60 / 75 | done |
 | `queryClient.test.tsx` | — | 0 / 156 | not started |
 | `mutation.test.tsx` | — | 0 / 28 | not started |
 | `mutationCache.test.tsx` | — | 0 / 16 | not started |
@@ -210,6 +210,55 @@ from the Dart side:
 Two smaller ones came with them: `_executeFetch` defaulted `cancelRefetch` to
 `true` where upstream's unset value is falsy, and `invalidateQueries` refetched
 with `cancelRefetch: false` where upstream's default is `true`.
+
+### `queryObserver.test.tsx`
+
+- **omitted — dropped observer feature (5):** the two `notifyOnChangeProps`
+  cases and the three `throwOnError` / `trackResult` / `trackProp` cases. Both
+  features are React-render-scheduling machinery that
+  [#15](https://github.com/KoTTi97/flutter_query/issues/15) replaced with
+  `select` plus the binding's own rebuild filter, and with errors living in the
+  sealed result.
+- **omitted — React-only (3):** the two `fetchOptimistic` cases (suspense's
+  primitive, and suspense is dropped) and
+  `should set fetchStatus to idle when _optimisticResults is isRestoring`
+  (`isRestoring` belongs to the React persist/restore boundary).
+- **omitted — replaceEqualDeep (4):** `should structurally share the selector`,
+  `should structurally share placeholder data`, and the two
+  `should not use replaceEqualDeep for select value ...` cases. All four assert
+  *reference* identity across two runs that produce equal values, which is what
+  `replaceEqualDeep` buys React and what
+  [#12](https://github.com/KoTTi97/flutter_query/issues/12) replaced with value
+  equality: here the results compare equal, so the observer does not notify —
+  the outcome those cases exist to protect.
+- **omitted — SSR (1):** `should not schedule timers on the server`.
+- **omitted — type-level (2):** `should throw an error if enabled option type is
+  not valid` (`Enabled` is a sealed type; an invalid value does not typecheck)
+  and `should be able to fetch with a selector and object syntax`, which is the
+  previous case again in TypeScript's other call syntax.
+- **adapted:** `should not schedule timers for disabled observers` counts the
+  zone's pending timers through the harness (`time.pendingTimers`) instead of
+  spying on `timeoutManager` — and asserts *zero*, since adding an observer
+  cancels the query's gc timer and a disabled observer must schedule nothing in
+  its place.
+- **adapted (3):** the `refetchInterval`/`refetchOnWindowFocus` callback cases
+  collect the query they were handed instead of asserting on a spy's arguments.
+- **adapted:** `should resolve with data when signal was consumed` drops
+  upstream's `'data' + String(signal)` — that string is JS's `[object
+  AbortSignal]`. The case's point, that the second subscribe re-runs the query
+  function and still resolves, is asserted directly.
+- **adapted:** `staleTime: Infinity` reads as `StaleTime.infinite`, and the
+  `enabled` / `staleTime` / `refetchInterval` / `refetchOnWindowFocus` callback
+  forms as their sealed `.when` / `.dynamic` constructors
+  ([#10](https://github.com/KoTTi97/flutter_query/issues/10)).
+
+**One port bug this suite caught:** `_createResult` selected placeholder data
+inside the placeholder branch instead of leaving it for the shared `select`
+step, so a successful selection over a placeholder never cleared a *stale*
+select error from a previous query — and the select-error branch dropped the
+last good select result instead of keeping it behind the error. Both are now
+upstream's shape: one `select` step over "query data or placeholder", and
+`data = selectResult` when a selector throws.
 
 ## Deliberate divergences that will show up in later suites
 

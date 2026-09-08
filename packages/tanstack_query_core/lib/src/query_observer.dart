@@ -70,6 +70,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   StackTrace? _selectErrorStackTrace;
   TData Function(TQueryData data)? _selectFn;
   TData? _selectResult;
+  bool _hasSelectResult = false;
 
   Query<TQueryData>? _lastQueryWithData;
 
@@ -306,8 +307,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     var isPlaceholderData = false;
     var skipSelect = false;
 
-    final queryData = state.data;
-    final hasQueryData = state.hasData;
+    // What `select` will be given: the query's data, or the placeholder that
+    // stands in for it. Upstream runs placeholder data through `select` too,
+    // by leaving it in the same variable rather than selecting it early.
+    TQueryData? candidate = state.hasData ? state.data : null;
+    var hasCandidate = state.hasData;
 
     TData? outData;
     var hasOutData = false;
@@ -315,12 +319,13 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // Placeholder data, only while nothing real has resolved.
     final placeholderData = options.placeholderData;
     if (placeholderData != null &&
-        !hasQueryData &&
+        !hasCandidate &&
         status == QueryStatus.pending) {
       if (prevResult != null &&
           prevResult.isPlaceholderData &&
           identical(placeholderData, prevResultOptions?.placeholderData)) {
-        // Already selected on the previous pass.
+        // Already selected on the previous pass, so `select` must not run
+        // again over an already-selected value.
         outData = prevResult.dataOrNull;
         hasOutData = true;
         skipSelect = true;
@@ -334,39 +339,28 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         if (placeholder != null) {
           status = QueryStatus.success;
           isPlaceholderData = true;
-          final select = options.select;
-          if (select != null) {
-            try {
-              outData = select(placeholder);
-              hasOutData = true;
-            } catch (selectError, selectStackTrace) {
-              _selectError = selectError;
-              _selectErrorStackTrace = selectStackTrace;
-            }
-          } else {
-            outData = placeholder as TData;
-            hasOutData = true;
-          }
-          skipSelect = true;
+          candidate = placeholder;
+          hasCandidate = true;
         }
       }
     }
 
     if (!skipSelect) {
       final select = options.select;
-      if (select != null && hasQueryData) {
+      if (select != null && hasCandidate) {
         if (prevResult != null &&
             prevResultState != null &&
             prevResultState.hasData &&
-            queryData == prevResultState.data &&
+            candidate == prevResultState.data &&
             identical(select, _selectFn)) {
           outData = _selectResult;
-          hasOutData = true;
+          hasOutData = _hasSelectResult;
         } else {
           try {
             _selectFn = select;
-            outData = select(queryData as TQueryData);
+            outData = select(candidate as TQueryData);
             _selectResult = outData;
+            _hasSelectResult = true;
             hasOutData = true;
             _selectError = null;
             _selectErrorStackTrace = null;
@@ -375,15 +369,15 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             _selectErrorStackTrace = selectStackTrace;
           }
         }
-      } else if (select == null && hasQueryData) {
+      } else if (select == null && hasCandidate) {
         assert(
-          queryData is TData,
+          candidate is TData,
           'A query observer with no select must have the same data type on '
           'both sides: $TQueryData cannot be reported as $TData.',
         );
-        outData = queryData as TData;
+        outData = candidate as TData;
         hasOutData = true;
-      } else if (!hasQueryData) {
+      } else if (!hasCandidate) {
         // A select error belongs to data that is now gone.
         _selectError = null;
         _selectErrorStackTrace = null;
@@ -397,6 +391,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       errorUpdatedAt = clock.now();
       status = QueryStatus.error;
       isPlaceholderData = false;
+      // The last value `select` produced stays on screen behind the error,
+      // which is what makes a failing selector as survivable as a failing
+      // fetch.
+      outData = _selectResult;
+      hasOutData = _hasSelectResult;
     }
 
     final isFetchedAfterMount =
