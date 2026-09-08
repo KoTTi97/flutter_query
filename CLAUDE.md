@@ -1,20 +1,28 @@
 # flutter_query — working notes for agents
 
 A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
-`query-core`, with a builder-first Flutter binding on top. The differentiator is
+`query-core`, with a Flutter binding on top. The differentiator is
 **behavioral fidelity proven by porting the upstream test suite**, so fidelity
 work is first-class here, not an add-on.
 
-## What is happening now (2026-09-08)
+**This repo holds two things, and they must not be confused:**
 
-**The port is being re-planned from scratch as a wayfinder map.** The map is
+| | Where | Status |
+|---|---|---|
+| **The plan of record** — a fresh port, planned as a wayfinder map of decision tickets | [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1) and its sub-issues; supporting files under `docs/` | **active** — this is what to work on |
+| **The previous attempt** — a `query_core` implementation with its design doc and milestone plan | `flutter-port/` | **prior art** — frozen, reusable after evaluation, not the plan |
+
+## The plan of record: the wayfinder map (2026-09-08)
+
+The port is being re-planned from scratch. The map is
 [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1)
 (label `wayfinder:map`); its decision tickets are the map's sub-issues, and the
 frontier (open, unblocked, unassigned) is visible in GitHub's UI through native
-blocked-by edges. **Start there, not at the milestone table below.** The
-wayfinding operations are in [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+blocked-by edges. **Start there.** The map's Notes are the standing rules for
+every session; the wayfinding operations are in
+[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 
-What the map settles that this file used to:
+What the map settles:
 
 - **Destination:** a pure-Dart core (core set plus infinite queries and
   `placeholderData`) with upstream tests ported case-for-case, a Flutter binding,
@@ -36,19 +44,36 @@ The wayfinder, grilling, prototype and research flows come from the
 `mattpocock-skills` plugin; the map's Notes name which skill each ticket type
 uses.
 
-## The existing implementation (prior art)
+## Agent skills
 
-Everything from here down describes the previous attempt under `flutter-port/`.
-It is accurate for that code and still the right orientation when a ticket
-evaluates a module for reuse.
+### Issue tracker
 
-**Read these three, in order, before changing anything under `flutter-port/`:**
+Issues live in this repo's GitHub Issues (`KoTTi97/flutter_query`, via the
+`gh` CLI). See `docs/agents/issue-tracker.md` — its "Wayfinding operations"
+section is what `/wayfinder` sessions follow. The current wayfinder map is the
+issue labelled `wayfinder:map`.
 
-1. [`flutter-port/DESIGN.md`](flutter-port/DESIGN.md) — the design doc of
-   record. Decisions **D1–D13** are cited all over the source; §14 lists where
-   implementation has since amended them.
-2. [`flutter-port/PLAN.md`](flutter-port/PLAN.md) — the approved milestone plan
-   (M0–M9) and the module map. Its header carries current status.
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created lazily
+by `/domain-modeling` when the first term or decision is resolved. See
+`docs/agents/domain.md`.
+
+## The previous attempt: `flutter-port/` (prior art)
+
+Everything from here to the end of this file describes the previous attempt.
+It is accurate for that code, frozen as of 2026-09-08, and the right
+orientation when a ticket evaluates one of its modules for reuse. Do not
+continue its milestones.
+
+**Its three documents, in reading order:**
+
+1. [`flutter-port/DESIGN.md`](flutter-port/DESIGN.md) — its design doc.
+   Decisions **D1–D13** are cited all over that source; §14 lists where
+   implementation amended them. They are inputs to the map's tickets, not
+   decisions of the new plan.
+2. [`flutter-port/PLAN.md`](flutter-port/PLAN.md) — its milestone plan (M0–M9)
+   and module map; M0–M6 were built, M7–M9 never started.
 3. [`flutter-port/packages/query_core/test/PORTING_NOTES.md`](flutter-port/packages/query_core/test/PORTING_NOTES.md)
    — the fidelity audit: which upstream test is ported where, every omission
    with a reason, every port bug the suites caught, and the deliberate
@@ -58,9 +83,11 @@ evaluates a module for reuse.
 
 | Path | What it is | In git? |
 |---|---|---|
-| `flutter-port/` | **The port.** Dart pub workspace. | yes |
+| `flutter-port/` | **The previous attempt** (prior art). Dart pub workspace with `query_core`. | yes |
+| `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |
+| `docs/research/` | Research findings behind the map's tickets. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |
-| `react-demo/` | The React sensor demo + the shared express gateway. Defines the MVP bar. | yes — vendored (its own `.git` was removed); only `node_modules` is ignored |
+| `react-demo/` | The React sensor demo + the shared express gateway. Defines the MVP bar for both attempts. | yes — vendored (its own `.git` was removed); only `node_modules` is ignored |
 
 `react-demo/` is tracked here, so a fresh checkout has the demo, the express
 gateway under `react-demo/server/`, and the cache policy the Flutter app has to
@@ -86,11 +113,10 @@ references drift otherwise:
 git -C query checkout 50680b98c
 ```
 
-## State of the existing code
+## Where the previous attempt stopped
 
-This is where the previous attempt stopped; it is not the current plan (see the
-top of this file). `query_core` is feature-complete for its MVP. **372 tests
-pass**; analyzer and formatter are clean.
+`query_core` is feature-complete for its MVP. **372 tests pass**; analyzer and
+formatter are clean. Nothing below M6 was started.
 
 | Milestone | Scope | State |
 |---|---|---|
@@ -99,19 +125,18 @@ pass**; analyzer and formatter are clean.
 | M4 | `QueryObserver`, sealed `QueryResult` | done |
 | M5 | `QueryClient`, `QueryFilters` | done |
 | M6 | `Mutation`, `MutationCache`, `MutationObserver`, sealed `MutationResult` | done |
-| M7 | `flutter_query` binding: `QueryScope`, provider, `QueryBuilder`, `MutationBuilder`, scheduler-aware flush | not started (superseded by the map) |
-| M8 | `sensor_demo` app + widget tests — this is the MVP release gate | not started |
-| M9 | Polish: dartdoc, exports audit, per-package READMEs | not started |
+| M7 | `flutter_query` binding: `QueryScope`, provider, `QueryBuilder`, `MutationBuilder`, scheduler-aware flush | never started |
+| M8 | `sensor_demo` app + widget tests | never started |
+| M9 | Polish: dartdoc, exports audit, per-package READMEs | never started |
 
 Six upstream suites are ported: **279 of 355 cases**. The 76 unported ones are
 enumerated by category with reasons in PORTING_NOTES.md — none is a silent
 omission, and that property is worth preserving.
 
 M7 and M8 are scaffolded but commented out in
-[`flutter-port/pubspec.yaml`](flutter-port/pubspec.yaml); uncomment the workspace
-entry when you start one.
+[`flutter-port/pubspec.yaml`](flutter-port/pubspec.yaml).
 
-## Commands
+## Commands for the previous attempt's code
 
 Everything runs from `flutter-port/packages/query_core`:
 
@@ -123,18 +148,19 @@ dart test
 dart analyze --fatal-infos && dart format --set-exit-if-changed .
 ```
 
-Those two are the per-milestone gate — the plan requires both green plus tests
-passing before a milestone is called done.
+Those two were its per-milestone gate.
 
-To run the demo gateway the Flutter app will target (port 5174):
+To run the demo gateway (port 5174), which both attempts target:
 
 ```bash
 cd react-demo/server && npm install && npm run dev
 ```
 
-## Conventions that are load-bearing
+## Conventions the previous attempt settled on
 
-These are not style preferences; breaking them breaks tests or semantics.
+These are not style preferences; breaking them breaks that code's tests or
+semantics. Several are candidate answers for the map's tickets (the harness,
+options and fidelity tickets in particular).
 
 - **Time goes through `package:clock`** (`clock.now()`), never `DateTime.now()`,
   and delays through plain `Timer` / `Future.delayed`. `fake_async` intercepts
@@ -160,9 +186,9 @@ These are not style preferences; breaking them breaks tests or semantics.
   counterpart) goes in `test/port_specifics_test.dart`, so one Dart file maps to
   one upstream file everywhere else.
 
-## Working on the port
+## What the previous attempt learned about porting
 
-The loop that has worked: read the upstream module, read its upstream test file,
+The loop that worked: read the upstream module, read its upstream test file,
 write the Dart module, then port the test file case by case and let the failures
 tell you where the port is wrong. That is how all nine port bugs listed in
 PORTING_NOTES.md were found — several of them (the silent-cancel error dispatch,
@@ -173,22 +199,7 @@ When a ported test fails, the default assumption should be that **the port is
 wrong, not the test**. Change the assertion only when a design decision genuinely
 makes upstream's expectation inapplicable — and then write it down.
 
-## Known loose ends
+## Known loose ends of the previous attempt
 
-- The design doc also lives as a published artifact. `DESIGN.md` is the
+- Its design doc also lives as a published artifact. `DESIGN.md` is the
   canonical copy; if you change one, change the other.
-
-## Agent skills
-
-### Issue tracker
-
-Issues live in this repo's GitHub Issues (`KoTTi97/flutter_query`, via the
-`gh` CLI). See `docs/agents/issue-tracker.md` — its "Wayfinding operations"
-section is what `/wayfinder` sessions follow. The current wayfinder map is the
-issue labelled `wayfinder:map`.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created lazily
-by `/domain-modeling` when the first term or decision is resolved. See
-`docs/agents/domain.md`.

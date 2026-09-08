@@ -5,7 +5,7 @@ on top.
 
 | | |
 |---|---|
-| **Status** | Accepted; implementation in progress (see [PLAN.md](PLAN.md)) |
+| **Status** | **Superseded as plan of record on 2026-09-08** by the wayfinder map ([GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1)). Kept as prior art: D1–D13 and §14 are inputs the map's tickets re-decide, not decisions of the new plan. Implementation history in [PLAN.md](PLAN.md). |
 | **Author** | Christian (with Claude) |
 | **Date** | 2026-08-25 |
 | **Upstream** | TanStack Query v5, `packages/query-core` |

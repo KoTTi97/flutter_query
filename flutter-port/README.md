@@ -1,6 +1,12 @@
 # flutter-port
 
-The Dart/Flutter port of TanStack Query's `query-core`. A pub workspace.
+> **Prior art, frozen 2026-09-08.** This is the previous attempt at the port.
+> The plan of record is the wayfinder map on
+> [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1); see the
+> repo's [CLAUDE.md](../CLAUDE.md). Modules here may be reused where a map
+> ticket evaluates them as suitable; do not continue the milestones below.
+
+The previous attempt's Dart port of TanStack Query's `query-core`. A pub workspace.
 
 - [DESIGN.md](DESIGN.md) — design doc of record; decisions **D1–D13**, cited
   throughout the source, plus the amendments implementation has made to them.
@@ -16,10 +22,10 @@ flutter-port/
   pubspec.yaml            workspace root (Dart SDK ^3.11.0)
   analysis_options.yaml   package:lints/recommended + strict-casts/inference/raw-types
   packages/
-    query_core/           pure Dart. Zero Flutter imports.       ← complete for the MVP
-    flutter_query/        the widget binding                     ← M7, not started
+    query_core/           pure Dart. Zero Flutter imports.       ← built (M0–M6)
+    flutter_query/        the widget binding                     ← M7, never started
   apps/
-    sensor_demo/          the Flutter sensor demo                ← M8, not started
+    sensor_demo/          the Flutter sensor demo                ← M8, never started
 ```
 
 Only `packages/query_core` is active in the workspace today; the other two are

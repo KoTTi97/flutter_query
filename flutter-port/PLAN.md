@@ -1,13 +1,15 @@
 # Initial Dart Port of TanStack query-core — plan
 
-> Approved plan of record for the port. It lived only in
-> `~/.claude/plans/` until now, which meant it was not in the repo and not
-> reviewable alongside the code; this copy is the canonical one.
+> **Superseded on 2026-09-08.** This was the plan of record for the previous
+> attempt. The port is now re-planned as the wayfinder map on
+> [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1); this
+> file is kept as prior art and is no longer executed. M7–M9 will not happen
+> under this plan.
 >
-> **Status:** M0–M6 complete. `query_core` is done: keys, managers, retryer,
+> **Status at freeze:** M0–M6 complete. `query_core` is done: keys, managers, retryer,
 > options, query, cache, observer, client, mutations — **372 tests**, with all
 > six priority upstream suites ported (279 of 355 upstream cases; the rest are
-> enumerated with reasons). Next is M7, the `flutter_query` binding.
+> enumerated with reasons). M7 was next when the plan was frozen.
 > The design decisions this plan refers to are in [DESIGN.md](DESIGN.md).
 > Per-test fidelity is audited in
 > [`packages/query_core/test/PORTING_NOTES.md`](packages/query_core/test/PORTING_NOTES.md).
