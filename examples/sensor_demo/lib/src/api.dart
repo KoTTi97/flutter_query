@@ -7,7 +7,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -29,13 +28,17 @@ abstract final class SensorKeys {
 ///
 /// An Android emulator reaches the host machine through `10.0.2.2`, never
 /// through `localhost` — that would be the emulator itself. Override with
-/// `--dart-define=GATEWAY=http://192.168.1.5:5174` for a real device.
+/// `--dart-define=GATEWAY=http://192.168.1.5:5174/api` for a real device.
+///
+/// The platform check goes through [defaultTargetPlatform] rather than
+/// `Platform.isAndroid`, because importing `dart:io` at all would stop this
+/// app compiling for the web.
 String defaultGatewayBaseUrl() {
   const override = String.fromEnvironment('GATEWAY');
   if (override.isNotEmpty) {
     return override;
   }
-  if (!kIsWeb && Platform.isAndroid) {
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     return 'http://10.0.2.2:5174/api';
   }
   return 'http://localhost:5174/api';

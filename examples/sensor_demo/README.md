@@ -12,12 +12,19 @@ Start the gateway the React demo uses (port 5174):
 cd ../../react-demo/server && npm install && npm run dev
 ```
 
-Then run the app. **iOS is the platform that is generated** — for macOS, web or
-Android, run `flutter create --platforms=macos,web,android .` first.
+Then run the app. **iOS and web are generated** — for macOS or Android, run
+`flutter create --platforms=macos,android .` first.
 
 ```bash
-flutter run                          # pick the simulator when asked
+flutter run -d chrome                # web
+flutter run                          # iOS: pick the simulator when asked
 ```
+
+On the **web** the app talks to the gateway across origins, which works because
+the gateway answers with `Access-Control-Allow-Origin: *` and allows the
+`x-demo-client` header the client sends. (The React demo avoids the question
+entirely by proxying `/api` through Vite; a Flutter web build has no such proxy,
+so it goes direct.)
 
 On the **simulator**, `localhost` is your Mac, so the default gateway URL just
 works.
