@@ -109,6 +109,15 @@ fog).
   exports it, so `should reflect network availability in canFetch and canStart`
   ports unchanged apart from taking the manager as an argument.
 
+**One adapted assertion (2026-09-09):** `queries with gcTime 0 should be
+removed immediately after unsubscribing` expects the query function to have run
+once; here it runs twice. Upstream's observer rejoins the query it last watched
+even after the cache has collected it, and shows that dead query's data without
+fetching; this port re-resolves the key on resubscribe (see "resubscribe after
+gc" in the second review below), and a collected query has no data left to
+show, so the second subscription fetches. The rest of the case — removal
+immediately after unsubscribe, both times — is unchanged.
+
 ### `queryCache.test.tsx`
 
 - **omitted — hashKey identity (2):**
@@ -263,15 +272,10 @@ upstream's shape: one `select` step over "query data or placeholder", and
 
 ### `queryClient.test.tsx`
 
-95 ported, **25 deferred** and 36 omitted.
+104 ported and 36 omitted (the 25 infinite cases were deferred until
+[#16](https://github.com/KoTTi97/flutter_query/issues/16) and are ported now —
+see the infinite section below).
 
-- **deferred — infinite queries (25):** the `ensureInfiniteQueryData`,
-  `infiniteQuery with static staleTime`, `fetchInfiniteQuery`, `infiniteQuery`,
-  `prefetchInfiniteQuery` and `infiniteQuery used for prefetching` blocks. These
-  are not omissions: they land with
-  [#16](https://github.com/KoTTi97/flutter_query/issues/16), which builds
-  infinite queries, and this file's status line stays "done bar the infinite
-  blocks" until they do.
 - **omitted — deprecated upstream API (17):** the whole `fetchQuery` (9),
   `ensureQueryData` (5) and `prefetchQuery` (3) blocks. Upstream deprecated all
   three at this pin in favour of `queryClient.query`, and pairs each block with
@@ -471,17 +475,16 @@ without which every rebuild would report an options change.
 
 ### `utils.test.tsx`
 
-16 ported, 8 deferred, 54 omitted. This is the one upstream file that is mostly
-*not* applicable: it tests JavaScript helpers, and the ones that survive the
-port are already methods on a value type here.
+24 ported, 54 omitted (the 8 `addToEnd`/`addToStart` cases were deferred until
+[#16](https://github.com/KoTTi97/flutter_query/issues/16) and are ported now).
+This is the one upstream file that is mostly *not* applicable: it tests
+JavaScript helpers, and the ones that survive the port are already methods on a
+value type here.
 
 - **ported:** `partialMatchKey` (8) as `QueryKey.matches`, `hashKey` (4) as
   `QueryKey.debugString`, `matchMutation` (1), and the three
   `addConsumeAwareSignal` cases as the query function context's `signal` getter
   plus `QueryCancelToken.onCancel`.
-- **deferred — infinite queries (8):** `addToEnd` and `addToStart`, which are
-  the `maxPages` helpers; they land with
-  [#16](https://github.com/KoTTi97/flutter_query/issues/16).
 - **omitted — no counterpart (26):** `isPlainObject` (7), `isPlainArray` (2),
   `shallowEqualObjects` (4), `isValidTimeout` (6), `hashQueryKeyByOptions` (2),
   `keepPreviousData` (1), `ensureQueryFn` (3), `shouldThrowError` (2). Dart has
@@ -580,6 +583,80 @@ written as Dart closures, a lazily-consumed cancellation token. Ported tests
 prove the ported behaviour; they cannot prove the seams the port itself
 introduced. Those need tests of their own.
 
+### Second review (2026-09-09, of `35fe71b`)
+
+A deeper review reported 17 findings — eight in the core, eight in the binding,
+one on the demo's build setup — plus three upstream-inherited behaviours and
+two null conventions to decide. Every finding was reproduced against the
+checkout before anything was changed; the review's own reproduction cases
+were re-run and all reproduced, with two exceptions noted below. The core's
+regressions are the second block of `port_specifics_test.dart`; the binding's
+are `tanstack_query_flutter/test/review_regressions_test.dart`.
+
+Core, fixed:
+
+6. **An `async onMutate` that could return `null` failed with a `TypeError`.**
+   The runtime check was `is Future<TOnMutateResult>`; a callback declared as
+   `FutureOr<TOnMutateResult?>` produces `Future<TOnMutateResult?>`, which is
+   not a subtype of that, fell through to the synchronous branch, and was cast
+   as a value. JavaScript has no such distinction, so no ported case could see
+   it. The check is `is Future<TOnMutateResult?>` now.
+7. **A listener starting the next mutation stole the previous call's
+   callbacks.** `_updateResult` notified listeners *before* the per-call
+   callbacks read `_callCallbacks`, which a reentrant `mutate` had already
+   replaced: `['second:1', 'second:2']` instead of `['first:1', 'second:2']`.
+   Upstream runs the per-call callbacks first, inside the same batch. Ported
+   faithfully now.
+8. **Explicit mutation scopes collided with unscoped mutations.** `_scopeOf`
+   fell back to the numeric `mutationId`, in the same namespace as user-chosen
+   scope ids; `MutationScope(1)` queued behind whichever unscoped mutation was
+   created first. Upstream never serialises unscoped mutations. Neither does
+   this port now.
+9. **A retry called the mutation function the mutation started with.**
+   `execute` captured `mutationFn` once; `setOptions` on a running mutation
+   updated the options but not the closure the retryer held. Upstream reads
+   `this.options.mutationFn` per attempt. So does the port now — and, with it,
+10. **a missing `mutationFn` now fails inside the attempt**, reaching the error
+    state and the `onError`/`onSettled` callbacks like any other failure, rather
+    than throwing before the `pending` transition and leaving the observer
+    idle. `MissingMutationFunctionError` is still what the future rejects with.
+11. **Exponential backoff overflowed.** `base * (1 << failureCount)` wraps a
+    64-bit int at 44 and a JavaScript int at 32, and the wrapped product was
+    clamped to *zero* — a `RetryPolicy.always` that had failed for long enough
+    retried in a tight loop. The delay is now doubled up to the cap without ever
+    computing the power; the regression covers attempts up to `1 << 40`.
+12. **Nested sets broke the `==`/`hashCode` contract.** Set equality was
+    "every element has *a* match", which called `{[1], [1], [2]}` and
+    `{[1], [2], [2]}` equal while `hashAllUnordered` told them apart. Sets in
+    keys are a port extension (JSON has none); they compare as multisets now.
+13. **`networkMode: always` refetched on reconnect.** Upstream's one dependent
+    default — `refetchOnReconnect = networkMode !== 'always'` — was missing.
+    `defaultQueryObserverOptions` derives it from the resolved network mode now.
+
+Two of the review's binding reproductions did not reproduce what they claimed,
+and are worth recording because the findings behind them were still real: the
+"listener removes itself on first notification" case never received a
+notification at all (an observer whose first result equals its optimistic one
+does not notify on subscribe), and the "provider mounted while hidden" case
+never mounted anything, because Flutter produces no frames while the app is
+hidden. Both regressions were rewritten to exercise the actual path.
+
+Upstream-inherited behaviour, changed here on purpose (in the table below):
+a removed failing `select` no longer keeps reporting its error; a changed
+`select` is applied to a retained placeholder; an observer that resubscribes
+after its query was collected re-resolves the key. And the null convention is
+decided: `InitialData.value(null)` and `PlaceholderData.value(null)` are values
+— the wrapper is the presence — while `.compute` returning `null` keeps
+upstream's "return `undefined` to skip" meaning, because that is the one place
+where Dart's single null has to carry both.
+
+What the binding half of the review found is recorded with its regressions;
+the short version is that notifications now actually go through the scheduler
+the provider installs, observers belong to reading widgets rather than to keys,
+every call style follows a replaced provider client, an inline mutation keeps
+its state across its own rebuild, and disposing a controller detaches its
+observer whether or not anyone ever listened.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -605,3 +682,7 @@ suite does not have to go looking:
 | a removed query or mutation re-arms its own gc timer from the fetch's `finally` | removal marks it, and a marked one schedules nothing | [#24](https://github.com/KoTTi97/flutter_query/issues/24) |
 | `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
+| a `select` that threw keeps reporting its error after `select` is removed | the error goes with the selector; the raw data is reported | review, 2026-09-09 |
+| a retained placeholder keeps its old selection after `select` changed | the new `select` runs over the placeholder | review, 2026-09-09 |
+| an observer resubscribing after its query was collected rejoins the dead query | it re-resolves the key and joins the current entry (one adapted assertion in `query_test.dart`) | review, 2026-09-09 |
+| `initialData: null` / `placeholderData: null` mean "none" | `.value(null)` is a value of `null`; `.compute` returning `null` means "none" | review, 2026-09-09 |

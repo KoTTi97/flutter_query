@@ -167,13 +167,22 @@ class MutationCache
     );
   }
 
-  /// The scope a mutation is serialised under: its own scope, or its identity.
-  Object _scopeOf(Mutation<Object?, Object?, Object?> mutation) =>
-      mutation.options.scope?.id ?? mutation.mutationId;
+  /// The scope a mutation is serialised under, or null for an unscoped one.
+  ///
+  /// Unscoped mutations are never serialised — not even against themselves —
+  /// so they get no synthetic scope. Falling back to the mutation's own id
+  /// would put it in the same namespace as user-chosen scope ids, and
+  /// `MutationScope(3)` would then queue behind whichever unscoped mutation
+  /// happened to be the third one created.
+  Object? _scopeOf(Mutation<Object?, Object?, Object?> mutation) =>
+      mutation.options.scope?.id;
 
   @override
   bool canRunMutation(Mutation<Object?, Object?, Object?> mutation) {
     final scope = _scopeOf(mutation);
+    if (scope == null) {
+      return true;
+    }
     for (final other in _mutations) {
       if (identical(other, mutation)) {
         return true;
@@ -190,6 +199,9 @@ class MutationCache
   @override
   void onMutationSettled(Mutation<Object?, Object?, Object?> mutation) {
     final scope = _scopeOf(mutation);
+    if (scope == null) {
+      return;
+    }
     for (final other in _mutations) {
       if (!identical(other, mutation) &&
           _scopeOf(other) == scope &&

@@ -312,17 +312,22 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   /// Runs the mutation function once, with everything around it.
   Future<TData> execute(TVariables variables) async {
-    final mutationFn = _options.mutationFn;
-    if (mutationFn == null) {
-      throw MissingMutationFunctionError(_options.mutationKey);
-    }
-
     // The retryer exists before the first `await`, exactly as upstream builds
     // it: a mutation that pauses while its `onMutate` is still running must
     // still be resumable, and `continueMutation` has nothing to continue
     // without it.
     final retryer = Retryer<TData>(
-      fn: () async => mutationFn(variables),
+      // Resolved per attempt, not once: `setOptions` on a running mutation
+      // replaces the function, and a retry must call the replacement. A
+      // missing function fails *inside* the attempt, so that it reaches the
+      // error state and the callbacks like any other failure would.
+      fn: () async {
+        final mutationFn = _options.mutationFn;
+        if (mutationFn == null) {
+          throw MissingMutationFunctionError(_options.mutationKey);
+        }
+        return mutationFn(variables);
+      },
       focusManager: client.focusManager,
       onlineManager: client.onlineManager,
       canRun: () =>
@@ -366,10 +371,14 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
         }
 
         final mutating = _options.onMutate?.call(variables);
-        if (mutating is Future<TOnMutateResult>) {
+        // `Future<TOnMutateResult?>`, not `Future<TOnMutateResult>`: the
+        // callback's declared type is `FutureOr<TOnMutateResult?>`, and an
+        // `async` callback that can return null produces the nullable future,
+        // which the non-nullable check would let fall through to the cast.
+        if (mutating is Future<TOnMutateResult?>) {
           onMutateResult = await mutating;
         } else {
-          onMutateResult = mutating as TOnMutateResult?;
+          onMutateResult = mutating;
         }
 
         if (onMutateResult != _state.onMutateResult) {

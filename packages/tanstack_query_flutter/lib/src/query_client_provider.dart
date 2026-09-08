@@ -21,7 +21,12 @@ import 'query_context.dart';
 ///    treating those as "unfocused" would refetch the world on the way back.
 /// 2. **The notify scheduler.** Notifications that arrive while a build is in
 ///    flight are deferred to a post-frame callback, so a query resolving
-///    mid-build cannot call `setState` during that build.
+///    mid-build cannot call `setState` during that build. The scheduler is
+///    installed on the client's `NotifyManager` — which is the process-wide
+///    one unless the client was given its own — and the previous scheduler is
+///    put back when the provider goes away. Two providers sharing one manager
+///    therefore hand the scheduler back and forth in mount order; give each
+///    client its own `NotifyManager` if their lifetimes overlap.
 /// 3. **Connectivity, only if you bring it.** Pass [onlineStatus] and the
 ///    client follows it. Nothing is installed by default and no connectivity
 ///    package is a dependency — see the README for the `connectivity_plus`
@@ -95,6 +100,13 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     widget.client.mount();
 
     if (widget.observeAppLifecycle) {
+      // The listener only reports transitions; the state the app is already
+      // in has to be read. A provider mounted while the app is hidden would
+      // otherwise keep the client "focused" until the next show.
+      final current = WidgetsBinding.instance.lifecycleState;
+      if (current != null) {
+        widget.client.focusManager.setFocused(_isShown(current));
+      }
       _lifecycle = AppLifecycleListener(
         onShow: () => widget.client.focusManager.setFocused(true),
         onHide: () => widget.client.focusManager.setFocused(false),
@@ -125,14 +137,30 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     }
   }
 
+  /// The same mapping [AppLifecycleListener] applies to transitions:
+  /// `onShow` fires on the way to `resumed`, `onHide` on the way to `hidden`,
+  /// and `inactive` counts as shown (see the class doc).
+  static bool _isShown(AppLifecycleState state) => switch (state) {
+        AppLifecycleState.resumed || AppLifecycleState.inactive => true,
+        AppLifecycleState.hidden ||
+        AppLifecycleState.paused ||
+        AppLifecycleState.detached =>
+          false,
+      };
+
   /// Runs [callback] now when that is safe, and after this frame when it is
   /// not. Called for every batch of cache notifications.
+  ///
+  /// Synchronous on purpose, where upstream's default is a zero-delay timer:
+  /// a `setState` outside the build phase is exactly what Flutter expects from
+  /// a tap handler or a resolved future, and delivering right away means one
+  /// `pump` in a test — or one frame in an app — shows the new result.
   static void _scheduleNotification(void Function() callback) {
     final phase = SchedulerBinding.instance.schedulerPhase;
     final duringBuild = phase == SchedulerPhase.persistentCallbacks ||
         phase == SchedulerPhase.midFrameMicrotasks;
     if (!duringBuild) {
-      scheduleMicrotask(callback);
+      callback();
       return;
     }
     SchedulerBinding.instance.addPostFrameCallback((_) => callback());

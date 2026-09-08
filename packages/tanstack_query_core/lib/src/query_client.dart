@@ -635,9 +635,13 @@ class QueryClient {
       refetchOnWindowFocus: options.refetchOnWindowFocus ??
           queryDefaults.refetchOnWindowFocus ??
           RefetchOn.ifStale,
+      // Upstream's one dependent default: a query whose function runs
+      // regardless of the network has nothing to gain from a reconnect.
       refetchOnReconnect: options.refetchOnReconnect ??
           queryDefaults.refetchOnReconnect ??
-          RefetchOn.ifStale,
+          (base.networkMode == NetworkMode.always
+              ? RefetchOn.never
+              : RefetchOn.ifStale),
       refetchInterval: options.refetchInterval ??
           queryDefaults.refetchInterval ??
           RefetchInterval.off,

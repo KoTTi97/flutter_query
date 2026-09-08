@@ -602,7 +602,12 @@ void main() {
 
       await time.flushMicrotasks();
       expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
-      expect(count, 1);
+      // Upstream expects 1: its observer rejoins the query it last watched,
+      // which the cache no longer holds, and shows its data without fetching.
+      // Here a resubscribe re-resolves the key first, and a collected query
+      // has no data left to show, so the second subscription fetches (see
+      // PORTING_NOTES, "resubscribe after gc").
+      expect(count, 2);
     });
 
     testFakeAsync('should be garbage collected when unsubscribed to',

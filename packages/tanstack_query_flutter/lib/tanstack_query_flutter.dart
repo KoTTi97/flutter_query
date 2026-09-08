@@ -3,13 +3,14 @@
 /// Four equal ways to reach a query, none of which needs a package beyond
 /// Flutter (https://github.com/KoTTi97/flutter_query/issues/21):
 ///
-/// * [QueryController] / [MutationController] — a `ValueListenable`, the
-///   foundation the other three stand on, and what makes signals, provider,
-///   riverpod and bloc integration free.
-/// * [QueryBuilder] / [MutationBuilder] — the `StreamBuilder` shape.
+/// * [QueryController] / [InfiniteQueryController] / [MutationController] — a
+///   `ValueListenable`, the foundation the other three stand on, and what
+///   makes signals, provider, riverpod and bloc integration free.
+/// * [QueryBuilder] / [InfiniteQueryBuilder] / [MutationBuilder] — the
+///   `StreamBuilder` shape.
 /// * [QueryMixin] — `watchQuery(...)` straight in `build`.
 /// * `context.query(...)` — the same, in a `StatelessWidget`, rebuilding only
-///   the widgets that read that key.
+///   the widgets that read that query.
 ///
 /// The core's whole surface is re-exported, so one import is enough.
 library;

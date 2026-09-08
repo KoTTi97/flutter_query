@@ -91,10 +91,22 @@ sealed class InitialData<TQueryData> {
   const factory InitialData.compute(TQueryData? Function() compute) =
       InitialDataCompute<TQueryData>;
 
-  /// The seed, or `null` for "no data after all".
-  TQueryData? resolve() => switch (this) {
-        InitialDataValue<TQueryData>(:final data) => data,
-        InitialDataCompute<TQueryData>(:final compute) => compute(),
+  /// The seed, and whether there is one.
+  ///
+  /// `.value(x)` always seeds — `x` may be `null` for a nullable data type,
+  /// and the wrapper itself is the presence. `.compute` returning `null` is
+  /// upstream's `undefined`: no data after all. That is the one place where
+  /// Dart's single null has to carry two meanings, and the callback form is
+  /// where upstream's own "return undefined to skip" idiom lives.
+  ({bool hasData, TQueryData? data}) seed() => switch (this) {
+        InitialDataValue<TQueryData>(:final data) => (
+            hasData: true,
+            data: data
+          ),
+        InitialDataCompute<TQueryData>(:final compute) => switch (compute()) {
+            null => (hasData: false, data: null),
+            final data => (hasData: true, data: data),
+          },
       };
 }
 
@@ -125,14 +137,23 @@ sealed class PlaceholderData<TQueryData> {
         compute,
   ) = PlaceholderDataCompute<TQueryData>;
 
-  TQueryData? resolve(
-          TQueryData? previousData, Query<TQueryData>? previousQuery) =>
+  /// The placeholder, and whether there is one. Same rule as
+  /// [InitialData.seed]: `.value(null)` is a placeholder of `null`, while
+  /// `.compute` returning `null` means "none".
+  ({bool hasData, TQueryData? data}) provide(
+    TQueryData? previousData,
+    Query<TQueryData>? previousQuery,
+  ) =>
       switch (this) {
-        PlaceholderDataValue<TQueryData>(:final data) => data,
-        PlaceholderDataCompute<TQueryData>(:final compute) => compute(
-            previousData,
-            previousQuery,
+        PlaceholderDataValue<TQueryData>(:final data) => (
+            hasData: true,
+            data: data,
           ),
+        PlaceholderDataCompute<TQueryData>(:final compute) => switch (
+              compute(previousData, previousQuery)) {
+            null => (hasData: false, data: null),
+            final data => (hasData: true, data: data),
+          },
       };
 }
 

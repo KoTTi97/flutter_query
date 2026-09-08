@@ -273,14 +273,23 @@ sealed class RetryDelay {
 
   Duration resolve(int failureCount, Object error) => switch (this) {
         RetryDelayFixed(:final delay) => delay,
-        RetryDelayExponential(:final base, :final maximum) => Duration(
-            microseconds: (base.inMicroseconds * (1 << failureCount)).clamp(
-              0,
-              maximum.inMicroseconds,
-            ),
-          ),
+        RetryDelayExponential(:final base, :final maximum) =>
+          _exponential(base, maximum, failureCount),
         RetryDelayCustom(:final compute) => compute(failureCount, error),
       };
+
+  /// `min(base * 2^failureCount, maximum)`, without ever computing the
+  /// power. `1 << failureCount` overflows a 64-bit int at 63 and a JavaScript
+  /// int at 32, and the overflowed product clamped to *zero*, which turned a
+  /// long-running `RetryPolicy.always` into a tight loop of instant retries.
+  static Duration _exponential(Duration base, Duration maximum, int count) {
+    final cap = maximum.inMicroseconds;
+    var delay = base.inMicroseconds.clamp(0, cap);
+    for (var i = 0; i < count && delay < cap; i++) {
+      delay = (delay * 2).clamp(0, cap);
+    }
+    return Duration(microseconds: delay);
+  }
 }
 
 final class RetryDelayFixed extends RetryDelay {

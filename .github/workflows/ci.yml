@@ -1,0 +1,36 @@
+# The per-module gate from CLAUDE.md, on a fresh checkout: tests, analyzer,
+# formatter, and one real app build of the demo.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.8
+          cache: true
+      - run: flutter pub get
+      - name: core tests
+        run: dart test
+        working-directory: packages/tanstack_query_core
+      - name: binding tests
+        run: flutter test
+        working-directory: packages/tanstack_query_flutter
+      - name: demo tests
+        run: flutter test
+        working-directory: examples/sensor_demo
+      - name: analyzer
+        run: dart analyze --fatal-infos packages examples/sensor_demo
+      - name: formatter
+        run: dart format --set-exit-if-changed --output=none packages examples/sensor_demo/lib examples/sensor_demo/test
+      - name: demo web build
+        run: flutter build web --no-pub
+        working-directory: examples/sensor_demo

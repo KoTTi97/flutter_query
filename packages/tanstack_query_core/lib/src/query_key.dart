@@ -104,7 +104,14 @@ bool _partsEqual(Object? a, Object? b) {
     if (a.length != b.length) {
       return false;
     }
-    return a.every((element) => b.any((other) => _partsEqual(element, other)));
+    // As multisets, not "every element has *a* match": a frozen set holds
+    // structurally equal lists as distinct members, so `{[1], [1], [2]}` and
+    // `{[1], [2], [2]}` both pass the any-match test while hashing
+    // differently. Counting matches on both sides keeps `==` and `hashCode`
+    // telling the same story.
+    int count(Set<Object?> set, Object? element) =>
+        set.where((other) => _partsEqual(element, other)).length;
+    return a.every((element) => count(a, element) == count(b, element));
   }
   if (a is Map && b is Map) {
     if (a.length != b.length) {

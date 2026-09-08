@@ -1,8 +1,12 @@
 # The Flutter binding's API shape
 
-**For Christian to decide ([#21](https://github.com/KoTTi97/flutter_query/issues/21)).**
-Everything else on the map is decided AFK; this one you asked to be part of, and
-nothing in `packages/tanstack_query_flutter/` gets written until it is settled.
+**Decided by Christian on 2026-09-08 ([#21](https://github.com/KoTTi97/flutter_query/issues/21),
+[#23](https://github.com/KoTTi97/flutter_query/issues/23)).** The ruling: no
+third-party package required by the main package — not `flutter_hooks`, not
+signals, not `connectivity_plus`; hooks and signals may come later as opt-in
+packages. And no default in the documentation: the four call styles are
+presented as equal alternatives. What follows is the comparison he decided on,
+kept as the record of the reasoning.
 
 *Revised 2026-09-08 after two findings: the builder pyramid turned out not to be
 an argument for hooks, and signals reframed the question. The first version of

@@ -9,8 +9,11 @@ typedef OnlineSetup = void Function() Function(
 
 /// Tracks whether the device believes it has a network connection.
 ///
-/// The default is "online"; the Flutter binding installs a `connectivity_plus`
-/// adapter, which reports a *link*, not reachability
+/// The default is "online". Nothing is installed for you: the Flutter binding
+/// takes an optional `Stream<bool>` and depends on no connectivity package
+/// (https://github.com/KoTTi97/flutter_query/issues/21); a
+/// `connectivity_plus` stream, which reports a *link* rather than
+/// reachability, is the usual source
 /// (https://github.com/KoTTi97/flutter_query/issues/5).
 class OnlineManager extends Subscribable<void Function(bool online)> {
   bool _online = true;

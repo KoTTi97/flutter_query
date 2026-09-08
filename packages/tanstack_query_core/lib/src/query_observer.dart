@@ -91,6 +91,13 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   void _onSubscribe() {
     if (listeners.length == 1) {
+      // Re-resolve the query first. The one this observer last watched may
+      // have been collected while nobody was listening, and a fresh entry
+      // may already stand in its place; upstream only re-resolves on
+      // `setOptions` and on a fetch, so an infinitely fresh query would
+      // rejoin its dead predecessor. A binding that reuses a controller
+      // across subscriptions hits exactly that.
+      _updateQuery();
       _currentQuery.addObserver(this);
 
       if (_shouldFetchOnMount(_currentQuery, _options)) {
@@ -341,23 +348,26 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         status == QueryStatus.pending) {
       if (prevResult != null &&
           prevResult.isPlaceholderData &&
-          identical(placeholderData, prevResultOptions?.placeholderData)) {
+          identical(placeholderData, prevResultOptions?.placeholderData) &&
+          identical(options.select, prevResultOptions?.select)) {
         // Already selected on the previous pass, so `select` must not run
-        // again over an already-selected value.
+        // again over an already-selected value. Only while `select` is the
+        // same one, though — upstream memoises on the placeholder alone and
+        // keeps showing the old selection after the selector changed.
         outData = prevResult.dataOrNull;
         hasOutData = true;
         skipSelect = true;
         status = QueryStatus.success;
         isPlaceholderData = true;
       } else {
-        final placeholder = placeholderData.resolve(
+        final placeholder = placeholderData.provide(
           _lastQueryWithData?.state.data,
           _lastQueryWithData,
         );
-        if (placeholder != null) {
+        if (placeholder.hasData) {
           status = QueryStatus.success;
           isPlaceholderData = true;
-          candidate = placeholder;
+          candidate = placeholder.data;
           hasCandidate = true;
         }
       }
@@ -395,6 +405,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         );
         outData = candidate as TData;
         hasOutData = true;
+        // The error belonged to a selector that is no longer there. Upstream
+        // keeps reporting it until a *new* selection succeeds, which never
+        // happens once `select` is gone.
+        _selectError = null;
+        _selectErrorStackTrace = null;
       } else if (!hasCandidate) {
         // A select error belongs to data that is now gone.
         _selectError = null;

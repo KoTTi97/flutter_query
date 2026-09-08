@@ -10,48 +10,51 @@ timing, garbage collection, optimistic rollback — behave the way people who kn
 the library expect. Several existing Dart packages cover the idea; none has done
 the fidelity work.
 
-**Status (2026-09-08):** being re-planned from scratch as a wayfinder map on
-[GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1). The
-`flutter-port/` code is the previous attempt (`query_core` complete, 372 tests,
-279 ported case-for-case); it is prior art the new plan may reuse where a
-ticket evaluates it as suitable. Research behind the map is under
-[`docs/research/`](docs/research/).
+> An independent community port. Not affiliated with, endorsed by, or a product
+> of TanStack.
 
-## Where to look
-
-**The plan of record (active):**
+## What is here
 
 | | |
 |---|---|
-| [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1) | The wayfinder map: destination, standing rules, decisions so far, and the open decision tickets as sub-issues |
-| [CLAUDE.md](CLAUDE.md) | Orientation for anyone (or any agent) picking the work up |
-| [docs/research/](docs/research/) | Research behind the map's tickets |
-| [docs/agents/](docs/agents/) | Tracker and domain-doc conventions |
+| [`packages/tanstack_query_core/`](packages/tanstack_query_core) | The pure-Dart core: queries, mutations, infinite queries, observers, client and caches. No Flutter dependency. Every applicable upstream suite ported case-for-case; the audit is [PORTING_NOTES.md](packages/tanstack_query_core/test/PORTING_NOTES.md). |
+| [`packages/tanstack_query_flutter/`](packages/tanstack_query_flutter) | The Flutter binding: `QueryClientProvider`, listenable controllers, builder widgets, a `State` mixin and `context.query(...)`. Four equal call styles, no dependency beyond Flutter. |
+| [`examples/sensor_demo/`](examples/sensor_demo) | The React demo's sensor manager rebuilt on the binding, against the same gateway and the same cache policy, with an acceptance test per row of the MVP checklist. |
+| [`react-demo/`](react-demo) | The React sensor demo and its express gateway, vendored: they define the bar the Flutter demo has to meet. |
 
-**The previous attempt (prior art, frozen):**
+Upstream is pinned at `50680b98c`; the `query/` checkout it needs is a nested,
+gitignored clone (see [CLAUDE.md](CLAUDE.md) for the clone command).
 
-| | |
-|---|---|
-| [flutter-port/README.md](flutter-port/README.md) | Its module map, test layout, how to run it |
-| [flutter-port/DESIGN.md](flutter-port/DESIGN.md) | Its design doc — decisions D1–D13 and the amendments made while building |
-| [flutter-port/PLAN.md](flutter-port/PLAN.md) | Its milestone plan M0–M9; M0–M6 built, the rest never started |
-| [flutter-port/packages/query_core/test/PORTING_NOTES.md](flutter-port/packages/query_core/test/PORTING_NOTES.md) | Its fidelity audit — what is ported, what is not, and why |
-
-## Repository layout
-
-- `flutter-port/` — the previous attempt's code (prior art).
-- `docs/` — research findings and agent conventions for the plan of record.
-- `query/` — upstream TanStack Query, and the source of the ported tests.
-  A nested clone, gitignored; the fresh port pins `50680b98c`, the existing code `5bb950be8`.
-- `react-demo/` — the React sensor demo and its shared express gateway, which
-  define the MVP acceptance bar. Vendored into this repo, so it is tracked;
-  only its `node_modules` is ignored.
-
-The `query/` checkout is needed to work on either; CLAUDE.md has the clone
-command and both pinned revisions.
-
-## Quick start (previous attempt's tests)
+## Quick start
 
 ```bash
-cd flutter-port/packages/query_core && dart test
+cd packages/tanstack_query_core && dart test
 ```
+
+```bash
+cd packages/tanstack_query_flutter && flutter test
+```
+
+```bash
+cd examples/sensor_demo && flutter test
+```
+
+The demo's README says how to run it against the gateway.
+
+## How it was planned
+
+As a wayfinder map on [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1):
+the destination, the standing rules, and one decision ticket per fork in the
+road, each closed with the options, the answer and why. The research behind
+those tickets is under [`docs/research/`](docs/research/), and the one decision
+the maintainer kept for himself — the binding's API shape — is written up in
+[`docs/decisions/binding-api-shape.md`](docs/decisions/binding-api-shape.md).
+
+The rule that shaped everything: **closeness to upstream is a tiebreaker, not a
+goal.** Where a Dart or Flutter idiom is better, the port diverges and writes
+down why; the table of divergences is at the end of PORTING_NOTES.md.
+
+## Licence
+
+MIT — see the `LICENSE` in each package. Upstream TanStack Query is MIT as
+well; the ported tests carry its notice.

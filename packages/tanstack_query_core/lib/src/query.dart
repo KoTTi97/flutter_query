@@ -682,12 +682,12 @@ class Query<TQueryData> extends Removable {
   QueryState<TQueryData> _defaultState(
     DefaultedQueryOptions<TQueryData> options,
   ) {
-    final initialData = options.initialData?.resolve();
-    final hasData = options.initialData != null && initialData != null;
+    final seed = options.initialData?.seed();
+    final hasData = seed?.hasData ?? false;
 
     return QueryState<TQueryData>(
       hasData: hasData,
-      data: initialData,
+      data: seed?.data,
       dataUpdatedAt:
           hasData ? (options.initialDataUpdatedAt ?? clock.now()) : null,
       status: hasData ? QueryStatus.success : QueryStatus.pending,

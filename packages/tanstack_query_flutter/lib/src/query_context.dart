@@ -2,14 +2,28 @@
 ///
 /// One of four equal call styles
 /// (https://github.com/KoTTi97/flutter_query/issues/21). The flattest of them —
-/// it works in a `StatelessWidget` — and the only one whose rebuilds are
-/// per-key: when a query changes, only the widgets that read *that* key rebuild.
+/// it works in a `StatelessWidget` — and its rebuilds are per-reader: when a
+/// query changes, only the widgets that read *that* query rebuild.
 ///
 /// It is also the one with the most machinery behind the curtain. The mechanism
 /// is Flutter's own, the same one `provider` uses for `context.watch`:
-/// `InheritedElement` hands us `updateDependencies` when a widget reads, and
-/// `removeDependent` when one unmounts, so the observers can be reference
-/// counted exactly rather than guessed at.
+/// `InheritedElement` hands us `removeDependent` when a reading widget
+/// unmounts, so the observers it held can be released exactly rather than
+/// guessed at.
+///
+/// **Identity.** Every reading widget gets observers of its own; what is shared
+/// is the *query* in the cache, which the core already deduplicates. Two widgets
+/// reading the same key with different `select`s, `enabled`s or polling
+/// intervals therefore do not fight over one observer. Within a single widget
+/// an observer is identified by key and types — read the same key twice with
+/// different selectors of the same output type and pass [id] to tell them
+/// apart.
+///
+/// **Release.** A key the widget read last build but not this one is released
+/// after the frame. A widget that stops calling `context.query` *altogether*
+/// gives no signal a `BuildContext` can see, so its last observers stay until
+/// it unmounts; put a conditional read in its own small widget, and the
+/// condition becomes that widget's presence in the tree.
 library;
 
 import 'package:flutter/scheduler.dart';
@@ -27,30 +41,58 @@ extension QueryContext on BuildContext {
   /// final sensor = context.query(sensorQuery(id));
   /// ```
   ///
-  /// The observer is shared by every widget reading the same key, and released
-  /// once the last of them stops reading it — including when a widget simply
-  /// reads a *different* key on a later build.
+  /// The observer is this widget's, released once the widget stops reading the
+  /// key — including when it simply reads a *different* key on a later build —
+  /// or unmounts. [id] tells apart two reads of one key in the same widget.
   QueryResult<TData> query<TData>(
-    QueryObserverOptions<TData, TData> options,
-  ) =>
-      selectQuery<TData, TData>(options);
+    QueryObserverOptions<TData, TData> options, {
+    Object? id,
+  }) =>
+      selectQuery<TData, TData>(options, id: id);
 
   /// [query] for a query with a `select`.
   QueryResult<TData> selectQuery<TQueryData, TData>(
-    QueryObserverOptions<TQueryData, TData> options,
-  ) {
+    QueryObserverOptions<TQueryData, TData> options, {
+    Object? id,
+  }) {
     final element = _scopeElement(this);
-    final key = options.queryKey!;
-    final result =
-        element.readQuery<TQueryData, TData>(options, this as Element);
-    dependOnInheritedWidgetOfExactType<QueryScope>(aspect: key);
+    final result = element.readQuery<TQueryData, TData>(
+      options,
+      this as Element,
+      id,
+    );
+    dependOnInheritedWidgetOfExactType<QueryScope>();
     return result;
+  }
+
+  /// [query] for an infinite query. Returns the controller rather than the
+  /// result, because paging lives on it.
+  ///
+  /// ```dart
+  /// final feed = context.infiniteQuery(feedQuery());
+  /// if (feed.hasNextPage) feed.fetchNextPage();
+  /// ```
+  InfiniteQueryController<TPageData, TPageParam, TData>
+      infiniteQuery<TPageData, TPageParam, TData>(
+    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options, {
+    Object? id,
+  }) {
+    final element = _scopeElement(this);
+    final controller = element.readInfiniteQuery<TPageData, TPageParam, TData>(
+      options,
+      this as Element,
+      id,
+    );
+    dependOnInheritedWidgetOfExactType<QueryScope>();
+    return controller;
   }
 
   /// A mutation owned by this widget.
   ///
   /// Mutations are not shared: each widget that asks gets its own, disposed
-  /// when the widget unmounts. Pass [id] when one widget runs several.
+  /// when the widget unmounts. One is identified by [id], else by the options'
+  /// `mutationKey`, else by its three types — so pass [id] when one widget
+  /// runs two mutations of the same shape.
   MutationController<TData, TVariables, TOnMutateResult>
       mutation<TData, TVariables, TOnMutateResult>(
     MutationOptions<TData, TVariables, TOnMutateResult> options, {
@@ -92,71 +134,124 @@ class QueryScope extends InheritedWidget {
   InheritedElement createElement() => QueryScopeElement(this);
 }
 
+/// A query observer one widget holds, and how to let it go.
 class _QueryEntry {
-  _QueryEntry(this.controller);
+  _QueryEntry(this.controller, this.detach);
 
-  final QueryController<Object?, Object?> controller;
-  final Set<Element> readers = <Element>{};
-  void Function()? detach;
+  final ChangeNotifier controller;
+  final void Function() detach;
+
+  void dispose() {
+    detach();
+    controller.dispose();
+  }
 }
 
-class _ReaderKeys {
-  _ReaderKeys(this.epoch);
+/// Everything one reading widget holds.
+class _Reader {
+  _Reader(this.epoch);
 
   int epoch;
 
-  /// Keys this reader has read during [epoch].
-  final Set<QueryKey> current = <QueryKey>{};
+  /// Observers by identity: `(key, types…, id)`.
+  final Map<Object, _QueryEntry> queries = <Object, _QueryEntry>{};
 
-  /// Keys it held during the previous epoch, still to be reconciled.
-  Set<QueryKey> pending = <QueryKey>{};
+  /// Identities read during [epoch].
+  Set<Object> current = <Object>{};
+
+  /// Identities held during the previous epoch, still to be reconciled.
+  Set<Object> pending = <Object>{};
+
+  final Map<Object, MutationController<Object?, Object?, Object?>> mutations =
+      <Object, MutationController<Object?, Object?, Object?>>{};
+
+  void dispose() {
+    for (final entry in queries.values) {
+      entry.dispose();
+    }
+    queries.clear();
+    for (final controller in mutations.values) {
+      controller.dispose();
+    }
+    mutations.clear();
+  }
 }
 
-/// Keeps one observer per [QueryKey] alive for as long as some mounted widget
-/// is reading it.
+/// Keeps each reading widget's observers alive for as long as it reads them.
 class QueryScopeElement extends InheritedElement {
   QueryScopeElement(QueryScope super.widget);
 
-  final Map<QueryKey, _QueryEntry> _entries = <QueryKey, _QueryEntry>{};
-  final Map<Element, _ReaderKeys> _readers = <Element, _ReaderKeys>{};
-  final Map<Element, Map<Object, MutationController<Object?, Object?, Object?>>>
-      _mutations =
-      <Element, Map<Object, MutationController<Object?, Object?, Object?>>>{};
+  final Map<Element, _Reader> _readers = <Element, _Reader>{};
 
   int _epoch = 0;
   bool _sweepScheduled = false;
 
   QueryClient get client => (widget as QueryScope).client;
 
-  /// Creates or reuses the observer for [options], records that [reader] is
-  /// reading it, and returns its current result.
+  /// Creates or reuses [reader]'s observer for [options] and returns its
+  /// current result.
   QueryResult<TData> readQuery<TQueryData, TData>(
     QueryObserverOptions<TQueryData, TData> options,
     Element reader,
+    Object? id,
   ) {
-    final key = options.queryKey!;
-    _startEpochFor(reader);
+    final identity = (options.queryKey!, TQueryData, TData, id);
+    final controller = _controllerFor<QueryController<TQueryData, TData>>(
+      reader,
+      identity,
+      () => QueryController<TQueryData, TData>(client, options),
+    );
+    // Unconditional, as upstream re-applies options on every render: the
+    // observer itself decides whether anything actually changed.
+    controller.setOptions(options);
+    return controller.value;
+  }
 
-    final existing = _entries[key];
-    final _QueryEntry entry;
+  /// The infinite twin of [readQuery].
+  InfiniteQueryController<TPageData, TPageParam, TData>
+      readInfiniteQuery<TPageData, TPageParam, TData>(
+    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    Element reader,
+    Object? id,
+  ) {
+    final identity = (options.queryKey, TPageData, TPageParam, TData, id);
+    final controller =
+        _controllerFor<InfiniteQueryController<TPageData, TPageParam, TData>>(
+      reader,
+      identity,
+      () => InfiniteQueryController<TPageData, TPageParam, TData>(
+        client,
+        options,
+      ),
+    );
+    controller.setInfiniteOptions(options);
+    return controller;
+  }
+
+  C _controllerFor<C extends ChangeNotifier>(
+    Element reader,
+    Object identity,
+    C Function() create,
+  ) {
+    final state = _startEpochFor(reader);
+    final existing = state.queries[identity];
+    final C controller;
     if (existing != null) {
-      entry = existing;
-      // Unconditional, as upstream re-applies options on every render.
-      (entry.controller as QueryController<TQueryData, TData>)
-          .setOptions(options);
+      controller = existing.controller as C;
     } else {
-      final controller = QueryController<TQueryData, TData>(client, options);
-      entry = _QueryEntry(controller as QueryController<Object?, Object?>);
-      void onChanged() => _notifyReadersOf(key);
+      controller = create();
+      void onChanged() {
+        if (reader.mounted) {
+          reader.markNeedsBuild();
+        }
+      }
+
       controller.addListener(onChanged);
-      entry.detach = () => controller.removeListener(onChanged);
-      _entries[key] = entry;
+      state.queries[identity] =
+          _QueryEntry(controller, () => controller.removeListener(onChanged));
     }
-
-    entry.readers.add(reader);
-    _readers[reader]!.current.add(key);
-
-    return (entry.controller as QueryController<TQueryData, TData>).value;
+    state.current.add(identity);
+    return controller;
   }
 
   /// A mutation controller owned by [reader].
@@ -166,14 +261,14 @@ class QueryScopeElement extends InheritedElement {
     Element reader,
     Object? id,
   ) {
+    // Never the function itself: a closure built in `build` is a new object
+    // every build, and a controller keyed on it would be replaced — idle
+    // again — by the very rebuild its own result caused.
     final identity =
-        id ?? options.mutationKey ?? (TData, TVariables, options.mutationFn);
-    final owned = _mutations.putIfAbsent(
-      reader,
-      () => <Object, MutationController<Object?, Object?, Object?>>{},
-    );
+        id ?? options.mutationKey ?? (TData, TVariables, TOnMutateResult);
+    final state = _readers.putIfAbsent(reader, () => _Reader(_epoch));
 
-    final existing = owned[identity];
+    final existing = state.mutations[identity];
     if (existing != null) {
       final controller = existing
           as MutationController<TData, TVariables, TOnMutateResult>
@@ -188,13 +283,13 @@ class QueryScopeElement extends InheritedElement {
         reader.markNeedsBuild();
       }
     });
-    owned[identity] =
+    state.mutations[identity] =
         controller as MutationController<Object?, Object?, Object?>;
     return controller;
   }
 
-  void _startEpochFor(Element reader) {
-    final state = _readers.putIfAbsent(reader, () => _ReaderKeys(_epoch));
+  _Reader _startEpochFor(Element reader) {
+    final state = _readers.putIfAbsent(reader, () => _Reader(_epoch));
     if (state.epoch != _epoch) {
       // First read of a new frame: what it held before becomes provisional,
       // and whatever it does not read again this frame is released in the
@@ -202,22 +297,11 @@ class QueryScopeElement extends InheritedElement {
       // would stay subscribed to the key it no longer shows.
       state
         ..epoch = _epoch
-        ..pending = <QueryKey>{...state.pending, ...state.current}
-        ..current.clear();
+        ..pending = <Object>{...state.pending, ...state.current}
+        ..current = <Object>{};
     }
     _scheduleSweep();
-  }
-
-  void _notifyReadersOf(QueryKey key) {
-    final entry = _entries[key];
-    if (entry == null) {
-      return;
-    }
-    for (final reader in List<Element>.of(entry.readers)) {
-      if (reader.mounted) {
-        reader.markNeedsBuild();
-      }
-    }
+    return state;
   }
 
   void _scheduleSweep() {
@@ -231,67 +315,45 @@ class QueryScopeElement extends InheritedElement {
     });
   }
 
-  /// Releases keys a reader stopped reading, then drops observers nobody reads.
+  /// Releases the observers a reader stopped reading.
   void _sweep() {
-    for (final entry in _readers.entries) {
-      final state = entry.value;
+    for (final state in _readers.values) {
       final released = state.pending.difference(state.current);
-      state.pending = <QueryKey>{};
-      for (final key in released) {
-        _entries[key]?.readers.remove(entry.key);
+      state.pending = <Object>{};
+      for (final identity in released) {
+        state.queries.remove(identity)?.dispose();
       }
     }
-
-    _entries.removeWhere((_, entry) {
-      if (entry.readers.isNotEmpty) {
-        return false;
-      }
-      entry.detach?.call();
-      entry.controller.dispose();
-      return true;
-    });
-
     _epoch++;
   }
 
   @override
   void removeDependent(Element dependent) {
     super.removeDependent(dependent);
-    _release(dependent);
+    _readers.remove(dependent)?.dispose();
   }
 
-  void _release(Element dependent) {
-    final state = _readers.remove(dependent);
-    if (state != null) {
-      for (final key in <QueryKey>{...state.current, ...state.pending}) {
-        _entries[key]?.readers.remove(dependent);
-      }
+  @override
+  void update(QueryScope newWidget) {
+    if ((widget as QueryScope).client != newWidget.client) {
+      // Every observer belongs to the old client. The readers are told the
+      // scope changed (`updateShouldNotify`), rebuild, and recreate what they
+      // read on the new one.
+      _disposeAll();
     }
+    super.update(newWidget);
+  }
 
-    final owned = _mutations.remove(dependent);
-    if (owned != null) {
-      for (final controller in owned.values) {
-        controller.dispose();
-      }
+  void _disposeAll() {
+    for (final state in _readers.values) {
+      state.dispose();
     }
-
-    _scheduleSweep();
+    _readers.clear();
   }
 
   @override
   void unmount() {
-    for (final entry in _entries.values) {
-      entry.detach?.call();
-      entry.controller.dispose();
-    }
-    _entries.clear();
-    _readers.clear();
-    for (final owned in _mutations.values) {
-      for (final controller in owned.values) {
-        controller.dispose();
-      }
-    }
-    _mutations.clear();
+    _disposeAll();
     super.unmount();
   }
 }

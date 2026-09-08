@@ -138,14 +138,43 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     _updateResult(MutationState<TData, TVariables, TOnMutateResult>());
   }
 
+  /// Stops observing for good: drops every listener and leaves the mutation,
+  /// which starts its `gcTime` clock.
+  ///
+  /// Upstream has no counterpart — a React observer is simply forgotten — but
+  /// a binding that owns the observer's lifetime needs a way to say so, or a
+  /// mutation that ran without listeners keeps an observer nobody will ever
+  /// remove and can never be collected.
+  void destroy() {
+    listeners.clear();
+    _currentMutation?.removeObserver(this);
+    _currentMutation = null;
+  }
+
   @override
   void onMutationUpdate(MutationAction action) {
     final mutation = _currentMutation;
     if (mutation == null) {
       return;
     }
-    _updateResult(mutation.state);
-    _notifyCallCallbacks(action, mutation.state);
+    final state = mutation.state;
+    final next = _createResult(state.status, state);
+    final changed = next != _currentResult;
+    _currentResult = next;
+
+    // Per-call callbacks first, then the listeners — upstream's order, and it
+    // matters: a listener may start the next mutation from inside its
+    // notification, which replaces `_callCallbacks`. Running the callbacks
+    // afterwards would hand this mutation's result to the *next* call's
+    // `onSuccess`.
+    _client.notifyManager.batch(() {
+      _notifyCallCallbacks(action, state);
+      if (changed) {
+        for (final listener in List.of(listeners)) {
+          listener(_currentResult);
+        }
+      }
+    });
   }
 
   void _notifyCallCallbacks(
