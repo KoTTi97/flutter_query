@@ -5,6 +5,43 @@ A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
 **behavioral fidelity proven by porting the upstream test suite**, so fidelity
 work is first-class here, not an add-on.
 
+## What is happening now (2026-09-08)
+
+**The port is being re-planned from scratch as a wayfinder map.** The map is
+[GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1)
+(label `wayfinder:map`); its decision tickets are the map's sub-issues, and the
+frontier (open, unblocked, unassigned) is visible in GitHub's UI through native
+blocked-by edges. **Start there, not at the milestone table below.** The
+wayfinding operations are in [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+
+What the map settles that this file used to:
+
+- **Destination:** a pure-Dart core (core set plus infinite queries and
+  `placeholderData`) with upstream tests ported case-for-case, a Flutter binding,
+  and the `react-demo` sensor app reproduced on it.
+- **Standing rule:** closeness to upstream is a tiebreaker, not a goal. The best
+  Flutter-world result wins; diverge wherever a Dart/Flutter idiom is better and
+  record why.
+- **The existing `flutter-port/` code is prior art, not the plan of record.** It
+  may be reused wherever a ticket evaluates it as good and suitable; the
+  evaluation is recorded on that ticket, nothing carries over silently.
+- **Upstream pin for the fresh port:** `query/` at `50680b98c` (`main`,
+  2026-09-08). The `5bb950be8` pin below is what the *existing* code was built
+  against; the inventory research found only two behaviour changes between them.
+- **Research findings** from charting live under [`docs/research/`](docs/research/)
+  (upstream inventory, Dart library survey, adapter contract, runtime facts,
+  naming and affiliation). Each is linked from its resolved ticket.
+
+The wayfinder, grilling, prototype and research flows come from the
+`mattpocock-skills` plugin; the map's Notes name which skill each ticket type
+uses.
+
+## The existing implementation (prior art)
+
+Everything from here down describes the previous attempt under `flutter-port/`.
+It is accurate for that code and still the right orientation when a ticket
+evaluates a module for reuse.
+
 **Read these three, in order, before changing anything under `flutter-port/`:**
 
 1. [`flutter-port/DESIGN.md`](flutter-port/DESIGN.md) — the design doc of
@@ -39,18 +76,21 @@ missing, clone it before starting:
 git clone https://github.com/TanStack/query.git query
 ```
 
-**The upstream revision is load-bearing.** Every fidelity claim is against
-`query/` at commit `5bb950be8` (`release-2026-08-24-1925-6-g5bb950be8`). Checking
-out a different revision will make test counts and line references drift:
+**The upstream revision is load-bearing.** The existing code's fidelity claims
+are against `query/` at commit `5bb950be8` (`release-2026-08-24-1925-6-g5bb950be8`);
+the fresh port pins `50680b98c`. Both are on upstream `main`, so one clone serves
+both; check out the one you are working against, because test counts and line
+references drift otherwise:
 
 ```bash
-git -C query checkout 5bb950be8
+git -C query checkout 50680b98c
 ```
 
-## Current state
+## State of the existing code
 
-`query_core` is feature-complete for the MVP. **372 tests pass**; analyzer and
-formatter are clean.
+This is where the previous attempt stopped; it is not the current plan (see the
+top of this file). `query_core` is feature-complete for its MVP. **372 tests
+pass**; analyzer and formatter are clean.
 
 | Milestone | Scope | State |
 |---|---|---|
@@ -59,7 +99,7 @@ formatter are clean.
 | M4 | `QueryObserver`, sealed `QueryResult` | done |
 | M5 | `QueryClient`, `QueryFilters` | done |
 | M6 | `Mutation`, `MutationCache`, `MutationObserver`, sealed `MutationResult` | done |
-| **M7** | **`flutter_query` binding: `QueryScope`, provider, `QueryBuilder`, `MutationBuilder`, scheduler-aware flush** | **next** |
+| M7 | `flutter_query` binding: `QueryScope`, provider, `QueryBuilder`, `MutationBuilder`, scheduler-aware flush | not started (superseded by the map) |
 | M8 | `sensor_demo` app + widget tests — this is the MVP release gate | not started |
 | M9 | Polish: dartdoc, exports audit, per-package READMEs | not started |
 

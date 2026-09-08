@@ -10,9 +10,12 @@ timing, garbage collection, optimistic rollback — behave the way people who kn
 the library expect. Several existing Dart packages cover the idea; none has done
 the fidelity work.
 
-**Status:** `query_core` is complete for the MVP and passing 372 tests, of which
-279 are ported case-for-case from six upstream suites. The Flutter binding and
-the demo app are next.
+**Status (2026-09-08):** being re-planned from scratch as a wayfinder map on
+[GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1). The
+`flutter-port/` code is the previous attempt (`query_core` complete, 372 tests,
+279 ported case-for-case); it is prior art the new plan may reuse where a
+ticket evaluates it as suitable. Research behind the map is under
+[`docs/research/`](docs/research/).
 
 ## Where to look
 
@@ -28,7 +31,7 @@ the demo app are next.
 
 - `flutter-port/` — the port. This is the tracked work.
 - `query/` — upstream TanStack Query, and the source of the ported tests.
-  A nested clone, gitignored; pinned to `5bb950be8`.
+  A nested clone, gitignored; the fresh port pins `50680b98c`, the existing code `5bb950be8`.
 - `react-demo/` — the React sensor demo and its shared express gateway, which
   define the MVP acceptance bar. Vendored into this repo, so it is tracked;
   only its `node_modules` is ignored.
