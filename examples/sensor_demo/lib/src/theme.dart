@@ -188,6 +188,37 @@ class StatusPill extends StatelessWidget {
       );
 }
 
+/// An inline failure the user should see but not be blocked by — a rejected
+/// rename, a refused delete.
+class Notice extends StatelessWidget {
+  const Notice({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.dangerSoft,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(fontSize: 13, color: AppColors.danger),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
 /// The rounded tile a sensor's icon sits in.
 class IconTile extends StatelessWidget {
   const IconTile({super.key, required this.icon, this.dimmed = false});

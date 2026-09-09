@@ -216,36 +216,39 @@ class _SensorList extends StatelessWidget {
   final SensorApi api;
 
   @override
-  Widget build(BuildContext context) {
-    if (sensors.isEmpty) {
-      return const _EmptyState();
-    }
-    return MutationBuilder<String, String, ListSnapshot>(
-      options: deleteSensorMutation(QueryClientProvider.of(context), api),
-      builder: (context, delete) => Column(
-        children: <Widget>[
-          if (delete.value case MutationError(:final error))
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: _Notice(text: '$error'),
-            ),
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-              itemCount: sensors.length,
-              separatorBuilder: (context, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) => SensorRow(
-                key: ValueKey<String>(sensors[index].id),
-                id: sensors[index].id,
-                api: api,
-                onDelete: () => delete.mutate(sensors[index].id),
+  Widget build(BuildContext context) =>
+      MutationBuilder<String, String, ListSnapshot>(
+        options: deleteSensorMutation(QueryClientProvider.of(context), api),
+        // The builder sits above the empty state on purpose: deleting the
+        // last visible sensor empties the list optimistically, and if the
+        // empty state replaced the builder, the rollback would still run but
+        // its failure notice would be lost with the unmounted mutation.
+        builder: (context, delete) => Column(
+          children: <Widget>[
+            if (delete.value case MutationError(:final error))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Notice(text: '$error'),
               ),
+            Expanded(
+              child: sensors.isEmpty
+                  ? const _EmptyState()
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                      itemCount: sensors.length,
+                      separatorBuilder: (context, _) =>
+                          const SizedBox(height: 8),
+                      itemBuilder: (context, index) => SensorRow(
+                        key: ValueKey<String>(sensors[index].id),
+                        id: sensors[index].id,
+                        api: api,
+                        onDelete: () => delete.mutate(sensors[index].id),
+                      ),
+                    ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
 }
 
 /// One row.
@@ -482,36 +485,6 @@ class _ErrorPanel extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      );
-}
-
-/// An inline failure the user should see but not be blocked by.
-class _Notice extends StatelessWidget {
-  const _Notice({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.dangerSoft,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: <Widget>[
-            const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(fontSize: 13, color: AppColors.danger),
-              ),
-            ),
-          ],
         ),
       );
 }

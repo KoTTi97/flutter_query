@@ -1,11 +1,10 @@
 name: tanstack_query_core
 description: >-
-  A Dart port of TanStack Query's query-core: caching, background refetching,
-  staleness and mutations, with no Flutter dependency. An independent community
-  port, not affiliated with or endorsed by TanStack.
+  Dart port of TanStack Query's query-core: caching, refetching, staleness
+  and mutations, no Flutter needed. Independent community port, not affiliated
+  with or endorsed by TanStack.
 version: 0.1.0-dev
 repository: https://github.com/KoTTi97/flutter_query
-publish_to: none
 
 environment:
   sdk: ^3.6.0

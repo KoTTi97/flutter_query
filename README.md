@@ -41,6 +41,41 @@ cd examples/sensor_demo && flutter test
 
 The demo's README says how to run it against the gateway.
 
+## Requirements and platforms
+
+The core is pure Dart (SDK `^3.6.0`). The binding and the demo need **Flutter
+3.27 or later**. The demo has been run on the iOS simulator and on the web;
+other platforms are untested.
+
+## Coming from TanStack Query (JS)
+
+[`docs/coming-from-react-query.md`](docs/coming-from-react-query.md) maps the
+JavaScript names to the Dart ones — `useQuery` to the four equal call styles,
+`fetchQuery` to `QueryClient.query`, `staleTime: Infinity` to
+`StaleTime.infinite`, and the rest.
+
+## Deliberately not in v1
+
+Each row is recorded, with its reason, in
+[PORTING_NOTES.md](packages/tanstack_query_core/test/PORTING_NOTES.md).
+
+| Upstream | Here |
+|---|---|
+| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in v1; `Query.setState` is the door a persister would use |
+| `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders |
+| `throwOnError` | errors live in the sealed result (`QueryError`) |
+| `queryKeyHashFn` | `QueryKey` is a value type |
+| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook |
+| `useQueries` / `QueriesObserver` | not ported |
+| `streamedQuery` | not ported |
+| `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
+| `select` on `fetchQuery` | map the future |
+| `initialDataUpdatedAt` as a function | `DateTime?` only |
+| SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
+| `MutationFunctionContext` | not ported; a mutation function takes its variables only |
+| Callbacks in `setMutationDefaults` | not ported |
+| Devtools | none |
+
 ## How it was planned
 
 As a wayfinder map on [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1):
@@ -56,5 +91,6 @@ down why; the table of divergences is at the end of PORTING_NOTES.md.
 
 ## Licence
 
-MIT — see the `LICENSE` in each package. Upstream TanStack Query is MIT as
-well; the ported tests carry its notice.
+MIT — see the `LICENSE` in each package. The ported tests are derived from
+upstream TanStack Query's MIT-licensed suite; its licence is `LICENSE-TANSTACK`
+in each package.

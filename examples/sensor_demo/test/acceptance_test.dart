@@ -1,6 +1,11 @@
-/// The MVP acceptance suite: every row of the DESIGN.md §3 feature checklist,
-/// as a widget test against the fake gateway
+/// The MVP acceptance suite: one widget test per row of the demo's feature
+/// checklist, against the fake gateway
 /// (https://github.com/KoTTi97/flutter_query/issues/24).
+///
+/// The rows are the behaviours `react-demo/react/README.md` lists under "What
+/// each part demonstrates", itemised the way the original port design did
+/// (`git show 69c71d4:flutter-port/DESIGN.md`, §3 "Feature checklist"). The
+/// cases after them are regressions found by review, not checklist rows.
 ///
 /// These run the *real* app — its screens, its `SensorApi`, its cache policy —
 /// with only the transport replaced. Pointing the same app at the express
@@ -13,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sensor_demo/main.dart';
 import 'package:sensor_demo/src/api.dart';
 import 'package:sensor_demo/src/models.dart';
+import 'package:sensor_demo/src/queries.dart';
 import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import 'fake_gateway.dart';
@@ -24,7 +30,8 @@ void main() {
 
   setUp(() {
     gateway = FakeGateway();
-    client = QueryClient();
+    // The app's own defaults, so the suite runs the policy that ships.
+    client = QueryClient(defaultOptions: demoDefaultOptions);
     api = SensorApi(
       dio: Dio(BaseOptions(baseUrl: 'http://gateway.test/api'))
         ..httpClientAdapter = gateway,
@@ -180,6 +187,11 @@ void main() {
       client.getQueryData<Sensor>(SensorKeys.detail('1'))!.name,
       'Fensterkontakt',
     );
+    // The field follows the rollback, as the React form does.
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      'Fensterkontakt',
+    );
   });
 
   demoTest('editing again clears a failed rename banner', (tester) async {
@@ -212,6 +224,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     // The accepted response carries pending: true, which starts the poll.
     expect(find.text('Wird vom Gerät bestätigt…'), findsOneWidget);
+    // And locks the switch until the device has confirmed, as in React.
+    expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNull);
 
     // Let the device confirm and the poll pick it up.
     await tester.pump(const Duration(milliseconds: 900));
@@ -220,6 +234,7 @@ void main() {
 
     expect(find.text('Bestätigter Gerätezustand'), findsOneWidget);
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
     // The poll ran: more than one detail request while pending.
     expect(requestsFor('GET /sensors/1'), greaterThan(0));
   });
@@ -280,19 +295,56 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  demoTest('a gateway error shows a panel that can retry', (tester) async {
+  demoTest('a gateway error is retried once, then shows a panel that can retry',
+      (tester) async {
     final broken = SensorApi(
       dio: Dio(BaseOptions(baseUrl: 'http://gateway.test/api'))
         ..httpClientAdapter = _AlwaysFails(gateway),
     );
     await tester.pumpWidget(SensorDemoApp(api: broken, client: client));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
 
+    // `retry: 1` from the app's defaults: the first failure is not final, one
+    // more attempt is scheduled after the default one-second delay, and the
+    // skeleton stays up meanwhile.
+    expect(requestsFor('GET /sensors'), 1);
+    expect(find.text('Nochmal versuchen'), findsNothing);
+
+    // The toolbar spinner keeps frames coming while fetching, so settling
+    // runs through the retry delay and the second failure.
+    await tester.pumpAndSettle();
+    expect(requestsFor('GET /sensors'), 2);
     expect(find.text('Nochmal versuchen'), findsOneWidget);
+  });
+
+  // Regressions found by review, not checklist rows.
+
+  demoTest('a refused delete of the last visible sensor still shows its notice',
+      (tester) async {
+    await start(tester);
+    // Filter down to one row and delete it: the optimistic patch empties the
+    // list, and the empty state must not take the mutation's notice with it.
+    await tester.enterText(find.byType(TextField).first, 'Thermo');
+    await tester.pump(const Duration(milliseconds: 350)); // debounce
+    await tester.pumpAndSettle();
+    expect(find.text('Thermostat'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Thermostat löschen'));
+    await tester.pump();
+    expect(find.text('Keine Sensoren gefunden.'), findsOneWidget);
+
+    // The first delete fails, by the gateway's script.
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Gateway hat das Löschen abgelehnt — nochmal versuchen'),
+      findsOneWidget,
+    );
+    expect(find.text('Thermostat'), findsOneWidget);
   });
 }
 
-/// A gateway that refuses everything, for the error panel.
+/// A gateway that refuses everything, for the error panel. Requests still
+/// land in [inner]'s log, so the suite can count the attempts.
 class _AlwaysFails implements HttpClientAdapter {
   _AlwaysFails(this.inner);
 
@@ -303,14 +355,16 @@ class _AlwaysFails implements HttpClientAdapter {
     RequestOptions options,
     Stream<List<int>>? requestStream,
     Future<void>? cancelFuture,
-  ) async =>
-      ResponseBody.fromString(
-        '{"message":"Gateway nicht erreichbar"}',
-        503,
-        headers: <String, List<String>>{
-          Headers.contentTypeHeader: <String>[Headers.jsonContentType],
-        },
-      );
+  ) async {
+    inner.requests.add('${options.method} ${options.path}');
+    return ResponseBody.fromString(
+      '{"message":"Gateway nicht erreichbar"}',
+      503,
+      headers: <String, List<String>>{
+        Headers.contentTypeHeader: <String>[Headers.jsonContentType],
+      },
+    );
+  }
 
   @override
   void close({bool force = false}) {}

@@ -4,8 +4,6 @@ query
 node_modules
 .DS_Store
 
-flutter-port/**/.dart_tool/
-flutter-port/**/build/
 .dart_tool/
 build/
 .packages

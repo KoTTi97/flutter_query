@@ -17,6 +17,7 @@ import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import 'src/api.dart';
 import 'src/app_state.dart';
+import 'src/queries.dart';
 import 'src/screens/detail.dart';
 import 'src/screens/overview.dart';
 import 'src/theme.dart';
@@ -37,7 +38,8 @@ class SensorDemoApp extends StatefulWidget {
 }
 
 class _SensorDemoAppState extends State<SensorDemoApp> {
-  late final QueryClient _client = widget.client ?? QueryClient();
+  late final QueryClient _client =
+      widget.client ?? QueryClient(defaultOptions: demoDefaultOptions);
   final AppState _state = AppState();
 
   @override

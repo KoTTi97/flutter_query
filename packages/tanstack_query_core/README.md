@@ -91,6 +91,38 @@ matter at the call site:
   (`hasNextPage`, `fetchNextPage`) is on `InfiniteQueryObserver`.
 - **Time goes through `package:clock`**, so `fake_async` controls it completely.
 
+The full JS-to-Dart name map is
+[`docs/coming-from-react-query.md`](https://github.com/KoTTi97/flutter_query/blob/main/docs/coming-from-react-query.md)
+in the repository.
+
+## Deliberately not in v1
+
+Each row is recorded, with its reason, in
+[`test/PORTING_NOTES.md`](test/PORTING_NOTES.md).
+
+| Upstream | Here |
+|---|---|
+| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in v1; `Query.setState` is the door a persister would use |
+| `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the binding's builders |
+| `throwOnError` | errors live in the sealed result (`QueryError`) |
+| `queryKeyHashFn` | `QueryKey` is a value type |
+| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook |
+| `useQueries` / `QueriesObserver` | not ported |
+| `streamedQuery` | not ported |
+| `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
+| `select` on `fetchQuery` | map the future |
+| `initialDataUpdatedAt` as a function | `DateTime?` only |
+| SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
+| `MutationFunctionContext` | not ported; a mutation function takes its variables only |
+| Callbacks in `setMutationDefaults` | not ported |
+| Devtools | none |
+
+## Requirements
+
+Dart SDK `^3.6.0`, no Flutter. The Flutter binding, `tanstack_query_flutter`,
+needs Flutter 3.27 or later; its demo has been run on the iOS simulator and on
+the web, other platforms untested.
+
 ## Running the suite
 
 ```bash

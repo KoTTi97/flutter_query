@@ -49,16 +49,6 @@ class FakeGateway implements HttpClientAdapter {
   int _deleteAttempts = 0;
   int _nextId = 4;
 
-  /// Requests that are parked until [release] is called, by path.
-  final Map<String, Completer<void>> _gates = <String, Completer<void>>{};
-
-  /// Holds the next request to [path] until [release].
-  void hold(String path) => _gates[path] = Completer<void>();
-
-  void release(String path) {
-    _gates.remove(path)?.complete();
-  }
-
   static Map<String, Object?> _sensor({
     required String id,
     required String name,
@@ -104,11 +94,6 @@ class FakeGateway implements HttpClientAdapter {
     final path = options.path;
     final method = options.method;
     requests.add('$method $path');
-
-    final gate = _gates[path];
-    if (gate != null) {
-      await gate.future;
-    }
 
     // `cancelFuture` completes when dio's CancelToken is cancelled, which is
     // what a cancelled query does to the HTTP request.

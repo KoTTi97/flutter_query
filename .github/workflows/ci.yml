@@ -27,6 +27,15 @@ jobs:
       - name: demo tests
         run: flutter test
         working-directory: examples/sensor_demo
+      # `dart pub publish --dry-run` exits 65 when validation finds a warning
+      # (a missing CHANGELOG, say) and 0 when the package is clean, so a
+      # warning fails the job without any extra flag.
+      - name: core publish dry-run
+        run: dart pub publish --dry-run
+        working-directory: packages/tanstack_query_core
+      - name: binding publish dry-run
+        run: dart pub publish --dry-run
+        working-directory: packages/tanstack_query_flutter
       - name: analyzer
         run: dart analyze --fatal-infos packages examples/sensor_demo
       - name: formatter

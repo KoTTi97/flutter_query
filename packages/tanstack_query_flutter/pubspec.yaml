@@ -1,16 +1,14 @@
 name: tanstack_query_flutter
 description: >-
-  The Flutter binding for tanstack_query_core: a QueryClientProvider, listenable
-  controllers, builder widgets, a State mixin and context.query — four equal
-  ways to reach a query, with no dependency beyond Flutter itself. An
-  independent community port, not affiliated with or endorsed by TanStack.
+  Flutter binding for tanstack_query_core: provider, controllers, builders,
+  State mixin, context.query. An independent community port, not affiliated
+  with or endorsed by TanStack.
 version: 0.1.0-dev
 repository: https://github.com/KoTTi97/flutter_query
-publish_to: none
 
 environment:
   sdk: ^3.6.0
-  flutter: ">=3.13.0"
+  flutter: ">=3.27.0"
 
 resolution: workspace
 
@@ -23,4 +21,3 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   lints: ^6.0.0
-  meta: ^1.16.0

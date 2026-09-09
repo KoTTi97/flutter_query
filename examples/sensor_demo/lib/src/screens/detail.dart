@@ -29,12 +29,20 @@ class SensorDetail extends StatefulWidget {
 
 class _SensorDetailState extends State<SensorDetail> with QueryMixin {
   final TextEditingController _name = TextEditingController();
+
+  /// Which sensor the field was filled for.
   String? _nameFor;
 
   @override
   void dispose() {
     _name.dispose();
     super.dispose();
+  }
+
+  void _syncName(QueryClient client, String id) {
+    if (!mounted) return;
+    final name = client.getQueryData<Sensor>(SensorKeys.detail(id))?.name;
+    if (name != null) _name.text = name;
   }
 
   @override
@@ -73,7 +81,7 @@ class _SensorDetailState extends State<SensorDetail> with QueryMixin {
                 _Hero(sensor: data),
                 const SizedBox(height: 14),
                 if (rename.value case MutationError(:final error)) ...<Widget>[
-                  _Notice(text: '$error'),
+                  Notice(text: '$error'),
                   const SizedBox(height: 14),
                 ],
                 _RenameCard(
@@ -82,13 +90,27 @@ class _SensorDetailState extends State<SensorDetail> with QueryMixin {
                   // A failed submit's banner goes away as soon as the user
                   // edits again.
                   onChanged: rename.value.isError ? rename.reset : null,
-                  onSubmit: () =>
-                      rename.mutate((id: data.id, name: _name.text.trim())),
+                  onSubmit: () => rename.mutate(
+                    (id: data.id, name: _name.text.trim()),
+                    // Once the rename has settled, the field shows what the
+                    // cache holds: the submitted name after a success, the old
+                    // one after a rollback. React gets the same from `reset`
+                    // in `onSuccess` plus the form's `values` re-sync.
+                    callbacks:
+                        MutateCallbacks<Sensor, RenameInput, SensorSnapshot>(
+                      onSettled: (_, __, ___, ____, _____) =>
+                          _syncName(client, data.id),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 14),
                 _MatterCard(
                   sensor: data,
-                  pending: matter.value.isPending,
+                  // Locked for the whole confirmation window, not only while
+                  // the write is in flight — a second flip before the device
+                  // has confirmed the first would race the poll.
+                  pending:
+                      data.matterForwardingPending || matter.value.isPending,
                   onChanged: (value) =>
                       matter.mutate((id: data.id, value: value)),
                 ),
@@ -402,35 +424,6 @@ class _DetailError extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      );
-}
-
-class _Notice extends StatelessWidget {
-  const _Notice({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.dangerSoft,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: <Widget>[
-            const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(fontSize: 13, color: AppColors.danger),
-              ),
-            ),
-          ],
         ),
       );
 }

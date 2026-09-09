@@ -50,10 +50,9 @@ String defaultGatewayBaseUrl() {
 /// the whole reason this class exists, rather than letting dio's generic
 /// status-code prose reach the UI.
 class GatewayException implements Exception {
-  const GatewayException(this.message, {this.statusCode});
+  const GatewayException(this.message);
 
   final String message;
-  final int? statusCode;
 
   @override
   String toString() => message;
@@ -66,6 +65,10 @@ class SensorApi {
             Dio(BaseOptions(
               baseUrl: baseUrl ?? defaultGatewayBaseUrl(),
               headers: const <String, String>{'x-demo-client': 'tq-demo'},
+              // A gateway that hangs must fail the query, not leave it
+              // fetching forever. The real one answers within a second.
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 10),
             ));
 
   final Dio _dio;
@@ -161,13 +164,15 @@ class SensorApi {
     }
   }
 
+  /// Every failure leaves here as a [GatewayException] with a sentence a user
+  /// can read; nothing raw reaches the screens.
   Future<T> _run<T>(
     Future<Response<Map<String, Object?>>> Function() request,
     T Function(Map<String, Object?> json) parse,
   ) async {
+    final Response<Map<String, Object?>> response;
     try {
-      final response = await request();
-      return parse(response.data!);
+      response = await request();
     } on DioException catch (error) {
       if (CancelToken.isCancel(error)) {
         // A cancelled request is the library's business, not the user's: let
@@ -175,9 +180,24 @@ class SensorApi {
         rethrow;
       }
       throw GatewayException(
-        _messageFrom(error.response?.data) ?? 'Gateway nicht erreichbar',
-        statusCode: error.response?.statusCode,
+        _messageFrom(error.response?.data) ?? _describe(error),
       );
     }
+    // A response the client cannot read — a missing field, the wrong type —
+    // is as much a gateway failure as a refused one, and its `TypeError` is
+    // no message for a user.
+    try {
+      return parse(response.data!);
+    } on Object {
+      throw const GatewayException('Unerwartete Antwort vom Gateway');
+    }
   }
+
+  static String _describe(DioException error) => switch (error.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.sendTimeout ||
+        DioExceptionType.receiveTimeout =>
+          'Gateway antwortet nicht',
+        _ => 'Gateway nicht erreichbar',
+      };
 }

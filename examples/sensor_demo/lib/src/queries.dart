@@ -13,6 +13,21 @@ import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 import 'api.dart';
 import 'models.dart';
 
+/// The client-wide defaults — the twin of `main.tsx`'s `defaultOptions`.
+///
+/// The gateway cannot take a request storm, so the aggressive defaults are
+/// turned off deliberately: no refetch when the app comes back to the
+/// foreground or the network returns, and one retry instead of three. Both
+/// the app and the acceptance suite build their client from this, so the
+/// tests run the policy the app ships with.
+const DefaultOptions demoDefaultOptions = DefaultOptions(
+  queries: QueryDefaults(
+    refetchOnWindowFocus: RefetchOn.never,
+    refetchOnReconnect: RefetchOn.never,
+    retry: RetryPolicy.times(1),
+  ),
+);
+
 /// Options for a sensor-list query, shared by every caller.
 ///
 /// They have to be shared rather than re-declared per screen: two observers on
@@ -86,7 +101,6 @@ QueryObserverOptions<Sensor, Sensor> sensorQuery(
   return QueryObserverOptions<Sensor, Sensor>(
     queryKey: SensorKeys.detail(id),
     queryFn: (context) => api.getSensor(id, signal: context.signal),
-    enabled: id.isEmpty ? Enabled.no : Enabled.yes,
     staleTime: const StaleTime.duration(Duration(seconds: 45)),
     // Fallback seed for the case where a sensor is opened before any list
     // response has seeded it. Inheriting the list's timestamp matters: dated

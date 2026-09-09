@@ -1,11 +1,11 @@
 {
-    "name": "sensor_demo",
-    "short_name": "sensor_demo",
+    "name": "Sensor-Gateway",
+    "short_name": "Sensor-Gateway",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "The React sensor demo's manager, rebuilt on tanstack_query_flutter against the same gateway.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

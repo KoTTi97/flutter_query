@@ -52,7 +52,10 @@ second delete** fails. Both rollbacks are demonstrable on demand.
 
 The whole cache policy is [`lib/src/queries.dart`](lib/src/queries.dart) — one
 file, and worth comparing line for line with
-`react-demo/react/src/queries.ts`. The shape it sets up:
+`react-demo/react/src/queries.ts`. It opens with the client-wide defaults,
+`demoDefaultOptions`, the twin of `main.tsx`'s `defaultOptions`: no refetch on
+focus or reconnect and one retry, because the gateway cannot take a request
+storm. The shape the rest sets up:
 
 - the **list** query owns *which* sensors exist; a **per-sensor** query owns
   *what each one is*, and the list's query function seeds every per-sensor entry
@@ -83,8 +86,9 @@ interoperate:
 flutter test
 ```
 
-Fourteen widget tests, one per row of the MVP feature checklist, running the
-real app against [`test/fake_gateway.dart`](test/fake_gateway.dart) — an
+Fifteen widget tests — one per row of the MVP feature checklist, plus a
+regression found by review — running the real app, with its own client
+defaults, against [`test/fake_gateway.dart`](test/fake_gateway.dart) — an
 in-memory stand-in for `react-demo/server/server.ts` wired in as a dio
 `HttpClientAdapter`. Only the transport is replaced: the app's own `SensorApi`,
 its JSON, its error handling and its cancellation are all exercised. Pointing
