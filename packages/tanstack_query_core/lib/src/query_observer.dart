@@ -493,10 +493,23 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           'A query observer with no select must have the same data type on '
           'both sides: $TQueryData cannot be reported as $TData.',
         );
-        outData = replaceEqualDeep<TData>(
-          prevResult?.dataOrNull,
-          candidate as TData,
-        );
+        if (isPlaceholderData) {
+          // A placeholder was never written to the cache, so it is shared
+          // here — through the query's own hook, as upstream's
+          // `replaceData(prevResult?.data, placeholderData, options)`.
+          final sharing = options.structuralSharing;
+          final previous = prevResult?.dataOrNull as TQueryData?;
+          outData = (sharing == null
+              ? replaceEqualDeep<TQueryData>(previous, candidate as TQueryData)
+              : sharing(previous, candidate as TQueryData)) as TData;
+        } else {
+          // Cached data goes through as it is, as upstream's `data =
+          // state.data`: the cache write already applied `structuralSharing`,
+          // and re-sharing it against the last result here hid an opt-out
+          // (`(_, next) => next`) from every reader — the showcase's
+          // select-and-sharing screen found it (2026-09-09).
+          outData = candidate as TData;
+        }
         hasOutData = true;
         // The error belonged to a selector that is no longer there. Upstream
         // keeps reporting it until a *new* selection succeeds, which never

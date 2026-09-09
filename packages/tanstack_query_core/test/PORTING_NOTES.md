@@ -244,8 +244,9 @@ with `cancelRefetch: false` where upstream's default is `true`.
 - **omitted — no off switch for select output (2):** the two `should not use
   replaceEqualDeep for select value when structuralSharing option is ...`
   cases. `structuralSharing: false` has no counterpart for what `select`
-  produces: the typed hook governs the cache write, and a selector's output
-  always goes through `replaceEqualDeep` (in the table below).
+  produces: the typed hook governs the cache write and the placeholder, and a
+  selector's output always goes through `replaceEqualDeep` (in the table
+  below).
 - **omitted — SSR (1):** `should not schedule timers on the server`.
 - **omitted — type-level (2):** `should throw an error if enabled option type is
   not valid` (`Enabled` is a sealed type; an invalid value does not typecheck)
@@ -1399,6 +1400,20 @@ with the reviews.
    `tanstack_query_flutter/test/key_change_test.dart`, all three styles plus
    the without-`id` case; the README's mixin and context sections say the
    rule.
+
+2. **`structuralSharing` was invisible to every reader** (core). The
+   `select == null` branch of `QueryObserver.createResult` ran
+   `replaceEqualDeep(prevResult?.data, candidate)`, where upstream's is
+   `data = state.data`. The cache write had already applied the query's
+   `structuralSharing` hook, so an opt-out (`(_, next) => next`) put a fresh
+   instance in the cache — and the observer then re-shared it against its own
+   last result and handed back the old one. The `select-and-sharing` screen
+   found it: the cache visibly held a new list while no reader ever saw one.
+   Fixed by passing cached data through as upstream does; the placeholder
+   case, which is *not* in the cache, is now shared here through the query's
+   own hook, matching upstream's `replaceData(prevResult?.data,
+   placeholderData, options)`. Regression: `showcaseFindings()` in
+   `port_specifics_test.dart`.
 
 ## Deliberate divergences that will show up in later suites
 

@@ -450,6 +450,7 @@ void main() {
   thirdReview();
   fourthReview();
   fifthReviewObserver();
+  showcaseFindings();
 }
 
 // -----------------------------------------------------------------------------
@@ -1981,6 +1982,47 @@ void fifthReviewObserver() {
     response.complete(1);
     await time.flushMicrotasks();
     observer.destroy();
+    client.clear();
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Found by the showcase (`examples/showcase/`, #25, 2026-09-09): its screens
+// exercise every feature through real widgets, and what they find in the
+// core is reproduced here before it is fixed.
+void showcaseFindings() {
+  testFakeAsync(
+      'select-and-sharing: an observer without select reports the cache\'s '
+      'data as written, so a structuralSharing opt-out reaches the reader',
+      (time) async {
+    final client = testClient();
+    var fetches = 0;
+    final observer = client.observe<List<int>, List<int>>(QueryObserverOptions(
+      queryKey: queryKey(),
+      // A fresh but equal list on every fetch.
+      queryFn: (_) async {
+        fetches++;
+        return <int>[1, 2, 3];
+      },
+      // The opt-out: the cache keeps the new instance.
+      structuralSharing: (_, next) => next,
+    ));
+    observer.subscribe((_) {});
+    await time.advance(Duration.zero);
+    final first = observer.currentResult.dataOrNull;
+    expect(fetches, 1);
+
+    await observer.refetch();
+    await time.advance(Duration.zero);
+    final cached = observer.currentQuery.state.data;
+    final reported = observer.currentResult.dataOrNull;
+    expect(fetches, 2);
+    // The cache write honoured the hook …
+    expect(identical(cached, first), isFalse);
+    // … and the observer hands that instance on, as upstream's no-select
+    // branch does (`data = state.data`), instead of re-sharing it against the
+    // last result and hiding the opt-out from every reader.
+    expect(identical(reported, cached), isTrue);
     client.clear();
   });
 }

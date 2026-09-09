@@ -268,9 +268,6 @@ void main() {
         expect(inReader('raw', 'data builds=2'), findsOneWidget);
       });
     },
-    skip: 'suspected library bug: the observer re-shares the cache data '
-        'against its last reported result even without `select`, so '
-        'structuralSharing: (_, next) => next is invisible to every reader',
   );
 
   showcaseTest('leaving the screen releases all five observers',
