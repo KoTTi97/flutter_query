@@ -78,7 +78,13 @@ class QueryCancelToken {
     final callbacks = List<void Function()>.of(_callbacks);
     _callbacks.clear();
     for (final callback in callbacks) {
-      callback();
+      // One callback's throw must not skip the rest, nor escape into the
+      // code that cancelled; it is the callback's error, reported as such.
+      try {
+        callback();
+      } catch (error, stackTrace) {
+        Zone.current.handleUncaughtError(error, stackTrace);
+      }
     }
   }
 }

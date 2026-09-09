@@ -771,6 +771,22 @@ void main() {
       expect(observer.currentResult.dataOrNull, (count: 1));
     });
 
+    testFakeAsync('should structurally share the selector', (time) async {
+      final key = queryKey();
+      var count = 0;
+      final observer = queryClient.observe<Map<String, int>, Map<String, int>>(
+        QueryObserverOptions(
+          queryKey: key,
+          queryFn: (_) => <String, int>{'count': ++count},
+          select: (_) => <String, int>{'myCount': 1},
+        ),
+      );
+      final observerResult1 = await observer.refetch();
+      final observerResult2 = await observer.refetch();
+      expect(count, 2);
+      expect(observerResult1.dataOrNull, same(observerResult2.dataOrNull));
+    });
+
     testFakeAsync('should not trigger a fetch when subscribed and disabled',
         (time) async {
       final key = queryKey();
@@ -1051,6 +1067,29 @@ void main() {
       expect(results[0].dataOrNull, 'placeholder');
       expect(results[1].status, QueryStatus.success);
       expect(results[1].dataOrNull, 'data');
+    });
+
+    testFakeAsync('should structurally share placeholder data', (time) async {
+      final key = queryKey();
+      final observer = queryClient.observe<Map<String, int>, Map<String, int>>(
+        QueryObserverOptions(
+          queryKey: key,
+          enabled: Enabled.no,
+          queryFn: (_) => <String, int>{},
+          placeholderData: PlaceholderData.value(<String, int>{}),
+        ),
+      );
+
+      final firstData = observer.currentResult.dataOrNull;
+
+      observer.setOptions(QueryObserverOptions(
+        queryKey: key,
+        placeholderData: PlaceholderData.value(<String, int>{}),
+      ));
+
+      final secondData = observer.currentResult.dataOrNull;
+
+      expect(firstData, same(secondData));
     });
 
     testFakeAsync('should return the current query from getCurrentQuery',

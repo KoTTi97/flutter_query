@@ -36,6 +36,37 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
     setOptions(client.infiniteObserverOptions(options));
   }
 
+  /// Only for options that carry the paging behaviour, which is what
+  /// [setInfiniteOptions] and `QueryClient.infiniteObserverOptions` produce.
+  /// Plain observer options would strip the behaviour from the shared query,
+  /// and its next refetch would fail with `MissingQueryFunctionError`.
+  @override
+  void setOptions(
+    QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
+  ) {
+    _checkInfinite(options);
+    super.setOptions(options);
+  }
+
+  /// See [setOptions]: use [getOptimisticInfiniteResult].
+  @override
+  QueryResult<TData> getOptimisticResult(
+    QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
+  ) {
+    _checkInfinite(options);
+    return super.getOptimisticResult(options);
+  }
+
+  static void _checkInfinite(QueryObserverOptions<Object?, Object?> options) {
+    if (options.behavior is! InfiniteQueryBehavior) {
+      throw UnsupportedError(
+        'An InfiniteQueryObserver takes InfiniteQueryObserverOptions (via '
+        'setInfiniteOptions / getOptimisticInfiniteResult); plain observer '
+        'options have no paging half.',
+      );
+    }
+  }
+
   InfiniteData<TPageData, TPageParam>? get _data =>
       currentQuery.state.hasData ? currentQuery.state.data : null;
 
@@ -63,6 +94,23 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
 
   bool get isFetchPreviousPageError =>
       currentResult.isError && _fetchDirection == FetchDirection.backward;
+
+  /// Whether the pages already held are being refetched — *not* a page being
+  /// added. The sealed result's `isRefetching` is true while a page is
+  /// fetched, because the query is fetching and has data; upstream's infinite
+  /// result subtracts the page directions, and so does this, where the other
+  /// paging flags live.
+  bool get isRefetching =>
+      currentResult.isRefetching &&
+      !isFetchingNextPage &&
+      !isFetchingPreviousPage;
+
+  /// The error twin of [isRefetching]: a refetch failed, not a page fetch.
+  bool get isRefetchError => switch (currentResult) {
+        QueryError<TData>(:final isRefetchError) =>
+          isRefetchError && !isFetchNextPageError && !isFetchPreviousPageError,
+        _ => false,
+      };
 
   /// The result these options would produce right now — the infinite twin of
   /// [QueryObserver.getOptimisticResult], for a binding's first build.

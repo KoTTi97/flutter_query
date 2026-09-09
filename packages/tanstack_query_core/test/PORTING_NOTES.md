@@ -27,14 +27,14 @@ is a bug in this file.
 | `retryer.test.tsx` | `retryer_test.dart` | 13 / 13 | done |
 | `query.test.tsx` | `query_test.dart` | 43 / 51 | done |
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
-| `queryObserver.test.tsx` | `query_observer_test.dart` | 60 / 75 | done |
+| `queryObserver.test.tsx` | `query_observer_test.dart` | 62 / 75 | done |
 | `queryClient.test.tsx` | `query_client_test.dart` | 104 / 156 | done |
 | `mutation.test.tsx` | `mutation_test.dart` | 28 / 28 | done |
 | `mutationCache.test.tsx` | `mutation_cache_test.dart` | 16 / 16 | done |
 | `mutationObserver.test.tsx` | `mutation_observer_test.dart` | 16 / 16 | done |
 | `infiniteQueryBehavior.test.tsx` | `infinite_query_behavior_test.dart` | 7 / 9 | done |
 | `infiniteQueryObserver.test.tsx` | `infinite_query_observer_test.dart` | 6 / 7 | done |
-| `utils.test.tsx` | `utils_test.dart` | 24 / 78 | done |
+| `utils.test.tsx` | `utils_test.dart` | 47 / 78 | done |
 
 Suites not ported at all, each for one recorded reason:
 `hydration.test.tsx` (hydration is out of v1 scope, #17),
@@ -233,14 +233,15 @@ with `cancelRefetch: false` where upstream's default is `true`.
   primitive, and suspense is dropped) and
   `should set fetchStatus to idle when _optimisticResults is isRestoring`
   (`isRestoring` belongs to the React persist/restore boundary).
-- **omitted — replaceEqualDeep (4):** `should structurally share the selector`,
-  `should structurally share placeholder data`, and the two
-  `should not use replaceEqualDeep for select value ...` cases. All four assert
-  *reference* identity across two runs that produce equal values, which is what
-  `replaceEqualDeep` buys React and what
-  [#12](https://github.com/KoTTi97/flutter_query/issues/12) replaced with value
-  equality: here the results compare equal, so the observer does not notify —
-  the outcome those cases exist to protect.
+- **ported since the third review (2):** `should structurally share the
+  selector` and `should structurally share placeholder data`. Both assert
+  reference identity across two runs that produce equal values, which
+  `replaceEqualDeep` now provides here too (see the third review below).
+- **omitted — no off switch for select output (2):** the two `should not use
+  replaceEqualDeep for select value when structuralSharing option is ...`
+  cases. `structuralSharing: false` has no counterpart for what `select`
+  produces: the typed hook governs the cache write, and a selector's output
+  always goes through `replaceEqualDeep` (in the table below).
 - **omitted — SSR (1):** `should not schedule timers on the server`.
 - **omitted — type-level (2):** `should throw an error if enabled option type is
   not valid` (`Enabled` is a sealed type; an invalid value does not typecheck)
@@ -319,9 +320,10 @@ see the infinite section below).
 - **adapted:** `setQueryDefaults > should merge defaultOptions` uses `retry`
   where upstream uses `suspense`, which is dropped.
 - **adapted:** `should set the new data without comparison if structuralSharing
-  is set to false` → `... is not set`. There is no `structuralSharing: false`
-  here; not configuring it *is* "no comparison"
-  ([#12](https://github.com/KoTTi97/flutter_query/issues/12)).
+  is set to false` turns sharing off with the identity function,
+  `(_, next) => next`, which is the port's `false`
+  ([#12](https://github.com/KoTTi97/flutter_query/issues/12), revised by the
+  third review: sharing is now on by default, as upstream).
 - **adapted (4):** the `focusManager`/`onlineManager` spy cases. Without
   `vi.spyOn` there is nothing to count, so each asserts the effect: a refetch
   happens (or does not) after the event, and the mount/unmount balance is read
@@ -475,8 +477,9 @@ without which every rebuild would report an options change.
 
 ### `utils.test.tsx`
 
-24 ported, 54 omitted (the 8 `addToEnd`/`addToStart` cases were deferred until
-[#16](https://github.com/KoTTi97/flutter_query/issues/16) and are ported now).
+47 ported, 31 omitted (the 8 `addToEnd`/`addToStart` cases were deferred until
+[#16](https://github.com/KoTTi97/flutter_query/issues/16), the 23
+`replaceEqualDeep` cases until the third review; both are ported now).
 This is the one upstream file that is mostly *not* applicable: it tests
 JavaScript helpers, and the ones that survive the port are already methods on a
 value type here.
@@ -493,8 +496,16 @@ value type here.
   `throwOnError`) or expresses differently (`keepPreviousData` is
   `PlaceholderData.compute((previous, _) => previous)`, shallow equality is
   `==` on the defaulted options).
-- **omitted — replaceEqualDeep (21):** the whole block
-  ([#12](https://github.com/KoTTi97/flutter_query/issues/12)).
+- **ported since the third review — replaceEqualDeep (23 of 24):** the
+  block, against `replaceEqualDeep` in `structural_sharing.dart`. JS objects
+  become maps, `undefined` becomes `null`, and the "not arrays or objects"
+  stand-in is a class without `==`. **Adapted (4):** `should replace different
+  values in objects`, `... in arrays` (at index 2), and the two `should replace
+  all parent ...` cases — a map is shared whole here, not entry by entry, so a
+  changed map is `next` itself rather than a copy with equal entries shared;
+  the assertions say so. The depth-limit case nests lists instead of objects,
+  so the walk is what it exercises. **Omitted (1):** `should support objects
+  which are not plain arrays` — an array with extra properties is JavaScript.
 - **omitted — undefined guards (1):** `hashKey > should hash undefined object
   properties the same as missing properties`. Dropping `null` entries from the
   debug rendering would misrepresent a key: `null` is a value here, and two
@@ -657,6 +668,115 @@ every call style follows a replaced provider client, an inline mutation keeps
 its state across its own rebuild, and disposing a controller detaches its
 observer whether or not anyone ever listened.
 
+### Third review (2026-09-09, of `c96921f`)
+
+A release-readiness review: three behavioural blockers, eight majors, some
+thirty minors, an API pass and the pub.dev mechanics. Every blocker and major
+was reproduced against the checkout before anything changed — one of the
+review's own binding reproductions (the inline `select` rebuild loop) needed a
+parent rebuild as the first kick, which the review's numbers had implied but
+its description had not said. The core's regressions are the third block of
+`port_specifics_test.dart` (`thirdReview()`); the binding's are the third
+section of `tanstack_query_flutter/test/review_regressions_test.dart`.
+
+Core, fixed:
+
+14. **An `Enabled.when` (or `StaleTime.dynamic`) built per rebuild restarted
+    the timers.** `setOptions` compared the option *wrappers*, and a closure
+    built in `build` is a new wrapper every time, so the refetch interval was
+    cancelled and re-armed on every rebuild — a widget rebuilding faster than
+    its interval never polled (1 fetch in a second instead of 11). Upstream
+    compares the *resolved* values; so does the port now.
+15. **A throwing `RetryPolicy.when` or `RetryDelay.custom` hung the fetch
+    forever.** The throw escaped the retryer's catch block into an `.ignore()`d
+    future, and the completer was never settled: `pending`/`fetching` after a
+    minute, no error anywhere. Upstream has the same hole (an unhandled
+    rejection there). Here the throw becomes the fetch's error — a fetch that
+    can never settle is worse than one that fails.
+16. **A retry backoff outlived `cancel()` and `clear()`.** The delay was a bare
+    `Future.delayed`; the post-delay `isResolved` check kept it *correct*, but
+    the timer stood for up to 30 seconds, which is exactly what a widget test
+    asserts against. Worse for mutations: nothing cancelled a removed
+    mutation's retryer, so `RetryPolicy.always` kept hitting the server after
+    `clear()` — 41 attempts in 40 seconds in the reproduction. The delay is a
+    timer the retryer owns and drops when it resolves; `Mutation.destroy` cuts
+    the retries short. The retryer's recursion became a loop on the way.
+17. **A `select` returning a fresh but equal list notified on every
+    `setOptions` — and, through the binding, rebuilt on every frame.**
+    Upstream runs `replaceData` over the selector's output and placeholder
+    data; the port applied its hook only in `Query.setData`, and a Dart
+    `List` is equal only to itself. `replaceEqualDeep` is ported now
+    (`structural_sharing.dart`) and is the default everywhere upstream applies
+    it: the cache write, the selector's output, placeholder data. Lists are
+    shared element by element; a map or set is shared whole when deep-equal,
+    because a generic function cannot build a map of the caller's runtime
+    type; everything else by `==`. The 23 upstream cases are ported.
+18. **`errorUpdatedAt` was cleared when a refetch started or succeeded.**
+    `copyWith(clearError: true)` took the timestamp with the error; upstream's
+    `fetchState`/`successState` null only `error`. Kept now.
+19. **`updateQueriesData` wrote half the prefix before throwing** on a type
+    mismatch. Checked before anything is written.
+20. **`InitialData.value`/`PlaceholderData.value` had identity equality**,
+    unlike every other option value, so one built inline made every
+    `setOptions` a change. Value equality now.
+21. **A map keyed by a collection passed the key assertion** but could never
+    match, because map entries are compared through a hash lookup. Map keys
+    must be value-equal scalars; the assertion says so.
+22. **`find` matched by prefix.** Upstream's `find` defaults `exact: true`
+    (`queryCache.ts:302`, `mutationCache.ts:286`); the ported test had lost its
+    `exact: false` argument. `QueryFilters.exact` is nullable now — prefix for
+    the bulk operations, exact for `find` — and the test has its argument back.
+23. **`canRunMutation` stopped at the mutation's own position** rather than at
+    the first pending mutation in the scope, so a mutation built earlier could
+    start while one built later was running. Upstream's rule now.
+24. **A plain `setOptions` on an `InfiniteQueryObserver` stripped the paging
+    behaviour** from the shared query; its next refetch failed with
+    `MissingQueryFunctionError`. Refused with `UnsupportedError`. And
+    `InfiniteQueryBehavior` had identity equality, so defaulted infinite
+    options were never equal; it compares the six fields it reads.
+25. **`pages` on `InfiniteQueryObserverOptions` trimmed pages the user had
+    paged to** on the next refetch. It is `QueryClient.infiniteQuery`'s "fetch
+    this many up front" and is gone from the observer options, as upstream.
+26. **A mutation's error state kept the previous success's data**
+    (`data ?? this.data`, the same latent pattern the first review fixed on
+    the query side, masked by the `pending` action). Upstream's `data:
+    undefined`; `hasData`/`data` travel together now, as on `QueryState`.
+27. **`Mutation.reset()` was public, port-only, and corrupted a running
+    mutation.** Removed; `MutationObserver.reset` is the API.
+
+Decided divergences (in the table): a throwing observer listener is reported
+to the zone rather than recorded as the query's error, the way mutation
+callbacks already are; a throwing cancel-token callback likewise, without
+skipping the rest; `Query.reset()` re-arms collection for an unobserved query
+(upstream leaves it in the cache for good); a removed mutation stops retrying;
+the corrected `isRefetching`/`isRefetchError` for infinite queries live on the
+observer, next to the other paging flags, because the sealed result has one
+shape; and the `NotifyManager` is per client by default, like the other
+managers — the binding installs its scheduler on the client's manager, and two
+clients sharing one handed it back and forth.
+
+Not changed, recorded here: `QueryCache.notify`/`clear` are not wrapped in a
+notify batch, because the cache has no manager to batch on (it is built before
+the client; the manager is the client's); `MutationDefaults` carries no
+callbacks (they are typed per mutation, and the defaults are not); the
+`MutationObserver.subscribe` notifies the new listener synchronously.
+
+Binding, in short: the app's first build — which `runApp` runs outside any
+frame — is now recognised as a build (`BuildOwner.debugBuilding`) and its
+notifications go into a microtask, so a sibling's `initialData` no longer
+trips the "setState during build" assertion at startup; the mixin releases a
+key it stopped reading after the frame, like `context.query` (its retained
+observer used to refetch with a `queryFn` that had closed over the *new*
+widget, writing "Sensor b" into a's cache entry); every lifecycle transition
+maps onto focus (`detached → resumed` fired neither `onShow` nor `onHide`); a
+new `onlineStatus` stream rebinds the subscription without unmounting the
+client; two reads of one key in one build with options that yield different
+results, or two mutations of one shape without `id`, are caught by an
+assertion instead of flipping the observer forever; `buildWhen` is on every
+builder; a missing provider throws a `FlutterError` in every build mode; and
+the barrel exports are trimmed to upstream's `index.ts` surface, with tests of
+the internals importing them directly.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -666,12 +786,12 @@ suite does not have to go looking:
 |---|---|---|
 | `data === undefined` runtime guard in `Query.fetch` | impossible: `Future<T>` with non-nullable `T` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | `hashKey` string identity, `queryKeyHashFn` | `QueryKey` is a value type; the string is a debug view | [#8](https://github.com/KoTTi97/flutter_query/issues/8) |
-| `replaceEqualDeep` structural sharing | value equality plus an optional `structuralSharing` hook | [#12](https://github.com/KoTTi97/flutter_query/issues/12) |
+| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists element by element, maps and sets whole, `==` otherwise; the typed hook replaces it for the cache write, and `(_, next) => next` is `false`; `select` and placeholder output always go through `replaceEqualDeep` | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
 | `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `MutationFunctionContext` (a mutation function's second argument) | not ported: `MutationFn` takes variables only |  [#14](https://github.com/KoTTi97/flutter_query/issues/14) |
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
-| module-level managers | instances the `QueryClient` owns | [#19](https://github.com/KoTTi97/flutter_query/issues/19) |
+| module-level managers | instances the `QueryClient` owns — the `NotifyManager` too since the third review (`NotifyManager.shared` opts back in) | [#19](https://github.com/KoTTi97/flutter_query/issues/19), review 2026-09-09 |
 | `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |
 | `persister`, `initialDataUpdatedAt` as a function | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
@@ -686,3 +806,10 @@ suite does not have to go looking:
 | a retained placeholder keeps its old selection after `select` changed | the new `select` runs over the placeholder | review, 2026-09-09 |
 | an observer resubscribing after its query was collected rejoins the dead query | it re-resolves the key and joins the current entry (one adapted assertion in `query_test.dart`) | review, 2026-09-09 |
 | `initialData: null` / `placeholderData: null` mean "none" | `.value(null)` is a value of `null`; `.compute` returning `null` means "none" | review, 2026-09-09 |
+| a throwing `retry` / `retryDelay` callback leaves the fetch pending forever | the throw is the fetch's error | third review, 2026-09-09 |
+| a retry backoff runs to its end after the fetch was cancelled | the delay is a timer the retryer drops on resolve | third review, 2026-09-09 |
+| a mutation removed from the cache keeps retrying | `Mutation.destroy` stops the retries; the mutation fails with its last error | third review, 2026-09-09 |
+| a throwing observer listener becomes the query's error (via `Query.fetch`) | reported to the zone; the query keeps its state | third review, 2026-09-09 |
+| a throwing cancel callback skips the rest and escapes into the canceller | each is isolated and reported to the zone | third review, 2026-09-09 |
+| `Query.reset()` on an unobserved query leaves it in the cache for good | it re-arms collection | third review, 2026-09-09 |
+| `isRefetching`/`isRefetchError` corrected for page fetches on the infinite *result* | on `InfiniteQueryObserver` / `InfiniteQueryController`, next to the other paging flags | third review, 2026-09-09 |

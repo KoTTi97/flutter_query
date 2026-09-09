@@ -153,9 +153,11 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   ]) =>
       queries.where(filters.matches).toList();
 
+  /// The first matching query. An unset `exact` means an exact match here,
+  /// as upstream's `find` defaults `{ exact: true, ...filters }`.
   Query<Object?>? find(QueryFilters filters) {
     for (final query in _queries.values) {
-      if (filters.matches(query)) {
+      if (filters.matches(query, exactByDefault: true)) {
         return query;
       }
     }

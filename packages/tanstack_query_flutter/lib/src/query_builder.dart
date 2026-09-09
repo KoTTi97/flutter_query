@@ -6,6 +6,7 @@
 /// the rebuild is exactly this widget's subtree.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 
@@ -80,13 +81,21 @@ class _QueryBuilderState<TData> extends _ControllerBuilderState<
   void applyOptions() => controller.setOptions(widget.options);
 
   @override
-  bool shouldRebuild() =>
-      widget.buildWhen?.call(_built!, controller.value) ?? true;
+  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
 
   @override
   Widget build(BuildContext context) =>
       widget.builder(context, _built = controller.value);
 }
+
+/// Whether a builder with [buildWhen] should rebuild for the controller's
+/// current value, given what it [built] last. Nothing built yet means yes.
+bool _shouldRebuild<T>(
+  BuildWhen<T>? buildWhen,
+  T? built,
+  ValueListenable<T> controller,
+) =>
+    buildWhen == null || built == null || buildWhen(built, controller.value);
 
 /// [QueryBuilder] for a query with a `select`, where what the cache holds and
 /// what the widget sees are different types.
@@ -136,8 +145,7 @@ class _QuerySelectBuilderState<TQueryData, TData>
   void applyOptions() => controller.setOptions(widget.options);
 
   @override
-  bool shouldRebuild() =>
-      widget.buildWhen?.call(_built!, controller.value) ?? true;
+  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
 
   @override
   Widget build(BuildContext context) =>
@@ -165,6 +173,7 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData>
     super.key,
     required this.options,
     required this.builder,
+    this.buildWhen,
     this.client,
   });
 
@@ -173,6 +182,9 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData>
     BuildContext context,
     InfiniteQueryController<TPageData, TPageParam, TData> query,
   ) builder;
+
+  /// See [QueryBuilder.buildWhen]. Compares the controller's results.
+  final BuildWhen<QueryResult<TData>>? buildWhen;
   final QueryClient? client;
 
   @override
@@ -209,8 +221,16 @@ class _InfiniteQueryBuilderState<TPageData, TPageParam, TData>
   @override
   void applyOptions() => controller.setInfiniteOptions(widget.options);
 
+  QueryResult<TData>? _built;
+
   @override
-  Widget build(BuildContext context) => widget.builder(context, controller);
+  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
+
+  @override
+  Widget build(BuildContext context) {
+    _built = controller.value;
+    return widget.builder(context, controller);
+  }
 }
 
 /// Builds from a mutation's result, and hands the builder the controller so it
@@ -233,6 +253,7 @@ class MutationBuilder<TData, TVariables, TOnMutateResult>
     super.key,
     required this.options,
     required this.builder,
+    this.buildWhen,
     this.client,
   });
 
@@ -241,6 +262,9 @@ class MutationBuilder<TData, TVariables, TOnMutateResult>
     BuildContext context,
     MutationController<TData, TVariables, TOnMutateResult> mutation,
   ) builder;
+
+  /// See [QueryBuilder.buildWhen]. Compares the mutation's results.
+  final BuildWhen<MutationResult<TData, TVariables>>? buildWhen;
   final QueryClient? client;
 
   @override
@@ -279,8 +303,16 @@ class _MutationBuilderState<TData, TVariables, TOnMutateResult>
   @override
   void applyOptions() => controller.setOptions(widget.options);
 
+  MutationResult<TData, TVariables>? _built;
+
   @override
-  Widget build(BuildContext context) => widget.builder(context, controller);
+  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
+
+  @override
+  Widget build(BuildContext context) {
+    _built = controller.value;
+    return widget.builder(context, controller);
+  }
 }
 
 /// What the four builders share: a controller created on first build, bound

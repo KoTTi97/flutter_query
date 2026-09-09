@@ -178,7 +178,10 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
     required super.getNextPageParam,
     super.getPreviousPageParam,
     super.maxPages,
-    super.pages,
+    // No `pages`: that is `QueryClient.infiniteQuery`'s "fetch this many up
+    // front". An observer refetches as many pages as the query holds, as
+    // upstream's observer does; a fixed count here would throw away the pages
+    // the user had paged to on the next refetch.
     super.enabled,
     super.staleTime,
     super.gcTime,
@@ -241,6 +244,30 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
   /// How many pages to fetch from the start; `null` refetches as many as the
   /// query already holds.
   final int? pages;
+
+  // Value equality over what the behaviour actually reads, so that defaulted
+  // options built from equal inputs compare equal — the observer relies on
+  // that to tell a real options change from a rebuild.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InfiniteQueryBehavior<TPageData, TPageParam> &&
+          other.pages == pages &&
+          other.options.pageFn == options.pageFn &&
+          other.options.initialPageParam == options.initialPageParam &&
+          other.options.getNextPageParam == options.getNextPageParam &&
+          other.options.getPreviousPageParam == options.getPreviousPageParam &&
+          other.options.maxPages == options.maxPages;
+
+  @override
+  int get hashCode => Object.hash(
+        pages,
+        options.pageFn,
+        options.initialPageParam,
+        options.getNextPageParam,
+        options.getPreviousPageParam,
+        options.maxPages,
+      );
 
   @override
   void onFetch(

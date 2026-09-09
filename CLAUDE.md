@@ -5,23 +5,23 @@ A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
 **behavioural fidelity proven by porting the upstream test suite**, so fidelity
 work is first-class here, not an add-on.
 
-## Where the work stands (2026-09-08)
+## Where the work stands (2026-09-09)
 
 | Phase | State |
 |---|---|
-| **`packages/tanstack_query_core/`** — the pure-Dart core | **done.** 398 tests, every applicable upstream suite ported, analyzer clean at `--fatal-infos` |
-| **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, twice reviewed.** 31 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter |
-| **`examples/sensor_demo/`** — the react-demo port | **done.** 14 widget tests, one per row of the MVP checklist; iOS and web generated |
+| **`packages/tanstack_query_core/`** — the pure-Dart core | **done, three times reviewed.** 442 tests, every applicable upstream suite ported, analyzer clean at `--fatal-infos` |
+| **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, three times reviewed.** 42 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter |
+| **`examples/sensor_demo/`** — the react-demo port | **done.** 15 widget tests, one per row of the MVP checklist plus one regression; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
 reason — is
 [`packages/tanstack_query_core/test/PORTING_NOTES.md`](packages/tanstack_query_core/test/PORTING_NOTES.md),
-and it is the first thing to read before touching a ported suite. Two external
-reviews (2026-09-08 and 2026-09-09) found 21 bugs between them, none caught by
-a ported case; their regressions live in `port_specifics_test.dart` (core) and
-`review_regressions_test.dart` (binding), and the notes' "Regressions found by
-review" section says what each one was. **A review's finding is verified by
+and it is the first thing to read before touching a ported suite. Three
+external reviews (2026-09-08 and two on 2026-09-09) found some 35 bugs between
+them, none caught by a ported case; their regressions live in
+`port_specifics_test.dart` (core) and `review_regressions_test.dart` (binding),
+and the notes' "Regressions found by review" section says what each one was. **A review's finding is verified by
 reproducing it before anything is changed** — two of the second review's own
 reproductions did not exercise the code they claimed to, and the notes record
 why.

@@ -125,8 +125,10 @@ final class QueryState<TQueryData> {
       errorStackTrace:
           clearError ? null : (errorStackTrace ?? this.errorStackTrace),
       errorUpdateCount: errorUpdateCount ?? this.errorUpdateCount,
-      errorUpdatedAt:
-          clearError ? null : (errorUpdatedAt ?? this.errorUpdatedAt),
+      // Not cleared with the error: upstream's `fetchState` and `successState`
+      // null `error` and leave `errorUpdatedAt` standing, so "last failed at"
+      // survives the refetch that follows.
+      errorUpdatedAt: errorUpdatedAt ?? this.errorUpdatedAt,
       fetchFailureCount:
           fetchFailureCount ?? (clearFetchFailure ? 0 : this.fetchFailureCount),
       fetchFailureReason: clearFetchFailure

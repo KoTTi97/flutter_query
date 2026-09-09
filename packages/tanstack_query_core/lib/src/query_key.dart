@@ -194,6 +194,16 @@ String _describe(Object? part) {
   return '$part';
 }
 
+bool _debugCheckScalar(Object? part) =>
+    part == null ||
+    part is num ||
+    part is String ||
+    part is bool ||
+    part is DateTime ||
+    part is Duration ||
+    part is Enum ||
+    part is Type;
+
 bool _debugCheckParts(Object? part) {
   if (part == null || part is num || part is String || part is bool) {
     return true;
@@ -205,11 +215,14 @@ bool _debugCheckParts(Object? part) {
     return part.every(_debugCheckParts);
   }
   if (part is Map) {
+    // A map is compared entry by entry through `b[key]`, which is a hash
+    // lookup: a key that is itself a collection would never be found again.
+    // Upstream cannot hit this — JSON object keys are strings.
     return part.entries.every(
-      (entry) => _debugCheckParts(entry.key) && _debugCheckParts(entry.value),
+      (entry) => _debugCheckScalar(entry.key) && _debugCheckParts(entry.value),
     );
   }
-  if (part is DateTime || part is Duration || part is Enum || part is Type) {
+  if (_debugCheckScalar(part)) {
     return true;
   }
   // Anything left that hashes by identity can never match an equal-but-distinct

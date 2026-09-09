@@ -4,6 +4,8 @@ library;
 
 import 'dart:async';
 
+// The unit under test is internal plumbing the package does not export.
+import 'package:tanstack_query_core/src/retryer.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 import 'package:test/test.dart';
 

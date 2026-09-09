@@ -135,9 +135,11 @@ class MutationCache
   ]) =>
       _mutations.where(filters.matches).toList();
 
+  /// The first matching mutation. An unset `exact` means an exact match
+  /// here, as upstream's `find` defaults `{ exact: true, ...filters }`.
   Mutation<Object?, Object?, Object?>? find(MutationFilters filters) {
     for (final mutation in _mutations) {
-      if (filters.matches(mutation)) {
+      if (filters.matches(mutation, exactByDefault: true)) {
         return mutation;
       }
     }
@@ -183,14 +185,14 @@ class MutationCache
     if (scope == null) {
       return true;
     }
+    // Upstream's rule exactly: a scoped mutation may run when no mutation in
+    // its scope is pending, or when it is itself the *first* pending one (the
+    // continue case). Stopping at the mutation's own position let one built
+    // earlier start while one built later was already running.
     for (final other in _mutations) {
-      if (identical(other, mutation)) {
-        return true;
-      }
       if (_scopeOf(other) == scope &&
           other.state.status == MutationStatus.pending) {
-        // An earlier mutation in the same scope is still running.
-        return false;
+        return identical(other, mutation);
       }
     }
     return true;

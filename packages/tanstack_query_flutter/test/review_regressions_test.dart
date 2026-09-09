@@ -1,9 +1,12 @@
-/// Regressions found by the second external review (2026-09-09), each pinned
-/// by the case that reproduced it. Binding-only; the core's are in
-/// `tanstack_query_core/test/port_specifics_test.dart`.
+/// Regressions found by the second and third external reviews (2026-09-09),
+/// each pinned by the case that reproduced it. Binding-only; the core's are
+/// in `tanstack_query_core/test/port_specifics_test.dart`.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
@@ -353,6 +356,302 @@ void main() {
       });
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Third review, 2026-09-09.
+
+  group('B1 the bootstrap build', () {
+    testWidgets(
+        'a sibling initialData notifies after the first build, not in it',
+        (tester) async {
+      final client = newClient();
+      await withClient(tester, [client], () async {
+        final root = app(
+          client,
+          Column(children: [
+            QueryBuilder<int>(
+              options: QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+              builder: (_, r) => Text('first:${r.dataOrNull}'),
+            ),
+            QueryBuilder<int>(
+              options: QueryObserverOptions(
+                queryKey: key,
+                enabled: Enabled.no,
+                initialData: const InitialData.value(1),
+              ),
+              builder: (_, r) => Text('second:${r.dataOrNull}'),
+            ),
+          ]),
+        );
+        // What `runApp` does: `Timer.run(() => attachRootWidget(…))`, whose
+        // `RootWidget.attach` runs `buildScope` synchronously — in
+        // `SchedulerPhase.idle`, the one build no phase accounts for. The
+        // test binding already owns a root element, so the same `buildScope`
+        // is run by hand, still in `idle`.
+        expect(SchedulerBinding.instance.schedulerPhase, SchedulerPhase.idle);
+        tester.binding
+            .attachRootWidget(tester.binding.wrapWithDefaultView(root));
+        tester.binding.buildOwner!.buildScope(tester.binding.rootElement!);
+        expect(tester.takeException(), isNull);
+
+        await tester.pump();
+        expect(find.text('first:1'), findsOneWidget);
+        expect(find.text('second:1'), findsOneWidget);
+      });
+    });
+  });
+
+  group('B2 a select returning a fresh but equal value', () {
+    testWidgets('does not rebuild a context reader every frame',
+        (tester) async {
+      final client = newClient()..setQueryData<List<int>>(key, [1, 2, 3, 4]);
+      final builds = <int>[];
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(app(client, _R3ListSelect(builds)));
+        // One kick from outside — a parent rebuild, as any real screen has;
+        // this used to start a rebuild on every frame, for good.
+        await tester.pumpWidget(app(client, _R3ListSelect(builds)));
+        final after = builds.length;
+        for (var i = 0; i < 4; i++) {
+          await tester.pump();
+        }
+        expect(builds.length, after);
+        expect(find.text('[2, 4]'), findsOneWidget);
+      });
+    });
+
+    testWidgets('does not rebuild a mixin reader every frame', (tester) async {
+      final client = newClient()..setQueryData<List<int>>(key, [1, 2, 3, 4]);
+      final builds = <int>[];
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(app(client, _R3MixinListSelect(builds)));
+        await tester.pumpWidget(app(client, _R3MixinListSelect(builds)));
+        final after = builds.length;
+        for (var i = 0; i < 4; i++) {
+          await tester.pump();
+        }
+        expect(builds.length, after);
+      });
+    });
+  });
+
+  group('M7 collisions without id', () {
+    testWidgets('two selects of one key in one build are caught',
+        (tester) async {
+      final client = newClient()..setQueryData<String>(key, 'Ab');
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(app(client, const _R3TwoSelectsNoId()));
+        expect(tester.takeException(), isA<FlutterError>());
+      });
+    });
+
+    testWidgets('two mutations of one shape in one build are caught',
+        (tester) async {
+      final client = newClient();
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(app(client, const _R3TwoMutationsNoId()));
+        expect(tester.takeException(), isA<FlutterError>());
+        // With ids, the same widget is fine.
+        await tester.pumpWidget(
+          app(client, const _R3TwoMutationsNoId(withIds: true)),
+        );
+        expect(tester.takeException(), isNull);
+      });
+    });
+  });
+
+  group('M4 the mixin releases a key it stopped reading', () {
+    testWidgets('and its stale queryFn never runs again', (tester) async {
+      final client = newClient();
+      final fetched = <String>[];
+      Future<String> fetch(String id) async {
+        fetched.add(id);
+        return 'Sensor $id';
+      }
+
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(app(client, _R3MixinById('a', fetch)));
+        await tester.pump();
+        expect(find.text('Sensor a'), findsOneWidget);
+
+        await tester.pumpWidget(app(client, _R3MixinById('b', fetch)));
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Sensor b'), findsOneWidget);
+
+        final a = client.queryCache.get<String>(QueryKey(<Object?>['m4', 'a']));
+        expect(a!.observersCount, 0);
+
+        // The old observer's `queryFn` closed over `widget.id` — which is
+        // now 'b'. Left alive, a refetch of key 'a' would have fetched 'b'
+        // and written "Sensor b" into a's cache entry.
+        fetched.clear();
+        await client.invalidateQueries(
+          filters: QueryFilters(queryKey: QueryKey(<Object?>['m4', 'a'])),
+        );
+        await tester.pump();
+        expect(fetched, isEmpty);
+        expect(a.state.data, 'Sensor a');
+      });
+    });
+  });
+
+  group('M5 lifecycle transitions', () {
+    testWidgets('detached → resumed focuses the client', (tester) async {
+      final client = newClient();
+      await withClient(tester, [client], () async {
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.detached);
+        await tester.pumpWidget(
+          QueryClientProvider(client: client, child: const SizedBox()),
+        );
+        tester.binding.scheduleForcedFrame();
+        await tester.pump();
+        expect(client.focusManager.isFocused(), isFalse);
+
+        // Neither `onShow` nor `onHide`: only `onResume` fires for this one.
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pump();
+        expect(client.focusManager.isFocused(), isTrue);
+      });
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    });
+  });
+
+  group('M6 a new onlineStatus stream per build', () {
+    testWidgets('rebinds the subscription and nothing else', (tester) async {
+      final client = newClient();
+      var listens = 0;
+      Stream<bool> status() {
+        late StreamController<bool> controller;
+        controller = StreamController<bool>(onListen: () {
+          listens++;
+          controller.add(false);
+        });
+        return controller.stream;
+      }
+
+      Widget build() => QueryClientProvider(
+            client: client,
+            onlineStatus: status(),
+            child: const SizedBox(),
+          );
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(build());
+        await tester.pump();
+        expect(client.onlineManager.isOnline(), isFalse);
+
+        // A remount would re-read the lifecycle state and refocus the client;
+        // rebinding just the stream leaves it alone.
+        client.focusManager.setFocused(false);
+        await tester.pumpWidget(build());
+        await tester.pumpWidget(build());
+        await tester.pump();
+        expect(listens, 3);
+        expect(client.focusManager.isFocused(), isFalse);
+        expect(client.onlineManager.isOnline(), isFalse);
+      });
+    });
+  });
+
+  group('buildWhen on every builder', () {
+    testWidgets('InfiniteQueryBuilder and MutationBuilder take one',
+        (tester) async {
+      final client = newClient();
+      var feedBuilds = 0;
+      var mutationBuilds = 0;
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(app(
+          client,
+          Column(children: [
+            InfiniteQueryBuilder<int, int, InfiniteData<int, int>>(
+              options: InfiniteQueryObserverOptions(
+                queryKey: key,
+                initialPageParam: 0,
+                pageFn: (context) async => context.pageParam,
+                getNextPageParam: (page, pages, param, params) => param + 1,
+              ),
+              // Only the page count matters to this widget.
+              buildWhen: (previous, current) =>
+                  previous.dataOrNull?.pages.length !=
+                  current.dataOrNull?.pages.length,
+              builder: (_, feed) {
+                feedBuilds++;
+                return Text('pages:${feed.value.dataOrNull?.pages.length}');
+              },
+            ),
+            MutationBuilder<int, int, void>(
+              options: MutationOptions(mutationFn: (v) async => v),
+              buildWhen: (previous, current) => current.isSuccess,
+              builder: (_, mutation) {
+                mutationBuilds++;
+                return TextButton(
+                  onPressed: () => mutation.mutate(1),
+                  child: Text('m:${mutation.value.dataOrNull}'),
+                );
+              },
+            ),
+          ]),
+        ));
+        await tester.pump();
+        expect(find.text('pages:1'), findsOneWidget);
+        final feedAfterFirstPage = feedBuilds;
+
+        // A refetch of the held page changes the result (`dataUpdatedAt`)
+        // but not the page count.
+        await client.refetchQueries(filters: QueryFilters(queryKey: key));
+        await tester.pump();
+        expect(feedBuilds, feedAfterFirstPage);
+
+        await tester.tap(find.byType(TextButton));
+        await tester.pump(); // pending: skipped
+        await tester.pump(); // success: built
+        expect(find.text('m:1'), findsOneWidget);
+        expect(mutationBuilds, 2);
+      });
+    });
+  });
+
+  group('release-mode-safe errors', () {
+    testWidgets('a missing provider is a FlutterError, not a null check',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: _ContextReader()));
+      expect(tester.takeException(), isA<FlutterError>());
+      await tester.pumpWidget(MaterialApp(
+        home: QueryBuilder<String>(
+          options: seeded(),
+          builder: (_, r) => const SizedBox(),
+        ),
+      ));
+      expect(tester.takeException(), isA<FlutterError>());
+    });
+
+    testWidgets('plain options on an infinite controller are refused',
+        (tester) async {
+      final client = newClient();
+      final controller =
+          InfiniteQueryController<int, int, InfiniteData<int, int>>(
+        client,
+        InfiniteQueryObserverOptions(
+          queryKey: key,
+          initialPageParam: 0,
+          pageFn: (context) async => context.pageParam,
+          getNextPageParam: (page, pages, param, params) => null,
+        ),
+      );
+      expect(
+        () => controller.setOptions(
+          QueryObserverOptions<InfiniteData<int, int>, InfiniteData<int, int>>(
+            queryKey: key,
+          ),
+        ),
+        throwsUnsupportedError,
+      );
+      controller.dispose();
+      client.clear();
+    });
+  });
 }
 
 class _MixinTwoSelects extends StatefulWidget {
@@ -382,5 +681,110 @@ class _MixinTwoSelectsState extends State<_MixinTwoSelects> with QueryMixin {
       id: 'reversed',
     );
     return Text('${upper.dataOrNull}/${reversed.dataOrNull}');
+  }
+}
+
+class _R3ListSelect extends StatelessWidget {
+  const _R3ListSelect(this.builds);
+
+  final List<int> builds;
+
+  @override
+  Widget build(BuildContext context) {
+    builds.add(builds.length);
+    final evens = context.selectQuery<List<int>, List<int>>(
+      QueryObserverOptions(
+        queryKey: key,
+        enabled: Enabled.no,
+        // The canonical selector: a fresh list every call.
+        select: (list) => list.where((e) => e.isEven).toList(),
+      ),
+    );
+    return Text('${evens.dataOrNull}');
+  }
+}
+
+class _R3MixinListSelect extends StatefulWidget {
+  const _R3MixinListSelect(this.builds);
+
+  final List<int> builds;
+
+  @override
+  State<_R3MixinListSelect> createState() => _R3MixinListSelectState();
+}
+
+class _R3MixinListSelectState extends State<_R3MixinListSelect>
+    with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    widget.builds.add(widget.builds.length);
+    final evens = watchSelectQuery<List<int>, List<int>>(
+      QueryObserverOptions(
+        queryKey: key,
+        enabled: Enabled.no,
+        select: (list) => list.where((e) => e.isEven).toList(),
+      ),
+    );
+    return Text('${evens.dataOrNull}');
+  }
+}
+
+class _R3TwoSelectsNoId extends StatelessWidget {
+  const _R3TwoSelectsNoId();
+
+  @override
+  Widget build(BuildContext context) {
+    final upper = context.selectQuery<String, String>(QueryObserverOptions(
+      queryKey: key,
+      enabled: Enabled.no,
+      select: (v) => v.toUpperCase(),
+    ));
+    final lower = context.selectQuery<String, String>(QueryObserverOptions(
+      queryKey: key,
+      enabled: Enabled.no,
+      select: (v) => v.toLowerCase(),
+    ));
+    return Text('${upper.dataOrNull}/${lower.dataOrNull}');
+  }
+}
+
+class _R3TwoMutationsNoId extends StatelessWidget {
+  const _R3TwoMutationsNoId({this.withIds = false});
+
+  final bool withIds;
+
+  @override
+  Widget build(BuildContext context) {
+    final archive = context.mutation<String, String, void>(
+      MutationOptions(mutationFn: (v) async => 'archived $v'),
+      id: withIds ? 'archive' : null,
+    );
+    final delete = context.mutation<String, String, void>(
+      MutationOptions(mutationFn: (v) async => 'deleted $v'),
+      id: withIds ? 'delete' : null,
+    );
+    return Text('${archive.value.dataOrNull}/${delete.value.dataOrNull}');
+  }
+}
+
+class _R3MixinById extends StatefulWidget {
+  const _R3MixinById(this.id, this.fetch);
+
+  final String id;
+  final Future<String> Function(String id) fetch;
+
+  @override
+  State<_R3MixinById> createState() => _R3MixinByIdState();
+}
+
+class _R3MixinByIdState extends State<_R3MixinById> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final sensor = watchQuery(QueryObserverOptions<String, String>(
+      queryKey: QueryKey(<Object?>['m4', widget.id]),
+      // Closes over the widget, as real code does.
+      queryFn: (_) => widget.fetch(widget.id),
+    ));
+    return Text(sensor.dataOrNull ?? 'none');
   }
 }

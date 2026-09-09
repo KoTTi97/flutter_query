@@ -13,6 +13,7 @@ import 'query_options.dart';
 import 'query_result.dart';
 import 'query_state.dart';
 import 'retryer.dart';
+import 'structural_sharing.dart';
 
 typedef QueryObserverListener<TData> = void Function(QueryResult<TData> result);
 
@@ -65,7 +66,9 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   late DefaultedQueryObserverOptions<TQueryData, TData> _options;
   DefaultedQueryObserverOptions<TQueryData, TData> get options => _options;
 
-  late Query<TQueryData> _currentQuery;
+  // Null only between construction and the first `_updateQuery`.
+  Query<TQueryData>? _query;
+  Query<TQueryData> get _currentQuery => _query!;
   late QueryState<TQueryData> _currentQueryInitialState;
   late QueryResult<TData> _currentResult;
   QueryResult<TData>? _previousResult;
@@ -149,18 +152,28 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
     updateResult();
 
+    // Compared once resolved, as upstream compares `resolveQueryValue`s: an
+    // `Enabled.when` or `StaleTime.dynamic` built inline is a new closure on
+    // every build, and comparing the wrappers would restart the timers — the
+    // polling one included — on every rebuild, so a widget rebuilding faster
+    // than its interval would never poll (third review, 2026-09-09).
+    final queryChanged = !identical(_currentQuery, prevQuery);
+    final enabledChanged = _options.enabled.resolve(_currentQuery) !=
+        prevOptions.enabled.resolve(_currentQuery);
+
     if (mounted &&
-        (!identical(_currentQuery, prevQuery) ||
-            _options.enabled != prevOptions.enabled ||
-            _options.staleTime != prevOptions.staleTime)) {
+        (queryChanged ||
+            enabledChanged ||
+            _options.staleTime.resolveFor(_currentQuery) !=
+                prevOptions.staleTime.resolveFor(_currentQuery))) {
       _updateStaleTimeout();
     }
 
     final nextRefetchInterval = _computeRefetchInterval();
 
     if (mounted &&
-        (!identical(_currentQuery, prevQuery) ||
-            _options.enabled != prevOptions.enabled ||
+        (queryChanged ||
+            enabledChanged ||
             nextRefetchInterval != _currentRefetchInterval)) {
       _updateRefetchInterval(nextRefetchInterval);
     }
@@ -386,7 +399,13 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         } else {
           try {
             _selectFn = select;
-            outData = select(candidate as TQueryData);
+            // Shared against the last *reported* data, as upstream's
+            // `replaceData(prevResult?.data, …)`: a selector that builds a
+            // fresh but equal list must not count as a change.
+            outData = replaceEqualDeep<TData>(
+              prevResult?.dataOrNull,
+              select(candidate as TQueryData),
+            );
             _selectResult = outData;
             _hasSelectResult = true;
             hasOutData = true;
@@ -403,7 +422,10 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           'A query observer with no select must have the same data type on '
           'both sides: $TQueryData cannot be reported as $TData.',
         );
-        outData = candidate as TData;
+        outData = replaceEqualDeep<TData>(
+          prevResult?.dataOrNull,
+          candidate as TData,
+        );
         hasOutData = true;
         // The error belonged to a selector that is no longer there. Upstream
         // keeps reporting it until a *new* selection succeeds, which never
@@ -518,7 +540,14 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
     _client.notifyManager.batch(() {
       for (final listener in List.of(listeners)) {
-        listener(_currentResult);
+        // A listener's throw is the listener's problem, not the query's:
+        // reaching `Query.fetch` it would be recorded as the fetch's error.
+        // Reported to the zone, the way the mutation callbacks already are.
+        try {
+          listener(_currentResult);
+        } catch (error, stackTrace) {
+          Zone.current.handleUncaughtError(error, stackTrace);
+        }
       }
       _client.queryCache.notifyObserverResultsUpdated(_currentQuery);
     });
@@ -530,20 +559,12 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       _options.queryOptions,
     );
 
-    Query<TQueryData>? prevQuery;
-    var hadQuery = false;
-    try {
-      prevQuery = _currentQuery;
-      hadQuery = true;
-    } on Error {
-      // First call: there is no current query yet.
-    }
-
-    if (hadQuery && identical(query, prevQuery)) {
+    final prevQuery = _query;
+    if (identical(query, prevQuery)) {
       return;
     }
 
-    _currentQuery = query;
+    _query = query;
     _currentQueryInitialState = query.state;
 
     if (hasListeners) {

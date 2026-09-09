@@ -26,7 +26,7 @@ enum RefetchType { active, inactive, all, none }
 class QueryFilters {
   const QueryFilters({
     this.queryKey,
-    this.exact = false,
+    this.exact,
     this.type,
     this.stale,
     this.fetchStatus,
@@ -36,7 +36,12 @@ class QueryFilters {
 
   /// Matched as a prefix unless [exact] is set.
   final QueryKey? queryKey;
-  final bool exact;
+
+  /// Left unset, `findAll` and every bulk operation match by prefix, and
+  /// `find` matches exactly — upstream's `find` defaults `exact: true` and
+  /// its filters default to a prefix, and a nullable field is how one value
+  /// carries both defaults.
+  final bool? exact;
   final QueryTypeFilter? type;
   final bool? stale;
   final FetchStatus? fetchStatus;
@@ -57,9 +62,12 @@ class QueryFilters {
         predicate: predicate,
       );
 
-  bool matches(Query<Object?> query) {
+  /// Whether [query] matches. [exactByDefault] is what an unset [exact]
+  /// means to the caller: prefix for the bulk operations, exact for `find`.
+  bool matches(Query<Object?> query, {bool exactByDefault = false}) {
     final queryKey = this.queryKey;
-    if (queryKey != null && !query.queryKey.matches(queryKey, exact: exact)) {
+    if (queryKey != null &&
+        !query.queryKey.matches(queryKey, exact: exact ?? exactByDefault)) {
       return false;
     }
 
@@ -102,21 +110,27 @@ class QueryFilters {
 class MutationFilters {
   const MutationFilters({
     this.mutationKey,
-    this.exact = false,
+    this.exact,
     this.status,
     this.predicate,
   });
 
   final QueryKey? mutationKey;
-  final bool exact;
+
+  /// See [QueryFilters.exact].
+  final bool? exact;
   final MutationStatus? status;
   final bool Function(Mutation<Object?, Object?, Object?> mutation)? predicate;
 
-  bool matches(Mutation<Object?, Object?, Object?> mutation) {
+  bool matches(
+    Mutation<Object?, Object?, Object?> mutation, {
+    bool exactByDefault = false,
+  }) {
     final mutationKey = this.mutationKey;
     if (mutationKey != null) {
       final key = mutation.options.mutationKey;
-      if (key == null || !key.matches(mutationKey, exact: exact)) {
+      if (key == null ||
+          !key.matches(mutationKey, exact: exact ?? exactByDefault)) {
         return false;
       }
     }

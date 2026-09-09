@@ -160,7 +160,11 @@ class QueryClient {
         mutationCache = mutationCache ?? MutationCache(),
         focusManager = focusManager ?? AppFocusManager(),
         onlineManager = onlineManager ?? OnlineManager(),
-        notifyManager = notifyManager ?? NotifyManager.shared,
+        // One per client, like the other managers: the Flutter binding
+        // installs its scheduler on the client's manager, and two clients
+        // sharing one would hand that scheduler back and forth in mount
+        // order. Pass `NotifyManager.shared` to batch across clients.
+        notifyManager = notifyManager ?? NotifyManager(),
         _defaultOptions = defaultOptions ?? const DefaultOptions();
 
   final QueryCache queryCache;
@@ -299,22 +303,30 @@ class QueryClient {
     QueryFilters filters,
     TQueryData? Function(TQueryData? previous) updater, {
     DateTime? updatedAt,
-  }) =>
-      notifyManager.batch(
-        () => queryCache
-            .findAll(filters)
-            .map(
-              (query) => (
+  }) {
+    final queries = queryCache.findAll(filters);
+    // Checked before anything is written, so a mismatch under the prefix
+    // throws with the cache untouched rather than half-updated.
+    for (final query in queries) {
+      if (query is! Query<TQueryData>) {
+        throw QueryDataTypeError(query.queryKey, TQueryData, query.runtimeType);
+      }
+    }
+    return notifyManager.batch(
+      () => queries
+          .map(
+            (query) => (
+              query.queryKey,
+              updateQueryData<TQueryData>(
                 query.queryKey,
-                updateQueryData<TQueryData>(
-                  query.queryKey,
-                  updater,
-                  updatedAt: updatedAt,
-                ),
+                updater,
+                updatedAt: updatedAt,
               ),
-            )
-            .toList(),
-      );
+            ),
+          )
+          .toList(),
+    );
+  }
 
   // ---------------------------------------------------------- operations
 

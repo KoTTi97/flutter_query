@@ -161,13 +161,14 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
       infiniteObserver.setInfiniteOptions(options);
 
   /// Not for infinite queries: the plain observer options carry no paging
-  /// half, so applying them here would silently drop it.
+  /// half, so applying them here would silently drop it. Throws in every
+  /// build mode, where an `assert` would have made it a silent no-op in
+  /// release.
   @override
   void setOptions(
     QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
   ) {
-    assert(
-      false,
+    throw UnsupportedError(
       'Use setInfiniteOptions on an InfiniteQueryController; plain observer '
       'options have no paging half.',
     );
@@ -180,6 +181,13 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
   bool get isFetchNextPageError => infiniteObserver.isFetchNextPageError;
   bool get isFetchPreviousPageError =>
       infiniteObserver.isFetchPreviousPageError;
+
+  /// Whether the pages already held are being refetched, as opposed to a page
+  /// being added — the result's own `isRefetching` is true for both.
+  bool get isRefetching => infiniteObserver.isRefetching;
+
+  /// Whether a refetch of the held pages failed, as opposed to a page fetch.
+  bool get isRefetchError => infiniteObserver.isRefetchError;
 
   /// Fetches the page after the ones already held.
   Future<QueryResult<TData>> fetchNextPage({bool cancelRefetch = true}) =>

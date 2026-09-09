@@ -8,12 +8,16 @@
 ///
 /// What that identity does *not* cover: two reads of one key with different
 /// selectors of the same output type, or two mutations of the same shape. Pass
-/// `id` to tell those apart. And a key that is no longer read is kept until
-/// the `State` is disposed — a mixin has no post-build hook to release it
-/// earlier — so a screen that switches between many keys is better served by
-/// `context.query`, which does release them.
+/// `id` to tell those apart.
+///
+/// **Release.** A key read in the previous build but not in this one is
+/// released after the frame, the way `context.query` releases it. A `State`
+/// that stops calling `watchQuery` *altogether* gives no signal, so its last
+/// observers stay until it is disposed; keep a conditional read in its own
+/// widget, and the condition becomes that widget's presence in the tree.
 library;
 
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 
@@ -41,15 +45,25 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
       <Object, MutationController<Object?, Object?, Object?>>{};
   QueryClient? _client;
 
+  // The same epoch bookkeeping `QueryScopeElement` keeps per reader: what the
+  // current build read, what earlier builds held, and a sweep after the frame
+  // that releases the difference.
+  Set<Object> _current = <Object>{};
+  Set<Object> _pending = <Object>{};
+  Set<Object> _mutationsByShape = <Object>{};
+  bool _sweepScheduled = false;
+
   /// The client these observers run on. Defaults to the nearest provider;
   /// override it to run against a client of your own.
   QueryClient get queryClient => QueryClientProvider.of(context);
 
   /// Subscribes to [options]'s query and returns its current result.
   ///
-  /// The first call for a key creates the observer; later calls reuse it and
-  /// apply the new options, so a changed key switches the observed query in
-  /// place. [id] tells apart two reads of one key in the same widget.
+  /// The first call for a key creates the observer; later calls with the
+  /// same key reuse it and apply the new options. A *different* key is a
+  /// different observer, and the one for the key no longer read is released
+  /// after the frame. [id] tells apart two reads of one key in the same
+  /// widget.
   QueryResult<TData> watchQuery<TData>(
     QueryObserverOptions<TData, TData> options, {
     Object? id,
@@ -61,14 +75,18 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     QueryObserverOptions<TQueryData, TData> options, {
     Object? id,
   }) {
+    final identity = (options.queryKey!, TQueryData, TData, id);
+    final repeat = _startEpoch().contains(identity);
     final controller = _query<QueryController<TQueryData, TData>>(
-      (options.queryKey!, TQueryData, TData, id),
+      identity,
       () => QueryController<TQueryData, TData>(_currentClient, options),
-    )
-      // Unconditional, as upstream re-applies options on every render: the
-      // observer itself decides whether anything actually changed, and
-      // options built inline carry a fresh closure every build anyway.
-      ..setOptions(options);
+    );
+    final before = repeat ? controller.value : null;
+    // Unconditional, as upstream re-applies options on every render: the
+    // observer itself decides whether anything actually changed, and
+    // options built inline carry a fresh closure every build anyway.
+    controller.setOptions(options);
+    _debugCheckRepeatRead(repeat, before, controller.value, identity);
     return controller.value;
   }
 
@@ -78,16 +96,25 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
       watchInfiniteQuery<TPageData, TPageParam, TData>(
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options, {
     Object? id,
-  }) =>
-          _query<InfiniteQueryController<TPageData, TPageParam, TData>>(
-            (options.queryKey, TPageData, TPageParam, TData, id),
-            () => InfiniteQueryController<TPageData, TPageParam, TData>(
-              _currentClient,
-              options,
-            ),
-          )..setInfiniteOptions(options);
+  }) {
+    final identity = (options.queryKey, TPageData, TPageParam, TData, id);
+    final repeat = _startEpoch().contains(identity);
+    final controller =
+        _query<InfiniteQueryController<TPageData, TPageParam, TData>>(
+      identity,
+      () => InfiniteQueryController<TPageData, TPageParam, TData>(
+        _currentClient,
+        options,
+      ),
+    );
+    final before = repeat ? controller.value : null;
+    controller.setInfiniteOptions(options);
+    _debugCheckRepeatRead(repeat, before, controller.value, identity);
+    return controller;
+  }
 
   C _query<C extends ChangeNotifier>(Object identity, C Function() create) {
+    _current.add(identity);
     final existing = _queries[identity];
     if (existing != null) {
       return existing as C;
@@ -95,6 +122,28 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     final controller = create()..addListener(_rebuild);
     _queries[identity] = controller;
     return controller;
+  }
+
+  /// See `QueryScopeElement._debugCheckRepeatRead`: the same identity read
+  /// twice in one build with options that yield different results would flip
+  /// the observer on every build, and rebuild forever.
+  static void _debugCheckRepeatRead(
+    bool repeat,
+    Object? before,
+    Object? after,
+    Object identity,
+  ) {
+    assert(() {
+      if (repeat && before != after) {
+        throw FlutterError(
+          'This State read the query $identity twice in one build with '
+          'options that produce different results — most likely two '
+          'different `select`s of the same output type. Give each read its '
+          'own `id:` so they get observers of their own.',
+        );
+      }
+      return true;
+    }());
   }
 
   /// Subscribes to a mutation and returns its controller.
@@ -111,6 +160,19 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     // every build (see `context.mutation`).
     final identity =
         id ?? options.mutationKey ?? (TData, TVariables, TOnMutateResult);
+    _startEpoch();
+    assert(() {
+      if (id == null &&
+          options.mutationKey == null &&
+          !_mutationsByShape.add(identity)) {
+        throw FlutterError(
+          'This State read two mutations of the shape $identity in one '
+          'build. They would share one controller, and whichever was read '
+          'last would run for both. Give each an `id:`.',
+        );
+      }
+      return true;
+    }());
     final existing = _mutations[identity];
     if (existing != null) {
       final controller = existing
@@ -126,6 +188,32 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     _mutations[identity] =
         controller as MutationController<Object?, Object?, Object?>;
     return controller;
+  }
+
+  /// The first read of a build: what earlier builds held becomes provisional,
+  /// and whatever this build does not read again is released after the frame.
+  Set<Object> _startEpoch() {
+    if (!_sweepScheduled) {
+      _sweepScheduled = true;
+      _pending = <Object>{..._pending, ..._current};
+      _current = <Object>{};
+      _mutationsByShape = <Object>{};
+      SchedulerBinding.instance.addPostFrameCallback((_) => _sweep());
+    }
+    return _current;
+  }
+
+  void _sweep() {
+    _sweepScheduled = false;
+    if (!mounted) {
+      return;
+    }
+    for (final identity in _pending.difference(_current)) {
+      _queries.remove(identity)
+        ?..removeListener(_rebuild)
+        ..dispose();
+    }
+    _pending = <Object>{};
   }
 
   QueryClient get _currentClient => _client ??= queryClient;
@@ -162,6 +250,8 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
         ..dispose();
     }
     _mutations.clear();
+    _current = <Object>{};
+    _pending = <Object>{};
   }
 
   @override

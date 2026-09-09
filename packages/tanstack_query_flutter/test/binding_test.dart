@@ -10,7 +10,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:meta/meta.dart';
 import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 QueryKey sensorKey(String id) => QueryKey(<Object?>['sensor', id]);
@@ -50,7 +49,6 @@ void main() {
   /// `tearDown` runs. So the teardown has to happen inside the body. The same
   /// rule applies to anyone writing widget tests against this library, and the
   /// README says so.
-  @isTest
   void widgetTest(
       String description, Future<void> Function(WidgetTester) body) {
     testWidgets(description, (tester) async {
@@ -147,7 +145,7 @@ void main() {
   });
 
   group('options changes', () {
-    widgetTest('a changed key switches the query without recreating anything',
+    widgetTest('a changed key moves a context reader to the new query',
         (tester) async {
       await tester.pumpWidget(app(
         client,

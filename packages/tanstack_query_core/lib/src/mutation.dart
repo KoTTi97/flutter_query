@@ -105,10 +105,6 @@ final class MutationContinueAction extends MutationAction {
   const MutationContinueAction();
 }
 
-final class MutationResetAction extends MutationAction {
-  const MutationResetAction();
-}
-
 /// A mutation's state at one point in time.
 @immutable
 final class MutationState<TData, TVariables, TOnMutateResult> {
@@ -157,13 +153,16 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
     Object? failureReason,
     bool? isPaused,
     DateTime? submittedAt,
+    bool clearData = false,
     bool clearError = false,
     bool clearFailureReason = false,
   }) =>
       MutationState<TData, TVariables, TOnMutateResult>(
         status: status ?? this.status,
-        hasData: hasData ?? this.hasData,
-        data: data ?? this.data,
+        hasData: clearData ? false : (hasData ?? this.hasData),
+        // `data` and `hasData` travel together, as on `QueryState`: with
+        // `hasData: true` the value is authoritative even when it is `null`.
+        data: clearData ? null : (hasData == true ? data : (data ?? this.data)),
         error: clearError ? null : (error ?? this.error),
         errorStackTrace:
             clearError ? null : (errorStackTrace ?? this.errorStackTrace),
@@ -283,6 +282,12 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   void destroy() {
     _removed = true;
     super.destroy();
+    // A mutation the cache dropped has nothing left to retry for. Upstream
+    // leaves the retryer running — `RetryPolicy.always` would keep hitting
+    // the server after `clear()`, and its backoff timer would outlive the
+    // cache. The in-flight attempt still settles; a backoff in progress is
+    // cut short and the mutation fails with the error it last saw.
+    _retryer?.cancelRetry(immediately: true);
   }
 
   bool _removed = false;
@@ -303,11 +308,6 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     } catch (error, stackTrace) {
       Zone.current.handleUncaughtError(error, stackTrace);
     }
-  }
-
-  /// Back to idle.
-  void reset() {
-    _dispatch(const MutationResetAction());
   }
 
   /// Runs the mutation function once, with everything around it.
@@ -523,14 +523,14 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
           ),
         MutationErrorAction(:final error, :final stackTrace) => state.copyWith(
             status: MutationStatus.error,
+            // Upstream's `data: undefined`.
+            clearData: true,
             error: error,
             errorStackTrace: stackTrace,
             failureCount: state.failureCount + 1,
             failureReason: error,
             isPaused: false,
           ),
-        MutationResetAction() =>
-          MutationState<TData, TVariables, TOnMutateResult>(),
       };
 
   @override

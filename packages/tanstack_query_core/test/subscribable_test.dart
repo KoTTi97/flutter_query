@@ -2,7 +2,8 @@
 /// at upstream `50680b98c`. 9 of 9 cases.
 library;
 
-import 'package:tanstack_query_core/tanstack_query_core.dart';
+// The unit under test is internal plumbing the package does not export.
+import 'package:tanstack_query_core/src/subscribable.dart';
 import 'package:test/test.dart';
 
 typedef Listener = void Function();

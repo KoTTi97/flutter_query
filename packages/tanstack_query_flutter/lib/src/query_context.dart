@@ -24,6 +24,11 @@
 /// gives no signal a `BuildContext` can see, so its last observers stay until
 /// it unmounts; put a conditional read in its own small widget, and the
 /// condition becomes that widget's presence in the tree.
+///
+/// **Only in `build`.** The read is reconciled against what the widget read
+/// in its last build; a `context.query` from a tap handler creates an observer
+/// that is only matched up on the next build. Read in `build`, act on the
+/// result from the handler.
 library;
 
 import 'package:flutter/scheduler.dart';
@@ -111,12 +116,16 @@ extension QueryContext on BuildContext {
   static QueryScopeElement _scopeElement(BuildContext context) {
     final element =
         context.getElementForInheritedWidgetOfExactType<QueryScope>();
-    assert(
-      element != null,
-      'No QueryClientProvider found above this widget, so context.query() has '
-      'nowhere to keep its observers.',
-    );
-    return element! as QueryScopeElement;
+    if (element == null) {
+      // In every build mode: the null check it would otherwise become in
+      // release says nothing about what is missing.
+      throw FlutterError(
+        'No QueryClientProvider found above this widget, so context.query() '
+        'has nowhere to keep its observers. Wrap your app (or the subtree '
+        'that uses queries) in QueryClientProvider(client: …).',
+      );
+    }
+    return element as QueryScopeElement;
   }
 }
 
@@ -149,7 +158,10 @@ class _QueryEntry {
 
 /// Everything one reading widget holds.
 class _Reader {
-  _Reader(this.epoch);
+  _Reader(this.reader, this.epoch);
+
+  /// The widget doing the reading.
+  final Element reader;
 
   int epoch;
 
@@ -164,6 +176,10 @@ class _Reader {
 
   final Map<Object, MutationController<Object?, Object?, Object?>> mutations =
       <Object, MutationController<Object?, Object?, Object?>>{};
+
+  /// Mutation identities read during [epoch] that fell back to the type
+  /// triple — the ones a second read of the same shape would silently share.
+  Set<Object> mutationsByShape = <Object>{};
 
   void dispose() {
     for (final entry in queries.values) {
@@ -196,15 +212,44 @@ class QueryScopeElement extends InheritedElement {
     Object? id,
   ) {
     final identity = (options.queryKey!, TQueryData, TData, id);
+    final state = _startEpochFor(reader);
+    final repeat = state.current.contains(identity);
     final controller = _controllerFor<QueryController<TQueryData, TData>>(
-      reader,
+      state,
       identity,
       () => QueryController<TQueryData, TData>(client, options),
     );
+    final before = repeat ? controller.value : null;
     // Unconditional, as upstream re-applies options on every render: the
     // observer itself decides whether anything actually changed.
     controller.setOptions(options);
+    _debugCheckRepeatRead(repeat, before, controller.value, identity);
     return controller.value;
+  }
+
+  /// One widget reading one identity twice in one build with options that
+  /// produce different results — two `select`s of the same output type on
+  /// one key, without `id` — would flip the observer between them on every
+  /// build, and each flip notifies, so the widget rebuilds forever. Caught
+  /// where it happens: the same observer cannot yield two results in one
+  /// synchronous build unless its options changed between the reads.
+  static void _debugCheckRepeatRead(
+    bool repeat,
+    Object? before,
+    Object? after,
+    Object identity,
+  ) {
+    assert(() {
+      if (repeat && before != after) {
+        throw FlutterError(
+          'This widget read the query $identity twice in one build with '
+          'options that produce different results — most likely two '
+          'different `select`s of the same output type. Give each read its '
+          'own `id:` so they get observers of their own.',
+        );
+      }
+      return true;
+    }());
   }
 
   /// The infinite twin of [readQuery].
@@ -215,31 +260,35 @@ class QueryScopeElement extends InheritedElement {
     Object? id,
   ) {
     final identity = (options.queryKey, TPageData, TPageParam, TData, id);
+    final state = _startEpochFor(reader);
+    final repeat = state.current.contains(identity);
     final controller =
         _controllerFor<InfiniteQueryController<TPageData, TPageParam, TData>>(
-      reader,
+      state,
       identity,
       () => InfiniteQueryController<TPageData, TPageParam, TData>(
         client,
         options,
       ),
     );
+    final before = repeat ? controller.value : null;
     controller.setInfiniteOptions(options);
+    _debugCheckRepeatRead(repeat, before, controller.value, identity);
     return controller;
   }
 
   C _controllerFor<C extends ChangeNotifier>(
-    Element reader,
+    _Reader state,
     Object identity,
     C Function() create,
   ) {
-    final state = _startEpochFor(reader);
     final existing = state.queries[identity];
     final C controller;
     if (existing != null) {
       controller = existing.controller as C;
     } else {
       controller = create();
+      final reader = state.reader;
       void onChanged() {
         if (reader.mounted) {
           reader.markNeedsBuild();
@@ -266,7 +315,23 @@ class QueryScopeElement extends InheritedElement {
     // again — by the very rebuild its own result caused.
     final identity =
         id ?? options.mutationKey ?? (TData, TVariables, TOnMutateResult);
-    final state = _readers.putIfAbsent(reader, () => _Reader(_epoch));
+    final state = _startEpochFor(reader);
+    assert(() {
+      // Two mutations of one shape in one widget without `id` would share a
+      // controller, and the second `setOptions` would win: a tap on
+      // "archive" running the delete. Only the type-triple fallback is
+      // ambiguous; an `id` or a `mutationKey` names the mutation.
+      if (id == null &&
+          options.mutationKey == null &&
+          !state.mutationsByShape.add(identity)) {
+        throw FlutterError(
+          'This widget read two mutations of the shape $identity in one '
+          'build. They would share one controller, and whichever was read '
+          'last would run for both. Give each an `id:`.',
+        );
+      }
+      return true;
+    }());
 
     final existing = state.mutations[identity];
     if (existing != null) {
@@ -289,7 +354,7 @@ class QueryScopeElement extends InheritedElement {
   }
 
   _Reader _startEpochFor(Element reader) {
-    final state = _readers.putIfAbsent(reader, () => _Reader(_epoch));
+    final state = _readers.putIfAbsent(reader, () => _Reader(reader, _epoch));
     if (state.epoch != _epoch) {
       // First read of a new frame: what it held before becomes provisional,
       // and whatever it does not read again this frame is released in the
@@ -298,7 +363,8 @@ class QueryScopeElement extends InheritedElement {
       state
         ..epoch = _epoch
         ..pending = <Object>{...state.pending, ...state.current}
-        ..current = <Object>{};
+        ..current = <Object>{}
+        ..mutationsByShape = <Object>{};
     }
     _scheduleSweep();
     return state;

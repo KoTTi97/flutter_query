@@ -2,10 +2,14 @@
 /// `50680b98c`. Omissions and adaptations: `test/PORTING_NOTES.md`.
 library;
 
+// The unit under test is internal plumbing the package does not export.
+import 'package:tanstack_query_core/src/query.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 import 'package:test/test.dart';
 
 import 'test_utils.dart';
+
+Object? _keepNext(Object? _, Object? next) => next;
 
 void main() {
   group('queryClient', () {
@@ -241,8 +245,14 @@ void main() {
 
       testFakeAsync(
           'should set the new data without comparison if structuralSharing is '
-          'not set', (time) async {
+          'set to false', (time) async {
         final key = queryKey();
+
+        // There is no `false` here: the identity function is how sharing is
+        // turned off (see `StructuralSharing`).
+        queryClient.setDefaultOptions(const DefaultOptions(
+          queries: QueryDefaults(structuralSharing: _keepNext),
+        ));
 
         final oldData = <String, bool>{'value': true};
         final newData = <String, bool>{'value': true};

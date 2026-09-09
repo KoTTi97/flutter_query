@@ -72,11 +72,19 @@ enum FetchDirection { forward, backward }
 typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
     QueryFunctionContext context);
 
-/// Replaces the whole result with a shared instance when nothing changed.
+/// Decides what is written into the cache when new data arrives, given what
+/// was there before.
 ///
-/// Upstream's `replaceEqualDeep` walks plain JSON, which cannot reconstruct
-/// typed Dart models, so this optional hook replaces it
-/// (https://github.com/KoTTi97/flutter_query/issues/12).
+/// Unset, the port applies `replaceEqualDeep`: data that is deep-equal to the
+/// previous data keeps the previous instance, so an unchanged refetch notifies
+/// nobody. Lists are shared element by element; maps, sets and typed models
+/// are shared whole, by their own `==`. Set this to `(_, next) => next` to
+/// turn sharing off — upstream's `structuralSharing: false` — or to a function
+/// of your own to reconcile typed models yourself
+/// (https://github.com/KoTTi97/flutter_query/issues/12). The hook governs the
+/// cache write; what `select` and `placeholderData` produce always goes
+/// through `replaceEqualDeep`, because the hook is typed on the cache's data
+/// and a selector's output is another type.
 typedef StructuralSharing<TQueryData> = TQueryData Function(
     TQueryData? previous, TQueryData next);
 
@@ -113,6 +121,14 @@ sealed class InitialData<TQueryData> {
 final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
   const InitialDataValue(this.data);
   final TQueryData data;
+
+  // Value equality, like every other option value: an `InitialData.value`
+  // built inline would otherwise make every `setOptions` look like a change.
+  @override
+  bool operator ==(Object other) =>
+      other is InitialDataValue<TQueryData> && other.data == data;
+  @override
+  int get hashCode => Object.hash(InitialDataValue<TQueryData>, data);
 }
 
 final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
@@ -161,6 +177,12 @@ final class PlaceholderDataValue<TQueryData>
     extends PlaceholderData<TQueryData> {
   const PlaceholderDataValue(this.data);
   final TQueryData data;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlaceholderDataValue<TQueryData> && other.data == data;
+  @override
+  int get hashCode => Object.hash(PlaceholderDataValue<TQueryData>, data);
 }
 
 final class PlaceholderDataCompute<TQueryData>

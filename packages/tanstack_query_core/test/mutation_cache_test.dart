@@ -301,6 +301,7 @@ void main() {
         expect(
           testCache.find(MutationFilters(
             mutationKey: QueryKey(<Object?>['mutation']),
+            exact: false,
           )),
           same(mutation),
         );

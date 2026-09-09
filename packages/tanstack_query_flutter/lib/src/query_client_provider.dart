@@ -15,18 +15,21 @@ import 'query_context.dart';
 ///
 /// Three things happen at mount:
 ///
-/// 1. **App lifecycle → focus.** `onShow`/`onHide` from [AppLifecycleListener]
-///    set the client's focus state. `onInactive` is deliberately ignored: on
-///    iOS it fires for the notification shade and every system dialog, and
-///    treating those as "unfocused" would refetch the world on the way back.
+/// 1. **App lifecycle → focus.** Every [AppLifecycleState] the app reports —
+///    the one it is already in, and each transition after — is mapped onto
+///    the client's focus state: `resumed` and `inactive` are focused, `hidden`,
+///    `paused` and `detached` are not. `inactive` counts as focused on
+///    purpose: on iOS it fires for the notification shade and every system
+///    dialog, and treating those as "unfocused" would refetch the world on the
+///    way back.
 /// 2. **The notify scheduler.** Notifications that arrive while a build is in
 ///    flight are deferred to a post-frame callback, so a query resolving
 ///    mid-build cannot call `setState` during that build. The scheduler is
-///    installed on the client's `NotifyManager` — which is the process-wide
-///    one unless the client was given its own — and the previous scheduler is
-///    put back when the provider goes away. Two providers sharing one manager
-///    therefore hand the scheduler back and forth in mount order; give each
-///    client its own `NotifyManager` if their lifetimes overlap.
+///    installed on the client's own `NotifyManager` and the previous one is
+///    put back when the provider goes away. (A client constructed with
+///    `NotifyManager.shared` shares the manager with every other such client;
+///    two providers over shared managers hand the scheduler back and forth in
+///    mount order.)
 /// 3. **Connectivity, only if you bring it.** Pass [onlineStatus] and the
 ///    client follows it. Nothing is installed by default and no connectivity
 ///    package is a dependency — see the README for the `connectivity_plus`
@@ -57,23 +60,27 @@ class QueryClientProvider extends StatefulWidget {
   static QueryClient of(BuildContext context) {
     final scope =
         context.dependOnInheritedWidgetOfExactType<_QueryClientScope>();
-    assert(
-      scope != null,
-      'No QueryClientProvider found above this widget. Wrap your app (or the '
-      'subtree that uses queries) in QueryClientProvider(client: …).',
-    );
-    return scope!.client;
+    if (scope == null) {
+      throw _missingProvider();
+    }
+    return scope.client;
   }
+
+  // Thrown in every build mode: as an `assert` it would surface in release as
+  // a null check on the scope, which says nothing about what is missing.
+  static FlutterError _missingProvider() => FlutterError(
+        'No QueryClientProvider found above this widget. Wrap your app (or '
+        'the subtree that uses queries) in QueryClientProvider(client: …).',
+      );
 
   /// Like [of], but without subscribing the calling element to changes.
   static QueryClient read(BuildContext context) {
     final element =
         context.getElementForInheritedWidgetOfExactType<_QueryClientScope>();
-    assert(
-      element != null,
-      'No QueryClientProvider found above this widget.',
-    );
-    return (element!.widget as _QueryClientScope).client;
+    if (element == null) {
+      throw _missingProvider();
+    }
+    return (element.widget as _QueryClientScope).client;
   }
 
   @override
@@ -88,58 +95,71 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   @override
   void initState() {
     super.initState();
-    _install();
-  }
-
-  void _install() {
-    // Kept so it can be put back: notify managers are shared by default, and a
-    // scheduler that outlived the provider that set it would keep deferring
-    // notifications to a frame that is never coming.
-    _previousScheduler = widget.client.notifyManager.scheduler;
-    widget.client.notifyManager.setScheduler(_scheduleNotification);
-    widget.client.mount();
-
+    _mountClient(widget.client);
     if (widget.observeAppLifecycle) {
-      // The listener only reports transitions; the state the app is already
-      // in has to be read. A provider mounted while the app is hidden would
-      // otherwise keep the client "focused" until the next show.
-      final current = WidgetsBinding.instance.lifecycleState;
-      if (current != null) {
-        widget.client.focusManager.setFocused(_isShown(current));
-      }
-      _lifecycle = AppLifecycleListener(
-        onShow: () => widget.client.focusManager.setFocused(true),
-        onHide: () => widget.client.focusManager.setFocused(false),
-      );
+      _observeLifecycle(widget.client);
     }
-
-    final onlineStatus = widget.onlineStatus;
-    if (onlineStatus != null) {
-      _onlineSubscription =
-          onlineStatus.listen(widget.client.onlineManager.setOnline);
-    }
+    _follow(widget.onlineStatus, widget.client);
   }
 
-  void _uninstall() {
-    _lifecycle?.dispose();
-    _lifecycle = null;
-    _onlineSubscription?.cancel();
-    _onlineSubscription = null;
-    _restoreScheduler(widget.client);
-    widget.client.unmount();
+  void _mountClient(QueryClient client) {
+    // Kept so it can be put back: a scheduler that outlived the provider that
+    // set it would keep deferring notifications to a frame that is never
+    // coming.
+    _previousScheduler = client.notifyManager.scheduler;
+    client.notifyManager.setScheduler(_scheduleNotification);
+    client.mount();
   }
 
-  void _restoreScheduler(QueryClient client) {
+  void _unmountClient(QueryClient client) {
     final previous = _previousScheduler;
     if (previous != null) {
       client.notifyManager.setScheduler(previous);
       _previousScheduler = null;
     }
+    client.unmount();
   }
 
-  /// The same mapping [AppLifecycleListener] applies to transitions:
-  /// `onShow` fires on the way to `resumed`, `onHide` on the way to `hidden`,
-  /// and `inactive` counts as shown (see the class doc).
+  void _observeLifecycle(QueryClient client) {
+    // The listener only reports transitions; the state the app is already in
+    // has to be read. A provider mounted while the app is hidden would
+    // otherwise keep the client "focused" until the next show.
+    final current = WidgetsBinding.instance.lifecycleState;
+    if (current != null) {
+      client.focusManager.setFocused(_isShown(current));
+    }
+    // Every transition, through one mapping — not `onShow`/`onHide`, which
+    // are two of the transitions: `detached → resumed` fires neither, and
+    // left the client unfocused for good.
+    _lifecycle = AppLifecycleListener(
+      onStateChange: (state) => client.focusManager.setFocused(_isShown(state)),
+    );
+  }
+
+  void _stopObservingLifecycle() {
+    _lifecycle?.dispose();
+    _lifecycle = null;
+  }
+
+  void _follow(Stream<bool>? onlineStatus, QueryClient client) {
+    _onlineSubscription?.cancel();
+    _onlineSubscription = onlineStatus?.listen(
+      client.onlineManager.setOnline,
+      // A stream error is the stream's problem, not the app's: reported the
+      // way Flutter reports a build error, not thrown into the zone.
+      onError: (Object error, StackTrace stackTrace) =>
+          FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'tanstack_query_flutter',
+          context: ErrorDescription('while listening to onlineStatus'),
+        ),
+      ),
+    );
+  }
+
+  /// `resumed` and `inactive` are shown, the rest is not (see the class doc).
   static bool _isShown(AppLifecycleState state) => switch (state) {
         AppLifecycleState.resumed || AppLifecycleState.inactive => true,
         AppLifecycleState.hidden ||
@@ -152,43 +172,64 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// not. Called for every batch of cache notifications.
   ///
   /// Synchronous on purpose, where upstream's default is a zero-delay timer:
-  /// a `setState` outside the build phase is exactly what Flutter expects from
-  /// a tap handler or a resolved future, and delivering right away means one
-  /// `pump` in a test — or one frame in an app — shows the new result.
+  /// a `setState` outside a build is exactly what Flutter expects from a tap
+  /// handler or a resolved future, and delivering right away means one `pump`
+  /// in a test — or one frame in an app — shows the new result.
+  ///
+  /// "During a build" is two things. The frame's build phase, which the
+  /// scheduler phase names; a notification there waits for the frame to end.
+  /// And the very first build of the app: `runApp` attaches the root widget
+  /// from a `Timer.run`, in `SchedulerPhase.idle`, and builds the whole tree
+  /// synchronously right there — the one build no phase accounts for. That
+  /// one is told apart by `BuildOwner.debugBuilding`, and its notifications
+  /// go into a microtask, which runs the moment the attach returns and so
+  /// lands before the first frame. `debugBuilding` is a debug-only fact, and
+  /// that is enough: the "setState during build" assertion it guards against
+  /// is debug-only too, and in release a widget marked dirty mid-scope is
+  /// simply rebuilt before the scope ends.
   static void _scheduleNotification(void Function() callback) {
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    final duringBuild = phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks;
-    if (!duringBuild) {
-      callback();
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => callback());
       return;
     }
-    SchedulerBinding.instance.addPostFrameCallback((_) => callback());
+    if (WidgetsBinding.instance.buildOwner?.debugBuilding ?? false) {
+      scheduleMicrotask(callback);
+      return;
+    }
+    callback();
   }
 
   @override
   void didUpdateWidget(QueryClientProvider oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.client != widget.client ||
-        oldWidget.onlineStatus != widget.onlineStatus ||
-        oldWidget.observeAppLifecycle != widget.observeAppLifecycle) {
-      _uninstallFor(oldWidget);
-      _install();
+    // Each wiring follows its own field. Tearing everything down for a new
+    // `onlineStatus` object — which a stream built in a parent's `build` is
+    // on every rebuild — would unmount and remount the client each time.
+    final clientChanged = oldWidget.client != widget.client;
+    if (clientChanged) {
+      _stopObservingLifecycle();
+      _unmountClient(oldWidget.client);
+      _mountClient(widget.client);
     }
-  }
-
-  void _uninstallFor(QueryClientProvider previous) {
-    _lifecycle?.dispose();
-    _lifecycle = null;
-    _onlineSubscription?.cancel();
-    _onlineSubscription = null;
-    _restoreScheduler(previous.client);
-    previous.client.unmount();
+    if (clientChanged ||
+        oldWidget.observeAppLifecycle != widget.observeAppLifecycle) {
+      _stopObservingLifecycle();
+      if (widget.observeAppLifecycle) {
+        _observeLifecycle(widget.client);
+      }
+    }
+    if (clientChanged || oldWidget.onlineStatus != widget.onlineStatus) {
+      _follow(widget.onlineStatus, widget.client);
+    }
   }
 
   @override
   void dispose() {
-    _uninstall();
+    _stopObservingLifecycle();
+    _onlineSubscription?.cancel();
+    _onlineSubscription = null;
+    _unmountClient(widget.client);
     super.dispose();
   }
 

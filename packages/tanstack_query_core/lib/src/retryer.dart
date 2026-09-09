@@ -87,14 +87,21 @@ class Retryer<TData> {
   void cancel({bool revert = false, bool silent = false}) {
     if (!isResolved) {
       final error = CancelledError(revert: revert, silent: silent);
-      _reject(error, StackTrace.current);
+      _reject(error, stackTrace: StackTrace.current);
       onCancel?.call(error);
     }
   }
 
   /// Stops the loop from making another attempt, letting the in-flight request
-  /// finish and populate the cache.
-  void cancelRetry() => _isRetryCancelled = true;
+  /// finish and populate the cache. A backoff delay already running is waited
+  /// out first, as upstream does, unless [immediately] is set — then the loop
+  /// rejects with the last error as soon as nothing is in flight.
+  void cancelRetry({bool immediately = false}) {
+    _isRetryCancelled = true;
+    if (immediately) {
+      _wakeDelay();
+    }
+  }
 
   void continueRetry() => _isRetryCancelled = false;
 
@@ -134,45 +141,95 @@ class Retryer<TData> {
   void _resolve(TData data) {
     if (!isResolved) {
       _tryContinue();
+      _wakeDelay();
       _status = RetryerStatus.resolved;
       _completer.complete(data);
     }
   }
 
-  void _reject(Object error, StackTrace stackTrace) {
+  void _reject(Object error, {required StackTrace stackTrace}) {
     if (!isResolved) {
       _tryContinue();
+      _wakeDelay();
       _status = RetryerStatus.rejected;
       _completer.completeError(error, stackTrace);
     }
   }
 
-  Future<void> _attempt() async {
-    if (isResolved) {
-      return;
+  Timer? _delayTimer;
+  Completer<void>? _delayCompleter;
+
+  /// Upstream's `sleep`, with an off switch: the timer is dropped and the
+  /// wait ends early when the fetch is resolved or its retries are cancelled
+  /// for good. Left alone, a 30-second backoff would outlive the cache it was
+  /// fetching for, and Flutter's widget tests assert that no timer does.
+  Future<void> _sleep(Duration delay) {
+    final completer = Completer<void>();
+    _delayCompleter = completer;
+    _delayTimer = Timer(delay, () {
+      _delayTimer = null;
+      _delayCompleter = null;
+      completer.complete();
+    });
+    return completer.future;
+  }
+
+  void _wakeDelay() {
+    _delayTimer?.cancel();
+    _delayTimer = null;
+    final completer = _delayCompleter;
+    _delayCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
     }
+  }
 
-    final initial = _failureCount == 0 ? initialFuture : null;
-
-    try {
-      final data = await (initial ?? fn());
-      _resolve(data);
-    } catch (error, stackTrace) {
+  /// Upstream's recursive `run`, written as a loop: a mutation retrying
+  /// forever while offline would otherwise stack one async frame per attempt.
+  Future<void> _attempt() async {
+    while (true) {
       if (isResolved) {
         return;
       }
 
-      if (_isRetryCancelled ||
-          !retry.shouldRetry(_failureCount, error, stackTrace)) {
-        _reject(error, stackTrace);
+      final initial = _failureCount == 0 ? initialFuture : null;
+
+      final Object error;
+      final StackTrace stackTrace;
+      try {
+        final data = await (initial ?? fn());
+        _resolve(data);
+        return;
+      } catch (caught, trace) {
+        error = caught;
+        stackTrace = trace;
+      }
+
+      if (isResolved) {
         return;
       }
 
-      final delay = retryDelay.resolve(_failureCount, error);
+      // The retry policy and the delay are user code. Upstream lets a throw
+      // here escape as an unhandled rejection and leaves the fetch pending
+      // forever; a fetch that can never settle is worse than one that fails,
+      // so the throw becomes the fetch's error.
+      final Duration delay;
+      try {
+        if (_isRetryCancelled ||
+            !retry.shouldRetry(_failureCount, error, stackTrace)) {
+          _reject(error, stackTrace: stackTrace);
+          return;
+        }
+        delay = retryDelay.resolve(_failureCount, error);
+      } catch (policyError, policyStackTrace) {
+        _reject(policyError, stackTrace: policyStackTrace);
+        return;
+      }
+
       _failureCount++;
       onFail?.call(_failureCount, error, stackTrace);
 
-      await Future<void>.delayed(delay);
+      await _sleep(delay);
 
       // The wait is long enough for the fetch to have been cancelled. Upstream
       // omits this check and a cancelled retry can still flip its query from
@@ -187,9 +244,8 @@ class Retryer<TData> {
       }
 
       if (_isRetryCancelled) {
-        _reject(error, stackTrace);
-      } else {
-        await _attempt();
+        _reject(error, stackTrace: stackTrace);
+        return;
       }
     }
   }

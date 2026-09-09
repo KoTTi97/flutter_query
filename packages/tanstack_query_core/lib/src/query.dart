@@ -14,6 +14,7 @@ import 'query_options.dart';
 import 'query_state.dart';
 import 'removable.dart';
 import 'retryer.dart';
+import 'structural_sharing.dart';
 
 /// What a [Query] needs from an observer, without knowing what an observer is.
 abstract interface class QueryObserverRef {
@@ -254,9 +255,10 @@ class Query<TQueryData> extends Removable {
     bool manual = false,
   }) {
     final sharing = _options.structuralSharing;
+    final previous = _state.hasData ? _state.data : null;
     final data = sharing == null
-        ? newData
-        : sharing(_state.hasData ? _state.data : null, newData);
+        ? replaceEqualDeep<TQueryData>(previous, newData)
+        : sharing(previous, newData);
 
     _dispatch(
       QuerySuccessAction<TQueryData>(
@@ -321,6 +323,12 @@ class Query<TQueryData> extends Removable {
   void reset() {
     destroy();
     setState(_initialState);
+    // `destroy` dropped the gc timer. Upstream never re-arms it, so a reset
+    // query nobody observes stays in the cache for good; here it is collected
+    // like any other idle entry.
+    if (observers.isEmpty) {
+      scheduleGc();
+    }
   }
 
   /// Whether any observer's `enabled` resolves to true.
