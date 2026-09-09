@@ -15,7 +15,9 @@
 ///   4's request is in flight, and the cache stays empty until the answer.
 /// - **C.** `PlaceholderData.compute((previous, _) => previous)` — upstream's
 ///   `keepPreviousData` — keeps the last post on screen while the segmented
-///   button switches the key to the next one.
+///   button switches the key to the next one. The read carries an `id`, which
+///   is what makes the mixin's observer follow the key instead of starting a
+///   new one (see the binding's `key_change_test.dart`).
 ///
 /// Proofs (widget tests in `test/features/initial_and_placeholder_test.dart`,
 /// end-to-end in `e2e/tests/initial_and_placeholder.spec.ts`): a detail
@@ -182,7 +184,13 @@ class _InitialAndPlaceholderScreenState
             seededAt: _seededAt(),
           ));
     final placeholder = watchQuery(placeholderPostQuery(api));
-    final previous = watchQuery(previousPostQuery(api, _previousId));
+    // The `id` is what lets the observer follow the key: without it a new
+    // key is a new observer, and a fresh observer has no previous data to
+    // hand to `PlaceholderData.compute`.
+    final previous = watchQuery(
+      previousPostQuery(api, _previousId),
+      id: 'previous',
+    );
     // Read from the cache, not from the result: a placeholder is only ever
     // in the result, and this is what shows it.
     final cached = queryClient.getQueryData<Post>(ShowcaseKeys.post(4));

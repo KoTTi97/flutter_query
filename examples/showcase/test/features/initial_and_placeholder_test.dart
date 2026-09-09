@@ -122,13 +122,10 @@ void main() {
     expect(h.requests('GET', '/api/posts/4'), 2);
   });
 
-  // `watchQuery` identifies its observer by key, so a changed key is a *new*
-  // observer with no previous data to hand to `PlaceholderData.compute` —
-  // the frame after the switch shows a skeleton, not post 5. The same
-  // options through `QueryBuilder`, whose `didUpdateWidget` applies the new
-  // key to the one observer, keep post 5 as expected (reproduced 2026-09-09).
-  // #22 rules that a key change is `setOptions`, never dispose-and-recreate,
-  // for the mixin and `context.query` too.
+  // Without an `id`, `watchQuery` identifies its observer by key, so a
+  // changed key would be a *new* observer with no previous data for
+  // `PlaceholderData.compute`; card C's read carries one, so the observer
+  // follows the key (found here on 2026-09-09, fixed in the binding).
   group(
     'keepPreviousData through the mixin',
     () {
@@ -157,9 +154,6 @@ void main() {
         expect(h.fact('post-6', 'fetches=1'), findsOneWidget);
       });
     },
-    skip: 'suspected library bug: QueryMixin.watchQuery recreates the '
-        'observer on a key change, so PlaceholderData.compute never sees '
-        'previousData (keepPreviousData) through the mixin',
   );
 
   showcaseTest('a switched key fetches the new post and settles on it',

@@ -1376,6 +1376,30 @@ Decisions taken on the way, with the alternatives:
   accepted; Dart allows it, and splitting `InfiniteData` out would move a
   public type for the sake of a graph nobody navigates. Not restructured.
 
+### Found by the showcase (2026-09-09, from `24eae03` on)
+
+The showcase (`examples/showcase/`, #25) exercises every feature through real
+screens; what its widget and end-to-end tests find in the library is recorded
+here, reproduced in the library's own suite before anything is changed, as
+with the reviews.
+
+1. **A read whose key changes lost `keepPreviousData` in the mixin and
+   `context.query`** (binding). Upstream's `useQuery` is one observer per call
+   site, so a new key is applied to the observer it already has, and
+   `placeholderData: (previous) => previous` shows the old key's data while
+   the new one loads. The mixin and the context extension identified a read
+   by `(key, types, id)`, so a changed key was a *new* observer with nothing
+   previous — the `initial-and-placeholder` screen switched a `watchQuery`
+   from post 5 to post 6 and got a skeleton, while `QueryBuilder` (which
+   applies the new key in `didUpdateWidget`) kept post 5. Decision: an `id`
+   is the read's identity — `(#query, types, id)` — so a read that carries one
+   keeps its observer across a key change; without an `id` a new key stays a
+   new read, because two reads of one type in one widget cannot be told apart
+   by call position (no rules of hooks here). Regression:
+   `tanstack_query_flutter/test/key_change_test.dart`, all three styles plus
+   the without-`id` case; the README's mixin and context sections say the
+   rule.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported

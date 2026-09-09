@@ -89,10 +89,9 @@ test('a refetch keeps the real post, not the placeholder', async ({ page, open, 
   expect(await scenario.count('GET', /^\/api\/posts\/4$/)).toBe(2)
 })
 
-// `watchQuery` identifies its observer by key, so a changed key is a new
-// observer with no previous data for `PlaceholderData.compute` — see the
-// skipped widget test of the same name for the reproduction.
-test.skip('switching the key keeps the previous post as a placeholder', async ({ page, open }) => {
+// Card C's read carries an `id`, so the mixin's observer follows the key and
+// hands post 5 to `PlaceholderData.compute` while post 6 loads.
+test('switching the key keeps the previous post as a placeholder', async ({ page, open }) => {
   await open('/initial-and-placeholder')
   await expect(detail(page, 'C', 'Door sensor: setup guide')).toBeVisible()
   await expect(detail(page, 'C', 'isPlaceholderData=false')).toBeVisible()

@@ -69,8 +69,10 @@ class _WatchEntry {
 /// Everything created this way is disposed with the [State], and recreated
 /// when the client above it changes.
 mixin QueryMixin<T extends StatefulWidget> on State<T> {
-  /// Controllers by identity: `(key, types…, id)` for a query,
-  /// `(#mutation, id or key, types…)` for a mutation.
+  /// Controllers by identity: `(key, types…)` for a query without an `id`,
+  /// `(#query, types…, id)` for one with — so a read that carries an `id`
+  /// keeps its observer across a key change — and `(#mutation, id or key,
+  /// types…)` for a mutation.
   final Map<Object, _WatchEntry> _entries = <Object, _WatchEntry>{};
   QueryClient? _client;
 
@@ -92,8 +94,12 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// re-applied on every build, as upstream re-applies them on every render,
   /// and the observer decides what, if anything, actually changed. A
   /// *different* key is a different observer, and the one for the key no
-  /// longer read is released after the frame. [id] tells apart two reads of
-  /// one key in the same widget.
+  /// longer read is released after the frame — unless the read carries an
+  /// [id]: then the id is the read's identity and the observer follows the
+  /// key, as upstream's one-observer-per-call-site does. That is what
+  /// `PlaceholderData.compute((previous, _) => previous)` needs to show the
+  /// previous key's data while the next loads. [id] also tells apart two
+  /// reads of one key in the same widget.
   QueryResult<TData> watchQuery<TData>(
     QueryObserverOptions<TData, TData> options, {
     Object? id,
@@ -105,7 +111,9 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     QueryObserverOptions<TQueryData, TData> options, {
     Object? id,
   }) {
-    final identity = (options.queryKey, TQueryData, TData, id);
+    final identity = id == null
+        ? (options.queryKey, TQueryData, TData)
+        : (#query, TQueryData, TData, id);
     final repeat = _startEpoch().contains(identity);
     final entry = _entryFor(
       identity,
@@ -129,7 +137,9 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options, {
     Object? id,
   }) {
-    final identity = (options.queryKey, TPageData, TPageParam, TData, id);
+    final identity = id == null
+        ? (options.queryKey, TPageData, TPageParam, TData)
+        : (#infinite, TPageData, TPageParam, TData, id);
     final repeat = _startEpoch().contains(identity);
     final entry = _entryFor(
       identity,

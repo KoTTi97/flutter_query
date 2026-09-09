@@ -17,8 +17,12 @@
 /// intervals therefore do not fight over one observer. Within a single widget
 /// an observer is identified by key and types — read the same key twice with
 /// different selectors of the same output type and pass [id] to tell them
-/// apart. A mutation is identified by [id] or else by its `mutationKey`,
-/// together with its three types.
+/// apart. An [id] is then the read's identity: a read that carries one keeps
+/// its observer when its key changes, as upstream's one-observer-per-call-site
+/// does, which is what `PlaceholderData.compute((previous, _) => previous)`
+/// needs to show the previous key's data while the next loads. A mutation is
+/// identified by [id] or else by its `mutationKey`, together with its three
+/// types.
 ///
 /// **Release.** A key the widget read last build but not this one is released
 /// after the frame — a mutation likewise, so one whose [id] changed between
@@ -59,7 +63,8 @@ extension QueryContext on BuildContext {
   ///
   /// The observer is this widget's, released once the widget stops reading the
   /// key — including when it simply reads a *different* key on a later build —
-  /// or unmounts. [id] tells apart two reads of one key in the same widget.
+  /// or unmounts. With an [id] the observer follows a changed key instead;
+  /// [id] also tells apart two reads of one key in the same widget.
   ///
   /// Always on the provider's client; see the library doc on why there is no
   /// `client:` here. Options built inline are re-applied on every build, as
@@ -206,8 +211,10 @@ class _Reader {
 
   int epoch;
 
-  /// Controllers by identity: `(key, types…, id)` for a query,
-  /// `(#mutation, id or key, types…)` for a mutation.
+  /// Controllers by identity: `(key, types…)` for a query without an `id`,
+  /// `(#query, types…, id)` for one with — so a read that carries an `id`
+  /// keeps its observer across a key change — and `(#mutation, id or key,
+  /// types…)` for a mutation.
   final Map<Object, _Entry> entries = <Object, _Entry>{};
 
   /// Identities read during [epoch].
@@ -248,7 +255,9 @@ class QueryScopeElement extends InheritedElement {
     Element reader,
     Object? id,
   ) {
-    final identity = (options.queryKey, TQueryData, TData, id);
+    final identity = id == null
+        ? (options.queryKey, TQueryData, TData)
+        : (#query, TQueryData, TData, id);
     final state = _startEpochFor(reader);
     final repeat = state.current.contains(identity);
     final entry = _entryFor(
@@ -273,7 +282,9 @@ class QueryScopeElement extends InheritedElement {
     Element reader,
     Object? id,
   ) {
-    final identity = (options.queryKey, TPageData, TPageParam, TData, id);
+    final identity = id == null
+        ? (options.queryKey, TPageData, TPageParam, TData)
+        : (#infinite, TPageData, TPageParam, TData, id);
     final state = _startEpochFor(reader);
     final repeat = state.current.contains(identity);
     final entry = _entryFor(

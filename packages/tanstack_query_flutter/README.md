@@ -81,7 +81,12 @@ there is no equivalent of the rules of hooks. A key read in the previous build
 but not in this one is released after the frame, as with `context.query`. Two
 reads of one key with different selectors of the same output type, or two
 mutations of the same shape, are told apart by an `id:` argument — and reading
-two of them *without* one is caught by an assertion in debug builds.
+two of them *without* one is caught by an assertion in debug builds. An `id:`
+is then the read's identity: a read that carries one keeps its observer when
+its key changes, the way upstream's one-observer-per-call-site does, so
+`PlaceholderData.compute((previous, _) => previous)` shows the previous key's
+data while the next loads. Without an `id:`, a new key is a new observer and
+the placeholder has nothing previous to show.
 
 ### `QueryController`
 
