@@ -165,6 +165,19 @@ class InfiniteQueryOptions<TPageData, TPageParam>
   /// How many pages to fetch up front — used to warm a cache with several
   /// pages, or to refetch a fixed number of them.
   final int? pages;
+
+  /// The paging behaviour, derived from these options.
+  ///
+  /// This is what makes the subtype honest: an [InfiniteQueryOptions] *is a*
+  /// `QueryOptions<InfiniteData>` that pages wherever a `QueryOptions` is
+  /// accepted — `QueryClient.query` included — rather than one that fails
+  /// with `MissingQueryFunctionError` unless it went through
+  /// `infiniteQuery` (fourth review, 2026-09-09). A fresh instance per read,
+  /// which is harmless: it has value equality over what it reads.
+  @internal
+  @override
+  FetchBehavior<InfiniteData<TPageData, TPageParam>> get behavior =>
+      InfiniteQueryBehavior<TPageData, TPageParam>(this, pages: pages);
 }
 
 /// [InfiniteQueryOptions] plus the observer-only options.
@@ -232,8 +245,8 @@ final class FetchMore {
 
 /// Turns one fetch into a loop over pages.
 ///
-/// Set by [QueryClient] when it defaults infinite-query options; users never
-/// construct one.
+/// [InfiniteQueryOptions.behavior] derives one from the options it belongs
+/// to; users never construct one.
 @internal
 class InfiniteQueryBehavior<TPageData, TPageParam>
     implements FetchBehavior<InfiniteData<TPageData, TPageParam>> {

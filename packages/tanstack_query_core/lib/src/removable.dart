@@ -6,12 +6,13 @@ import 'dart:async';
 import 'package:meta/meta.dart';
 
 import 'option_values.dart';
+import 'timers.dart';
 
 /// Something the cache garbage-collects once nothing observes it.
 ///
-/// Upstream clamps `gcTime` to `setTimeout`'s 32-bit limit; Dart's [Timer]
-/// takes a 64-bit [Duration], so the clamp is not ported
-/// (https://github.com/KoTTi97/flutter_query/issues/9).
+/// The timer's duration is clamped to [maxTimerDuration]: Dart's [Timer] is
+/// 64-bit on the VM but rides on `setTimeout` on the web, where a `gcTime`
+/// over 24.8 days would fire after a millisecond (fourth review, 2026-09-09).
 abstract class Removable {
   Timer? _gcTimer;
 
@@ -25,7 +26,7 @@ abstract class Removable {
     clearGcTimeout();
     final gcTime = this.gcTime;
     if (gcTime is GcTimeDuration) {
-      _gcTimer = Timer(gcTime.duration, optionalRemove);
+      _gcTimer = Timer(clampTimerDuration(gcTime.duration), optionalRemove);
     }
   }
 

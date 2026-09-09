@@ -30,6 +30,10 @@ typedef BuildWhen<T> = bool Function(T previous, T current);
 /// ```
 ///
 /// Use [QuerySelectBuilder] when the query needs a `select`.
+///
+/// [options] built inline are re-applied on every build of this widget, as
+/// upstream re-applies them on every render; the observer decides what, if
+/// anything, actually changed. Every builder here takes its options that way.
 class QueryBuilder<TData> extends StatefulWidget {
   const QueryBuilder({
     super.key,
@@ -39,6 +43,7 @@ class QueryBuilder<TData> extends StatefulWidget {
     this.client,
   });
 
+  /// The query. Re-applied every build; the observer decides what changed.
   final QueryObserverOptions<TData, TData> options;
   final Widget Function(BuildContext context, QueryResult<TData> result)
       builder;
@@ -90,12 +95,26 @@ class _QueryBuilderState<TData> extends _ControllerBuilderState<
 
 /// Whether a builder with [buildWhen] should rebuild for the controller's
 /// current value, given what it [built] last. Nothing built yet means yes.
+///
+/// A value equal to the one last built is skipped before [buildWhen] is even
+/// asked. The first build reads the result straight after the subscribe
+/// started the fetch, and the observer's notification about that very fetch
+/// arrives after the frame — a rebuild with nothing new in it (fourth review,
+/// 2026-09-09). Results carry value equality, so "nothing new" is `==`.
 bool _shouldRebuild<T>(
   BuildWhen<T>? buildWhen,
   T? built,
   ValueListenable<T> controller,
-) =>
-    buildWhen == null || built == null || buildWhen(built, controller.value);
+) {
+  if (built == null) {
+    return true;
+  }
+  final current = controller.value;
+  if (current == built) {
+    return false;
+  }
+  return buildWhen == null || buildWhen(built, current);
+}
 
 /// [QueryBuilder] for a query with a `select`, where what the cache holds and
 /// what the widget sees are different types.
@@ -108,6 +127,7 @@ class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget {
     this.client,
   });
 
+  /// See [QueryBuilder.options].
   final QueryObserverOptions<TQueryData, TData> options;
   final Widget Function(BuildContext context, QueryResult<TData> result)
       builder;
@@ -156,11 +176,12 @@ class _QuerySelectBuilderState<TQueryData, TData>
 /// page.
 ///
 /// ```dart
-/// InfiniteQueryBuilder<Post, int, InfiniteData<Post, int>>(
+/// InfiniteQueryBuilder<List<Post>, int, InfiniteData<List<Post>, int>>(
 ///   options: feedQuery(),
 ///   builder: (context, feed) => ListView(
 ///     children: [
-///       for (final page in feed.value.dataOrNull?.pages ?? []) ...page.map(PostTile.new),
+///       for (final page in feed.value.dataOrNull?.pages ?? const [])
+///         ...page.map(PostTile.new),
 ///       if (feed.hasNextPage)
 ///         TextButton(onPressed: feed.fetchNextPage, child: const Text('Mehr')),
 ///     ],
@@ -177,6 +198,7 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData>
     this.client,
   });
 
+  /// See [QueryBuilder.options].
   final InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options;
   final Widget Function(
     BuildContext context,
@@ -237,7 +259,7 @@ class _InfiniteQueryBuilderState<TPageData, TPageParam, TData>
 /// can start one.
 ///
 /// ```dart
-/// MutationBuilder<Sensor, RenameInput>(
+/// MutationBuilder<Sensor, RenameInput, void>(
 ///   options: renameSensor(),
 ///   builder: (context, rename) => TextButton(
 ///     onPressed: () => rename.mutate((id: id, name: 'Küche')),
@@ -257,6 +279,7 @@ class MutationBuilder<TData, TVariables, TOnMutateResult>
     this.client,
   });
 
+  /// See [QueryBuilder.options].
   final MutationOptions<TData, TVariables, TOnMutateResult> options;
   final Widget Function(
     BuildContext context,

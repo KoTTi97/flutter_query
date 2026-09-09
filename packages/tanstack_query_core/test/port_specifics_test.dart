@@ -8,6 +8,11 @@ library;
 
 import 'dart:async';
 
+import 'package:tanstack_query_core/src/mutation.dart'
+    show MutationFailedAction;
+import 'package:tanstack_query_core/src/query.dart' show QueryFailedAction;
+import 'package:tanstack_query_core/src/retryer.dart';
+import 'package:tanstack_query_core/src/timers.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 import 'package:test/test.dart';
 
@@ -442,6 +447,7 @@ void main() {
   });
 
   thirdReview();
+  fourthReview();
 }
 
 // -----------------------------------------------------------------------------
@@ -863,5 +869,514 @@ void thirdReview() {
       QueryClient(notifyManager: NotifyManager.shared).notifyManager,
       same(NotifyManager.shared),
     );
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Fourth review, 2026-09-09 (of `65a1da6`). Each finding was reproduced
+// against the checkout before anything changed; the finding's number is the
+// review's.
+
+int _throwingSelect(int value) => throw StateError('select');
+
+void fourthReview() {
+  testFakeAsync(
+      'C-Q1: reading a key as a supertype of its data throws QueryDataTypeError',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<int>(key, 1);
+    // `Query<int>` is a `Query<int?>` and a `Query<num>` to `is`; both used to
+    // pass the cache and fail in `setOptions` with a raw `TypeError`.
+    expect(
+      () => client.observe<int?, int?>(
+        QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+      ),
+      throwsA(isA<QueryDataTypeError>()),
+    );
+    expect(
+      () => client.query<num>(QueryOptions(queryKey: key, queryFn: (_) => 2)),
+      throwsA(isA<QueryDataTypeError>()),
+    );
+    expect(
+      () => client.updateQueriesData<num>(
+        QueryFilters(queryKey: key),
+        (previous) => (previous ?? 0) + 1,
+      ),
+      throwsA(isA<QueryDataTypeError>()),
+    );
+    expect(client.getQueryData<int>(key), 1);
+    client.clear();
+  });
+
+  test('C-Q2: timer durations are clamped to what setTimeout can hold', () {
+    // The real reproduction needs `dart compile js`: under node, a
+    // `Timer(Duration(days: 30), …)` fires after 1 ms with a
+    // `TimeoutOverflowWarning`, ahead of a 200 ms control timer. The VM's
+    // timer is 64-bit, so a VM test can only pin the clamp itself.
+    expect(maxTimerDuration.inMilliseconds, 0x7FFFFFFF);
+    expect(clampTimerDuration(const Duration(days: 30)), maxTimerDuration);
+    expect(clampTimerDuration(maxTimerDuration), maxTimerDuration);
+    expect(clampTimerDuration(ms(5)), ms(5));
+    expect(clampTimerDuration(Duration.zero), Duration.zero);
+  });
+
+  testFakeAsync('C-Q2: gc, refetch interval and retry delay all go through it',
+      (time) async {
+    final client = testClient();
+    const beyond = Duration(days: 30);
+    final key = queryKey();
+    client.setQueryData<int>(key, 1);
+    // A 30-day gc timer, armed as the clamp: it fires at 24.8 days.
+    client.queryCache.get<int>(key)!.setOptions(client
+        .defaultQueryOptions(QueryOptions<int>(
+            queryKey: key, gcTime: const GcTime.duration(beyond)))
+        .withRetry(RetryPolicy.never));
+    client.queryCache.get<int>(key)!.reset();
+    await time.advance(maxTimerDuration - ms(1));
+    expect(client.queryCache.get<int>(key), isNotNull);
+    await time.advance(ms(1));
+    expect(client.queryCache.get<int>(key), isNull);
+
+    var fetches = 0;
+    final observer = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions(
+        queryKey: queryKey(),
+        queryFn: (_) async => ++fetches,
+        refetchInterval: const RefetchInterval.every(beyond),
+      ),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    await time.advance(maxTimerDuration);
+    expect(fetches, 2);
+    unsubscribe();
+
+    var attempts = 0;
+    final retried = client.query<int>(QueryOptions(
+      queryKey: queryKey(),
+      queryFn: (_) async => ++attempts == 1 ? throw StateError('x') : attempts,
+      retry: const RetryPolicy.times(1),
+      retryDelay: const RetryDelay.fixed(beyond),
+    ));
+    await time.advance(maxTimerDuration);
+    expect(await retried, 2);
+    client.clear();
+  });
+
+  testFakeAsyncGuarded(
+      'C-Q3: a throwing cache listener neither hangs the fetch nor becomes its error',
+      (time, uncaught) async {
+    final client = testClient();
+    final key = queryKey();
+    final unsubscribe = client.queryCache.subscribe((event) {
+      if (event is QueryUpdated && event.action is QueryFailedAction) {
+        throw StateError('listener');
+      }
+    });
+    final result = client.query<int>(QueryOptions(
+      queryKey: key,
+      queryFn: (_) async => throw StateError('fetch'),
+      retry: const RetryPolicy.times(1),
+      retryDelay: const RetryDelay.fixed(Duration.zero),
+    ));
+    result.ignore();
+    await time.advance(ms(1));
+    await expectLater(
+      result,
+      throwsA(isA<StateError>().having((e) => e.message, 'message', 'fetch')),
+    );
+    final state = client.getQueryState<int>(key)!;
+    expect(state.status, QueryStatus.error);
+    expect(state.fetchStatus, FetchStatus.idle);
+    expect(uncaught.whereType<StateError>().map((e) => e.message),
+        contains('listener'));
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsyncGuarded(
+      'C-Q3: the mutation cache isolates its listeners the same way',
+      (time, uncaught) async {
+    final client = testClient();
+    final unsubscribe = client.mutationCache.subscribe((event) {
+      if (event is MutationUpdated && event.action is MutationFailedAction) {
+        throw StateError('listener');
+      }
+    });
+    final observer = MutationObserver<int, int, void>(
+      client,
+      MutationOptions(
+        mutationFn: (_) async => throw StateError('mutate'),
+        retry: const RetryPolicy.times(1),
+        retryDelay: const RetryDelay.fixed(Duration.zero),
+      ),
+    );
+    // And the observer's own listeners, which sit on the same dispatch path.
+    final unsubscribeObserver = observer.subscribe((result) {
+      if (result.failureCount > 0) {
+        throw StateError('observer listener');
+      }
+    });
+    final result = observer.mutateAsync(1);
+    result.ignore();
+    await time.advance(ms(1));
+    await expectLater(
+      result,
+      throwsA(isA<StateError>().having((e) => e.message, 'message', 'mutate')),
+    );
+    expect(observer.currentResult.isError, isTrue);
+    expect(
+      uncaught.whereType<StateError>().map((e) => e.message),
+      containsAll(<String>['listener', 'observer listener']),
+    );
+    unsubscribe();
+    unsubscribeObserver();
+    observer.reset();
+    client.clear();
+  });
+
+  testFakeAsync('C-Q3: a throwing retryer hook rejects the fetch',
+      (time) async {
+    // The last line of defence, once listeners are isolated: a hook that
+    // throws for any other reason settles the future instead of leaking out
+    // of `_attempt`'s ignored one.
+    final focus = AppFocusManager();
+    final online = OnlineManager();
+    final failing = Retryer<int>(
+      fn: () async => throw StateError('x'),
+      focusManager: focus,
+      onlineManager: online,
+      canRun: () => true,
+      retry: const RetryPolicy.times(3),
+      retryDelay: const RetryDelay.fixed(Duration.zero),
+      onFail: (_, __, ___) => throw ArgumentError('onFail'),
+    );
+    await expectLater(failing.start(), throwsA(isA<ArgumentError>()));
+
+    online.setOnline(false);
+    final pausing = Retryer<int>(
+      fn: () async => 1,
+      focusManager: focus,
+      onlineManager: online,
+      canRun: () => true,
+      onPause: () => throw ArgumentError('onPause'),
+    );
+    await expectLater(pausing.start(), throwsA(isA<ArgumentError>()));
+    expect(pausing.status, RetryerStatus.rejected);
+  });
+
+  testFakeAsync('C-Q4: a standing select error is not a new result per build',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<int>(key, 1);
+    QueryObserverOptions<int, int> options() => QueryObserverOptions(
+        queryKey: key, enabled: Enabled.no, select: _throwingSelect);
+    final observer = QueryObserver<int, int>(client, options());
+    final failedAt = observer.currentResult.errorUpdatedAt;
+    expect(failedAt, time.now);
+    var notifications = 0;
+    final unsubscribe = observer.subscribe((_) => notifications++);
+    await time.flushMicrotasks();
+    notifications = 0;
+    for (var i = 0; i < 3; i++) {
+      await time.advance(ms(1));
+      observer.setOptions(options());
+    }
+    expect(notifications, 0);
+    expect(observer.currentResult.errorUpdatedAt, failedAt);
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync('C-M1: infinite pages are shared structurally on refetch',
+      (time) async {
+    final client = testClient();
+    final observer =
+        InfiniteQueryObserver<List<int>, int, InfiniteData<List<int>, int>>(
+      client,
+      InfiniteQueryObserverOptions(
+        queryKey: queryKey(),
+        initialPageParam: 0,
+        // A fresh list per page, as any real page is.
+        pageFn: (context) async => <int>[context.pageParam, 1],
+        getNextPageParam: (_, __, param, ___) => param < 1 ? param + 1 : null,
+      ),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    await observer.fetchNextPage();
+    final before = observer.currentResult.dataOrNull!;
+    expect(before.pages, hasLength(2));
+    await observer.refetch();
+    final after = observer.currentResult.dataOrNull!;
+    expect(after, same(before));
+
+    // One changed page: the other page's instance survives.
+    client.setQueryData<InfiniteData<List<int>, int>>(
+      observer.currentQuery.queryKey,
+      InfiniteData(pages: <List<int>>[
+        <int>[0, 1],
+        <int>[1, 2]
+      ], pageParams: <int>[
+        0,
+        1
+      ]),
+    );
+    final changed = observer.currentResult.dataOrNull!;
+    expect(changed, isNot(same(before)));
+    expect(changed.pages[0], same(before.pages[0]));
+    expect(changed.pageParams, same(before.pageParams));
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync('C-M2: an InfiniteQueryOptions pages through client.query',
+      (time) async {
+    final client = testClient();
+    final data = await client.query(InfiniteQueryOptions<int, int>(
+      queryKey: queryKey(),
+      initialPageParam: 0,
+      pages: 2,
+      pageFn: (context) async => context.pageParam,
+      getNextPageParam: (_, __, param, ___) => param + 1,
+    ));
+    expect(data.pages, <int>[0, 1]);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'C-Q5: subscribing to a fetch already running reports it as fetching',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<int>(key, 1);
+    final hold = Completer<int>();
+    final observer = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions(queryKey: key, queryFn: (_) => hold.future),
+    );
+    expect(observer.currentResult.fetchStatus, FetchStatus.idle);
+    client.refetchQueries(filters: QueryFilters(queryKey: key)).ignore();
+    await time.flushMicrotasks();
+    // Joins the running fetch, which dispatches nothing.
+    final unsubscribe = observer.subscribe((_) {});
+    expect(observer.currentQuery.state.fetchStatus, FetchStatus.fetching);
+    expect(observer.currentResult.fetchStatus, FetchStatus.fetching);
+    hold.complete(2);
+    await time.flushMicrotasks();
+    expect(observer.currentResult.dataOrNull, 2);
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'C-Q6: an immediate retry cancel rejects instead of pausing offline',
+      (time) async {
+    final focus = AppFocusManager();
+    final online = OnlineManager();
+    var pauses = 0;
+    final retryer = Retryer<int>(
+      fn: () async => throw StateError('x'),
+      focusManager: focus,
+      onlineManager: online,
+      canRun: () => true,
+      retry: const RetryPolicy.times(3),
+      retryDelay: const RetryDelay.fixed(Duration(seconds: 1)),
+      onPause: () => pauses++,
+    );
+    final result = retryer.start();
+    await time.flushMicrotasks();
+    online.setOnline(false);
+    retryer.cancelRetry(immediately: true);
+    await expectLater(result, throwsA(isA<StateError>()));
+    expect(pauses, 0);
+    expect(time.pendingTimers, 0);
+  });
+
+  test('C-Q7: an element that does not fit the incoming list is not shared',
+      () {
+    // `1 == 1.0`, and the recursion runs untyped: the `int` used to be stored
+    // into the `List<double>` copy and throw.
+    final previousInts = <int>[1];
+    final shared = replaceEqualDeep<List<num>>(previousInts, <double>[1.0]);
+    expect(shared, <double>[1.0]);
+    expect(shared, isA<List<double>>());
+    expect(shared, isNot(same(previousInts)));
+    // Elements that fit still share.
+    final previous = <num>[1, 2];
+    expect(replaceEqualDeep<List<num>>(previous, <num>[1, 2]), same(previous));
+  });
+
+  testFakeAsync('C-Q8: find survives a predicate that removes the query',
+      (time) async {
+    final client = testClient();
+    client.setQueryData<int>(queryKey(), 1);
+    client.setQueryData<int>(queryKey(), 2);
+    expect(
+      client.queryCache.find(QueryFilters(predicate: (query) {
+        client.queryCache.remove(query);
+        return false;
+      })),
+      isNull,
+    );
+    expect(client.queryCache.queries, isEmpty);
+  });
+
+  testFakeAsync('C-M3: clear() settles a mutation paused offline',
+      (time) async {
+    final client = testClient();
+    client.onlineManager.setOnline(false);
+    final observer = MutationObserver<int, int, void>(
+      client,
+      MutationOptions(mutationFn: (v) async => v),
+    );
+    final result = observer.mutateAsync(1);
+    result.ignore();
+    await time.flushMicrotasks();
+    expect(observer.currentResult.isPaused, isTrue);
+    client.clear();
+    await expectLater(result, throwsA(isA<CancelledError>()));
+    expect(observer.currentResult.isError, isTrue);
+    expect(observer.currentResult.isPaused, isFalse);
+    expect(time.pendingTimers, 0);
+    // Nothing is left to wake up.
+    client.onlineManager.setOnline(true);
+    await time.advance(const Duration(minutes: 10));
+    expect(observer.currentResult.isError, isTrue);
+  });
+
+  testFakeAsync('C-M4: a cancel-refetch resets the failure count',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<String>(key, 'ok1');
+    var attempts = 0;
+    final hold = Completer<String>();
+    final observer = QueryObserver<String, String>(
+      client,
+      QueryObserverOptions(
+        queryKey: key,
+        queryFn: (_) async {
+          attempts++;
+          if (attempts == 1) throw StateError('once');
+          return hold.future;
+        },
+        retry: const RetryPolicy.times(3),
+        retryDelay: const RetryDelay.fixed(Duration(seconds: 10)),
+      ),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(observer.currentResult.failureCount, 1);
+    observer.refetch(cancelRefetch: true).ignore();
+    await time.flushMicrotasks();
+    expect(observer.currentResult.failureCount, 0);
+    expect(observer.currentResult.failureReason, isNull);
+    expect(attempts, 2);
+    hold.complete('ok2');
+    await time.flushMicrotasks();
+    expect(observer.currentResult.dataOrNull, 'ok2');
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync('C-M5: a default function does not make options unequal',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryDefaults(key, QueryDefaults(queryFn: (_) async => 1));
+    final queryOptions = QueryOptions<int>(queryKey: key);
+    expect(
+      client.defaultQueryOptions(queryOptions),
+      client.defaultQueryOptions(queryOptions),
+    );
+    expect(
+      client.defaultQueryObserverOptions<int, int>(
+          QueryObserverOptions(queryKey: key)),
+      client.defaultQueryObserverOptions<int, int>(
+          QueryObserverOptions(queryKey: key)),
+    );
+
+    client.setMutationDefaults(
+        key, MutationDefaults(mutationFn: (v) async => v));
+    final mutationOptions = MutationOptions<int, int, void>(mutationKey: key);
+    expect(
+      client.defaultMutationOptions(mutationOptions),
+      client.defaultMutationOptions(mutationOptions),
+    );
+    final observer = MutationObserver<int, int, void>(client, mutationOptions);
+    await observer.mutateAsync(1);
+    var updates = 0;
+    final unsubscribe = client.mutationCache.subscribe((event) {
+      if (event is MutationObserverOptionsUpdated) updates++;
+    });
+    observer.setOptions(mutationOptions);
+    observer.setOptions(mutationOptions);
+    expect(updates, 0);
+
+    // The type check the wrapper exists for still holds, and still names the
+    // key where it has one.
+    await expectLater(
+      client.query<String>(QueryOptions(queryKey: key)),
+      throwsA(
+          isA<QueryDataTypeError>().having((e) => e.queryKey, 'queryKey', key)),
+    );
+    unsubscribe();
+    observer.reset();
+    client.clear();
+  });
+
+  testFakeAsync('C-M6: a settled mutation with an observer arms no gc timer',
+      (time) async {
+    final client = testClient();
+    final observer = MutationObserver<int, int, void>(
+      client,
+      MutationOptions(mutationFn: (v) async => v),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    await observer.mutateAsync(1);
+    expect(time.pendingTimers, 0);
+    // The observer leaving is what arms it.
+    unsubscribe();
+    expect(time.pendingTimers, 1);
+    await time.advance(const Duration(minutes: 5));
+    expect(client.mutationCache.mutations, isEmpty);
+  });
+
+  testFakeAsync('C-M7: the paging flags follow a direct setOptions',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>> options(
+      int? Function(int page, List<int> pages, int param, List<int> params)
+          next,
+    ) =>
+        InfiniteQueryObserverOptions(
+          queryKey: key,
+          initialPageParam: 0,
+          pageFn: (context) async => context.pageParam,
+          getNextPageParam: next,
+        );
+    final observer = InfiniteQueryObserver<int, int, InfiniteData<int, int>>(
+      client,
+      options((_, __, ___, ____) => null),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(observer.hasNextPage, isFalse);
+
+    // Any options carrying the paging behaviour are accepted, and the flags
+    // read the new paging half — not a copy kept beside the options.
+    final paged = client
+        .infiniteObserverOptions(options((_, __, param, ___) => param + 1));
+    observer.setOptions(paged);
+    expect(observer.hasNextPage, isTrue);
+    expect(observer.getOptimisticResult(paged).isSuccess, isTrue);
+    await observer.fetchNextPage();
+    expect(observer.currentResult.dataOrNull?.pages, <int>[0, 1]);
+    unsubscribe();
+    client.clear();
   });
 }

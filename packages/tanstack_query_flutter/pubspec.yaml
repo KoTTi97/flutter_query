@@ -5,6 +5,13 @@ description: >-
   with or endorsed by TanStack.
 version: 0.1.0-dev
 repository: https://github.com/KoTTi97/flutter_query
+issue_tracker: https://github.com/KoTTi97/flutter_query/issues
+topics:
+  - cache
+  - state-management
+  - query
+  - tanstack-query
+  - async
 
 environment:
   sdk: ^3.6.0
@@ -18,6 +25,7 @@ dependencies:
   tanstack_query_core: ^0.1.0-dev
 
 dev_dependencies:
+  clock: ^1.1.2
   flutter_test:
     sdk: flutter
-  lints: ^6.0.0
+  lints: '>=5.1.1 <7.0.0'

@@ -469,7 +469,16 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       if (identical(_retryer, retryer)) {
         _retryer = null;
       }
-      scheduleGc();
+      // Only when nobody is watching: `optionalRemove` leaves a pending
+      // mutation alone (re-arming there would spin on `gcTime: 0`), so a
+      // mutation that settles unobserved has to arm its own collection. With
+      // an observer attached, `removeObserver` arms it when that observer
+      // leaves — and a timer standing while a widget is mounted is exactly
+      // what Flutter's widget tests assert against (fourth review,
+      // 2026-09-09).
+      if (observers.isEmpty) {
+        scheduleGc();
+      }
     }
   }
 

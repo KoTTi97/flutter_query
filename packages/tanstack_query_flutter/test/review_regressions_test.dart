@@ -1,10 +1,13 @@
-/// Regressions found by the second and third external reviews (2026-09-09),
-/// each pinned by the case that reproduced it. Binding-only; the core's are
-/// in `tanstack_query_core/test/port_specifics_test.dart`.
+/// Regressions found by the second, third and fourth external reviews
+/// (2026-09-09), each pinned by the case that reproduced it. Binding-only; the
+/// core's are in `tanstack_query_core/test/port_specifics_test.dart`.
 library;
 
 import 'dart:async';
 
+// The core reads staleness from `package:clock`, so shifting that clock is
+// how a test makes data go stale between two reads.
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -652,6 +655,369 @@ void main() {
       client.clear();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Fourth review, 2026-09-09.
+
+  group('B2 a single-subscription onlineStatus stream', () {
+    testWidgets('survives a client switch, which inherits the last value',
+        (tester) async {
+      final a = newClient();
+      final b = newClient();
+      // Not broadcast: a second `listen` would throw.
+      final online = StreamController<bool>();
+      await withClient(tester, [a, b], () async {
+        await tester.pumpWidget(_provided(a, online.stream));
+        online.add(false);
+        await tester.pump();
+        expect(a.onlineManager.isOnline(), isFalse);
+
+        await tester.pumpWidget(_provided(b, online.stream));
+        expect(tester.takeException(), isNull);
+        // The stream will not repeat itself for the newcomer.
+        expect(b.onlineManager.isOnline(), isFalse);
+
+        online.add(true);
+        await tester.pump();
+        expect(b.onlineManager.isOnline(), isTrue);
+        expect(a.onlineManager.isOnline(), isFalse);
+      });
+      unawaited(online.close());
+    });
+  });
+
+  group('B3 the first build is the only build', () {
+    testWidgets('until the result actually changes, in all three styles',
+        (tester) async {
+      final client = newClient();
+      final builds = <String>[];
+      final fetches = <String, Completer<String>>{};
+      QueryObserverOptions<String, String> pending(String id) =>
+          QueryObserverOptions(
+            queryKey: QueryKey(<Object?>['r4', id]),
+            queryFn: (_) =>
+                fetches.putIfAbsent(id, Completer<String>.new).future,
+          );
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(app(
+          client,
+          Column(children: [
+            QueryBuilder<String>(
+              options: pending('builder'),
+              builder: (_, r) {
+                builds.add('builder:${r.dataOrNull}');
+                return const SizedBox();
+              },
+            ),
+            _R4ContextReader(pending('context'), builds),
+            _R4MixinReader(pending('mixin'), builds),
+          ]),
+        ));
+        for (var i = 0; i < 3; i++) {
+          await tester.pump();
+        }
+        // The subscribe started the fetch, the build read `fetching`, and the
+        // observer's notification about that very fetch has nothing to add.
+        expect(builds, ['builder:null', 'context:null', 'mixin:null']);
+
+        for (final fetch in fetches.values) {
+          fetch.complete('ok');
+        }
+        // Completed from outside a frame, the result reaches the widgets on
+        // the frame after the one that runs the completion's microtasks.
+        await tester.pumpAndSettle();
+        expect(builds, [
+          'builder:null',
+          'context:null',
+          'mixin:null',
+          'builder:ok',
+          'context:ok',
+          'mixin:ok',
+        ]);
+      });
+    });
+  });
+
+  group('B5 one mutationKey, two type triples', () {
+    for (final (name, widget) in [
+      ('context', const _R4KeyedMutations()),
+      ('mixin', const _R4MixinKeyedMutations()),
+    ]) {
+      testWidgets('$name gets two controllers, not a failed cast',
+          (tester) async {
+        final client = newClient();
+        await withClient(tester, [client], () async {
+          await tester.pumpWidget(app(client, widget));
+          expect(tester.takeException(), isNull);
+          expect(find.text('distinct'), findsOneWidget);
+        });
+      });
+    }
+  });
+
+  group('B6 staleness flipping between two reads of one key', () {
+    for (final (name, widget) in [
+      ('context', const _R4StaleBetweenReads()),
+      ('mixin', const _R4MixinStaleBetweenReads()),
+    ]) {
+      testWidgets('$name is not mistaken for two selects', (tester) async {
+        final client = newClient()..setQueryData<String>(key, 'x');
+        await withClient(tester, [client], () async {
+          await tester.pumpWidget(app(client, widget));
+          expect(tester.takeException(), isNull);
+          expect(find.text('false/true'), findsOneWidget);
+        });
+      });
+    }
+  });
+
+  group('B8 a mutation the widget stopped reading', () {
+    for (final (name, build) in [
+      ('context', _R4MutationById.new),
+      ('mixin', _R4MixinMutationById.new),
+    ]) {
+      testWidgets('$name releases it after the frame, like a query',
+          (tester) async {
+        final client = newClient();
+        final seen = <MutationController<Object?, Object?, Object?>>[];
+        await withClient(tester, [client], () async {
+          await tester.pumpWidget(app(client, build('a', seen)));
+          await tester.pumpWidget(app(client, build('b', seen)));
+          await tester.pump();
+          expect(seen, hasLength(2));
+          expect(seen[0], isNot(same(seen[1])));
+          expect(seen[0].isDisposed, isTrue);
+          expect(seen[1].isDisposed, isFalse);
+        });
+      });
+    }
+  });
+
+  group('A-24 QueryClientProvider.maybeOf', () {
+    testWidgets('is the client, or null without a provider', (tester) async {
+      final client = newClient();
+      QueryClient? found;
+      Widget probe() => Builder(builder: (context) {
+            found = QueryClientProvider.maybeOf(context);
+            return const SizedBox();
+          });
+      await withClient(tester, [client], () async {
+        await tester.pumpWidget(MaterialApp(home: probe()));
+        expect(found, isNull);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(app(client, probe()));
+        expect(found, same(client));
+      });
+    });
+  });
+
+  group('A-25 a controller read before anyone listens', () {
+    test('reports the optimistic result, as a first build would', () {
+      final client = newClient();
+      final controller = QueryController.of<String>(
+        client,
+        QueryObserverOptions(
+          queryKey: key,
+          queryFn: (_) => Completer<String>().future,
+        ),
+      );
+      expect(controller.value.fetchStatus, FetchStatus.fetching);
+      expect(
+          controller.observer.currentQuery.state.fetchStatus, FetchStatus.idle);
+      void listener() {}
+      controller.addListener(listener);
+      expect(controller.value.fetchStatus, FetchStatus.fetching);
+      controller.removeListener(listener);
+      controller.dispose();
+      client.clear();
+    });
+
+    test('a query that will not fetch stays idle', () {
+      final client = newClient();
+      final controller = QueryController.of<String>(
+        client,
+        QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+      );
+      expect(controller.value.fetchStatus, FetchStatus.idle);
+      controller.dispose();
+      client.clear();
+    });
+
+    test('the infinite controller agrees', () {
+      final client = newClient();
+      final controller =
+          InfiniteQueryController<int, int, InfiniteData<int, int>>(
+        client,
+        InfiniteQueryObserverOptions(
+          queryKey: key,
+          initialPageParam: 0,
+          pageFn: (context) => Completer<int>().future,
+          getNextPageParam: (page, pages, param, params) => null,
+        ),
+      );
+      expect(controller.value.fetchStatus, FetchStatus.fetching);
+      controller.dispose();
+      client.clear();
+    });
+  });
+}
+
+Widget _provided(QueryClient client, Stream<bool> online) =>
+    QueryClientProvider(
+      client: client,
+      observeAppLifecycle: false,
+      onlineStatus: online,
+      child: const SizedBox(),
+    );
+
+class _R4ContextReader extends StatelessWidget {
+  const _R4ContextReader(this.options, this.builds);
+
+  final QueryObserverOptions<String, String> options;
+  final List<String> builds;
+
+  @override
+  Widget build(BuildContext context) {
+    builds.add('context:${context.query(options).dataOrNull}');
+    return const SizedBox();
+  }
+}
+
+class _R4MixinReader extends StatefulWidget {
+  const _R4MixinReader(this.options, this.builds);
+
+  final QueryObserverOptions<String, String> options;
+  final List<String> builds;
+
+  @override
+  State<_R4MixinReader> createState() => _R4MixinReaderState();
+}
+
+class _R4MixinReaderState extends State<_R4MixinReader> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    widget.builds.add('mixin:${watchQuery(widget.options).dataOrNull}');
+    return const SizedBox();
+  }
+}
+
+MutationOptions<String, String, void> _renameKeyed() =>
+    MutationOptions(mutationKey: key, mutationFn: (v) async => v);
+
+MutationOptions<int, int, void> _countKeyed() =>
+    MutationOptions(mutationKey: key, mutationFn: (v) async => v);
+
+class _R4KeyedMutations extends StatelessWidget {
+  const _R4KeyedMutations();
+
+  @override
+  Widget build(BuildContext context) {
+    final rename = context.mutation(_renameKeyed());
+    final count = context.mutation(_countKeyed());
+    return Text(identical(rename, count) ? 'shared' : 'distinct');
+  }
+}
+
+class _R4MixinKeyedMutations extends StatefulWidget {
+  const _R4MixinKeyedMutations();
+
+  @override
+  State<_R4MixinKeyedMutations> createState() => _R4MixinKeyedMutationsState();
+}
+
+class _R4MixinKeyedMutationsState extends State<_R4MixinKeyedMutations>
+    with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final rename = watchMutation(_renameKeyed());
+    final count = watchMutation(_countKeyed());
+    return Text(identical(rename, count) ? 'shared' : 'distinct');
+  }
+}
+
+/// Fresh for a second, and never fetched: the two reads differ only in what
+/// the clock says.
+QueryObserverOptions<String, String> _shortlyStale() => QueryObserverOptions(
+      queryKey: key,
+      queryFn: (_) => Completer<String>().future,
+      refetchOnMount: RefetchOn.never,
+      staleTime: const StaleTime.duration(Duration(seconds: 1)),
+    );
+
+/// The second read happens "a moment later" — past the stale time.
+T _later<T>(T Function() read) => withClock(
+      Clock.fixed(clock.now().add(const Duration(seconds: 2))),
+      read,
+    );
+
+class _R4StaleBetweenReads extends StatelessWidget {
+  const _R4StaleBetweenReads();
+
+  @override
+  Widget build(BuildContext context) {
+    final first = context.query(_shortlyStale());
+    final second = _later(() => context.query(_shortlyStale()));
+    return Text('${first.isStale}/${second.isStale}');
+  }
+}
+
+class _R4MixinStaleBetweenReads extends StatefulWidget {
+  const _R4MixinStaleBetweenReads();
+
+  @override
+  State<_R4MixinStaleBetweenReads> createState() =>
+      _R4MixinStaleBetweenReadsState();
+}
+
+class _R4MixinStaleBetweenReadsState extends State<_R4MixinStaleBetweenReads>
+    with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final first = watchQuery(_shortlyStale());
+    final second = _later(() => watchQuery(_shortlyStale()));
+    return Text('${first.isStale}/${second.isStale}');
+  }
+}
+
+MutationOptions<String, String, void> _plain() =>
+    MutationOptions(mutationFn: (v) async => v);
+
+class _R4MutationById extends StatelessWidget {
+  const _R4MutationById(this.id, this.seen);
+
+  final String id;
+  final List<MutationController<Object?, Object?, Object?>> seen;
+
+  @override
+  Widget build(BuildContext context) {
+    final mutation = context.mutation(_plain(), id: id);
+    if (!seen.contains(mutation)) {
+      seen.add(mutation);
+    }
+    return const SizedBox();
+  }
+}
+
+class _R4MixinMutationById extends StatefulWidget {
+  const _R4MixinMutationById(this.id, this.seen);
+
+  final String id;
+  final List<MutationController<Object?, Object?, Object?>> seen;
+
+  @override
+  State<_R4MixinMutationById> createState() => _R4MixinMutationByIdState();
+}
+
+class _R4MixinMutationByIdState extends State<_R4MixinMutationById>
+    with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final mutation = watchMutation(_plain(), id: widget.id);
+    if (!widget.seen.contains(mutation)) {
+      widget.seen.add(mutation);
+    }
+    return const SizedBox();
+  }
 }
 
 class _MixinTwoSelects extends StatefulWidget {

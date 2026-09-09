@@ -1,6 +1,8 @@
 /// Port of `query-core/src/queryCache.ts` at upstream `50680b98c`.
 library;
 
+import 'dart:async';
+
 import 'package:meta/meta.dart';
 
 import 'filters.dart';
@@ -50,22 +52,28 @@ final class QueryObserverResultsUpdated extends QueryCacheEvent {
   const QueryObserverResultsUpdated(super.query);
 }
 
-/// Thrown when a query is read as one data type but holds another.
+/// Thrown when a query is read as one data type but holds another — or when
+/// an erased default (`QueryDefaults.queryFn`, `structuralSharing`,
+/// `MutationDefaults.mutationFn`) hands back a value of the wrong type.
 ///
 /// Upstream casts blindly and TypeScript cannot catch it; here the mismatch is
 /// always a bug, so it is loud rather than a silent `null`
-/// (https://github.com/KoTTi97/flutter_query/issues/7).
+/// (https://github.com/KoTTi97/flutter_query/issues/7). [queryKey] is `null`
+/// when the default that produced the value has no key to name: a sharing
+/// hook sees only the data, and a mutation function only its variables.
 final class QueryDataTypeError implements Exception {
   const QueryDataTypeError(this.queryKey, this.expected, this.actual);
 
-  final QueryKey queryKey;
+  final QueryKey? queryKey;
   final Type expected;
   final Type actual;
 
   @override
-  String toString() =>
-      'Query $queryKey holds $actual but was read as $expected. One key is '
-      'being used with two data types.';
+  String toString() => queryKey == null
+      ? 'A default produced $actual where $expected was expected. One '
+          'default is being used with two data types.'
+      : 'Query $queryKey holds $actual but was read as $expected. One key is '
+          'being used with two data types.';
 }
 
 /// Every query, keyed by [QueryKey].
@@ -134,16 +142,20 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
 
   /// The query stored under [queryKey], or `null` if there is none.
   ///
-  /// Throws [QueryDataTypeError] if it holds a different data type.
+  /// Throws [QueryDataTypeError] if it holds a different data type — a
+  /// *different* type, not a subtype: `is Query<T>` would let a `Query<int>`
+  /// through as a `Query<int?>` or a `Query<num>`, and the first write of
+  /// options typed for the wider type then failed deep inside the observer
+  /// with a raw `TypeError`. One key, one exact type.
   Query<TQueryData>? get<TQueryData>(QueryKey queryKey) {
     final query = _queries[queryKey];
     if (query == null) {
       return null;
     }
-    if (query is Query<TQueryData>) {
-      return query;
+    if (query.dataType == TQueryData) {
+      return query as Query<TQueryData>;
     }
-    throw QueryDataTypeError(queryKey, TQueryData, query.runtimeType);
+    throw QueryDataTypeError(queryKey, TQueryData, query.dataType);
   }
 
   List<Query<Object?>> get queries => List<Query<Object?>>.of(_queries.values);
@@ -156,7 +168,8 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// The first matching query. An unset `exact` means an exact match here,
   /// as upstream's `find` defaults `{ exact: true, ...filters }`.
   Query<Object?>? find(QueryFilters filters) {
-    for (final query in _queries.values) {
+    // A copy, like `findAll`: a predicate may remove the query it is shown.
+    for (final query in queries) {
       if (filters.matches(query, exactByDefault: true)) {
         return query;
       }
@@ -164,9 +177,17 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     return null;
   }
 
+  /// Each listener is isolated, as observer listeners are: a throw is
+  /// reported to the zone and the rest still run. Unisolated, a devtools or
+  /// logging subscriber that threw on a `failed` action blew up the retryer's
+  /// loop and left the fetch pending forever (fourth review, 2026-09-09).
   void notify(QueryCacheEvent event) {
     for (final listener in List.of(listeners)) {
-      listener(event);
+      try {
+        listener(event);
+      } catch (error, stackTrace) {
+        Zone.current.handleUncaughtError(error, stackTrace);
+      }
     }
   }
 

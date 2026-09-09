@@ -26,8 +26,9 @@ QueryObserverOptions<String, String> sensorQuery(
 
 Widget app(QueryClient client, Widget child) => QueryClientProvider(
       client: client,
-      // AppLifecycleListener needs a real binding observer; the widget tests
-      // drive focus through the manager directly instead.
+      // These tests drive focus through the manager directly; the lifecycle
+      // wiring itself runs fine under the test binding and is proven in
+      // review_regressions_test.dart (F10, M5).
       observeAppLifecycle: false,
       child: MaterialApp(home: Scaffold(body: child)),
     );

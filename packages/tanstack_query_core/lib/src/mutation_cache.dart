@@ -146,9 +146,17 @@ class MutationCache
     return null;
   }
 
+  /// Each listener is isolated, as observer listeners are: a throw is
+  /// reported to the zone and the rest still run. Unisolated, a devtools or
+  /// logging subscriber that threw on a `failed` action blew up the retryer's
+  /// loop and left the mutation pending forever.
   void notify(MutationCacheEvent event) {
     for (final listener in List.of(listeners)) {
-      listener(event);
+      try {
+        listener(event);
+      } catch (error, stackTrace) {
+        Zone.current.handleUncaughtError(error, stackTrace);
+      }
     }
   }
 

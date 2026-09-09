@@ -777,6 +777,181 @@ builder; a missing provider throws a `FlutterError` in every build mode; and
 the barrel exports are trimmed to upstream's `index.ts` surface, with tests of
 the internals importing them directly.
 
+### Fourth review (2026-09-09, of `65a1da6`)
+
+A fourth external review of the core: six majors, seven minors, three nits.
+Every finding was reproduced against the checkout before anything changed,
+and all fourteen behavioural ones reproduced as described — the web timer for
+real: a `Timer(Duration(days: 30), …)` compiled with `dart compile js` and run
+under node fires after 4 ms, with a `TimeoutOverflowWarning`, ahead of a
+200 ms control timer. One claim in the review did not hold: upstream at this
+pin has *no* 2^31 clamp (see 29). The regressions are the fourth block of
+`port_specifics_test.dart` (`fourthReview()`), one per finding, named by the
+review's number.
+
+Core, fixed:
+
+28. **Subtype-related data types on one key crashed with a raw `TypeError`.**
+    `QueryCache.get<T>` asked `query is Query<T>`, and Dart generics are
+    covariant: a `Query<int>` passed as a `Query<int?>` or a `Query<num>`, and
+    the observer's first `setOptions(DefaultedQueryOptions<int?>)` then failed
+    inside the query with a `_TypeError` nobody could catch by name. Upstream
+    casts blindly and cannot tell. The cache now compares the query's
+    `dataType` (the reified `TQueryData`) exactly, throws `QueryDataTypeError`
+    for a subtype too, and `updateQueriesData` makes the same exact check
+    before writing anything. The rule is *one key, one exact type* (in the
+    table).
+29. **Timers over 24.8 days fired at once on the web.** `Removable`'s gc
+    timer, the observer's stale timer and refetch interval, and the retryer's
+    backoff handed the `Duration` straight to `Timer`; dart2js and dart2wasm
+    pass the milliseconds to `setTimeout`, which treats anything above
+    2^31 − 1 as an overflow and fires after 1 ms. So
+    `GcTime.duration(Duration(days: 30))` collected a millisecond after the
+    last observer left, and `RefetchInterval.every(Duration(days: 30))` polled
+    every millisecond. The dartdoc in `removable.dart` said upstream's clamp
+    was not ported because Dart's timer is 64-bit — true on the VM, false on
+    the web — and upstream at this pin has no clamp either (`isValidTimeout`
+    only rejects `Infinity`; the review's "upstream does the same" was
+    mistaken, so this is the port's own). `timers.dart` is the one helper
+    (`clampTimerDuration`, to `maxTimerDuration`), applied at the four sites: a
+    clamp rather than "never", because a 30-day gc that runs on day 24.8 is
+    harmless while one that never runs would change what the option means.
+    Not a divergence — a runtime fact the VM hides. The helper has a unit
+    test and the three sites are driven past the clamp under virtual time;
+    the real reproduction needs `dart compile js`.
+30. **A throwing cache listener left the fetch pending forever.** The retryer
+    called `onFail`/`onPause`/`onContinue` outside every `try`; `Query` and
+    `Mutation` wire all three to `_dispatch`, whose cache listeners ran
+    unisolated. A devtools or logging subscriber throwing on a `failed` action
+    blew up `_attempt`, whose `.ignore()`d future swallowed it, and the
+    completer was never settled: `pending`/`fetching` after a minute, nothing
+    reported anywhere. The third review had isolated *observer* listeners;
+    cache listeners, and the mutation observer's own listeners, were still on
+    the same path. Both caches now isolate every listener (reported to the
+    zone, the rest still run), so does `MutationObserver`, and the retryer
+    guards its three hooks: a throw there is the fetch's error, the policy #15
+    set for a throwing retry callback — the last line of defence once the
+    listeners are isolated.
+31. **A standing `select` error was a new result on every build.**
+    `createResult` stamped `errorUpdatedAt = clock.now()` on every pass while
+    the selector's error stood; `errorUpdatedAt` is part of the result's
+    identity, so two results a millisecond apart were never equal and every
+    `setOptions` notified — through the binding, a rebuild loop. Upstream
+    reads `Date.now()` there too, but its render tracking hides the churn,
+    and this port has no such filter (#15). The timestamp is captured once,
+    when the selector throws, and reused until the error clears.
+32. **Infinite queries never shared their pages.** `replaceEqualDeep` walked
+    lists, maps and sets and fell back to `==` for everything else;
+    `InfiniteData` was "else", and its `==` compares pages by `==` — a page is
+    usually a `List`, equal only to itself — so every refetch that brought
+    back the same pages was a new `InfiniteData` for every consumer.
+    Upstream runs `{ pages, pageParams }` through `replaceEqualDeep` as a
+    plain object. `InfiniteData` is walked the same way now: each list shared
+    on its own, the whole `previous` when both come back unchanged, else
+    `next` carrying the shared lists. (An import cycle, `structural_sharing →
+    infinite_query → query → structural_sharing`, which Dart allows; a public
+    sharing interface would avoid it, and nobody has asked for one.)
+33. **An `InfiniteQueryOptions` could not be fetched as the `QueryOptions` it
+    is.** It extends `QueryOptions<InfiniteData>`, so `client.query(options)`
+    typechecked, but the paging behaviour was attached only by
+    `infiniteQuery`/`infiniteObserverOptions`, and the fetch failed with
+    `MissingQueryFunctionError` — pointing at the wrong fix. `behavior` is a
+    getter on `InfiniteQueryOptions` now, deriving the `InfiniteQueryBehavior`
+    from the options themselves (value-equal, so a fresh instance per read is
+    harmless); `infiniteQuery` is `query` with the type spelled out, and
+    `infiniteObserverOptions` no longer builds the behaviour by hand.
+34. **`hasNextPage` went stale after a direct `setOptions`.** The infinite
+    observer kept its paging options beside the defaulted ones; a `setOptions`
+    with behaviour-carrying options updated the fetch but not the copy, so
+    `hasNextPage` asked the old `getNextPageParam` while `fetchNextPage` used
+    the new one. The paging half is read off `options.behavior` now, and with
+    that the precondition is honest: `setOptions`/`getOptimisticResult` accept
+    *any* options carrying an `InfiniteQueryBehavior` — what
+    `setInfiniteOptions`, `infiniteObserverOptions` and an
+    `InfiniteQueryOptions`'s own `behavior` produce — and refuse only options
+    without one. The third review's "plain setOptions is refused" case still
+    holds as written (plain options have no behaviour); #24's typed-options-
+    only wording is superseded. `infiniteOptions` is the
+    `InfiniteQueryOptions` the behaviour holds, no longer the observer options
+    the observer was built with.
+35. **Subscribing to a fetch already running left `currentResult` idle.**
+    `onSubscribe`'s fetch branch relied on the `fetch` dispatch to recompute
+    the result, and a fetch that joins one already running dispatches nothing
+    — so an observer built while the query was idle and subscribed
+    mid-refetch reported `idle` while the query was `fetching`. Upstream's
+    `onSubscribe` has the same gap and its React adapter re-reads; the
+    Flutter controller reads `currentResult` right after subscribing. The
+    result is refreshed on subscribe when the query's state moved on since it
+    was last computed — and only then, because recomputing it unconditionally
+    ran a placeholder callback once more than upstream, which
+    `queryObserver.test.tsx` counts.
+36. **`cancelRetry(immediately: true)` paused offline instead of rejecting.**
+    A port-only path (the third review's). It woke the backoff, but
+    `_attempt` then reached `if (!canContinue) await pause()` before checking
+    the cancellation, so a removed mutation that went offline during its
+    backoff parked until the network came back. The immediate flag is checked
+    right after the delay, before the pause; a plain `cancelRetry()` keeps
+    upstream's order (wait out the delay, pause if offline, then reject).
+37. **`replaceEqualDeep` threw when a shared element did not fit the incoming
+    list.** The copy is `next.toList()`, which keeps `next`'s element type,
+    and the recursion runs as `Object?`, so the `is T` guard does not apply
+    one level down: `replaceEqualDeep<List<num>>(<int>[1], <double>[1.0])`
+    found `1 == 1.0` and stored an `int` into a `List<double>` — through
+    `Query.setData`, the query's error state. Sharing is best effort now: a
+    part that does not fit stays `next`'s and does not count as equal.
+38. **`QueryCache.find` iterated the live map.** A predicate that removed the
+    query it was shown threw `ConcurrentModificationError`; `findAll` already
+    iterated a copy. So does `find`.
+39. **`clear()` of a network-paused mutation hung `mutateAsync` forever.**
+    `Mutation.destroy` cut a backoff *delay* short (third review) but not a
+    *pause*: a mutation waiting for connectivity, focus or its scope kept its
+    pause completer after leaving the cache, and `resumePausedMutations` only
+    sees cached mutations. Ten minutes offline, ten minutes online: still
+    pending. An immediate cancel rejects a paused fetch on the spot with
+    `CancelledError` now — nothing is in flight to wait for — so the mutation
+    fails, its callbacks run, and no timer is left. The table's row is
+    corrected: the last error from a backoff, a `CancelledError` from a pause.
+40. **A cancel-refetch did not reset `fetchFailureCount`.** `Query.fetch`
+    dispatched the `fetch` action only when `fetchStatus` was idle or
+    `fetchMeta != meta`. Upstream's `!==` never holds there — a `null`
+    `fetchMeta` is not an unset `undefined`, and a page fetch builds a fresh
+    meta object per call — so upstream dispatches on every fetch that gets
+    past the piggyback check, which is what zeroes the failure count when a
+    `refetch()` cancels a retrying fetch. Dart's value-equal `FetchMore`s and
+    two `null`s compared equal here and skipped it: `failureCount: 1` where
+    upstream reports 0. The action is dispatched unconditionally, which is
+    what upstream's condition amounts to.
+41. **A default `queryFn`/`mutationFn` made defaulted options never equal.**
+    `_adoptQueryFn`, `_adoptMutationFn` and `_adoptStructuralSharing` wrapped
+    the erased default in a new closure per call, and defaulted options
+    compare functions by identity — so with `setQueryDefaults(key,
+    QueryDefaults(queryFn: …))` every `setOptions` was an options change and
+    every rebuild an `observerOptionsUpdated`. The wrappers are memoised per
+    (erased function, data type) in an `Expando` on the function itself, so
+    the memo lives exactly as long as the default does. They close over
+    nothing else: the query wrapper names the key from the context it is
+    handed, and the sharing and mutation wrappers have no key to name, so
+    `QueryDataTypeError.queryKey` is nullable now and the message says which
+    case it is.
+42. **A settled mutation with a live observer armed a gc timer.** `execute`'s
+    `finally` scheduled collection unconditionally — upstream never schedules
+    from `execute`; this port does because its `optionalRemove` leaves a
+    pending mutation alone rather than re-arming (the `mutationCache` section
+    above). With an observer attached the timer only fired into
+    `optionalRemove`, which returned; but a timer pending while a mutation
+    widget is mounted is exactly what Flutter's widget tests assert against.
+    It is armed only when no observer is attached; an observer leaving arms
+    it in `removeObserver`, as before.
+
+The three nits: `QueryClient.mount`'s listeners were `async` closures whose
+futures nobody held, so a throw would have surfaced as the unhandled
+rejection of an anonymous future; they report to the zone explicitly now,
+through one `_resumeThen`, and nothing `.ignore()`s the error into silence.
+`resetQueries` matched its refetch predicate against a `List` (O(n²)); an
+identity `Set` now. `defaultQueryObserverOptions` resolved the merged
+defaults twice per build — `defaultQueryOptions` plus its own scan, each over
+every registered default with deep key matching; resolved once and shared.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -786,7 +961,7 @@ suite does not have to go looking:
 |---|---|---|
 | `data === undefined` runtime guard in `Query.fetch` | impossible: `Future<T>` with non-nullable `T` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | `hashKey` string identity, `queryKeyHashFn` | `QueryKey` is a value type; the string is a debug view | [#8](https://github.com/KoTTi97/flutter_query/issues/8) |
-| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists element by element, maps and sets whole, `==` otherwise; the typed hook replaces it for the cache write, and `(_, next) => next` is `false`; `select` and placeholder output always go through `replaceEqualDeep` | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
+| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; the typed hook replaces it for the cache write, and `(_, next) => next` is `false`; `select` and placeholder output always go through `replaceEqualDeep` | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
 | `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `MutationFunctionContext` (a mutation function's second argument) | not ported: `MutationFn` takes variables only |  [#14](https://github.com/KoTTi97/flutter_query/issues/14) |
@@ -796,7 +971,7 @@ suite does not have to go looking:
 | `persister`, `initialDataUpdatedAt` as a function | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
-| a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
+| a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` — and a *subtype* is a mismatch: one key, one exact type | [#7](https://github.com/KoTTi97/flutter_query/issues/7), fourth review 2026-09-09 |
 | `MutationCache.remove` leaves the mutation's gc timer running | the timer is cancelled, so a removed mutation cannot ask to be removed again | [#22](https://github.com/KoTTi97/flutter_query/issues/22) |
 | a cancelled retry can still flip its query from `idle` to `paused` after its delay | the retryer checks `isResolved` after the delay | review, 2026-09-08 |
 | a removed query or mutation re-arms its own gc timer from the fetch's `finally` | removal marks it, and a marked one schedules nothing | [#24](https://github.com/KoTTi97/flutter_query/issues/24) |
@@ -808,8 +983,12 @@ suite does not have to go looking:
 | `initialData: null` / `placeholderData: null` mean "none" | `.value(null)` is a value of `null`; `.compute` returning `null` means "none" | review, 2026-09-09 |
 | a throwing `retry` / `retryDelay` callback leaves the fetch pending forever | the throw is the fetch's error | third review, 2026-09-09 |
 | a retry backoff runs to its end after the fetch was cancelled | the delay is a timer the retryer drops on resolve | third review, 2026-09-09 |
-| a mutation removed from the cache keeps retrying | `Mutation.destroy` stops the retries; the mutation fails with its last error | third review, 2026-09-09 |
+| a mutation removed from the cache keeps retrying | `Mutation.destroy` stops the retries; the mutation fails with its last error (from a backoff) or a `CancelledError` (from a pause) | third and fourth review, 2026-09-09 |
 | a throwing observer listener becomes the query's error (via `Query.fetch`) | reported to the zone; the query keeps its state | third review, 2026-09-09 |
 | a throwing cancel callback skips the rest and escapes into the canceller | each is isolated and reported to the zone | third review, 2026-09-09 |
 | `Query.reset()` on an unobserved query leaves it in the cache for good | it re-arms collection | third review, 2026-09-09 |
 | `isRefetching`/`isRefetchError` corrected for page fetches on the infinite *result* | on `InfiniteQueryObserver` / `InfiniteQueryController`, next to the other paging flags | third review, 2026-09-09 |
+| `{ pages, pageParams }` is walked by `replaceEqualDeep` as a plain object | `InfiniteData` is special-cased: each list shared on its own, the whole kept when both are | fourth review, 2026-09-09 |
+| a cache listener that throws during a dispatch escapes into the retryer, and the fetch never settles | cache and mutation-observer listeners are isolated and reported to the zone; a throw reaching a retryer hook is the fetch's error | fourth review, 2026-09-09 |
+| `onSubscribe` leaves the result stale after joining a running fetch (the React adapter re-reads) | refreshed on subscribe when the query's state moved on | fourth review, 2026-09-09 |
+| a standing `select` error is stamped `Date.now()` on every result | stamped once, when the selector threw | fourth review, 2026-09-09 |

@@ -17,25 +17,36 @@
 /// intervals therefore do not fight over one observer. Within a single widget
 /// an observer is identified by key and types — read the same key twice with
 /// different selectors of the same output type and pass [id] to tell them
-/// apart.
+/// apart. A mutation is identified by [id] or else by its `mutationKey`,
+/// together with its three types.
 ///
 /// **Release.** A key the widget read last build but not this one is released
-/// after the frame. A widget that stops calling `context.query` *altogether*
-/// gives no signal a `BuildContext` can see, so its last observers stay until
-/// it unmounts; put a conditional read in its own small widget, and the
-/// condition becomes that widget's presence in the tree.
+/// after the frame — a mutation likewise, so one whose [id] changed between
+/// builds does not outlive the build that stopped reading it. A widget that
+/// stops calling `context.query` *altogether* gives no signal a
+/// `BuildContext` can see, so its last observers stay until it unmounts; put a
+/// conditional read in its own small widget, and the condition becomes that
+/// widget's presence in the tree.
 ///
 /// **Only in `build`.** The read is reconciled against what the widget read
 /// in its last build; a `context.query` from a tap handler creates an observer
 /// that is only matched up on the next build. Read in `build`, act on the
 /// result from the handler.
+///
+/// **The client is always the provider's.** This style has no `client:`
+/// parameter, on purpose: a `BuildContext` names exactly one provider, and a
+/// second way to say which client would only leave readers wondering which
+/// one won. For a client that is not the provider's, the builders and the
+/// controllers take one directly.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 
 import 'query_controller.dart';
+import 'repeat_read.dart';
 
 /// Reading queries and mutations from a [BuildContext].
 extension QueryContext on BuildContext {
@@ -49,6 +60,11 @@ extension QueryContext on BuildContext {
   /// The observer is this widget's, released once the widget stops reading the
   /// key — including when it simply reads a *different* key on a later build —
   /// or unmounts. [id] tells apart two reads of one key in the same widget.
+  ///
+  /// Always on the provider's client; see the library doc on why there is no
+  /// `client:` here. Options built inline are re-applied on every build, as
+  /// upstream re-applies them on every render; the observer decides what, if
+  /// anything, actually changed.
   QueryResult<TData> query<TData>(
     QueryObserverOptions<TData, TData> options, {
     Object? id,
@@ -94,10 +110,11 @@ extension QueryContext on BuildContext {
 
   /// A mutation owned by this widget.
   ///
-  /// Mutations are not shared: each widget that asks gets its own, disposed
-  /// when the widget unmounts. One is identified by [id], else by the options'
-  /// `mutationKey`, else by its three types — so pass [id] when one widget
-  /// runs two mutations of the same shape.
+  /// Mutations are not shared: each widget that asks gets its own, released
+  /// when the widget stops reading it — the way a query is — or unmounts. One
+  /// is identified by [id], else by the options' `mutationKey`, each together
+  /// with its three types; without either, by the types alone — so pass [id]
+  /// when one widget runs two mutations of the same shape.
   MutationController<TData, TVariables, TOnMutateResult>
       mutation<TData, TVariables, TOnMutateResult>(
     MutationOptions<TData, TVariables, TOnMutateResult> options, {
@@ -131,6 +148,7 @@ extension QueryContext on BuildContext {
 
 /// The scope `context.query` reads through. Installed by
 /// `QueryClientProvider`; you never place one yourself.
+@internal
 class QueryScope extends InheritedWidget {
   const QueryScope({super.key, required this.client, required super.child});
 
@@ -143,16 +161,34 @@ class QueryScope extends InheritedWidget {
   InheritedElement createElement() => QueryScopeElement(this);
 }
 
-/// A query observer one widget holds, and how to let it go.
-class _QueryEntry {
-  _QueryEntry(this.controller, this.detach);
+/// One controller a widget holds — a query's or a mutation's — and how to let
+/// it go.
+class _Entry {
+  _Entry(this.controller, this.reader) {
+    controller.addListener(_onChanged);
+  }
 
-  final ChangeNotifier controller;
-  final void Function() detach;
+  final ValueListenable<Object?> controller;
+  final Element reader;
+
+  /// The value the last build read. A notification that carries the same
+  /// value is not worth a rebuild: the first build reads the result straight
+  /// after the subscribe started the fetch, and the observer's notification
+  /// about that very fetch lands after the frame (fourth review, 2026-09-09).
+  Object? built;
+
+  /// Reads the current value and remembers it as this build's.
+  T read<T>() => (built = controller.value) as T;
+
+  void _onChanged() {
+    if (reader.mounted && controller.value != built) {
+      reader.markNeedsBuild();
+    }
+  }
 
   void dispose() {
-    detach();
-    controller.dispose();
+    controller.removeListener(_onChanged);
+    (controller as ChangeNotifier).dispose();
   }
 }
 
@@ -165,8 +201,9 @@ class _Reader {
 
   int epoch;
 
-  /// Observers by identity: `(key, types…, id)`.
-  final Map<Object, _QueryEntry> queries = <Object, _QueryEntry>{};
+  /// Controllers by identity: `(key, types…, id)` for a query,
+  /// `(#mutation, id or key, types…)` for a mutation.
+  final Map<Object, _Entry> entries = <Object, _Entry>{};
 
   /// Identities read during [epoch].
   Set<Object> current = <Object>{};
@@ -174,26 +211,16 @@ class _Reader {
   /// Identities held during the previous epoch, still to be reconciled.
   Set<Object> pending = <Object>{};
 
-  final Map<Object, MutationController<Object?, Object?, Object?>> mutations =
-      <Object, MutationController<Object?, Object?, Object?>>{};
-
-  /// Mutation identities read during [epoch] that fell back to the type
-  /// triple — the ones a second read of the same shape would silently share.
-  Set<Object> mutationsByShape = <Object>{};
-
   void dispose() {
-    for (final entry in queries.values) {
+    for (final entry in entries.values) {
       entry.dispose();
     }
-    queries.clear();
-    for (final controller in mutations.values) {
-      controller.dispose();
-    }
-    mutations.clear();
+    entries.clear();
   }
 }
 
 /// Keeps each reading widget's observers alive for as long as it reads them.
+@internal
 class QueryScopeElement extends InheritedElement {
   QueryScopeElement(QueryScope super.widget);
 
@@ -214,42 +241,19 @@ class QueryScopeElement extends InheritedElement {
     final identity = (options.queryKey!, TQueryData, TData, id);
     final state = _startEpochFor(reader);
     final repeat = state.current.contains(identity);
-    final controller = _controllerFor<QueryController<TQueryData, TData>>(
+    final entry = _entryFor(
       state,
       identity,
       () => QueryController<TQueryData, TData>(client, options),
     );
+    final controller = entry.controller as QueryController<TQueryData, TData>;
     final before = repeat ? controller.value : null;
     // Unconditional, as upstream re-applies options on every render: the
     // observer itself decides whether anything actually changed.
     controller.setOptions(options);
-    _debugCheckRepeatRead(repeat, before, controller.value, identity);
-    return controller.value;
-  }
-
-  /// One widget reading one identity twice in one build with options that
-  /// produce different results — two `select`s of the same output type on
-  /// one key, without `id` — would flip the observer between them on every
-  /// build, and each flip notifies, so the widget rebuilds forever. Caught
-  /// where it happens: the same observer cannot yield two results in one
-  /// synchronous build unless its options changed between the reads.
-  static void _debugCheckRepeatRead(
-    bool repeat,
-    Object? before,
-    Object? after,
-    Object identity,
-  ) {
-    assert(() {
-      if (repeat && before != after) {
-        throw FlutterError(
-          'This widget read the query $identity twice in one build with '
-          'options that produce different results — most likely two '
-          'different `select`s of the same output type. Give each read its '
-          'own `id:` so they get observers of their own.',
-        );
-      }
-      return true;
-    }());
+    final result = entry.read<QueryResult<TData>>();
+    debugCheckRepeatRead(repeat, before, result, identity, 'This widget');
+    return result;
   }
 
   /// The infinite twin of [readQuery].
@@ -262,8 +266,7 @@ class QueryScopeElement extends InheritedElement {
     final identity = (options.queryKey, TPageData, TPageParam, TData, id);
     final state = _startEpochFor(reader);
     final repeat = state.current.contains(identity);
-    final controller =
-        _controllerFor<InfiniteQueryController<TPageData, TPageParam, TData>>(
+    final entry = _entryFor(
       state,
       identity,
       () => InfiniteQueryController<TPageData, TPageParam, TData>(
@@ -271,36 +274,30 @@ class QueryScopeElement extends InheritedElement {
         options,
       ),
     );
+    final controller = entry.controller
+        as InfiniteQueryController<TPageData, TPageParam, TData>;
     final before = repeat ? controller.value : null;
     controller.setInfiniteOptions(options);
-    _debugCheckRepeatRead(repeat, before, controller.value, identity);
+    debugCheckRepeatRead(
+      repeat,
+      before,
+      entry.read<QueryResult<TData>>(),
+      identity,
+      'This widget',
+    );
     return controller;
   }
 
-  C _controllerFor<C extends ChangeNotifier>(
+  _Entry _entryFor(
     _Reader state,
     Object identity,
-    C Function() create,
+    ValueListenable<Object?> Function() create,
   ) {
-    final existing = state.queries[identity];
-    final C controller;
-    if (existing != null) {
-      controller = existing.controller as C;
-    } else {
-      controller = create();
-      final reader = state.reader;
-      void onChanged() {
-        if (reader.mounted) {
-          reader.markNeedsBuild();
-        }
-      }
-
-      controller.addListener(onChanged);
-      state.queries[identity] =
-          _QueryEntry(controller, () => controller.removeListener(onChanged));
-    }
     state.current.add(identity);
-    return controller;
+    return state.entries.putIfAbsent(
+      identity,
+      () => _Entry(create(), state.reader),
+    );
   }
 
   /// A mutation controller owned by [reader].
@@ -312,9 +309,17 @@ class QueryScopeElement extends InheritedElement {
   ) {
     // Never the function itself: a closure built in `build` is a new object
     // every build, and a controller keyed on it would be replaced — idle
-    // again — by the very rebuild its own result caused.
-    final identity =
-        id ?? options.mutationKey ?? (TData, TVariables, TOnMutateResult);
+    // again — by the very rebuild its own result caused. The types are part
+    // of the identity the way they are for a query: the same `mutationKey`
+    // read with two type triples is two controllers, not a failed cast
+    // (fourth review, 2026-09-09).
+    final identity = (
+      #mutation,
+      id ?? options.mutationKey,
+      TData,
+      TVariables,
+      TOnMutateResult,
+    );
     final state = _startEpochFor(reader);
     assert(() {
       // Two mutations of one shape in one widget without `id` would share a
@@ -323,33 +328,32 @@ class QueryScopeElement extends InheritedElement {
       // ambiguous; an `id` or a `mutationKey` names the mutation.
       if (id == null &&
           options.mutationKey == null &&
-          !state.mutationsByShape.add(identity)) {
+          state.current.contains(identity)) {
         throw FlutterError(
-          'This widget read two mutations of the shape $identity in one '
-          'build. They would share one controller, and whichever was read '
-          'last would run for both. Give each an `id:`.',
+          'This widget read two mutations of the shape '
+          '${(TData, TVariables, TOnMutateResult)} in one build. They would '
+          'share one controller, and whichever was read last would run for '
+          'both. Give each an `id:`.',
         );
       }
       return true;
     }());
 
-    final existing = state.mutations[identity];
-    if (existing != null) {
-      final controller = existing
-          as MutationController<TData, TVariables, TOnMutateResult>
-        ..setOptions(options);
-      return controller;
+    final existed = state.entries.containsKey(identity);
+    final entry = _entryFor(
+      state,
+      identity,
+      () => MutationController<TData, TVariables, TOnMutateResult>(
+        client,
+        options,
+      ),
+    );
+    final controller = entry.controller
+        as MutationController<TData, TVariables, TOnMutateResult>;
+    if (existed) {
+      controller.setOptions(options);
     }
-
-    final controller =
-        MutationController<TData, TVariables, TOnMutateResult>(client, options);
-    controller.addListener(() {
-      if (reader.mounted) {
-        reader.markNeedsBuild();
-      }
-    });
-    state.mutations[identity] =
-        controller as MutationController<Object?, Object?, Object?>;
+    entry.read<Object?>();
     return controller;
   }
 
@@ -363,8 +367,7 @@ class QueryScopeElement extends InheritedElement {
       state
         ..epoch = _epoch
         ..pending = <Object>{...state.pending, ...state.current}
-        ..current = <Object>{}
-        ..mutationsByShape = <Object>{};
+        ..current = <Object>{};
     }
     _scheduleSweep();
     return state;
@@ -381,13 +384,13 @@ class QueryScopeElement extends InheritedElement {
     });
   }
 
-  /// Releases the observers a reader stopped reading.
+  /// Releases the observers a reader stopped reading, mutations included.
   void _sweep() {
     for (final state in _readers.values) {
       final released = state.pending.difference(state.current);
       state.pending = <Object>{};
       for (final identity in released) {
-        state.queries.remove(identity)?.dispose();
+        state.entries.remove(identity)?.dispose();
       }
     }
     _epoch++;

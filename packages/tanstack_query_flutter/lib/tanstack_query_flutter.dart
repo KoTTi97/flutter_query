@@ -1,5 +1,7 @@
 /// The Flutter binding for `tanstack_query_core`.
 ///
+/// An independent community port: not affiliated with or endorsed by TanStack.
+///
 /// Four equal ways to reach a query, none of which needs a package beyond
 /// Flutter (https://github.com/KoTTi97/flutter_query/issues/21):
 ///
@@ -19,6 +21,6 @@ export 'package:tanstack_query_core/tanstack_query_core.dart';
 
 export 'src/query_builder.dart';
 export 'src/query_client_provider.dart';
-export 'src/query_context.dart';
+export 'src/query_context.dart' hide QueryScope, QueryScopeElement;
 export 'src/query_controller.dart';
 export 'src/query_mixin.dart';

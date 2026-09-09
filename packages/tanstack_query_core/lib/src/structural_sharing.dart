@@ -2,6 +2,10 @@
 /// `50680b98c`.
 library;
 
+// A cycle (infinite_query → query → here), which Dart allows; the
+// alternative is a public sharing interface, which nobody has asked for.
+import 'infinite_query.dart';
+
 /// Returns [previous] when [next] is deep-equal to it, and otherwise [next]
 /// with every deep-equal part swapped for the instance [previous] already
 /// held — upstream's default structural sharing, and the reason a refetch
@@ -16,6 +20,11 @@ library;
 /// a map of the same runtime type from inside a generic function, and a copy
 /// typed `Map<Object?, Object?>` would not be the caller's `Map<String, int>`.
 /// A list can be copied with `toList()`, which keeps its element type.
+///
+/// An [InfiniteData] is walked like upstream's `{ pages, pageParams }` object:
+/// each list is shared on its own, and the whole is `previous` when both come
+/// back unchanged. Its `==` alone could not do that, because a page is
+/// usually a `List` — equal only to itself (fourth review, 2026-09-09).
 ///
 /// Decided on https://github.com/KoTTi97/flutter_query/issues/12 and revised
 /// after the third review (2026-09-09): a `select` that returns a fresh list
@@ -41,7 +50,16 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
         final previousItem = previous[i];
         final shared =
             replaceEqualDeep<Object?>(previousItem, nextItem, depth + 1);
-        copy[i] = shared;
+        // The copy has `next`'s element type and `shared` may be `previous`'s
+        // element: `<int>[1]` against `<double>[1.0]` finds `1 == 1.0` and
+        // would store an `int` in a `List<double>`. Sharing is best effort —
+        // a part that does not fit stays `next`'s, and does not count as
+        // equal.
+        try {
+          copy[i] = shared;
+        } on TypeError {
+          continue;
+        }
         if (identical(shared, previousItem)) {
           equalItems++;
         }
@@ -51,6 +69,23 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
       return previous as T;
     }
     return copy as T;
+  }
+
+  if (previous is InfiniteData && next is InfiniteData) {
+    // Same runtime type, or the shared lists could not be handed back into
+    // `next`'s page types.
+    if (previous.runtimeType != next.runtimeType) {
+      return next;
+    }
+    final pages =
+        replaceEqualDeep<List<Object?>>(previous.pages, next.pages, depth + 1);
+    final pageParams = replaceEqualDeep<List<Object?>>(
+        previous.pageParams, next.pageParams, depth + 1);
+    if (identical(pages, previous.pages) &&
+        identical(pageParams, previous.pageParams)) {
+      return previous as T;
+    }
+    return next.copyWith(pages: pages, pageParams: pageParams) as T;
   }
 
   if (previous is Map && next is Map) {

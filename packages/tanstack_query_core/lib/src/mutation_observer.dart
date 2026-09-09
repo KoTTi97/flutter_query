@@ -170,11 +170,23 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     _client.notifyManager.batch(() {
       _notifyCallCallbacks(action, state);
       if (changed) {
-        for (final listener in List.of(listeners)) {
-          listener(_currentResult);
-        }
+        _notifyListeners();
       }
     });
+  }
+
+  /// Each listener is isolated, as the query observer's are: a throw is
+  /// reported to the zone, and the rest still run. Unisolated, a listener
+  /// throwing on a `failed` action escaped into the retryer's loop, and one
+  /// throwing on `success` turned the success into the error path.
+  void _notifyListeners() {
+    for (final listener in List.of(listeners)) {
+      try {
+        listener(_currentResult);
+      } catch (error, stackTrace) {
+        Zone.current.handleUncaughtError(error, stackTrace);
+      }
+    }
   }
 
   void _notifyCallCallbacks(
@@ -250,11 +262,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     }
     _currentResult = next;
 
-    _client.notifyManager.batch(() {
-      for (final listener in List.of(listeners)) {
-        listener(_currentResult);
-      }
-    });
+    _client.notifyManager.batch(_notifyListeners);
   }
 
   MutationResult<TData, TVariables> _createResult(

@@ -2,6 +2,7 @@
 library;
 
 import 'infinite_query.dart';
+import 'query.dart';
 import 'query_client.dart';
 import 'query_observer.dart';
 import 'query_options.dart';
@@ -19,52 +20,59 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   InfiniteQueryObserver(
     QueryClient client,
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
-  )   : _infiniteOptions = options,
-        super(client, client.infiniteObserverOptions(options));
+  ) : super(client, client.infiniteObserverOptions(options));
 
-  InfiniteQueryObserverOptions<TPageData, TPageParam, TData> _infiniteOptions;
+  /// The paging half of the current options.
+  ///
+  /// Read off the options' behaviour rather than held beside them: a copy
+  /// kept in parallel went stale on a direct [setOptions], and `hasNextPage`
+  /// then asked the old `getNextPageParam` while the fetch used the new one
+  /// (fourth review, 2026-09-09).
+  InfiniteQueryOptions<TPageData, TPageParam> get infiniteOptions =>
+      _pagingOptionsOf(options.behavior);
 
-  /// The infinite-query options this observer was last given.
-  InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
-      get infiniteOptions => _infiniteOptions;
-
-  /// Replaces the options, keeping the paging half in step.
+  /// Replaces the options — the typed convenience over [setOptions].
   void setInfiniteOptions(
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
-  ) {
-    _infiniteOptions = options;
-    setOptions(client.infiniteObserverOptions(options));
-  }
+  ) =>
+      setOptions(client.infiniteObserverOptions(options));
 
-  /// Only for options that carry the paging behaviour, which is what
-  /// [setInfiniteOptions] and `QueryClient.infiniteObserverOptions` produce.
-  /// Plain observer options would strip the behaviour from the shared query,
-  /// and its next refetch would fail with `MissingQueryFunctionError`.
+  /// Accepts any options that carry the paging behaviour — what
+  /// [setInfiniteOptions], `QueryClient.infiniteObserverOptions` and an
+  /// [InfiniteQueryOptions]'s own `behavior` produce. Plain observer options
+  /// have no paging half; they would strip the behaviour from the shared
+  /// query, whose next refetch would fail with `MissingQueryFunctionError`,
+  /// so they are refused with an [UnsupportedError].
   @override
   void setOptions(
     QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
   ) {
-    _checkInfinite(options);
+    _pagingOptionsOf(options.behavior);
     super.setOptions(options);
   }
 
-  /// See [setOptions]: use [getOptimisticInfiniteResult].
+  /// See [setOptions]; [getOptimisticInfiniteResult] is the typed form.
   @override
   QueryResult<TData> getOptimisticResult(
     QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
   ) {
-    _checkInfinite(options);
+    _pagingOptionsOf(options.behavior);
     return super.getOptimisticResult(options);
   }
 
-  static void _checkInfinite(QueryObserverOptions<Object?, Object?> options) {
-    if (options.behavior is! InfiniteQueryBehavior) {
-      throw UnsupportedError(
-        'An InfiniteQueryObserver takes InfiniteQueryObserverOptions (via '
-        'setInfiniteOptions / getOptimisticInfiniteResult); plain observer '
-        'options have no paging half.',
-      );
+  static InfiniteQueryOptions<TPageData, TPageParam>
+      _pagingOptionsOf<TPageData, TPageParam>(
+    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
+  ) {
+    if (behavior is InfiniteQueryBehavior<TPageData, TPageParam>) {
+      return behavior.options;
     }
+    throw UnsupportedError(
+      'An InfiniteQueryObserver takes options with a paging behaviour — '
+      'InfiniteQueryObserverOptions via setInfiniteOptions / '
+      'getOptimisticInfiniteResult, or what QueryClient.infiniteObserverOptions '
+      'produces; plain observer options have no paging half.',
+    );
   }
 
   InfiniteData<TPageData, TPageParam>? get _data =>
@@ -72,11 +80,11 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
 
   /// Whether [fetchNextPage] would fetch anything.
   bool get hasNextPage =>
-      hasNextPageOf<TPageData, TPageParam>(_infiniteOptions, _data);
+      hasNextPageOf<TPageData, TPageParam>(infiniteOptions, _data);
 
   /// Whether [fetchPreviousPage] would fetch anything.
   bool get hasPreviousPage =>
-      hasPreviousPageOf<TPageData, TPageParam>(_infiniteOptions, _data);
+      hasPreviousPageOf<TPageData, TPageParam>(infiniteOptions, _data);
 
   FetchDirection? get _fetchDirection {
     final meta = currentQuery.state.fetchMeta;

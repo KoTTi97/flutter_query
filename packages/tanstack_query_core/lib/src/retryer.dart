@@ -7,6 +7,7 @@ import 'cancel_token.dart';
 import 'focus_manager.dart';
 import 'online_manager.dart';
 import 'option_values.dart';
+import 'timers.dart';
 
 enum RetryerStatus { pending, resolved, rejected }
 
@@ -64,6 +65,7 @@ class Retryer<TData> {
   Completer<void>? _pauseCompleter;
   RetryerStatus _status = RetryerStatus.pending;
   bool _isRetryCancelled = false;
+  bool _isRetryCancelledImmediately = false;
   int _failureCount = 0;
 
   Future<TData> get future => _completer.future;
@@ -95,15 +97,26 @@ class Retryer<TData> {
   /// Stops the loop from making another attempt, letting the in-flight request
   /// finish and populate the cache. A backoff delay already running is waited
   /// out first, as upstream does, unless [immediately] is set — then the loop
-  /// rejects with the last error as soon as nothing is in flight.
+  /// rejects with the last error as soon as nothing is in flight, and a fetch
+  /// that is *paused* (offline, unfocused, or queued behind its scope) rejects
+  /// with a [CancelledError] on the spot: nothing is in flight to wait for,
+  /// and nothing else would ever release it once its owner is gone.
   void cancelRetry({bool immediately = false}) {
     _isRetryCancelled = true;
     if (immediately) {
+      _isRetryCancelledImmediately = true;
       _wakeDelay();
+      final pause = _pauseCompleter;
+      if (pause != null && !pause.isCompleted) {
+        _reject(const CancelledError(), stackTrace: StackTrace.current);
+      }
     }
   }
 
-  void continueRetry() => _isRetryCancelled = false;
+  void continueRetry() {
+    _isRetryCancelled = false;
+    _isRetryCancelledImmediately = false;
+  }
 
   /// Releases a paused fetch, if it may now continue.
   Future<TData> continueFetch() {
@@ -130,11 +143,29 @@ class Retryer<TData> {
   Future<void> _pause() async {
     final pauseCompleter = Completer<void>();
     _pauseCompleter = pauseCompleter;
-    onPause?.call();
+    // A throw here rejects, and rejecting releases the pause.
+    _hook(onPause);
     await pauseCompleter.future;
     _pauseCompleter = null;
     if (!isResolved) {
-      onContinue?.call();
+      _hook(onContinue);
+    }
+  }
+
+  /// Runs one of the owner's hooks. They dispatch into the query or mutation,
+  /// and a dispatch reaches listeners — user code. Left unguarded, a throw
+  /// escaped into `_attempt`'s ignored future and the completer was never
+  /// settled: a fetch pending forever, with nothing reported anywhere
+  /// (fourth review, 2026-09-09). The throw is the fetch's error instead, the
+  /// policy a throwing retry callback already follows. Returns whether the
+  /// hook completed.
+  bool _hook(void Function()? hook) {
+    try {
+      hook?.call();
+      return true;
+    } catch (error, stackTrace) {
+      _reject(error, stackTrace: stackTrace);
+      return false;
     }
   }
 
@@ -166,7 +197,7 @@ class Retryer<TData> {
   Future<void> _sleep(Duration delay) {
     final completer = Completer<void>();
     _delayCompleter = completer;
-    _delayTimer = Timer(delay, () {
+    _delayTimer = Timer(clampTimerDuration(delay), () {
       _delayTimer = null;
       _delayCompleter = null;
       completer.complete();
@@ -227,7 +258,9 @@ class Retryer<TData> {
       }
 
       _failureCount++;
-      onFail?.call(_failureCount, error, stackTrace);
+      if (!_hook(() => onFail?.call(_failureCount, error, stackTrace))) {
+        return;
+      }
 
       await _sleep(delay);
 
@@ -236,6 +269,14 @@ class Retryer<TData> {
       // `idle` to `paused` on the way out; leaving a known state corruption in
       // for the sake of matching would be the wrong kind of fidelity.
       if (isResolved) {
+        return;
+      }
+
+      // An immediate cancel woke the delay early to reject, not to pause:
+      // checked before the pause, or an offline mutation removed from its
+      // cache would park here until the network came back.
+      if (_isRetryCancelledImmediately) {
+        _reject(error, stackTrace: stackTrace);
         return;
       }
 

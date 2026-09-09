@@ -14,6 +14,7 @@ import 'query_result.dart';
 import 'query_state.dart';
 import 'retryer.dart';
 import 'structural_sharing.dart';
+import 'timers.dart';
 
 typedef QueryObserverListener<TData> = void Function(QueryResult<TData> result);
 
@@ -77,6 +78,13 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   Object? _selectError;
   StackTrace? _selectErrorStackTrace;
+  // Captured when the selector throws, not per result: a standing select
+  // error read at `clock.now()` on every `createResult` made two results
+  // computed a millisecond apart unequal, and every `setOptions` a
+  // notification — through the binding, a rebuild loop (fourth review,
+  // 2026-09-09). Upstream reads `Date.now()` there too, but its render
+  // tracking hides the churn; this port has no such filter.
+  DateTime? _selectErrorUpdatedAt;
   TData Function(TQueryData data)? _selectFn;
   TData? _selectResult;
   bool _hasSelectResult = false;
@@ -105,6 +113,16 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
       if (_shouldFetchOnMount(_currentQuery, _options)) {
         executeFetch();
+        // A fetch that joined one already running dispatched nothing, and
+        // then nothing recomputed the result — while a binding reads
+        // `currentResult` right after subscribing. Brought up to date only
+        // when the dispatch did not already do it: every state change is a
+        // new `QueryState`, and running `createResult` again would call a
+        // placeholder callback one more time than upstream does (the ported
+        // suite counts those calls).
+        if (!identical(_currentResultState, _currentQuery.state)) {
+          updateResult();
+        }
       } else {
         updateResult();
       }
@@ -256,7 +274,9 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // Upstream adds a millisecond because its timer can fire just before the
     // deadline; Dart's virtual and real timers do not, so the deadline is used
     // as is.
-    _staleTimer = Timer(remaining.isNegative ? Duration.zero : remaining, () {
+    _staleTimer = Timer(
+        clampTimerDuration(remaining.isNegative ? Duration.zero : remaining),
+        () {
       if (!_currentResult.isStale) {
         updateResult();
       }
@@ -276,7 +296,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       return;
     }
 
-    _refetchTimer = Timer.periodic(nextInterval, (_) {
+    _refetchTimer = Timer.periodic(clampTimerDuration(nextInterval), (_) {
       if (_options.refetchIntervalInBackground ||
           _client.focusManager.isFocused()) {
         executeFetch().ignore();
@@ -409,11 +429,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             _selectResult = outData;
             _hasSelectResult = true;
             hasOutData = true;
-            _selectError = null;
-            _selectErrorStackTrace = null;
+            _clearSelectError();
           } catch (selectError, selectStackTrace) {
             _selectError = selectError;
             _selectErrorStackTrace = selectStackTrace;
+            _selectErrorUpdatedAt = clock.now();
           }
         }
       } else if (select == null && hasCandidate) {
@@ -430,12 +450,10 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         // The error belonged to a selector that is no longer there. Upstream
         // keeps reporting it until a *new* selection succeeds, which never
         // happens once `select` is gone.
-        _selectError = null;
-        _selectErrorStackTrace = null;
+        _clearSelectError();
       } else if (!hasCandidate) {
         // A select error belongs to data that is now gone.
-        _selectError = null;
-        _selectErrorStackTrace = null;
+        _clearSelectError();
       }
     }
 
@@ -443,7 +461,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     if (selectError != null) {
       error = selectError;
       errorStackTrace = _selectErrorStackTrace;
-      errorUpdatedAt = clock.now();
+      errorUpdatedAt = _selectErrorUpdatedAt;
       status = QueryStatus.error;
       isPlaceholderData = false;
       // The last value `select` produced stays on screen behind the error,
@@ -516,6 +534,12 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     }
 
     return build();
+  }
+
+  void _clearSelectError() {
+    _selectError = null;
+    _selectErrorStackTrace = null;
+    _selectErrorUpdatedAt = null;
   }
 
   /// Recomputes the result and notifies listeners if it changed.

@@ -73,6 +73,11 @@ class QueryClientProvider extends StatefulWidget {
         'the subtree that uses queries) in QueryClientProvider(client: …).',
       );
 
+  /// The nearest client above [context], or `null` when there is none — for
+  /// a widget that can do without one. Subscribes like [of].
+  static QueryClient? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_QueryClientScope>()?.client;
+
   /// Like [of], but without subscribing the calling element to changes.
   static QueryClient read(BuildContext context) {
     final element =
@@ -90,6 +95,7 @@ class QueryClientProvider extends StatefulWidget {
 class _QueryClientProviderState extends State<QueryClientProvider> {
   AppLifecycleListener? _lifecycle;
   StreamSubscription<bool>? _onlineSubscription;
+  bool? _lastOnline;
   ScheduleFunction? _previousScheduler;
 
   @override
@@ -99,7 +105,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     if (widget.observeAppLifecycle) {
       _observeLifecycle(widget.client);
     }
-    _follow(widget.onlineStatus, widget.client);
+    _follow(widget.onlineStatus);
   }
 
   void _mountClient(QueryClient client) {
@@ -141,10 +147,16 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     _lifecycle = null;
   }
 
-  void _follow(Stream<bool>? onlineStatus, QueryClient client) {
+  /// Subscribes to [onlineStatus] — once per stream object, never again for
+  /// a new client. The handler reads `widget.client` at delivery time, so a
+  /// client switch re-points it for free; cancelling and listening again
+  /// would throw on a single-subscription stream (`Stream has already been
+  /// listened to`), and the parameter type promises nothing about broadcast
+  /// (fourth review, 2026-09-09).
+  void _follow(Stream<bool>? onlineStatus) {
     _onlineSubscription?.cancel();
     _onlineSubscription = onlineStatus?.listen(
-      client.onlineManager.setOnline,
+      _onOnline,
       // A stream error is the stream's problem, not the app's: reported the
       // way Flutter reports a build error, not thrown into the zone.
       onError: (Object error, StackTrace stackTrace) =>
@@ -157,6 +169,11 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
         ),
       ),
     );
+  }
+
+  void _onOnline(bool online) {
+    _lastOnline = online;
+    widget.client.onlineManager.setOnline(online);
   }
 
   /// `resumed` and `inactive` are shown, the rest is not (see the class doc).
@@ -211,6 +228,12 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       _stopObservingLifecycle();
       _unmountClient(oldWidget.client);
       _mountClient(widget.client);
+      // The stream will not repeat itself for the newcomer: it starts from
+      // what the stream last said, as the old client did.
+      final lastOnline = _lastOnline;
+      if (lastOnline != null) {
+        widget.client.onlineManager.setOnline(lastOnline);
+      }
     }
     if (clientChanged ||
         oldWidget.observeAppLifecycle != widget.observeAppLifecycle) {
@@ -219,8 +242,8 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
         _observeLifecycle(widget.client);
       }
     }
-    if (clientChanged || oldWidget.onlineStatus != widget.onlineStatus) {
-      _follow(widget.onlineStatus, widget.client);
+    if (oldWidget.onlineStatus != widget.onlineStatus) {
+      _follow(widget.onlineStatus);
     }
   }
 

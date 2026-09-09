@@ -19,7 +19,7 @@ import 'package:tanstack_query_core/tanstack_query_core.dart';
 /// One query, as a [ValueListenable].
 ///
 /// ```dart
-/// final sensor = QueryController<Sensor>(client, sensorQuery(id));
+/// final sensor = QueryController.of<Sensor>(client, sensorQuery(id));
 /// // …
 /// sensor.dispose();
 /// ```
@@ -32,14 +32,21 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   QueryController(
     this.client,
     QueryObserverOptions<TQueryData, TData> options,
-  ) : _observer = QueryObserver<TQueryData, TData>(client, options);
+  )   : _observer = QueryObserver<TQueryData, TData>(client, options),
+        _options = options;
 
   /// Wraps an observer built elsewhere — how [InfiniteQueryController] brings
   /// its own. The controller owns it from here on and destroys it on
   /// [dispose].
+  ///
+  /// A controller built this way holds no options of its own, so its [value]
+  /// before the first listener is the observer's current result rather than
+  /// the optimistic one — unless the subclass overrides [optimisticValue], as
+  /// [InfiniteQueryController] does.
   QueryController.observing(
       this.client, QueryObserver<TQueryData, TData> observer)
-      : _observer = observer;
+      : _observer = observer,
+        _options = null;
 
   /// The common case: no `select`, so the query's data type is what you get.
   static QueryController<TData, TData> of<TData>(
@@ -52,6 +59,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   final QueryClient client;
 
   final QueryObserver<TQueryData, TData> _observer;
+  QueryObserverOptions<TQueryData, TData>? _options;
   void Function()? _unsubscribe;
   bool _disposed = false;
 
@@ -62,8 +70,29 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// Whether [dispose] has run.
   bool get isDisposed => _disposed;
 
+  /// The current result.
+  ///
+  /// While nobody listens this is the *optimistic* result — what the observer
+  /// would report the moment a listener arrived: `fetching` for a query that
+  /// will fetch on subscribe, not the `idle` the observer holds until then.
+  /// That is the read upstream's `useBaseQuery` does on every render, and it
+  /// is what makes a controller read before it is listened to agree with what
+  /// every widget style shows on its first build. Once subscribed, the value
+  /// is the observer's own, kept current by its notifications.
   @override
-  QueryResult<TData> get value => _observer.currentResult;
+  QueryResult<TData> get value => _unsubscribe == null && !_disposed
+      ? optimisticValue
+      : _observer.currentResult;
+
+  /// The result the observer would report on subscribing right now. Reported
+  /// by [value] while nobody listens; see there.
+  @protected
+  QueryResult<TData> get optimisticValue {
+    final options = _options;
+    return options == null
+        ? _observer.currentResult
+        : _observer.getOptimisticResult(options);
+  }
 
   /// Replaces the options — a changed key switches the observed query without
   /// recreating anything (https://github.com/KoTTi97/flutter_query/issues/22).
@@ -71,8 +100,10 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// Deliberately does not notify: the observer notifies by itself when the
   /// *result* changes, and notifying here would rebuild the widget that just
   /// called this from its own `build`.
-  void setOptions(QueryObserverOptions<TQueryData, TData> options) =>
-      _observer.setOptions(options);
+  void setOptions(QueryObserverOptions<TQueryData, TData> options) {
+    _options = options;
+    _observer.setOptions(options);
+  }
 
   /// Refetches, completing with the result the refetch produced.
   Future<QueryResult<TData>> refetch({bool cancelRefetch = true}) =>
@@ -132,7 +163,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
 /// (https://github.com/KoTTi97/flutter_query/issues/16).
 ///
 /// ```dart
-/// final feed = InfiniteQueryController<Post, int, InfiniteData<Post, int>>(
+/// final feed = InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>(
 ///   client,
 ///   feedQuery(),
 /// );
@@ -144,21 +175,30 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
   InfiniteQueryController(
     QueryClient client,
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
-  ) : super.observing(
+  )   : _infiniteOptions = options,
+        super.observing(
           client,
           InfiniteQueryObserver<TPageData, TPageParam, TData>(client, options),
         );
+
+  InfiniteQueryObserverOptions<TPageData, TPageParam, TData> _infiniteOptions;
 
   /// The observer underneath, typed.
   InfiniteQueryObserver<TPageData, TPageParam, TData> get infiniteObserver =>
       observer as InfiniteQueryObserver<TPageData, TPageParam, TData>;
 
+  @override
+  QueryResult<TData> get optimisticValue =>
+      infiniteObserver.getOptimisticInfiniteResult(_infiniteOptions);
+
   /// Replaces the options, paging half included. See
   /// [QueryController.setOptions] on why this does not notify.
   void setInfiniteOptions(
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
-  ) =>
-      infiniteObserver.setInfiniteOptions(options);
+  ) {
+    _infiniteOptions = options;
+    infiniteObserver.setInfiniteOptions(options);
+  }
 
   /// Not for infinite queries: the plain observer options carry no paging
   /// half, so applying them here would silently drop it. Throws in every

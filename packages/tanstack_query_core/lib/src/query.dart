@@ -189,6 +189,15 @@ class Query<TQueryData> extends Removable {
   final QueryCacheRef _cache;
   final QueryKey queryKey;
 
+  /// The data type this query holds, exactly.
+  ///
+  /// The cache compares this rather than asking `is Query<T>`: Dart generics
+  /// are covariant, so a `Query<int>` *is a* `Query<int?>` and a `Query<num>`,
+  /// and an observer reading it that way then handed it
+  /// `DefaultedQueryOptions<int?>`, which its `setOptions` refused with a raw
+  /// `TypeError`. One key, one exact type (fourth review, 2026-09-09).
+  Type get dataType => TQueryData;
+
   DefaultedQueryOptions<TQueryData> _options;
   DefaultedQueryOptions<TQueryData> get options => _options;
 
@@ -525,10 +534,13 @@ class Query<TQueryData> extends Removable {
     // Kept in case this fetch has to be reverted.
     _revertState = _state;
 
-    if (_state.fetchStatus == FetchStatus.idle ||
-        _state.fetchMeta != fetchOptions?.meta) {
-      _dispatch(QueryFetchAction(meta: fetchOptions?.meta));
-    }
+    // Unconditional. Upstream skips the action when `fetchStatus !== 'idle'
+    // && fetchMeta === meta`, and that never holds: a `null` fetchMeta is not
+    // an unset `undefined`, and a page fetch builds a fresh meta object per
+    // call. Comparing value-equal `FetchMore`s (or two `null`s) here skipped
+    // it, so a refetch that cancelled a retrying fetch kept the old
+    // `fetchFailureCount` (fourth review, 2026-09-09).
+    _dispatch(QueryFetchAction(meta: fetchOptions?.meta));
 
     final retryer = Retryer<TQueryData>(
       fn: context.fetchFn,

@@ -193,22 +193,31 @@ class QueryClient {
       return;
     }
 
-    // Paused mutations go first and the queries wait for them: a refetch that
-    // overtook the mutation it was meant to reflect would show the server's
-    // pre-mutation state.
-    _unsubscribeFocus = focusManager.subscribe((focused) async {
+    _unsubscribeFocus = focusManager.subscribe((focused) {
       if (focused) {
-        await resumePausedMutations();
-        queryCache.onFocus();
+        _resumeThen(queryCache.onFocus).ignore();
       }
     });
 
-    _unsubscribeOnline = onlineManager.subscribe((online) async {
+    _unsubscribeOnline = onlineManager.subscribe((online) {
       if (online) {
-        await resumePausedMutations();
-        queryCache.onOnline();
+        _resumeThen(queryCache.onOnline).ignore();
       }
     });
+  }
+
+  /// Paused mutations go first and the queries wait for them: a refetch that
+  /// overtook the mutation it was meant to reflect would show the server's
+  /// pre-mutation state. Nobody awaits this future — the managers' listeners
+  /// are `void` — so a throw is reported to the zone here rather than left
+  /// to surface as an unhandled rejection of a future nobody holds.
+  Future<void> _resumeThen(void Function() then) async {
+    try {
+      await resumePausedMutations();
+      then();
+    } catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+    }
   }
 
   /// Stops listening. Balanced with [mount].
@@ -308,8 +317,8 @@ class QueryClient {
     // Checked before anything is written, so a mismatch under the prefix
     // throws with the cache untouched rather than half-updated.
     for (final query in queries) {
-      if (query is! Query<TQueryData>) {
-        throw QueryDataTypeError(query.queryKey, TQueryData, query.runtimeType);
+      if (query.dataType != TQueryData) {
+        throw QueryDataTypeError(query.queryKey, TQueryData, query.dataType);
       }
     }
     return notifyManager.batch(
@@ -366,7 +375,8 @@ class QueryClient {
         // The matched set is captured *before* resetting, because a filter that
         // looks at state (`status: error`, a predicate over `query.state`) no
         // longer matches once the reset has happened.
-        final matched = queryCache.findAll(filters);
+        final matched = Set<Query<Object?>>.identity()
+          ..addAll(queryCache.findAll(filters));
         for (final query in matched) {
           query.reset();
         }
@@ -465,10 +475,8 @@ class QueryClient {
     QueryOptions<TQueryData> options,
   ) {
     final defaulted = defaultQueryOptions<TQueryData>(options);
-    final configured = options.retry ??
-        (_defaultOptions.queries ?? const QueryDefaults())
-            .mergedWith(getQueryDefaults(defaulted.queryKey))
-            .retry;
+    final configured =
+        options.retry ?? _queryDefaultsFor(defaulted.queryKey).retry;
     return configured == null
         ? defaulted.withRetry(RetryPolicy.never)
         : defaulted;
@@ -527,6 +535,12 @@ class QueryClient {
     return merged;
   }
 
+  /// The client-wide defaults merged with every registered default matching
+  /// [queryKey] — one scan, whichever caller asks.
+  QueryDefaults _queryDefaultsFor(QueryKey queryKey) =>
+      (_defaultOptions.queries ?? const QueryDefaults())
+          .mergedWith(getQueryDefaults(queryKey));
+
   /// Resolves [options] against the client and key defaults.
   DefaultedQueryOptions<TQueryData> defaultQueryOptions<TQueryData>(
     QueryOptions<TQueryData> options,
@@ -535,12 +549,21 @@ class QueryClient {
     if (queryKey == null) {
       throw ArgumentError('QueryOptions.queryKey is required to build a query');
     }
-    final defaults = (_defaultOptions.queries ?? const QueryDefaults())
-        .mergedWith(getQueryDefaults(queryKey));
+    return _defaultQueryOptionsWith<TQueryData>(
+      options,
+      queryKey,
+      _queryDefaultsFor(queryKey),
+    );
+  }
 
+  DefaultedQueryOptions<TQueryData> _defaultQueryOptionsWith<TQueryData>(
+    QueryOptions<TQueryData> options,
+    QueryKey queryKey,
+    QueryDefaults defaults,
+  ) {
     return DefaultedQueryOptions<TQueryData>(
       queryKey: queryKey,
-      queryFn: options.queryFn ?? _adoptQueryFn<TQueryData>(queryKey, defaults),
+      queryFn: options.queryFn ?? _adoptQueryFn<TQueryData>(defaults),
       enabled: options.enabled ?? defaults.enabled ?? Enabled.yes,
       staleTime: options.staleTime ?? defaults.staleTime ?? StaleTime.zero,
       gcTime: options.gcTime ?? defaults.gcTime ?? GcTime.defaultValue,
@@ -552,63 +575,91 @@ class QueryClient {
       initialData: options.initialData,
       initialDataUpdatedAt: options.initialDataUpdatedAt,
       structuralSharing: options.structuralSharing ??
-          _adoptStructuralSharing<TQueryData>(queryKey, defaults),
+          _adoptStructuralSharing<TQueryData>(defaults),
       meta: options.meta ?? defaults.meta,
       behavior: options.behavior,
     );
+  }
+
+  // The adapted wrappers, one per (erased default, data type). A wrapper
+  // built per call is a new closure per call, and defaulted options compare
+  // functions by identity — so a `setQueryDefaults(key, {queryFn})` made
+  // every `setOptions` an options change and every rebuild an
+  // `observerOptionsUpdated` (fourth review, 2026-09-09). Keyed on the
+  // erased function itself, the memo lives exactly as long as the default
+  // does; the wrappers close over nothing else, so they are shared across
+  // clients and keys.
+  static final Expando<Map<Type, Function>> _adapted =
+      Expando<Map<Type, Function>>('adapted defaults');
+
+  static TWrapper _memoised<TWrapper extends Function>(
+    Function erased,
+    Type dataType,
+    TWrapper Function() build,
+  ) {
+    final byType = _adapted[erased] ??= <Type, Function>{};
+    final existing = byType[dataType];
+    if (existing != null) {
+      return existing as TWrapper;
+    }
+    final wrapper = build();
+    byType[dataType] = wrapper;
+    return wrapper;
   }
 
   /// Wraps an erased default [QueryDefaults.queryFn] as a typed one. A plain
   /// cast cannot work — `FutureOr<Object?> Function(…)` is not a subtype of
   /// `FutureOr<TQueryData> Function(…)` — so the value is checked on the way
   /// out, and a synchronous default stays synchronous.
-  QueryFn<TQueryData>? _adoptQueryFn<TQueryData>(
-    QueryKey queryKey,
-    QueryDefaults defaults,
-  ) {
+  QueryFn<TQueryData>? _adoptQueryFn<TQueryData>(QueryDefaults defaults) {
     final queryFn = defaults.queryFn;
     if (queryFn == null) {
       return null;
     }
-    return (context) {
-      final result = queryFn(context);
-      return result is Future<Object?>
-          ? result.then((value) => _asData<TQueryData>(queryKey, value))
-          : _asData<TQueryData>(queryKey, result);
-    };
+    return _memoised<QueryFn<TQueryData>>(queryFn, TQueryData, () {
+      return (context) {
+        final result = queryFn(context);
+        return result is Future<Object?>
+            ? result
+                .then((value) => _asData<TQueryData>(value, context.queryKey))
+            : _asData<TQueryData>(result, context.queryKey);
+      };
+    });
   }
 
   StructuralSharing<TQueryData>? _adoptStructuralSharing<TQueryData>(
-    QueryKey queryKey,
     QueryDefaults defaults,
   ) {
     final sharing = defaults.structuralSharing;
     if (sharing == null) {
       return null;
     }
-    return (previous, next) =>
-        _asData<TQueryData>(queryKey, sharing(previous, next));
+    return _memoised<StructuralSharing<TQueryData>>(sharing, TQueryData, () {
+      return (previous, next) => _asData<TQueryData>(sharing(previous, next));
+    });
   }
 
-  /// The mutation twin of [_adoptQueryFn].
+  /// The mutation twin of [_adoptQueryFn]. The wrapper takes `Object?`, which
+  /// every `TVariables` narrows, so one wrapper per result type serves every
+  /// variables type.
   MutationFn<TData, TVariables>? _adoptMutationFn<TData, TVariables>(
-    QueryKey? mutationKey,
     MutationDefaults defaults,
   ) {
     final mutationFn = defaults.mutationFn;
     if (mutationFn == null) {
       return null;
     }
-    final key = mutationKey ?? QueryKey(const <Object?>['<no mutation key>']);
-    return (variables) {
-      final result = mutationFn(variables);
-      return result is Future<Object?>
-          ? result.then((value) => _asData<TData>(key, value))
-          : _asData<TData>(key, result);
-    };
+    return _memoised<MutationFn<TData, Object?>>(mutationFn, TData, () {
+      return (variables) {
+        final result = mutationFn(variables);
+        return result is Future<Object?>
+            ? result.then((value) => _asData<TData>(value))
+            : _asData<TData>(result);
+      };
+    });
   }
 
-  static TQueryData _asData<TQueryData>(QueryKey queryKey, Object? value) {
+  static TQueryData _asData<TQueryData>(Object? value, [QueryKey? queryKey]) {
     if (value is TQueryData) {
       return value;
     }
@@ -620,9 +671,15 @@ class QueryClient {
       defaultQueryObserverOptions<TQueryData, TData>(
     QueryObserverOptions<TQueryData, TData> options,
   ) {
-    final base = defaultQueryOptions<TQueryData>(options);
-    final queryDefaults = (_defaultOptions.queries ?? const QueryDefaults())
-        .mergedWith(getQueryDefaults(base.queryKey));
+    final queryKey = options.queryKey;
+    if (queryKey == null) {
+      throw ArgumentError('QueryOptions.queryKey is required to build a query');
+    }
+    // Resolved once: the scan over the registered defaults, with its deep key
+    // matching, runs on every build.
+    final queryDefaults = _queryDefaultsFor(queryKey);
+    final base =
+        _defaultQueryOptionsWith<TQueryData>(options, queryKey, queryDefaults);
 
     return DefaultedQueryObserverOptions<TQueryData, TData>(
       queryKey: base.queryKey,
@@ -676,8 +733,8 @@ class QueryClient {
 
     return DefaultedMutationOptions<TData, TVariables, TOnMutateResult>(
       mutationKey: mutationKey,
-      mutationFn: options.mutationFn ??
-          _adoptMutationFn<TData, TVariables>(mutationKey, defaults),
+      mutationFn:
+          options.mutationFn ?? _adoptMutationFn<TData, TVariables>(defaults),
       retry: options.retry ?? defaults.retry ?? RetryPolicy.never,
       retryDelay:
           options.retryDelay ?? defaults.retryDelay ?? RetryDelay.defaultValue,
@@ -694,7 +751,8 @@ class QueryClient {
   }
 
   /// Resolves infinite-query options into the observer options a
-  /// `Query<InfiniteData<…>>` runs on, attaching the paging behaviour.
+  /// `Query<InfiniteData<…>>` runs on. The paging behaviour is the options'
+  /// own ([InfiniteQueryOptions.behavior]); this only adds the observer half.
   @internal
   QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>
       infiniteObserverOptions<TPageData, TPageParam, TData>(
@@ -703,10 +761,7 @@ class QueryClient {
           QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>(
             queryKey: options.queryKey,
             queryFn: null,
-            behavior: InfiniteQueryBehavior<TPageData, TPageParam>(
-              options,
-              pages: options.pages,
-            ),
+            behavior: options.behavior,
             enabled: options.enabled,
             staleTime: options.staleTime,
             gcTime: options.gcTime,
@@ -734,29 +789,14 @@ class QueryClient {
   /// for `prefetchInfiniteQuery` and `ensureInfiniteQueryData` — `.ignore()`
   /// and `staleTime: StaleTime.static`
   /// (https://github.com/KoTTi97/flutter_query/issues/17).
+  ///
+  /// A typed convenience: an [InfiniteQueryOptions] carries its paging
+  /// behaviour, so [query] itself pages when handed one.
   Future<InfiniteData<TPageData, TPageParam>>
       infiniteQuery<TPageData, TPageParam>(
     InfiniteQueryOptions<TPageData, TPageParam> options,
   ) =>
-          query<InfiniteData<TPageData, TPageParam>>(
-            QueryOptions<InfiniteData<TPageData, TPageParam>>(
-              queryKey: options.queryKey,
-              behavior: InfiniteQueryBehavior<TPageData, TPageParam>(
-                options,
-                pages: options.pages,
-              ),
-              enabled: options.enabled,
-              staleTime: options.staleTime,
-              gcTime: options.gcTime,
-              retry: options.retry,
-              retryDelay: options.retryDelay,
-              networkMode: options.networkMode,
-              initialData: options.initialData,
-              initialDataUpdatedAt: options.initialDataUpdatedAt,
-              structuralSharing: options.structuralSharing,
-              meta: options.meta,
-            ),
-          );
+          query<InfiniteData<TPageData, TPageParam>>(options);
 
   /// A one-off observer for [options]. The caller owns its lifetime.
   QueryObserver<TQueryData, TData> observe<TQueryData, TData>(
