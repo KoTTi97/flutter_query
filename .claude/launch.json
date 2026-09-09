@@ -4,8 +4,32 @@
     {
       "name": "react-demo",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "react-demo/react", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "react-demo/react",
+        "run",
+        "dev"
+      ],
       "port": 5173
+    },
+    {
+      "name": "showcase-server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "examples/showcase/server",
+        "start"
+      ],
+      "port": 5175
+    },
+    {
+      "name": "showcase-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "examples/showcase/e2e/serve.mjs",
+        "examples/showcase/build/web"
+      ],
+      "port": 8124
     }
   ]
 }

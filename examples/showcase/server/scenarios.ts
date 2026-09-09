@@ -75,7 +75,7 @@ export class Scenario {
   // Projects are not stored: they are `projectCount` rows minted on demand,
   // each stamped with the time of the response that carried it.
   project(id: number): Project {
-    return { id, name: `Projekt ${id}`, fetchedAt: new Date().toISOString() }
+    return { id, name: `Project ${id}`, fetchedAt: new Date().toISOString() }
   }
 
   get projectCount() {

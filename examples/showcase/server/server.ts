@@ -82,18 +82,18 @@ app.post('/api/__scenario/:id/config', (req, res) => {
   const scenario = scenarioFor(req.params.id)
   const body = (req.body ?? {}) as Partial<ScenarioConfig>
   if (body.latency !== undefined) {
-    if (typeof body.latency !== 'number' || body.latency < 0) throw new HttpError(400, 'latency: Millisekunden ≥ 0')
+    if (typeof body.latency !== 'number' || body.latency < 0) throw new HttpError(400, 'latency: milliseconds ≥ 0')
     scenario.config.latency = body.latency
   }
   if (body.errorRate !== undefined) {
     if (typeof body.errorRate !== 'number' || body.errorRate < 0 || body.errorRate > 1) {
-      throw new HttpError(400, 'errorRate: Zahl zwischen 0 und 1')
+      throw new HttpError(400, 'errorRate: a number between 0 and 1')
     }
     scenario.config.errorRate = body.errorRate
   }
   if (body.failNext !== undefined) {
     if (!Array.isArray(body.failNext) || !body.failNext.every(isFailNext)) {
-      throw new HttpError(400, 'failNext: Liste aus { method, path, count, status, message? }')
+      throw new HttpError(400, 'failNext: a list of { method, path, count, status, message? }')
     }
     scenario.config.failNext = body.failNext.map((entry) => ({ ...entry, method: entry.method.toUpperCase() }))
   }
@@ -137,7 +137,7 @@ app.use('/api', async (req, res, next) => {
 
   if (req.query.fail !== undefined) {
     const status = Number(req.query.fail)
-    throw new HttpError(Number.isFinite(status) && status >= 400 ? status : 500, `Angefordert: ${req.query.fail}`)
+    throw new HttpError(Number.isFinite(status) && status >= 400 ? status : 500, `Requested: ${req.query.fail}`)
   }
 
   const scripted = scenario.config.failNext.find(
@@ -145,11 +145,11 @@ app.use('/api', async (req, res, next) => {
   )
   if (scripted) {
     scripted.count -= 1
-    throw new HttpError(scripted.status, scripted.message ?? `Skriptierter Fehler ${scripted.status}`)
+    throw new HttpError(scripted.status, scripted.message ?? `Scripted failure ${scripted.status}`)
   }
 
   if (scenario.config.errorRate > 0 && scenario.random() < scenario.config.errorRate) {
-    throw new HttpError(500, 'Zufällig fehlgeschlagen (errorRate)')
+    throw new HttpError(500, 'Failed at random (errorRate)')
   }
 
   next()
@@ -158,13 +158,13 @@ app.use('/api', async (req, res, next) => {
 registerRoutes(app)
 
 app.use('/api', (req, _res) => {
-  throw new HttpError(404, `Unbekannte Route ${req.method} ${req.baseUrl}${req.path}`)
+  throw new HttpError(404, `Unknown route ${req.method} ${req.baseUrl}${req.path}`)
 })
 
 // HttpError carries its status; anything else is a genuine 500.
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const status = error instanceof HttpError ? error.status : 500
-  const message = error instanceof Error ? error.message : 'Unbekannter Fehler'
+  const message = error instanceof Error ? error.message : 'Unknown error'
   res.status(status).json({ message })
 })
 

@@ -25,20 +25,20 @@ const intParam = (value: unknown, fallback: number): number => {
 
 const requirePost = (scenario: Scenario, id: string): Post => {
   const post = scenario.posts.find((candidate) => candidate.id === Number(id))
-  if (!post) throw new HttpError(404, 'Beitrag nicht gefunden')
+  if (!post) throw new HttpError(404, 'Post not found')
   return post
 }
 
 const requireTodo = (scenario: Scenario, id: string): Todo => {
   const todo = scenario.todos.find((candidate) => candidate.id === Number(id))
-  if (!todo) throw new HttpError(404, 'Aufgabe nicht gefunden')
+  if (!todo) throw new HttpError(404, 'Todo not found')
   return todo
 }
 
 const requireText = (body: unknown): string => {
   const text = (body as { text?: unknown } | undefined)?.text
   if (typeof text !== 'string' || text.trim() === '') {
-    throw new HttpError(400, 'Feld "text" fehlt oder ist leer')
+    throw new HttpError(400, 'Field "text" is missing or empty')
   }
   return text.trim()
 }
@@ -85,7 +85,7 @@ export const registerRoutes = (app: express.Express) => {
     const body = (req.body ?? {}) as { text?: unknown; done?: unknown }
     if (body.text !== undefined) todo.text = requireText(body)
     if (body.done !== undefined) {
-      if (typeof body.done !== 'boolean') throw new HttpError(400, 'Feld "done" ist kein Boolean')
+      if (typeof body.done !== 'boolean') throw new HttpError(400, 'Field "done" is not a boolean')
       todo.done = body.done
     }
     res.json(todo)

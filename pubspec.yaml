@@ -9,3 +9,4 @@ workspace:
   - packages/tanstack_query_flutter
   - packages/tanstack_query_flutter/example
   - examples/sensor_demo
+  - examples/showcase
