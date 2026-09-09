@@ -13,6 +13,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import 'src/api.dart';
@@ -23,7 +24,19 @@ import 'src/screens/overview.dart';
 import 'src/theme.dart';
 import 'src/widgets/header.dart';
 
-void main() => runApp(SensorDemoApp(api: SensorApi()));
+/// Built with `--dart-define=E2E=true`, the app switches its semantics tree on
+/// from the start. Flutter web paints to a canvas, so that tree — rendered as
+/// `flt-semantics` DOM nodes with roles and labels — is the only thing a
+/// browser-driving test can see. It is what a screen reader would get.
+const bool _e2e = bool.fromEnvironment('E2E');
+
+void main() {
+  if (_e2e) {
+    WidgetsFlutterBinding.ensureInitialized();
+    SemanticsBinding.instance.ensureSemantics();
+  }
+  runApp(SensorDemoApp(api: SensorApi()));
+}
 
 class SensorDemoApp extends StatefulWidget {
   const SensorDemoApp({super.key, required this.api, this.client});

@@ -82,6 +82,10 @@ interoperate:
 
 ## Tests
 
+Two layers. The widget tests run the real app against an in-memory gateway;
+the end-to-end tests run the real *web build* in a real Chromium against the
+real express gateway.
+
 ```bash
 flutter test
 ```
@@ -94,3 +98,34 @@ in-memory stand-in for `react-demo/server/server.ts` wired in as a dio
 its JSON, its error handling and its cancellation are all exercised. Pointing
 the same app at the express gateway is then a smoke test rather than a leap of
 faith.
+
+### End-to-end, in the browser
+
+[`e2e/`](e2e/) is a [Playwright](https://playwright.dev) project. It starts the
+express gateway and a static server for the web build, opens the app in
+Chromium and asserts on what a user sees — and on the wire: how many requests a
+screen costs, that a refetch keeps the rows, that an optimistic rename shows
+before the write returns, that the Matter poll stops once the device confirms,
+that a refused delete springs back, that an unreachable gateway is retried
+exactly once. Playwright can cut the network, which no widget test can.
+
+Flutter web paints to a canvas, so the tests read the **semantics tree** — the
+same tree a screen reader gets. The build under test switches it on from the
+start (`--dart-define=E2E=true`, see `main.dart`); rows are groups named after
+their sensor, buttons carry their tooltips, the switch is a `switch` with
+`aria-checked`. Two things worth knowing when adding a test: the semantic
+`<input>` of a text field mirrors its text only once the field has focus, so
+click before you read or `fill`; and the list builds only the rows in view,
+which is why the suite runs with a tall viewport and sweeps its own sensors off
+the gateway before and after.
+
+```bash
+cd e2e && npm ci && npx playwright install chromium   # once
+npm run build                                          # flutter build web --dart-define=E2E=true
+npm test                                               # or: npx playwright test --ui
+```
+
+The gateway keeps one in-memory state per process and scripts "every second
+delete fails", so the tests run one at a time, create the sensors they act on,
+and never depend on the seed data or on each other. CI runs the same suite on
+every push (`.github/workflows/ci.yml`, job `e2e`).

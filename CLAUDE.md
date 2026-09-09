@@ -11,7 +11,7 @@ work is first-class here, not an add-on.
 |---|---|
 | **`packages/tanstack_query_core/`** — the pure-Dart core | **done, three times reviewed.** 442 tests, every applicable upstream suite ported, analyzer clean at `--fatal-infos` |
 | **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, three times reviewed.** 42 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter |
-| **`examples/sensor_demo/`** — the react-demo port | **done.** 15 widget tests, one per row of the MVP checklist plus one regression; iOS and web generated |
+| **`examples/sensor_demo/`** — the react-demo port | **done.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
@@ -44,7 +44,10 @@ dart analyze --fatal-infos packages && dart format --set-exit-if-changed package
 
 That is the per-module gate: tests, analyzer, formatter, and a PORTING_NOTES
 entry, all in the same commit. `.github/workflows/ci.yml` runs the same gates
-plus a web build of the demo on every push.
+plus a web build of the demo on every push, and a second job runs the demo's
+Playwright end-to-end suite (`examples/sensor_demo/e2e/`: the real web build
+in Chromium against the real express gateway — see the demo README before
+touching it; it reads Flutter's semantics tree, not the canvas).
 
 **Widget tests need one extra step.** A `QueryClient` outlives the tree and owns
 `gcTime` timers; Flutter's test binding asserts no timer is pending when the
