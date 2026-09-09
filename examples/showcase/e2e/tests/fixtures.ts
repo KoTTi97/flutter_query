@@ -75,6 +75,7 @@ export const test = base.extend<{ scenario: Scenario; open: (route: string) => P
 })
 
 export { expect }
+export type { Page }
 
 /// The debug strip labelled `label`: a semantics group whose facts are exact
 /// leaf texts, `status=success`, `fetchStatus=idle`, `fetches=2`.
