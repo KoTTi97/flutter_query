@@ -1,6 +1,6 @@
 # tanstack_query_flutter
 
-The Flutter binding for [`tanstack_query_core`](../tanstack_query_core) — a
+The Flutter binding for [`tanstack_query_core`](https://pub.dev/packages/tanstack_query_core) — a
 `QueryClientProvider`, listenable controllers, builder widgets, a `State` mixin
 and `context.query(...)`.
 
@@ -42,7 +42,10 @@ that stops calling `context.query` *altogether* gives no signal Flutter can
 see, so its last observers stay until it unmounts — put a conditional read in
 its own small widget. Read in `build`, not in a handler: the read is reconciled
 against the previous build. `context.selectQuery` is the form with a `select`
-whose output type differs from the cache's.
+whose output type differs from the cache's. `context.query` always reads the
+provider's client and takes no `client:` — a `BuildContext` names exactly one
+provider; for a client that is not the provider's, use the builders (`client:`)
+or the controllers, or override `queryClient` on a `QueryMixin` State.
 
 ### `QueryBuilder`
 
@@ -92,7 +95,9 @@ sensor.dispose();
 `select` whose output type differs from the cache's.
 
 A `ValueListenable<QueryResult<T>>`. Nothing hidden, testable without widgets,
-and the foundation the other three stand on. Because it is a plain listenable,
+and the foundation the other three stand on. Its `value` before the first
+listener is the optimistic result — `fetching` for a query that will fetch on
+subscribe — the same thing a widget sees on its first build. Because it is a plain listenable,
 it also drops into `ValueListenableBuilder`, `ListenableBuilder`,
 `Listenable.merge`, `provider`, `riverpod` and `bloc` unchanged.
 
@@ -110,7 +115,10 @@ if (feed.hasNextPage) feed.fetchNextPage();
 
 Mutations likewise: `context.mutation(...)`, `watchMutation(...)`,
 `MutationBuilder`, `MutationController`. A mutation is owned by the widget that
-asks for it and disposed with it.
+asks for it and disposed with it. In the context and mixin styles a mutation is
+identified by `id`, else by its `mutationKey`, each together with its three
+type arguments; without either, by the types alone. Like a query, it is released
+after the frame once a build stops reading it.
 
 ## What rebuilds, and when
 
@@ -153,6 +161,13 @@ runApp(
 );
 ```
 
+`QueryClientProvider.of(context)` finds the client and subscribes the widget to
+a provider change, `read` finds it without subscribing (for handlers), and
+`maybeOf` returns `null` instead of throwing where a widget can do without one.
+The provider does not dispose the client: a `QueryClient` outlives the tree, so
+`client.clear()` (and `unmount()`) is yours to call — at the end of a widget
+test, on a sign-out, before a hot restart swaps the app.
+
 That does three things while it is mounted:
 
 - **App lifecycle → focus.** Every lifecycle state the app reports is mapped
@@ -190,7 +205,9 @@ QueryClientProvider(
 )
 ```
 
-The stream reports changes; the state the device is already in comes from
+Any `Stream<bool>` will do, single-subscription included: the provider
+subscribes once, and a swapped client inherits the last value the stream
+reported. The stream reports changes; the state the device is already in comes from
 `Connectivity().checkConnectivity()`, which you can feed to
 `client.onlineManager.setOnline` once at startup. Worth knowing:
 `connectivity_plus` reports a *link*, not reachability. A phone on hotel wifi

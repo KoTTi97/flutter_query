@@ -8,7 +8,7 @@ publish_to: none
 
 environment:
   sdk: ^3.6.0
-  flutter: ">=3.13.0"
+  flutter: ">=3.27.0"
 
 resolution: workspace
 
@@ -21,7 +21,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  lints: ^6.0.0
+  lints: '>=5.1.1 <7.0.0'
 
 flutter:
   # Bundles the Material icon font. Without it every Icon renders as a tofu box

@@ -38,10 +38,40 @@ jobs:
         working-directory: packages/tanstack_query_flutter
       - name: analyzer
         run: dart analyze --fatal-infos packages examples/sensor_demo
+      # `dart doc` reports unresolved doc references and broken links as
+      # warnings; the API reference is the first page a pub.dev reader opens.
+      - name: core docs
+        run: dart doc --validate-links
+        working-directory: packages/tanstack_query_core
+      - name: binding docs
+        run: dart doc --validate-links
+        working-directory: packages/tanstack_query_flutter
       - name: formatter
         run: dart format --set-exit-if-changed --output=none packages examples/sensor_demo/lib examples/sensor_demo/test
       - name: demo web build
         run: flutter build web --no-pub
+        working-directory: examples/sensor_demo
+
+  # The declared floors (Dart 3.6 / Flutter 3.27), tests only: the formatter
+  # and analyzer output differ between SDK versions, the behaviour must not.
+  floors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.27.4
+          cache: true
+      - run: flutter pub get
+      - name: core tests
+        run: dart test
+        working-directory: packages/tanstack_query_core
+      - name: binding tests
+        run: flutter test
+        working-directory: packages/tanstack_query_flutter
+      - name: demo tests
+        run: flutter test
         working-directory: examples/sensor_demo
 
   # The end-to-end suite: the real web build in a real Chromium against the

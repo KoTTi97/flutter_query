@@ -102,8 +102,8 @@ class _SensorOverviewState extends State<SensorOverview> {
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 6, 20, 0),
             child: Text(
-              'Referenz für den Umbau der Sensor-Domäne. Das Dummy-Gateway ist '
-              'absichtlich langsam — rund 900 ms pro Listenabruf.',
+              'Sensoren am Gateway. Das Gateway ist absichtlich langsam — '
+              'rund 900 ms pro Listenabruf — damit man den Cache arbeiten sieht.',
               style: mutedText,
             ),
           ),

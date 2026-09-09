@@ -1,4 +1,4 @@
-query
+/query/
 # react-demo is vendored (its own .git was removed); node_modules is
 # ignored via react-demo/.gitignore and the rule below.
 node_modules
@@ -8,3 +8,6 @@ node_modules
 build/
 .packages
 pubspec_overrides.yaml
+
+# dart doc output
+**/doc/api/

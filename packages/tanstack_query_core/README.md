@@ -17,12 +17,12 @@ upstream's test names so the two files diff against each other:
 |---|---|---|---|
 | `query` | 43 / 51 | `mutation` | 28 / 28 |
 | `queryCache` | 14 / 16 | `mutationCache` | 16 / 16 |
-| `queryObserver` | 60 / 75 | `mutationObserver` | 16 / 16 |
+| `queryObserver` | 62 / 75 | `mutationObserver` | 16 / 16 |
 | `queryClient` | 104 / 156 | `infiniteQueryBehavior` | 7 / 9 |
 | `retryer` | 13 / 13 | `infiniteQueryObserver` | 6 / 7 |
 
 Every case that is *not* ported is listed by name and category in
-[`test/PORTING_NOTES.md`](test/PORTING_NOTES.md), together with every place this
+[`test/PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/tanstack_query_core/test/PORTING_NOTES.md), together with every place this
 port deliberately diverges. No omission is silent.
 
 Pinned upstream revision: `50680b98c`.
@@ -98,7 +98,7 @@ in the repository.
 ## Deliberately not in v1
 
 Each row is recorded, with its reason, in
-[`test/PORTING_NOTES.md`](test/PORTING_NOTES.md).
+[`test/PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/tanstack_query_core/test/PORTING_NOTES.md).
 
 | Upstream | Here |
 |---|---|

@@ -44,8 +44,10 @@ The demo's README says how to run it against the gateway.
 ## Requirements and platforms
 
 The core is pure Dart (SDK `^3.6.0`). The binding and the demo need **Flutter
-3.27 or later**. The demo has been run on the iOS simulator and on the web;
-other platforms are untested.
+3.27 or later**; CI runs the tests on that floor and on current stable. The demo
+has been run on the iOS simulator and on the web; other platforms are untested.
+Its UI is German, like the React demo it mirrors. The gateway both demos talk to
+is Node (23.6 or later, for TypeScript type stripping).
 
 ## Coming from TanStack Query (JS)
 
@@ -54,14 +56,14 @@ JavaScript names to the Dart ones — `useQuery` to the four equal call styles,
 `fetchQuery` to `QueryClient.query`, `staleTime: Infinity` to
 `StaleTime.infinite`, and the rest.
 
-## Deliberately not in v1
+## Deliberately not in 0.1
 
 Each row is recorded, with its reason, in
 [PORTING_NOTES.md](packages/tanstack_query_core/test/PORTING_NOTES.md).
 
 | Upstream | Here |
 |---|---|
-| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in v1; `Query.setState` is the door a persister would use |
+| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 0.1; `Query.setState` is the door a persister would use |
 | `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders |
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |

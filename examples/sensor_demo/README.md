@@ -6,7 +6,9 @@ put side by side.
 
 ## Running it
 
-Start the gateway the React demo uses (port 5174):
+Start the gateway the React demo uses (port 5174). It runs its TypeScript
+straight through Node's type stripping, so it needs **Node 23.6 or later**
+(`.nvmrc` says 24, which is what CI uses):
 
 ```bash
 cd ../../react-demo/server && npm install && npm run dev
