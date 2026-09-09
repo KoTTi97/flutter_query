@@ -66,6 +66,14 @@ Not here, because the port does not have them: hydration and persisters,
 No screen presents one of the four call styles as the default; across the
 catalogue each is used in its turn.
 
+**What the catalogue found.** Building it turned up two bugs in the library
+that no ported upstream test could reach, because neither is visible without a
+real widget: a read whose key changed lost `keepPreviousData` in `QueryMixin`
+and `context.query`, and `structuralSharing` was invisible to every reader
+because the observer re-shared the cache's data against its own last result.
+Both were reproduced in the library's own suite before anything was changed;
+the "Found by the showcase" section of PORTING_NOTES has the details.
+
 ## The backend
 
 [`server/`](server) is an express server with one in-memory world per
@@ -135,3 +143,45 @@ paints to a canvas, so the tests read the **semantics tree**, switched on by
 - The build passes `--pwa-strategy=none --no-web-resources-cdn`: no service
   worker serving a stale bundle after a local rebuild, no CanvasKit fetched
   from a CDN in every fresh browser context.
+
+## Writing a screen: what the catalogue learned
+
+Rules that cost someone a debugging session, in the order they bite:
+
+- **`FeatureScaffold` lays its children out in a lazy `ListView`.** A debug
+  strip below a long list is never built, and neither a widget finder nor the
+  browser can see it. Keep strips near the top, bound tall content in its own
+  scroller, and widen the test window (`tester.view.physicalSize`,
+  `test.use({ viewport })`) when a screen is taller than the default.
+- **A lazy `ListView.builder` with a fixed `itemExtent` does not relayout when
+  only the item count grows**, so rows appended by a "load more" can be
+  unreachable in a widget test. An eager bounded `Column` is the honest fix.
+- **`IconButton(tooltip:)` is named by its tooltip; a `Tooltip` wrapped around
+  a text button is not** — there the visible label is the name, and
+  `Tooltip(message: …, excludeFromSemantics: true)` keeps the hover text
+  without touching the tree. Several controls in one row can fold into the
+  row's node: wrap a toolbar in `Semantics(container: true,
+  explicitChildNodes: true)`.
+- **Two facts named `status=` collide.** Put a card's facts in a named
+  semantics group and read them inside it, the way the strips do. A
+  `SectionCard` title must not repeat a control's label either.
+- **A subscription to a cache for rebuilds must filter to state-changing
+  events.** Every build re-applies a reader's options, an inline `queryFn`
+  closure is never equal, and `QueryObserverOptionsUpdated` then fires once
+  per build — a screen that rebuilds on it feeds itself. The same holds for
+  the mutation cache. `ShowcaseScope.of(context).stats` already filters.
+- **A read whose key the screen switches needs an `id:`** — with one, the
+  observer follows the key (and `PlaceholderData.compute` gets the previous
+  data); without one, a new key is a new read.
+- **`SegmentedButton` segments are `getByRole('radio')`**, a `SwitchListTile`
+  is `getByRole('switch')` and its subtitle is part of its name; Playwright's
+  `check()` races Flutter's next-frame semantics update, so click and then
+  assert `toBeChecked()`. The AppBar's back button is already named `Back`.
+- **Scrolling in the browser** is `locator.scrollIntoViewIfNeeded()` on a row;
+  `mouse.wheel` does not reach the canvas through the semantics overlay.
+- **`page.route` cannot filter by method** — hold a POST with a handler that
+  checks `route.request().method()` and continues everything else, the CORS
+  preflight included.
+- **`tester.pump()` with no duration does not let a fake-backend response
+  resolve**: dio hangs its pipeline off zero-duration timers and `FakeAsync`
+  runs those only when the clock moves. Step with a real duration.
