@@ -111,6 +111,14 @@ before the write returns, that the Matter poll stops once the device confirms,
 that a refused delete springs back, that an unreachable gateway is retried
 exactly once. Playwright can cut the network, which no widget test can.
 
+Nothing in the suite asserts on a stopwatch. To prove that a write shows
+*before* the gateway answers, the test holds the request at the network layer
+(`page.route`) and releases it once it has seen the optimistic patch: the
+server has provably not replied, so there is no wall-clock budget to blow. A
+timeout instead would be a guess about how fast the browser repaints and
+republishes its semantics tree, and a busy machine makes that guess wrong now
+and then.
+
 Flutter web paints to a canvas, so the tests read the **semantics tree** — the
 same tree a screen reader gets. The build under test switches it on from the
 start (`--dart-define=E2E=true`, see `main.dart`); rows are groups named after

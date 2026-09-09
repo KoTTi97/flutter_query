@@ -26,6 +26,28 @@ const row = (page: Page, name: string) => page.getByRole('group', { name })
 const deleteButton = (page: Page, name: string) => page.getByRole('button', { name: `${name} löschen` })
 const heroTitle = (page: Page) => page.getByText(/Kontakt · Flur/)
 
+// Holds every rename write in the browser until `release()`, so an assertion
+// between the click and the release runs while the gateway provably has not
+// answered. After the release the handler is a passthrough, so the rest of the
+// test talks to the gateway normally — unrouting it here would race the
+// handler that is still letting the held request go.
+function holdWrite(page: Page) {
+  let letGo: () => void = () => {}
+  const held = new Promise<void>((resolve) => {
+    letGo = resolve
+  })
+  const routed = page.route('**/api/sensors/*/name', async (route) => {
+    await held
+    await route.continue()
+  })
+  return {
+    async release() {
+      await routed
+      letGo()
+    },
+  }
+}
+
 test('loads the sensors from the gateway, one request for the whole screen', async ({ page, request }) => {
   const sensor = await createSensor(request, uniqueName('Erste Ladung'))
   const requests = requestCounter(page)
@@ -83,11 +105,18 @@ test('renames optimistically and the gateway keeps the name', async ({ page, req
   await field.click()
   await expect(field).toHaveValue(sensor.name)
   await field.fill(newName)
-  await page.getByRole('button', { name: 'Umbenennen', exact: true }).click()
 
-  // On screen before the write returns (the gateway takes ~700 ms), and still
-  // there after it has.
-  await expect(heroTitle(page)).toContainText(newName, { timeout: 300 })
+  // Hold the write at the network layer, so "optimistic" is proven by
+  // construction: the gateway has provably not answered while we assert. A
+  // wall-clock budget instead would be a guess about how fast the browser
+  // repaints and republishes its semantics tree, which is what a busy machine
+  // makes flaky.
+  const write = holdWrite(page)
+  await page.getByRole('button', { name: 'Umbenennen', exact: true }).click()
+  await expect(heroTitle(page)).toContainText(newName)
+  await write.release()
+
+  // And still there once the write has gone through.
   await expect(page.getByRole('button', { name: 'Umbenennen', exact: true })).not.toHaveAttribute('aria-disabled', 'true', { timeout: 10_000 })
   await expect(heroTitle(page)).toContainText(newName)
   expect((await getSensor(request, sensor.id))?.name).toBe(newName)
@@ -107,9 +136,15 @@ test('a refused rename rolls back on screen and in the field', async ({ page, re
 
   const field = page.getByRole('textbox', { name: /^Name/ })
   await field.click()
+  await expect(field).toHaveValue(sensor.name)
   await field.fill('fail')
+
+  // Same as the rename above: the rejected name has to be on screen while the
+  // gateway still owes an answer, so the write is held until we have seen it.
+  const write = holdWrite(page)
   await page.getByRole('button', { name: 'Umbenennen', exact: true }).click()
-  await expect(heroTitle(page)).toContainText('fail', { timeout: 300 })
+  await expect(heroTitle(page)).toContainText('fail')
+  await write.release()
 
   await expect(page.getByText('Gateway hat den Schreibvorgang abgelehnt')).toBeVisible()
   await expect(heroTitle(page)).toContainText(sensor.name)
