@@ -126,7 +126,8 @@ void main() {
     expect(requestsFor('GET /sensors?'), 0); // dio keeps params off the path
     expect(requestsFor('GET /sensors'), 2);
     expect(
-      client.queryCache.findAll(QueryFilters(queryKey: SensorKeys.lists)),
+      client.queryCache
+          .findAll(filters: QueryFilters(queryKey: SensorKeys.lists)),
       hasLength(2),
     );
   });

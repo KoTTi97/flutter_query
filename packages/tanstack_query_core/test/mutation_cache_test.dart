@@ -296,23 +296,26 @@ void main() {
 
         final mutation = testCache.mutations.first;
 
+        expect(testCache.find(filters: MutationFilters(mutationKey: key)),
+            same(mutation));
         expect(
-            testCache.find(MutationFilters(mutationKey: key)), same(mutation));
-        expect(
-          testCache.find(MutationFilters(
+          testCache.find(
+              filters: MutationFilters(
             mutationKey: QueryKey(<Object?>['mutation']),
             exact: false,
           )),
           same(mutation),
         );
         expect(
-          testCache.find(MutationFilters(
+          testCache.find(
+              filters: MutationFilters(
             mutationKey: QueryKey(<Object?>['unknown']),
           )),
           isNull,
         );
         expect(
-          testCache.find(MutationFilters(
+          testCache.find(
+              filters: MutationFilters(
             predicate: (m) => m.options.mutationKey?.parts.first == 'mutation',
           )),
           same(mutation),
@@ -344,24 +347,27 @@ void main() {
         final mutation2 = testCache.mutations[1];
 
         expect(
-          testCache
-              .findAll(MutationFilters(mutationKey: QueryKey(<Object?>['a']))),
+          testCache.findAll(
+              filters: MutationFilters(mutationKey: QueryKey(<Object?>['a']))),
           hasLength(2),
         );
         expect(
-          testCache
-              .find(MutationFilters(mutationKey: QueryKey(<Object?>['a', 1]))),
+          testCache.find(
+              filters:
+                  MutationFilters(mutationKey: QueryKey(<Object?>['a', 1]))),
           same(mutation1),
         );
         expect(
-          testCache.findAll(MutationFilters(
+          testCache.findAll(
+              filters: MutationFilters(
             predicate: (m) => m.options.mutationKey?.parts.last == 2,
           )),
           [same(mutation2)],
         );
         expect(
           testCache.findAll(
-              MutationFilters(mutationKey: QueryKey(<Object?>['unknown']))),
+              filters:
+                  MutationFilters(mutationKey: QueryKey(<Object?>['unknown']))),
           isEmpty,
         );
       });

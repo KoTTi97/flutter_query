@@ -65,6 +65,14 @@ The result is a **sealed** type, so `switch` is exhaustive and the data is
 simply there — no `result.data!`. A `QueryError` still carries the last good
 data, which is what makes stale-while-revalidate readable.
 
+Call `client.mount()` once at start-up and `client.unmount()` when done:
+without it nothing reacts to the app returning to the foreground or the
+device coming back online — no `refetchOnWindowFocus`, no
+`refetchOnReconnect`, no resuming of paused mutations, and a `query` that
+paused offline waits for a reconnect only while mounted. The Flutter binding
+mounts the client it is given; in pure Dart it is your call. A client also
+owns `gcTime` timers, so end with `client.clear()` to let the process exit.
+
 ## What is Dart rather than JavaScript
 
 The port follows upstream's behaviour, not its type tricks. The differences that

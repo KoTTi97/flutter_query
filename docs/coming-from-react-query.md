@@ -41,7 +41,7 @@ alternatives — there is no recommended default, pick per situation:
 | `fetchQuery({ select })` | none — `await` the future and map it |
 | `setQueryData(key, value)` | `setQueryData(key, value)` |
 | `setQueryData(key, updaterFn)` | `updateQueryData(key, (previous) => …)`; returning `null` leaves the cache untouched |
-| `setQueriesData(filters, updaterFn)` | `updateQueriesData(filters, updater)` |
+| `setQueriesData(filters, updaterFn)` | `updateQueriesData(updater, filters: QueryFilters(…))` — every filter parameter in the core is a named `filters:` |
 | `getQueryData(key)` | `getQueryData<T>(key)` — a type mismatch throws `QueryDataTypeError` |
 | a key read as a looser type (`number \| undefined` where `number` was cached) | throws too: one key, one exact type — `int` and `int?`, `List<Sensor>` and `List<Object?>` are different types, and `getQueriesData<T>` checks like `getQueryData<T>` |
 | `invalidateQueries({ queryKey })` | `invalidateQueries(filters: QueryFilters(queryKey: …))` |
@@ -86,7 +86,7 @@ alternatives — there is no recommended default, pick per situation:
 | `throwOnError` | gone: errors are the `QueryError` case of the sealed result |
 | `structuralSharing` | on by default: lists are shared element by element, maps and sets whole when deep-equal, everything else by `==`, so typed models need `==`/`hashCode`; `structuralSharing: (previous, next) => …` replaces it for the cache write |
 | `structuralSharing: false` | `structuralSharing: (_, next) => next` |
-| `queryCache.find({ queryKey })` | `queryCache.find(QueryFilters(queryKey: …))` — exact by default, as upstream; `exact: false` for a prefix |
+| `queryCache.find({ queryKey })` | `queryCache.find(filters: QueryFilters(queryKey: …))` — exact by default, as upstream; `exact: false` for a prefix |
 
 ## Infinite queries
 

@@ -87,6 +87,7 @@ bool _listEquals<T>(List<T> a, List<T> b) {
 class InfinitePageContext<TPageParam> {
   /// Built by the paging behaviour for each page; a page function receives
   /// one rather than constructing it.
+  @internal
   InfinitePageContext({
     required this.client,
     required this.queryKey,

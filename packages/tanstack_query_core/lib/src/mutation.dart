@@ -305,6 +305,43 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
         isPaused: isPaused ?? this.isPaused,
         submittedAt: submittedAt ?? this.submittedAt,
       );
+
+  // Value equality like `QueryState`'s: a persistence layer compares the
+  // state it restored with the one it is about to write (fifth review,
+  // 2026-09-09). `data` and `variables` by `==`, so typed models need their
+  // own.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MutationState<TData, TVariables, TOnMutateResult> &&
+          other.status == status &&
+          other.hasData == hasData &&
+          other.data == data &&
+          other.error == error &&
+          other.errorStackTrace == errorStackTrace &&
+          other.variables == variables &&
+          other.hasVariables == hasVariables &&
+          other.onMutateResult == onMutateResult &&
+          other.failureCount == failureCount &&
+          other.failureReason == failureReason &&
+          other.isPaused == isPaused &&
+          other.submittedAt == submittedAt;
+
+  @override
+  int get hashCode => Object.hash(
+        status,
+        hasData,
+        data,
+        error,
+        errorStackTrace,
+        variables,
+        hasVariables,
+        onMutateResult,
+        failureCount,
+        failureReason,
+        isPaused,
+        submittedAt,
+      );
 }
 
 /// One mutation: its options, its state, and one run of its mutation function.
@@ -359,6 +396,27 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   Retryer<TData>? _retryer;
 
+  /// This mutation with its type arguments erased, the shape the cache
+  /// speaks.
+  Mutation<Object?, Object?, Object?> get _erased =>
+      this as Mutation<Object?, Object?, Object?>;
+
+  MutationScope? _runScope;
+  bool _hasRunScope = false;
+
+  /// The scope this mutation is queued and released under.
+  ///
+  /// Captured when [execute] starts and kept for the whole run: a
+  /// `setOptions` that changes `scope` while the mutation is running does
+  /// not move it. Adopting the new scope did — `onMutationSettled` then woke
+  /// the next mutation in the *new* scope and left the one waiting in the
+  /// old scope `pending` for good (fifth review, 2026-09-09). Before the
+  /// first run, and for a restored mutation that has not been continued yet,
+  /// it is the options' scope.
+  @internal
+  MutationScope? get schedulingScope =>
+      _hasRunScope ? _runScope : _options.scope;
+
   /// The options' `meta`, as upstream exposes it on the mutation for cache
   /// listeners and devtools.
   Object? get meta => _options.meta;
@@ -382,8 +440,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     if (!_observers.contains(observer)) {
       _observers.add(observer);
       clearGcTimeout();
-      _cache.onMutationObserverAdded(
-          this as Mutation<Object?, Object?, Object?>, observer);
+      _cache.onMutationObserverAdded(_erased, observer);
     }
   }
 
@@ -396,8 +453,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     if (!_observers.remove(observer)) {
       return;
     }
-    _cache.onMutationObserverRemoved(
-        this as Mutation<Object?, Object?, Object?>, observer);
+    _cache.onMutationObserverRemoved(_erased, observer);
     // Never removed on the spot: an unmounted widget must not cut a mutation's
     // callbacks short. The gc timer decides, and `optionalRemove` lets a
     // pending one keep going.
@@ -421,7 +477,9 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// Releases a paused mutation, completing when it settles — or rejecting
   /// with the error it settled on, as upstream's `continue()` does. The cache's
   /// `resumePaused` is the caller that swallows it; a direct caller who does
-  /// not want the error `.ignore()`s the future.
+  /// not want the error `.ignore()`s the future. "Settles" is the state: the
+  /// success and settled callbacks have been awaited by then, but an `async`
+  /// one that the run did not await may still be running.
   ///
   /// A mutation restored from persistence is `pending` with no retryer at all;
   /// continuing it means running it, which is how an offline mutation survives
@@ -479,6 +537,10 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   /// Runs the mutation function once, with everything around it.
   Future<TData> execute(TVariables variables) async {
+    // The scope is fixed for this run; see `schedulingScope`.
+    _runScope = _options.scope;
+    _hasRunScope = true;
+
     // The retryer exists before the first `await`, exactly as upstream builds
     // it: a mutation that pauses while its `onMutate` is still running must
     // still be resumable, and `continueMutation` has nothing to continue
@@ -497,8 +559,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       },
       focusManager: client.focusManager,
       onlineManager: client.onlineManager,
-      canRun: () =>
-          _cache.canRunMutation(this as Mutation<Object?, Object?, Object?>),
+      canRun: () => _cache.canRunMutation(_erased),
       retry: _options.retry,
       retryDelay: _options.retryDelay,
       networkMode: _options.networkMode,
@@ -529,10 +590,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
         // Awaited only when there is something to await: with no cache-level
         // `onMutate`, the per-mutation one has to run synchronously, so that a
         // caller can read the optimistic state it wrote on the next line.
-        final starting = _cache.onMutationStarting(
-          this as Mutation<Object?, Object?, Object?>,
-          variables,
-        );
+        final starting = _cache.onMutationStarting(_erased, variables);
         if (starting is Future<void>) {
           await starting;
         }
@@ -564,15 +622,10 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       // Cache hook then per-mutation hook, for each of success and settled —
       // interleaved exactly as upstream runs them, so a global handler can set
       // something up that the local one consumes.
-      await _cache.onMutationSuccess(
-        this as Mutation<Object?, Object?, Object?>,
-        data,
-        variables,
-        onMutateResult,
-      );
+      await _cache.onMutationSuccess(_erased, data, variables, onMutateResult);
       await _options.onSuccess?.call(data, variables, onMutateResult);
       await _cache.onMutationSettledCallback(
-        this as Mutation<Object?, Object?, Object?>,
+        _erased,
         data,
         null,
         null,
@@ -595,7 +648,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       // for. Upstream does the same with `void Promise.reject(e)`.
       await _reportingFailures(
         () => _cache.onMutationError(
-          this as Mutation<Object?, Object?, Object?>,
+          _erased,
           error,
           stackTrace,
           variables,
@@ -612,7 +665,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       );
       await _reportingFailures(
         () => _cache.onMutationSettledCallback(
-          this as Mutation<Object?, Object?, Object?>,
+          _erased,
           null,
           error,
           stackTrace,
@@ -632,7 +685,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       _dispatch(MutationErrorAction(error, stackTrace));
       rethrow;
     } finally {
-      _cache.onMutationSettled(this as Mutation<Object?, Object?, Object?>);
+      _cache.onMutationSettled(_erased);
       if (identical(_retryer, retryer)) {
         _retryer = null;
       }
@@ -656,10 +709,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       for (final observer in List<MutationObserverRef>.of(_observers)) {
         observer.onMutationUpdate(action);
       }
-      _cache.onMutationStateUpdated(
-        this as Mutation<Object?, Object?, Object?>,
-        action,
-      );
+      _cache.onMutationStateUpdated(_erased, action);
     });
   }
 

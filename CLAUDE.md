@@ -9,7 +9,7 @@ work is first-class here, not an add-on.
 
 | Phase | State |
 |---|---|
-| **`packages/tanstack_query_core/`** — the pure-Dart core | **done, four times reviewed.** 467 tests, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
+| **`packages/tanstack_query_core/`** — the pure-Dart core | **done, six times reviewed.** 507 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
 | **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, four times reviewed.** 56 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter |
 | **`examples/sensor_demo/`** — the react-demo port | **done.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
 
@@ -17,10 +17,11 @@ The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
 reason — is
 [`packages/tanstack_query_core/test/PORTING_NOTES.md`](packages/tanstack_query_core/test/PORTING_NOTES.md),
-and it is the first thing to read before touching a ported suite. Four
-external reviews (2026-09-08 and three on 2026-09-09) found some 50 bugs between
+and it is the first thing to read before touching a ported suite. Six
+external reviews (2026-09-08 and five on 2026-09-09) found some 70 bugs between
 them, none caught by a ported case; their regressions live in
-`port_specifics_test.dart` (core) and `review_regressions_test.dart` (binding),
+`port_specifics_test.dart` and `port_lifecycle_test.dart` (core) and
+`review_regressions_test.dart` (binding),
 and the notes' "Regressions found by review" section says what each one was. **A review's finding is verified by
 reproducing it before anything is changed** — two of the second review's own
 reproductions did not exercise the code they claimed to, and the notes record

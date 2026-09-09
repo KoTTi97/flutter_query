@@ -21,6 +21,12 @@ jobs:
       - name: core tests
         run: dart test
         working-directory: packages/tanstack_query_core
+      # The port serves the web as a first-class target, and two reviews found
+      # bugs only a JavaScript runtime shows (32-bit timers, int/double being
+      # one type); the whole core suite runs compiled to JS as well.
+      - name: core tests, compiled to JavaScript
+        run: dart test --platform chrome
+        working-directory: packages/tanstack_query_core
       - name: binding tests
         run: flutter test
         working-directory: packages/tanstack_query_flutter

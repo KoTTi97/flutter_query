@@ -21,14 +21,22 @@ typedef BatchNotifyFunction = void Function(void Function() callback);
 /// * The default scheduler is [scheduleMicrotask], not a zero-delay timer.
 ///   It is faster, it is deterministic, and `fake_async` controls it.
 /// * This is an ordinary object rather than a module-level singleton, so a
-///   [QueryClient] can own one and tests are hermetic. Apps that want
-///   upstream's single shared queue get it by default via
-///   [NotifyManager.shared].
+///   `QueryClient` can own one and tests are hermetic. A client constructed
+///   without one creates its own; apps that want upstream's single shared
+///   queue pass [NotifyManager.shared] to every client.
+///
+/// What a [batch] guarantees: callbacks that go through [schedule] — an
+/// observer's listener notifications, and whatever the scheduler defers —
+/// are held until the outermost batch ends and delivered in one round. It
+/// does not defer the core's own synchronous plumbing: cache listeners and
+/// the observers' `onQueryUpdate` run per dispatch, batch or not.
 class NotifyManager {
   /// Creates an independent queue with the default microtask scheduler.
   NotifyManager();
 
-  /// The process-wide instance used when a client is constructed without one.
+  /// A process-wide instance, for batching across clients. Not the default:
+  /// a client constructed without one creates its own (third review,
+  /// 2026-09-09).
   static final NotifyManager shared = NotifyManager();
 
   final List<void Function()> _queue = <void Function()>[];

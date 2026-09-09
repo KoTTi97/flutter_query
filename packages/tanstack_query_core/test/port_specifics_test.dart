@@ -7,6 +7,7 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:tanstack_query_core/src/retryer.dart';
 import 'package:tanstack_query_core/src/timers.dart';
@@ -247,7 +248,9 @@ void main() {
 
   test('the default backoff stays capped however many times it has failed', () {
     final error = StateError('offline');
-    for (final attempt in [5, 30, 31, 32, 43, 44, 63, 64, 100, 1 << 40]) {
+    // A literal, not `1 << 40`: under dart2js a shift past 32 bits is `0`
+    // (fifth review, 2026-09-09).
+    for (final attempt in [5, 30, 31, 32, 43, 44, 63, 64, 100, 1000000000000]) {
       expect(
         RetryDelay.defaultValue.resolve(attempt, error),
         const Duration(seconds: 30),
@@ -380,7 +383,8 @@ void main() {
     var unsubscribe = observer.subscribe((_) {});
     unsubscribe();
     await time.advance(ms(2));
-    expect(client.queryCache.find(QueryFilters(queryKey: key)), isNull);
+    expect(
+        client.queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
 
     client.setQueryData<int>(key, 2);
     unsubscribe = observer.subscribe((_) {});
@@ -445,6 +449,7 @@ void main() {
 
   thirdReview();
   fourthReview();
+  fifthReviewObserver();
 }
 
 // -----------------------------------------------------------------------------
@@ -632,14 +637,16 @@ void thirdReview() {
     final client = testClient();
     final key = queryKey();
     client.setQueryData<int>(key.append(<Object?>[1]), 1);
-    expect(client.queryCache.find(QueryFilters(queryKey: key)), isNull);
     expect(
-      client.queryCache.find(QueryFilters(queryKey: key, exact: false)),
+        client.queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
+    expect(
+      client.queryCache
+          .find(filters: QueryFilters(queryKey: key, exact: false)),
       isNotNull,
     );
     // The bulk operations keep their prefix default.
-    expect(
-        client.queryCache.findAll(QueryFilters(queryKey: key)), hasLength(1));
+    expect(client.queryCache.findAll(filters: QueryFilters(queryKey: key)),
+        hasLength(1));
     client.clear();
   });
 
@@ -713,8 +720,8 @@ void thirdReview() {
     client.setQueryData<int>(prefix.append(<Object?>[3]), 3);
     expect(
       () => client.updateQueriesData<int>(
-        QueryFilters(queryKey: prefix),
         (previous) => (previous ?? 0) + 10,
+        filters: QueryFilters(queryKey: prefix),
       ),
       throwsA(isA<QueryDataTypeError>()),
     );
@@ -897,8 +904,8 @@ void fourthReview() {
     );
     expect(
       () => client.updateQueriesData<num>(
-        QueryFilters(queryKey: key),
         (previous) => (previous ?? 0) + 1,
+        filters: QueryFilters(queryKey: key),
       ),
       throwsA(isA<QueryDataTypeError>()),
     );
@@ -1194,16 +1201,32 @@ void fourthReview() {
 
   test('C-Q7: an element that does not fit the incoming list is not shared',
       () {
-    // `1 == 1.0`, and the recursion runs untyped: the `int` used to be stored
-    // into the `List<double>` copy and throw.
-    final previousInts = <int>[1];
-    final shared = replaceEqualDeep<List<num>>(previousInts, <double>[1.0]);
-    expect(shared, <double>[1.0]);
-    expect(shared, isA<List<double>>());
-    expect(shared, isNot(same(previousInts)));
+    // A nested `<Object>[1]` is deep-equal to `<int>[1]`, and the recursion
+    // runs untyped: the shared `List<Object>` used to be stored into the
+    // `List<List<int>>` copy and throw. (The case first stored an `int` into
+    // a `List<double>`, which is no mismatch under dart2js, where `1` and
+    // `1.0` are one value — fifth review, 2026-09-09.)
+    final previousInner = <Object>[1];
+    final previous = <Object>[previousInner];
+    final shared = replaceEqualDeep<List<List<int>>>(previous, <List<int>>[
+      <int>[1]
+    ]);
+    expect(shared, [
+      [1]
+    ]);
+    expect(shared, isA<List<List<int>>>());
+    expect(shared, isNot(same(previous)));
+    expect(shared.single, isNot(same(previousInner)));
     // Elements that fit still share.
-    final previous = <num>[1, 2];
-    expect(replaceEqualDeep<List<num>>(previous, <num>[1, 2]), same(previous));
+    final previousFit = <List<num>>[
+      <num>[1, 2]
+    ];
+    expect(
+      replaceEqualDeep<List<List<num>>>(previousFit, <List<num>>[
+        <num>[1, 2]
+      ]),
+      same(previousFit),
+    );
   });
 
   testFakeAsync('C-Q8: find survives a predicate that removes the query',
@@ -1212,7 +1235,7 @@ void fourthReview() {
     client.setQueryData<int>(queryKey(), 1);
     client.setQueryData<int>(queryKey(), 2);
     expect(
-      client.queryCache.find(QueryFilters(predicate: (query) {
+      client.queryCache.find(filters: QueryFilters(predicate: (query) {
         client.queryCache.remove(query);
         return false;
       })),
@@ -1554,10 +1577,11 @@ void fourthReview() {
     final key = queryKey();
     client.setQueryData<int>(key, 1);
     expect(
-      () => client.getQueriesData<String>(QueryFilters(queryKey: key)),
+      () => client.getQueriesData<String>(filters: QueryFilters(queryKey: key)),
       throwsA(isA<QueryDataTypeError>().having((e) => e.queryKey, 'key', key)),
     );
-    expect(client.getQueriesData<int>(QueryFilters(queryKey: key)), [(key, 1)]);
+    expect(client.getQueriesData<int>(filters: QueryFilters(queryKey: key)),
+        [(key, 1)]);
     client.clear();
   });
 
@@ -1596,3 +1620,367 @@ void fourthReview() {
 int? _seed() => 1;
 
 int? _placeholder(int? previousData, Query<int>? previousQuery) => 1;
+
+// -----------------------------------------------------------------------------
+// Fifth review, 2026-09-09 (two reviews of `98443be`, merged): the observer,
+// structural-sharing and timer findings. `D<n>` is the first review's
+// numbering, `F<nn>` the second's; the review's own reproduction suite is
+// `docs/reviews/core-review-2026-09-09/repro_test.dart`, and each case below
+// names the R-case it ports.
+
+void fifthReviewObserver() {
+  test('D1/F09: ceilToMilliseconds rounds up and never arms a zero timer', () {
+    expect(ceilToMilliseconds(const Duration(microseconds: 900)), ms(1));
+    expect(ceilToMilliseconds(ms(1)), ms(1));
+    expect(ceilToMilliseconds(const Duration(microseconds: 1001)), ms(2));
+    expect(
+        ceilToMilliseconds(const Duration(milliseconds: 29, microseconds: 600)),
+        ms(30));
+    expect(ceilToMilliseconds(Duration.zero), ms(1));
+    expect(ceilToMilliseconds(-ms(5)), ms(1));
+  });
+
+  testFakeAsync(
+      'D1/F09 (R16): a stale timer truncated to whole milliseconds still '
+      'flips isStale', (time) async {
+    final client = testClient();
+    late QueryObserver<int, int> observer;
+    // fake_async keeps microseconds; a real `Timer` is armed in whole
+    // milliseconds. This zone models that boundary, as the review's R16 did.
+    runZoned(() {
+      observer = client.observe<int, int>(QueryObserverOptions(
+        queryKey: queryKey(),
+        queryFn: (_) => 1,
+        staleTime: const StaleTime.duration(Duration(microseconds: 900)),
+      ));
+      observer.subscribe((_) {});
+    },
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) =>
+              parent.createTimer(zone, ms(duration.inMilliseconds), callback),
+        ));
+    await time.flushMicrotasks();
+    expect(observer.currentResult.isStale, isFalse);
+    await time.advance(ms(2));
+    expect(observer.currentResult.isStale, isTrue);
+    observer.destroy();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'D1/F09 (R03): a 30-day stale time flips isStale on day 30, past the '
+      'web timer clamp', (time) async {
+    final client = testClient();
+    var notifications = 0;
+    final observer = client.observe<int, int>(QueryObserverOptions(
+      queryKey: queryKey(),
+      queryFn: (_) => 1,
+      staleTime: const StaleTime.duration(Duration(days: 30)),
+    ));
+    observer.subscribe((_) => notifications++);
+    await time.flushMicrotasks();
+    // The clamp fires the timer on day 24.8; the data is still fresh, and
+    // the timer used to stop there.
+    await time.advance(const Duration(days: 25));
+    expect(observer.currentResult.isStale, isFalse);
+    expect(time.pendingTimers, 1, reason: 're-armed for the remainder');
+    notifications = 0;
+    await time.advance(const Duration(days: 6));
+    expect(observer.currentQuery.isStaleByTime(observer.options.staleTime),
+        isTrue);
+    expect(observer.currentResult.isStale, isTrue);
+    expect(notifications, 1);
+    observer.destroy();
+    client.clear();
+  });
+
+  test('D2/D11/F01 (R01): typed bytes survive a second cache write', () {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<Uint8List>(key, Uint8List.fromList([1]));
+    client.setQueryData<Uint8List>(key, Uint8List.fromList([2]));
+    expect(client.getQueryData<Uint8List>(key), [2]);
+    client.clear();
+  });
+
+  test('D2/D11/F01: typed data is a leaf — never walked, shared by identity',
+      () {
+    final previous = Float32List.fromList([1]);
+    final changed = Float32List.fromList([2]);
+    expect(replaceEqualDeep<Float32List>(previous, changed), same(changed));
+    // Equal contents are still `next`: a `Uint8Array` is not a plain array
+    // for upstream either, and a byte-by-byte walk is not worth the rebuild
+    // it would save.
+    final same_ = Float32List.fromList([1]);
+    expect(replaceEqualDeep<Float32List>(previous, same_), same(same_));
+    expect(replaceEqualDeep<Float32List>(previous, previous), same(previous));
+    // Nested in a list, the typed element does not stop the rest sharing.
+    final inner = <int>[1, 2];
+    final shared = replaceEqualDeep<List<Object>>(
+      <Object>[
+        inner,
+        Uint8List.fromList([1])
+      ],
+      <Object>[
+        <int>[1, 2],
+        Uint8List.fromList([1])
+      ],
+    );
+    expect(shared[0], same(inner));
+    expect(shared[1], isA<Uint8List>());
+  });
+
+  testFakeAsync('D2/D11/F01: a select returning typed bytes survives a refetch',
+      (time) async {
+    final client = testClient();
+    var calls = 0;
+    final observer = client.observe<List<int>, Uint8List>(QueryObserverOptions(
+      queryKey: queryKey(),
+      queryFn: (_) => [1, ++calls],
+      select: Uint8List.fromList,
+    ));
+    observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(observer.currentResult, isA<QuerySuccess<Uint8List>>());
+    await observer.refetch();
+    final result = observer.currentResult;
+    expect(result, isA<QuerySuccess<Uint8List>>(), reason: '$result');
+    expect(result.dataOrNull, [1, 2]);
+    observer.destroy();
+    client.clear();
+  });
+
+  test('D2/D11/F01 (R14): a narrow empty list can replace a wider previous one',
+      () {
+    // Empty against empty is "every element shared", and `<num>[]` is not
+    // the caller's `List<double>`: the copy, which is — never `previous`.
+    final previous = <num>[];
+    final replaced = replaceEqualDeep<List<double>>(previous, <double>[]);
+    expect(replaced, isA<List<double>>());
+    expect(replaced, isNot(same(previous)));
+    // Equal but not the caller's type: the copy, which is.
+    final widened = replaceEqualDeep<List<double>>(<num>[1], <double>[1.0]);
+    expect(widened, isA<List<double>>());
+    expect(widened, [1.0]);
+    // Deep-equal and the caller's type: shared.
+    final doubles = <double>[1.0];
+    expect(
+        replaceEqualDeep<List<double>>(doubles, <double>[1.0]), same(doubles));
+  });
+
+  test('D10/F02 (R02): structural sharing compares sets as multisets', () {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<Set<List<int>>>(key, {
+      [1],
+      [1],
+      [2]
+    });
+    client.setQueryData<Set<List<int>>>(key, {
+      [1],
+      [2],
+      [2]
+    });
+    expect(
+      client.getQueryData<Set<List<int>>>(key)!.where((x) => x.single == 2),
+      hasLength(2),
+    );
+    client.clear();
+  });
+
+  test('D10/F02: set comparison is symmetric and counts multiplicities', () {
+    Set<List<int>> twoOnes() => {
+          [1],
+          [1],
+          [2]
+        };
+    Set<List<int>> twoTwos() => {
+          [1],
+          [2],
+          [2]
+        };
+    final a = twoOnes();
+    final b = twoTwos();
+    expect(replaceEqualDeep<Set<List<int>>>(a, b), same(b));
+    expect(replaceEqualDeep<Set<List<int>>>(b, a), same(a));
+    // The same multiset, built afresh, is shared.
+    expect(replaceEqualDeep<Set<List<int>>>(a, twoOnes()), same(a));
+    // Nested in a map and in a list.
+    final inMap = <String, Set<List<int>>>{'k': twoOnes()};
+    final nextMap = <String, Set<List<int>>>{'k': twoTwos()};
+    expect(replaceEqualDeep<Map<String, Set<List<int>>>>(inMap, nextMap),
+        same(nextMap));
+    expect(
+      replaceEqualDeep<Map<String, Set<List<int>>>>(
+          inMap, <String, Set<List<int>>>{'k': twoOnes()}),
+      same(inMap),
+    );
+    final inList = <Set<List<int>>>[twoOnes()];
+    final sharedList = replaceEqualDeep<List<Set<List<int>>>>(
+        inList, <Set<List<int>>>[twoTwos()]);
+    expect(sharedList.single, isNot(same(inList.single)));
+    expect(sharedList.single.where((x) => x.single == 2), hasLength(2));
+  });
+
+  test('N5: map and set comparison shares without copying nested lists', () {
+    // No allocation is not observable, but the walk's rules are: depth,
+    // typed data and `InfiniteData` compare the same way they share.
+    final previous = <String, Object>{
+      'pages': const InfiniteData<List<int>, int>(pages: [
+        [1]
+      ], pageParams: [
+        0
+      ]),
+      'bytes': Uint8List.fromList([1]),
+    };
+    final equal = <String, Object>{
+      'pages': const InfiniteData<List<int>, int>(pages: [
+        [1]
+      ], pageParams: [
+        0
+      ]),
+      'bytes': previous['bytes']!,
+    };
+    expect(
+        replaceEqualDeep<Map<String, Object>>(previous, equal), same(previous));
+    final otherBytes = <String, Object>{
+      'pages': previous['pages']!,
+      'bytes': Uint8List.fromList([1]),
+    };
+    expect(replaceEqualDeep<Map<String, Object>>(previous, otherBytes),
+        same(otherBytes));
+  });
+
+  testFakeAsync(
+      'D3/F10 (R15): an observer with no select and another data type is '
+      'refused, and the shared query is untouched', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final good = client.observe<int, int>(
+        QueryObserverOptions(queryKey: key, queryFn: (_) => 1));
+    expect(
+      () => client.observe<int, String>(
+          QueryObserverOptions(queryKey: key, queryFn: (_) => 1)),
+      throwsArgumentError,
+    );
+    good.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(client.getQueryState<int>(key)!.status, QueryStatus.success);
+    expect(good.currentResult, isA<QuerySuccess<int>>());
+    // Widening is sound without a select; only an unrelated type is not.
+    final widened = client.observe<int, num>(
+        QueryObserverOptions(queryKey: key, enabled: Enabled.no));
+    expect(widened.currentResult.dataOrNull, 1);
+    expect(
+      () => good.getOptimisticResult(
+          QueryObserverOptions(queryKey: key, queryFn: (_) => 1)),
+      returnsNormally,
+    );
+    good.destroy();
+    client.clear();
+  });
+
+  testFakeAsync('D3/F10: setOptions dropping the select is refused up front',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final observer = client.observe<int, String>(QueryObserverOptions(
+      queryKey: key,
+      queryFn: (_) => 1,
+      select: (value) => '$value',
+    ));
+    observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(observer.currentResult.dataOrNull, '1');
+    expect(
+      () => observer
+          .setOptions(QueryObserverOptions(queryKey: key, queryFn: (_) => 2)),
+      throwsArgumentError,
+    );
+    expect(observer.options.select, isNotNull);
+    expect(
+      () => observer.getOptimisticResult(
+          QueryObserverOptions(queryKey: key, queryFn: (_) => 2)),
+      throwsArgumentError,
+    );
+    expect(observer.currentResult.dataOrNull, '1');
+    expect(client.getQueryState<int>(key)!.status, QueryStatus.success);
+    observer.destroy();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'D4/F08 (R12): a paging option that changes hasNextPage notifies',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>> options(
+            {required bool more}) =>
+        InfiniteQueryObserverOptions(
+          queryKey: key,
+          pageFn: (context) => context.pageParam,
+          initialPageParam: 0,
+          getNextPageParam: (_, __, param, ___) => more ? param + 1 : null,
+          staleTime: StaleTime.infinite,
+        );
+    final observer = InfiniteQueryObserver<int, int, InfiniteData<int, int>>(
+        client, options(more: true));
+    var notifications = 0;
+    var hasNextPageWhenNotified = true;
+    observer.subscribe((_) {
+      notifications++;
+      hasNextPageWhenNotified = observer.hasNextPage;
+    });
+    await time.flushMicrotasks();
+    expect(observer.hasNextPage, isTrue);
+    notifications = 0;
+    // The same paging outcome: nothing to say.
+    observer.setInfiniteOptions(options(more: true));
+    expect(notifications, 0);
+    observer.setInfiniteOptions(options(more: false));
+    expect(observer.hasNextPage, isFalse);
+    expect(notifications, 1);
+    expect(hasNextPageWhenNotified, isFalse);
+    observer.destroy();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'D4/F08 (R17): a page fetch changing direction in flight notifies',
+      (time) async {
+    final client = testClient();
+    final response = Completer<int>();
+    final observer = InfiniteQueryObserver<int, int, InfiniteData<int, int>>(
+      client,
+      InfiniteQueryObserverOptions(
+        queryKey: queryKey(),
+        initialPageParam: 0,
+        initialData: const InitialData.value(
+            InfiniteData<int, int>(pages: [0], pageParams: [0])),
+        pageFn: (_) => response.future,
+        getNextPageParam: (_, __, param, ___) => param + 1,
+        getPreviousPageParam: (_, __, param, ___) => param - 1,
+        staleTime: StaleTime.infinite,
+      ),
+    );
+    var notifications = 0;
+    var backwardsWhenNotified = false;
+    observer.subscribe((_) {
+      notifications++;
+      backwardsWhenNotified = observer.isFetchingPreviousPage;
+    });
+    observer.fetchNextPage().ignore();
+    await time.flushMicrotasks();
+    expect(observer.isFetchingNextPage, isTrue);
+    notifications = 0;
+    observer.fetchPreviousPage().ignore();
+    await time.flushMicrotasks();
+    expect(observer.isFetchingPreviousPage, isTrue);
+    expect(notifications, greaterThan(0));
+    expect(backwardsWhenNotified, isTrue);
+    response.complete(1);
+    await time.flushMicrotasks();
+    observer.destroy();
+    client.clear();
+  });
+}

@@ -211,8 +211,8 @@ void main() {
       observer.mutate('input');
 
       await time.advance(ms(5));
-      var existing = queryClient.mutationCache
-          .find(MutationFilters(mutationKey: key.append(<Object?>['1'])))!;
+      var existing = queryClient.mutationCache.find(
+          filters: MutationFilters(mutationKey: key.append(<Object?>['1'])))!;
       expect(existing.options.mutationKey, key.append(<Object?>['1']));
       expect(existing.state.status, MutationStatus.success);
       expect(existing.state.data, 'input');
@@ -223,8 +223,8 @@ void main() {
         ),
       );
 
-      existing = queryClient.mutationCache
-          .find(MutationFilters(mutationKey: key.append(<Object?>['1'])))!;
+      existing = queryClient.mutationCache.find(
+          filters: MutationFilters(mutationKey: key.append(<Object?>['1'])))!;
       expect(existing.options.mutationKey, key.append(<Object?>['1']));
       expect(existing.state.status, MutationStatus.success);
       expect(existing.state.data, 'input');
@@ -251,7 +251,8 @@ void main() {
       observer.mutate('input');
 
       await time.advance(ms(5));
-      var found = queryClient.mutationCache.find(const MutationFilters())!;
+      var found =
+          queryClient.mutationCache.find(filters: const MutationFilters())!;
       expect(found.options.meta, const <String, int>{'a': 1});
       expect(found.state.status, MutationStatus.success);
       expect(found.state.data, 'input');
@@ -262,7 +263,7 @@ void main() {
         ),
       );
 
-      found = queryClient.mutationCache.find(const MutationFilters())!;
+      found = queryClient.mutationCache.find(filters: const MutationFilters())!;
       expect(found.options.meta, const <String, int>{'a': 1});
       expect(found.state.status, MutationStatus.success);
 
@@ -329,7 +330,8 @@ void main() {
       observer.mutate('input');
 
       await time.advance(ms(5));
-      var found = queryClient.mutationCache.find(const MutationFilters())!;
+      var found =
+          queryClient.mutationCache.find(filters: const MutationFilters())!;
       expect(found.options.meta, const <String, int>{'a': 1});
       expect(found.state.status, MutationStatus.error);
 
@@ -339,7 +341,7 @@ void main() {
         ),
       );
 
-      found = queryClient.mutationCache.find(const MutationFilters())!;
+      found = queryClient.mutationCache.find(filters: const MutationFilters())!;
       expect(found.options.meta, const <String, int>{'a': 1});
       expect(found.state.status, MutationStatus.error);
 
@@ -363,7 +365,8 @@ void main() {
 
       observer.mutate('input');
       await time.advance(ms(5));
-      var found = queryClient.mutationCache.find(const MutationFilters())!;
+      var found =
+          queryClient.mutationCache.find(filters: const MutationFilters())!;
       expect(found.options.meta, const <String, int>{'a': 1});
       expect(found.state.status, MutationStatus.pending);
 
@@ -373,7 +376,7 @@ void main() {
         ),
       );
 
-      found = queryClient.mutationCache.find(const MutationFilters())!;
+      found = queryClient.mutationCache.find(filters: const MutationFilters())!;
       expect(found.options.meta, const <String, int>{'a': 2});
       expect(found.state.status, MutationStatus.pending);
 

@@ -360,7 +360,7 @@ void main() {
         ).ignore();
 
         var state = queryClient.mutationCache
-            .find(MutationFilters(mutationKey: key1))!
+            .find(filters: MutationFilters(mutationKey: key1))!
             .state;
         expect(state.status, MutationStatus.pending);
         expect(state.isPaused, isFalse);
@@ -381,7 +381,7 @@ void main() {
         ).ignore();
 
         state = queryClient.mutationCache
-            .find(MutationFilters(mutationKey: key2))!
+            .find(filters: MutationFilters(mutationKey: key2))!
             .state;
         expect(state.status, MutationStatus.pending);
         expect(state.isPaused, isTrue);

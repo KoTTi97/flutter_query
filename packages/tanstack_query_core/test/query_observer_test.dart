@@ -984,7 +984,8 @@ void main() {
       expect(count, 2);
       unsubscribe();
       await time.advance(ms(10));
-      expect(queryClient.queryCache.find(QueryFilters(queryKey: key)), isNull);
+      expect(queryClient.queryCache.find(filters: QueryFilters(queryKey: key)),
+          isNull);
       expect(count, 2);
     });
 
@@ -1033,7 +1034,8 @@ void main() {
       expect(
         seen,
         everyElement(
-          same(queryClient.queryCache.find(QueryFilters(queryKey: key))),
+          same(queryClient.queryCache
+              .find(filters: QueryFilters(queryKey: key))),
         ),
       );
       expect(seen, isNotEmpty);
@@ -1327,7 +1329,8 @@ void main() {
         ),
       );
 
-      final query = queryClient.queryCache.find(QueryFilters(queryKey: key));
+      final query =
+          queryClient.queryCache.find(filters: QueryFilters(queryKey: key));
       expect(events, hasLength(1));
       expect(events.single, isA<QueryObserverOptionsUpdated>());
       expect(events.single.query, same(query));
@@ -1527,7 +1530,8 @@ void main() {
       expect(
         seen,
         everyElement(
-          same(queryClient.queryCache.find(QueryFilters(queryKey: key))),
+          same(queryClient.queryCache
+              .find(filters: QueryFilters(queryKey: key))),
         ),
       );
       expect(seen, isNotEmpty);

@@ -192,8 +192,8 @@ void main() {
           .pumpWidget(app(client, _ContextScreen(id: 'a', fetch: fetch)));
       await tester.pump();
 
-      final query =
-          client.queryCache.find(QueryFilters(queryKey: sensorKey('a')))!;
+      final query = client.queryCache
+          .find(filters: QueryFilters(queryKey: sensorKey('a')))!;
       expect(query.observersCount, 1);
 
       await tester.pumpWidget(app(client, const Text('gone')));
@@ -208,8 +208,8 @@ void main() {
           .pumpWidget(app(client, _ContextScreen(id: 'a', fetch: fetch)));
       await tester.pump();
 
-      final first =
-          client.queryCache.find(QueryFilters(queryKey: sensorKey('a')))!;
+      final first = client.queryCache
+          .find(filters: QueryFilters(queryKey: sensorKey('a')))!;
       expect(first.observersCount, 1);
 
       await tester
@@ -220,7 +220,7 @@ void main() {
       expect(first.observersCount, 0);
       expect(
         client.queryCache
-            .find(QueryFilters(queryKey: sensorKey('b')))!
+            .find(filters: QueryFilters(queryKey: sensorKey('b')))!
             .observersCount,
         1,
       );
@@ -230,8 +230,8 @@ void main() {
       await tester.pumpWidget(app(client, _MixinScreen(id: 'a', fetch: fetch)));
       await tester.pump();
 
-      final query =
-          client.queryCache.find(QueryFilters(queryKey: sensorKey('a')))!;
+      final query = client.queryCache
+          .find(filters: QueryFilters(queryKey: sensorKey('a')))!;
       expect(query.observersCount, 1);
 
       await tester.pumpWidget(app(client, const Text('gone')));

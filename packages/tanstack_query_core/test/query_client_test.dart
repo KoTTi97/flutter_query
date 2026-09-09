@@ -54,7 +54,8 @@ void main() {
           queryKey: key,
           queryFn: (_) => Future<String>.value('data'),
         ));
-        final newQuery = client.queryCache.find(QueryFilters(queryKey: key));
+        final newQuery =
+            client.queryCache.find(filters: QueryFilters(queryKey: key));
         expect(newQuery?.options.gcTime, GcTime.never);
       });
 
@@ -212,9 +213,9 @@ void main() {
           'should not create a new query if query was not found and updater '
           'returns undefined', (time) async {
         final key = queryKey();
-        expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+        expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
         queryClient.updateQueryData<String>(key, (_) => null);
-        expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+        expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
       });
 
       testFakeAsync('should not update query data if updater returns undefined',
@@ -237,7 +238,8 @@ void main() {
         });
 
         expect(called, isTrue);
-        expect(queryCache.find(QueryFilters(queryKey: key))!.state.data,
+        expect(
+            queryCache.find(filters: QueryFilters(queryKey: key))!.state.data,
             'new data + test data');
       });
 
@@ -257,7 +259,8 @@ void main() {
         queryClient.setQueryData<Map<String, bool>>(key, oldData);
         queryClient.setQueryData<Map<String, bool>>(key, newData);
 
-        expect(queryCache.find(QueryFilters(queryKey: key))!.state.data,
+        expect(
+            queryCache.find(filters: QueryFilters(queryKey: key))!.state.data,
             same(newData));
       });
 
@@ -287,7 +290,8 @@ void main() {
         queryClient.setQueryData<Map<String, DateTime>>(key, oldData);
         queryClient.setQueryData<Map<String, DateTime>>(key, newData);
 
-        expect(queryCache.find(QueryFilters(queryKey: key))!.state.data,
+        expect(
+            queryCache.find(filters: QueryFilters(queryKey: key))!.state.data,
             same(oldData));
 
         final distinctData = <String, DateTime>{
@@ -295,7 +299,8 @@ void main() {
         };
         queryClient.setQueryData<Map<String, DateTime>>(key, distinctData);
 
-        expect(queryCache.find(QueryFilters(queryKey: key))!.state.data,
+        expect(
+            queryCache.find(filters: QueryFilters(queryKey: key))!.state.data,
             same(distinctData));
       });
 
@@ -331,8 +336,8 @@ void main() {
         queryClient.setQueryData<int>(QueryKey(<Object?>['key', 2]), 2);
 
         final result = queryClient.updateQueriesData<int>(
-          QueryFilters(queryKey: QueryKey(<Object?>['key'])),
           (old) => old == null ? null : old + 5,
+          filters: QueryFilters(queryKey: QueryKey(<Object?>['key'])),
         );
 
         expect(result, [
@@ -346,12 +351,12 @@ void main() {
       testFakeAsync('should accept queryFilters', (time) async {
         queryClient.setQueryData<int>(QueryKey(<Object?>['key', 1]), 1);
         queryClient.setQueryData<int>(QueryKey(<Object?>['key', 2]), 2);
-        final query1 = queryCache
-            .find(QueryFilters(queryKey: QueryKey(<Object?>['key', 1])))!;
+        final query1 = queryCache.find(
+            filters: QueryFilters(queryKey: QueryKey(<Object?>['key', 1])))!;
 
         final result = queryClient.updateQueriesData<int>(
-          QueryFilters(predicate: (query) => identical(query, query1)),
           (old) => old! + 5,
+          filters: QueryFilters(predicate: (query) => identical(query, query1)),
         );
 
         expect(result, [
@@ -363,8 +368,8 @@ void main() {
 
       testFakeAsync('should not update non existing queries', (time) async {
         final result = queryClient.updateQueriesData<String>(
-          QueryFilters(queryKey: QueryKey(<Object?>['key'])),
           (_) => 'data',
+          filters: QueryFilters(queryKey: QueryKey(<Object?>['key'])),
         );
 
         expect(result, isEmpty);
@@ -563,27 +568,32 @@ void main() {
         queryClient.setQueryData<int>(key1.append(<Object?>[1]), 1);
         queryClient.setQueryData<int>(key1.append(<Object?>[2]), 2);
         queryClient.setQueryData<int>(key2.append(<Object?>[2]), 2);
-        expect(queryClient.getQueriesData<int>(QueryFilters(queryKey: key1)), [
-          (key1.append(<Object?>[1]), 1),
-          (key1.append(<Object?>[2]), 2),
-        ]);
+        expect(
+            queryClient.getQueriesData<int>(
+                filters: QueryFilters(queryKey: key1)),
+            [
+              (key1.append(<Object?>[1]), 1),
+              (key1.append(<Object?>[2]), 2),
+            ]);
       });
 
       testFakeAsync('should return empty array if queries are not found',
           (time) async {
         final key = queryKey();
-        expect(queryClient.getQueriesData<int>(QueryFilters(queryKey: key)),
+        expect(
+            queryClient.getQueriesData<int>(
+                filters: QueryFilters(queryKey: key)),
             isEmpty);
       });
 
       testFakeAsync('should accept query filters', (time) async {
         queryClient.setQueryData<int>(QueryKey(<Object?>['key', 1]), 1);
         queryClient.setQueryData<int>(QueryKey(<Object?>['key', 2]), 2);
-        final query1 = queryCache
-            .find(QueryFilters(queryKey: QueryKey(<Object?>['key', 1])))!;
+        final query1 = queryCache.find(
+            filters: QueryFilters(queryKey: QueryKey(<Object?>['key', 1])))!;
 
         final result = queryClient.getQueriesData<int>(
-          QueryFilters(predicate: (query) => identical(query, query1)),
+          filters: QueryFilters(predicate: (query) => identical(query, query1)),
         );
 
         expect(result, [
@@ -960,7 +970,8 @@ void main() {
         await time.flushMicrotasks();
 
         expect(queryClient.getQueryData<String>(key), isNull);
-        expect(queryCache.find(QueryFilters(queryKey: key))?.state.status,
+        expect(
+            queryCache.find(filters: QueryFilters(queryKey: key))?.state.status,
             QueryStatus.error);
       });
 
@@ -973,9 +984,10 @@ void main() {
           queryFn: (_) => 'data',
           gcTime: const GcTime.duration(Duration(milliseconds: 10)),
         ));
-        expect(queryCache.find(QueryFilters(queryKey: key)), isNotNull);
+        expect(
+            queryCache.find(filters: QueryFilters(queryKey: key)), isNotNull);
         await time.advance(ms(15));
-        expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+        expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
       });
     });
 
@@ -989,17 +1001,18 @@ void main() {
           queryFn: (_) async => 'data',
         ));
         expect(
-            queryCache.find(QueryFilters(queryKey: key))?.state.data, 'data');
+            queryCache.find(filters: QueryFilters(queryKey: key))?.state.data,
+            'data');
 
         // check the error doesn't occur
         expect(
-          () => queryClient
-              .removeQueries(QueryFilters(queryKey: key, exact: true)),
+          () => queryClient.removeQueries(
+              filters: QueryFilters(queryKey: key, exact: true)),
           returnsNormally,
         );
 
         // check query was successfully removed
-        expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+        expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
       });
     });
 
@@ -1826,7 +1839,7 @@ void main() {
 
         queryClient.resetQueries(filters: QueryFilters(queryKey: key)).ignore();
 
-        final query = queryCache.find(QueryFilters(queryKey: key));
+        final query = queryCache.find(filters: QueryFilters(queryKey: key));
         expect(events.first, isA<QueryUpdated>());
         expect(events.first.query, same(query));
         expect((events.first as QueryUpdated).action,

@@ -85,7 +85,7 @@ QueryObserverOptions<Sensor, Sensor> sensorQuery(
 ) {
   ({QueryKey key, Sensor match})? findInLists() {
     for (final (key, data) in client.getQueriesData<SensorListResponse>(
-      QueryFilters(queryKey: SensorKeys.lists),
+      filters: QueryFilters(queryKey: SensorKeys.lists),
     )) {
       for (final sensor in data?.sensors ?? const <Sensor>[]) {
         if (sensor.id == id) {
@@ -230,12 +230,13 @@ MutationOptions<String, String, ListSnapshot> deleteSensorMutation(
       onMutate: (id) async {
         final lists = QueryFilters(queryKey: SensorKeys.lists);
         await client.cancelQueries(filters: lists);
-        final snapshot = client.getQueriesData<SensorListResponse>(lists);
+        final snapshot =
+            client.getQueriesData<SensorListResponse>(filters: lists);
         client.updateQueriesData<SensorListResponse>(
-          lists,
           (old) => old?.withSensors(
             old.sensors.where((sensor) => sensor.id != id).toList(),
           ),
+          filters: lists,
         );
         return snapshot;
       },
@@ -248,7 +249,8 @@ MutationOptions<String, String, ListSnapshot> deleteSensorMutation(
         }
       },
       onSettled: (_, __, ___, id, ____) async {
-        client.removeQueries(QueryFilters(queryKey: SensorKeys.detail(id)));
+        client.removeQueries(
+            filters: QueryFilters(queryKey: SensorKeys.detail(id)));
         await client.invalidateQueries(
           filters: QueryFilters(queryKey: SensorKeys.lists),
         );

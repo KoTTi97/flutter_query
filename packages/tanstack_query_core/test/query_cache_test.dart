@@ -25,7 +25,7 @@ void main() {
         final events = <QueryCacheEvent>[];
         final unsubscribe = queryCache.subscribe(events.add);
         queryClient.setQueryData<String>(key, 'foo');
-        final query = queryCache.find(QueryFilters(queryKey: key));
+        final query = queryCache.find(filters: QueryFilters(queryKey: key));
         expect(events.first, isA<QueryAdded>());
         expect(events.first.query, same(query));
         unsubscribe();
@@ -46,7 +46,7 @@ void main() {
             ))
             .ignore();
         await time.advance(ms(100));
-        final query = queryCache.find(QueryFilters(queryKey: key));
+        final query = queryCache.find(filters: QueryFilters(queryKey: key));
         expect(events.first, isA<QueryAdded>());
         expect(events.first.query, same(query));
       });
@@ -85,7 +85,8 @@ void main() {
           'observerResultsUpdated', // 8. Observer result updated -> stale
         ]);
 
-        final cachedQuery = queryCache.find(QueryFilters(queryKey: key));
+        final cachedQuery =
+            queryCache.find(filters: QueryFilters(queryKey: key));
         for (final query in queries) {
           expect(query, same(cachedQuery));
         }
@@ -110,7 +111,7 @@ void main() {
             ))
             .ignore();
         await time.advance(ms(100));
-        final query = queryCache.find(QueryFilters(queryKey: key));
+        final query = queryCache.find(filters: QueryFilters(queryKey: key));
         expect(events.first, isA<QueryAdded>());
         expect(events.first.query, same(query));
       });
@@ -132,7 +133,7 @@ void main() {
             ))
             .ignore();
         await time.advance(ms(100));
-        final query = queryCache.find(QueryFilters(queryKey: key));
+        final query = queryCache.find(filters: QueryFilters(queryKey: key));
         expect(events.first, isA<QueryAdded>());
         expect(events.first.query, same(query));
       });
@@ -144,7 +145,7 @@ void main() {
           if (event is QueryAdded) {
             if (testCache.queries.length > 2) {
               for (final query in testCache.findAll(
-                QueryFilters(
+                filters: QueryFilters(
                   type: QueryTypeFilter.inactive,
                   predicate: (q) => !identical(q, event.query),
                 ),
@@ -210,7 +211,7 @@ void main() {
             ))
             .ignore();
         await time.advance(ms(100));
-        final query = queryCache.find(QueryFilters(queryKey: key))!;
+        final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
         expect(query.state.data, 'data1');
       });
 
@@ -227,8 +228,8 @@ void main() {
             ))
             .ignore();
         await time.advance(ms(100));
-        final query =
-            queryCache.find(QueryFilters(queryKey: key, exact: false))!;
+        final query = queryCache.find(
+            filters: QueryFilters(queryKey: key, exact: false))!;
         expect(query.state.data, 'data1');
       });
     });
@@ -273,52 +274,65 @@ void main() {
         queryClient
             .invalidateQueries(filters: QueryFilters(queryKey: key2))
             .ignore();
-        final query1 = queryCache.find(QueryFilters(queryKey: key1))!;
-        final query2 = queryCache.find(QueryFilters(queryKey: key2))!;
-        final query3 = queryCache.find(QueryFilters(
-            queryKey: QueryKey(<Object?>[
+        final query1 = queryCache.find(filters: QueryFilters(queryKey: key1))!;
+        final query2 = queryCache.find(filters: QueryFilters(queryKey: key2))!;
+        final query3 = queryCache.find(
+            filters: QueryFilters(
+                queryKey: QueryKey(<Object?>[
           <String, String>{'a': 'a', 'b': 'b'}
         ])))!;
-        final query4 = queryCache
-            .find(QueryFilters(queryKey: QueryKey(<Object?>['posts', 1])))!;
+        final query4 = queryCache.find(
+            filters: QueryFilters(queryKey: QueryKey(<Object?>['posts', 1])))!;
 
-        expect(queryCache.findAll(QueryFilters(queryKey: key1)), [query1]);
+        expect(queryCache.findAll(filters: QueryFilters(queryKey: key1)),
+            [query1]);
         // wrapping in an extra array doesn't yield the same results anymore
         // since v4 because keys need to be an array
         expect(
-          queryCache
-              .findAll(QueryFilters(queryKey: QueryKey(<Object?>[key1.parts]))),
+          queryCache.findAll(
+              filters: QueryFilters(queryKey: QueryKey(<Object?>[key1.parts]))),
           isEmpty,
         );
         expect(queryCache.findAll(), [query1, query2, query3, query4]);
-        expect(queryCache.findAll(const QueryFilters()),
+        expect(queryCache.findAll(filters: const QueryFilters()),
             [query1, query2, query3, query4]);
         expect(
           queryCache.findAll(
-              QueryFilters(queryKey: key1, type: QueryTypeFilter.inactive)),
+              filters:
+                  QueryFilters(queryKey: key1, type: QueryTypeFilter.inactive)),
           [query1],
         );
         expect(
           queryCache.findAll(
-              QueryFilters(queryKey: key1, type: QueryTypeFilter.active)),
+              filters:
+                  QueryFilters(queryKey: key1, type: QueryTypeFilter.active)),
           isEmpty,
         );
-        expect(queryCache.findAll(QueryFilters(queryKey: key1, stale: true)),
+        expect(
+            queryCache.findAll(
+                filters: QueryFilters(queryKey: key1, stale: true)),
             isEmpty);
-        expect(queryCache.findAll(QueryFilters(queryKey: key1, stale: false)),
+        expect(
+            queryCache.findAll(
+                filters: QueryFilters(queryKey: key1, stale: false)),
             [query1]);
         expect(
-          queryCache.findAll(QueryFilters(
-              queryKey: key1, stale: false, type: QueryTypeFilter.active)),
+          queryCache.findAll(
+              filters: QueryFilters(
+                  queryKey: key1, stale: false, type: QueryTypeFilter.active)),
           isEmpty,
         );
         expect(
-          queryCache.findAll(QueryFilters(
-              queryKey: key1, stale: false, type: QueryTypeFilter.inactive)),
+          queryCache.findAll(
+              filters: QueryFilters(
+                  queryKey: key1,
+                  stale: false,
+                  type: QueryTypeFilter.inactive)),
           [query1],
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: key1,
             stale: false,
             type: QueryTypeFilter.inactive,
@@ -327,22 +341,31 @@ void main() {
           [query1],
         );
 
-        expect(queryCache.findAll(QueryFilters(queryKey: key2)), [query2]);
-        expect(queryCache.findAll(QueryFilters(queryKey: key2, stale: null)),
+        expect(queryCache.findAll(filters: QueryFilters(queryKey: key2)),
             [query2]);
-        expect(queryCache.findAll(QueryFilters(queryKey: key2, stale: true)),
+        expect(
+            queryCache.findAll(
+                filters: QueryFilters(queryKey: key2, stale: null)),
             [query2]);
-        expect(queryCache.findAll(QueryFilters(queryKey: key2, stale: false)),
+        expect(
+            queryCache.findAll(
+                filters: QueryFilters(queryKey: key2, stale: true)),
+            [query2]);
+        expect(
+            queryCache.findAll(
+                filters: QueryFilters(queryKey: key2, stale: false)),
             isEmpty);
         expect(
-          queryCache.findAll(QueryFilters(
-              queryKey: QueryKey(<Object?>[
+          queryCache.findAll(
+              filters: QueryFilters(
+                  queryKey: QueryKey(<Object?>[
             <String, String>{'b': 'b'}
           ]))),
           [query3],
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: QueryKey(<Object?>[
               <String, String>{'a': 'a'}
             ]),
@@ -351,7 +374,8 @@ void main() {
           [query3],
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: QueryKey(<Object?>[
               <String, String>{'a': 'a'}
             ]),
@@ -360,7 +384,8 @@ void main() {
           isEmpty,
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: QueryKey(<Object?>[
               <String, String>{'a': 'a', 'b': 'b'}
             ]),
@@ -369,21 +394,24 @@ void main() {
           [query3],
         );
         expect(
-          queryCache.findAll(QueryFilters(
-              queryKey: QueryKey(<Object?>[
+          queryCache.findAll(
+              filters: QueryFilters(
+                  queryKey: QueryKey(<Object?>[
             <String, String>{'a': 'a', 'b': 'b'}
           ]))),
           [query3],
         );
         expect(
-          queryCache.findAll(QueryFilters(
-              queryKey: QueryKey(<Object?>[
+          queryCache.findAll(
+              filters: QueryFilters(
+                  queryKey: QueryKey(<Object?>[
             <String, String>{'a': 'a', 'b': 'b', 'c': 'c'}
           ]))),
           isEmpty,
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: QueryKey(<Object?>[
               <String, String>{'a': 'a'}
             ]),
@@ -392,7 +420,8 @@ void main() {
           [query3],
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: QueryKey(<Object?>[
               <String, String>{'a': 'a'}
             ]),
@@ -401,7 +430,8 @@ void main() {
           isEmpty,
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: QueryKey(<Object?>[
               <String, String>{'a': 'a'}
             ]),
@@ -410,7 +440,8 @@ void main() {
           isEmpty,
         );
         expect(
-          queryCache.findAll(QueryFilters(
+          queryCache.findAll(
+              filters: QueryFilters(
             queryKey: QueryKey(<Object?>[
               <String, String>{'a': 'a'}
             ]),
@@ -420,20 +451,23 @@ void main() {
         );
         expect(
           queryCache.findAll(
-              QueryFilters(predicate: (query) => identical(query, query3))),
+              filters:
+                  QueryFilters(predicate: (query) => identical(query, query3))),
           [query3],
         );
         expect(
-            queryCache
-                .findAll(QueryFilters(queryKey: QueryKey(<Object?>['posts']))),
+            queryCache.findAll(
+                filters: QueryFilters(queryKey: QueryKey(<Object?>['posts']))),
             [query4]);
 
         expect(
-          queryCache.findAll(const QueryFilters(fetchStatus: FetchStatus.idle)),
+          queryCache.findAll(
+              filters: const QueryFilters(fetchStatus: FetchStatus.idle)),
           [query1, query2, query3, query4],
         );
         expect(
-          queryCache.findAll(QueryFilters(queryKey: key2, fetchStatus: null)),
+          queryCache.findAll(
+              filters: QueryFilters(queryKey: key2, fetchStatus: null)),
           [query2],
         );
 
@@ -444,14 +478,14 @@ void main() {
             ))
             .ignore();
         expect(
-          queryCache
-              .findAll(const QueryFilters(fetchStatus: FetchStatus.fetching)),
-          [queryCache.find(QueryFilters(queryKey: keyFetching))],
+          queryCache.findAll(
+              filters: const QueryFilters(fetchStatus: FetchStatus.fetching)),
+          [queryCache.find(filters: QueryFilters(queryKey: keyFetching))],
         );
         await time.advance(ms(20));
         expect(
-          queryCache
-              .findAll(const QueryFilters(fetchStatus: FetchStatus.fetching)),
+          queryCache.findAll(
+              filters: const QueryFilters(fetchStatus: FetchStatus.fetching)),
           isEmpty,
         );
       });
@@ -496,7 +530,7 @@ void main() {
             ))
             .ignore();
         await time.advance(ms(100));
-        final query = testCache.find(QueryFilters(queryKey: key));
+        final query = testCache.find(filters: QueryFilters(queryKey: key));
         expect(errors, [('error', query)]);
         expect(successes, isEmpty);
         expect(settled, [(null, 'error', query)]);
@@ -528,7 +562,7 @@ void main() {
             ))
             .ignore();
         await time.advance(ms(100));
-        final query = testCache.find(QueryFilters(queryKey: key));
+        final query = testCache.find(filters: QueryFilters(queryKey: key));
         // Records compare their fields with `==`, and two equal Dart maps are
         // not `==`, so the payload is asserted field by field.
         expect(successes, hasLength(1));

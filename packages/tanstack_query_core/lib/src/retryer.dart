@@ -134,9 +134,19 @@ class Retryer<TData> {
   bool canStart() => _canFetch() && canRun();
 
   /// Starts the loop, pausing first if it cannot start yet.
+  ///
+  /// A loop that cannot start and whose retries were already cancelled
+  /// `immediately` — its owner left the cache while it was still being built,
+  /// during a mutation's async `onMutate` — rejects with a [CancelledError]
+  /// instead of pausing: nothing is in flight to wait for, and nothing would
+  /// ever release the pause once the owner is gone (fifth review,
+  /// 2026-09-09). A loop that *can* start runs its one attempt, as an
+  /// in-flight request is left to settle.
   Future<TData> start() {
     if (canStart()) {
       _attempt().ignore();
+    } else if (_isRetryCancelledImmediately) {
+      _reject(const CancelledError(), stackTrace: StackTrace.current);
     } else {
       _pause().then((_) => _attempt()).ignore();
     }
@@ -158,7 +168,9 @@ class Retryer<TData> {
   /// rejects with the last error as soon as nothing is in flight, and a fetch
   /// that is *paused* (offline, unfocused, or queued behind its scope) rejects
   /// with a [CancelledError] on the spot: nothing is in flight to wait for,
-  /// and nothing else would ever release it once its owner is gone.
+  /// and nothing else would ever release it once its owner is gone. A loop
+  /// that has not [start]ed yet remembers the cancel and, if it cannot start
+  /// when the time comes, rejects the same way rather than pausing.
   void cancelRetry({bool immediately = false}) {
     _isRetryCancelled = true;
     if (immediately) {

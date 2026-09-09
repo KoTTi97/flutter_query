@@ -8,6 +8,7 @@ import 'package:meta/meta.dart';
 import 'filters.dart';
 import 'focus_manager.dart';
 import 'infinite_query.dart';
+import 'infinite_query_observer.dart';
 import 'mutation.dart';
 import 'mutation_cache.dart';
 import 'mutation_options.dart';
@@ -344,6 +345,20 @@ class QueryClient {
   void Function()? _unsubscribeOnline;
 
   /// Starts listening for focus and connectivity changes.
+  ///
+  /// Without it nothing reacts to the app returning to the foreground or the
+  /// device coming back online: no `refetchOnWindowFocus`, no
+  /// `refetchOnReconnect`, no resuming of paused mutations — and a [query]
+  /// under [NetworkMode.online] that paused offline waits for a reconnect
+  /// only if the client is mounted. The Flutter binding mounts the client it
+  /// is given; a pure-Dart user calls this once and [unmount] when done.
+  ///
+  /// On each focus or reconnect the paused mutations are resumed first and
+  /// the queries wait for *all* of them to settle — scope queues included —
+  /// before `queryCache.onFocus` / `onOnline` runs, so a refetch cannot
+  /// overtake the mutation it was meant to reflect. Upstream does the same.
+  /// The price is that a mutation that never settles blocks the query side's
+  /// focus and reconnect refetches for as long as it runs.
   void mount() {
     _mountCount++;
     if (_mountCount != 1) {
@@ -394,16 +409,16 @@ class QueryClient {
   /// How many queries matching [filters] are fetching right now — actually
   /// fetching, not paused. Every query when the filters are empty. Upstream's
   /// `isFetching`.
-  int isFetching([QueryFilters filters = const QueryFilters()]) => queryCache
-      .findAll(filters)
+  int isFetching({QueryFilters filters = const QueryFilters()}) => queryCache
+      .findAll(filters: filters)
       .where((query) => query.state.fetchStatus == FetchStatus.fetching)
       .length;
 
   /// How many mutations matching [filters] are pending right now. Every
   /// mutation when the filters are empty. Upstream's `isMutating`.
-  int isMutating([MutationFilters filters = const MutationFilters()]) =>
+  int isMutating({MutationFilters filters = const MutationFilters()}) =>
       mutationCache
-          .findAll(filters)
+          .findAll(filters: filters)
           .where((mutation) => mutation.state.status == MutationStatus.pending)
           .length;
 
@@ -428,10 +443,10 @@ class QueryClient {
   /// Throws [QueryDataTypeError] if a matching query holds another type, as
   /// [getQueryData] does — a `null` there would read as "nothing cached" and
   /// hide the bug (fourth review, 2026-09-09).
-  List<(QueryKey, TQueryData?)> getQueriesData<TQueryData>(
-    QueryFilters filters,
-  ) =>
-      queryCache.findAll(filters).map((query) {
+  List<(QueryKey, TQueryData?)> getQueriesData<TQueryData>({
+    required QueryFilters filters,
+  }) =>
+      queryCache.findAll(filters: filters).map((query) {
         if (query.dataType != TQueryData) {
           throw QueryDataTypeError(query.queryKey, TQueryData, query.dataType);
         }
@@ -479,16 +494,22 @@ class QueryClient {
   }
 
   /// Runs [updater] over every query matching [filters] and returns each key
-  /// with what it now holds. One batch, so listeners hear a single round; a
-  /// type mismatch anywhere under the filters throws before anything is
-  /// written. The filtered twin of [updateQueryData], upstream's
-  /// `setQueriesData`.
+  /// with what it now holds. A type mismatch anywhere under the filters
+  /// throws before anything is written. The filtered twin of
+  /// [updateQueryData], upstream's `setQueriesData`.
+  ///
+  /// The writes run in one [NotifyManager.batch], which guarantees exactly
+  /// what upstream's does: callbacks that go through the manager's scheduler
+  /// — an observer's listeners, the binding's rebuilds — are held until the
+  /// batch ends and delivered in one round. Cache listeners and the
+  /// observers' own `onQueryUpdate` are called synchronously per write, as
+  /// they are for every dispatch.
   List<(QueryKey, TQueryData?)> updateQueriesData<TQueryData>(
-    QueryFilters filters,
     TQueryData? Function(TQueryData? previous) updater, {
+    required QueryFilters filters,
     DateTime? updatedAt,
   }) {
-    final queries = queryCache.findAll(filters);
+    final queries = queryCache.findAll(filters: filters);
     // Checked before anything is written, so a mismatch under the prefix
     // throws with the cache untouched rather than half-updated.
     for (final query in queries) {
@@ -526,20 +547,30 @@ class QueryClient {
     bool revert = true,
     bool silent = false,
   }) async {
-    await Future.wait<void>(
-      queryCache
-          .findAll(filters)
-          .map((query) => query.cancel(revert: revert, silent: silent)),
+    // Batched like the other bulk operations (and upstream's): every revert
+    // is dispatched inside one transaction.
+    final cancels = notifyManager.batch(
+      () => queryCache
+          .findAll(filters: filters)
+          .map((query) => query.cancel(revert: revert, silent: silent))
+          .toList(),
     );
+    await Future.wait<void>(cancels);
   }
 
   /// Removes every query matching [filters] from the cache — all of them when
-  /// the filters are empty — cancelling their fetches silently. Observers
-  /// still attached to a removed query build a fresh entry on their next
-  /// interaction. Upstream's `removeQueries`.
-  void removeQueries([QueryFilters filters = const QueryFilters()]) =>
+  /// the filters are empty — cancelling their fetches silently. Upstream's
+  /// `removeQueries`.
+  ///
+  /// An observer still attached to a removed query stays on it: it keeps
+  /// reporting the removed entry's state, and a later [setQueryData] or
+  /// [query] of the same key creates a *new* entry it never sees, until its
+  /// next `setOptions` or resubscribe re-resolves the key. For a key with
+  /// live observers use [resetQueries], which keeps the entry and puts it
+  /// back to its initial state; removal is for keys nobody is watching.
+  void removeQueries({QueryFilters filters = const QueryFilters()}) =>
       notifyManager.batch(() {
-        for (final query in queryCache.findAll(filters)) {
+        for (final query in queryCache.findAll(filters: filters)) {
           queryCache.remove(query);
         }
       });
@@ -555,7 +586,7 @@ class QueryClient {
         // looks at state (`status: error`, a predicate over `query.state`) no
         // longer matches once the reset has happened.
         final matched = Set<Query<Object?>>.identity()
-          ..addAll(queryCache.findAll(filters));
+          ..addAll(queryCache.findAll(filters: filters));
         for (final query in matched) {
           query.reset();
         }
@@ -577,7 +608,16 @@ class QueryClient {
     bool cancelRefetch = true,
   }) =>
       notifyManager.batch(() {
-        for (final query in queryCache.findAll(filters)) {
+        // The matched set is captured *before* invalidating, as `resetQueries`
+        // does: a filter that looks at state (`stale: false`, a predicate over
+        // `query.state.isInvalidated`) no longer matches once the query has
+        // been marked, and upstream — which re-runs the same filter for the
+        // refetch — then refetched none of the queries it had just invalidated
+        // (fifth review, 2026-09-09). Only the `type` is re-evaluated, since
+        // `refetchType` may narrow it.
+        final matched = Set<Query<Object?>>.identity()
+          ..addAll(queryCache.findAll(filters: filters));
+        for (final query in matched) {
           query.invalidate();
         }
         if (refetchType == RefetchType.none) {
@@ -590,7 +630,7 @@ class QueryClient {
           RefetchType.none || null => filters.type ?? QueryTypeFilter.active,
         };
         return refetchQueries(
-          filters: filters.withType(type),
+          filters: QueryFilters(type: type, predicate: matched.contains),
           cancelRefetch: cancelRefetch,
         );
       });
@@ -602,7 +642,7 @@ class QueryClient {
   }) async {
     final refetches = notifyManager.batch(
       () => queryCache
-          .findAll(filters)
+          .findAll(filters: filters)
           // A disabled query has nothing to refetch, and a static one declared
           // itself permanently fresh.
           .where((query) => !query.isDisabled() && !query.isStatic())
@@ -639,41 +679,61 @@ class QueryClient {
   /// - to reshape the result, `await` it and map it — Dart needs no `select`
   ///   here.
   Future<TQueryData> query<TQueryData>(QueryOptions<TQueryData> options) {
-    final defaulted = _executeQueryOptions<TQueryData>(options);
+    // Resolved once: the scan over the registered defaults runs per call.
+    final defaults = _queryDefaultsFor(options.queryKey);
+    final defaulted = _defaultQueryOptionsWith<TQueryData>(
+      options,
+      options.queryKey,
+      defaults,
+    );
     final query = queryCache.build<TQueryData>(this, defaulted);
 
     if (query.isStaleByTime(defaulted.staleTime)) {
-      return query.fetch(options: defaulted);
+      // Upstream's imperative-path rule — a caller who configured nothing
+      // gets no retries — applied to this fetch alone. Upstream writes
+      // `retry: 0` into the shared query's options, where it outlived the
+      // call: an observer's `retry: times(3)` query refetched with a single
+      // attempt after one `client.query` (fifth review, 2026-09-09).
+      final retryConfigured = options.retry ?? defaults.retry;
+      return query.fetch(
+        options: defaulted,
+        fetchOptions: FetchOptions<TQueryData>(
+          retry: retryConfigured == null ? RetryPolicy.never : null,
+        ),
+      );
     }
     return Future<TQueryData>.value(query.state.data as TQueryData);
   }
 
-  /// [defaultQueryOptions] with upstream's imperative-path retry rule applied:
-  /// a caller who configured nothing gets no retries at all.
-  DefaultedQueryOptions<TQueryData> _executeQueryOptions<TQueryData>(
-    QueryOptions<TQueryData> options,
-  ) {
-    final defaulted = defaultQueryOptions<TQueryData>(options);
-    final configured =
-        options.retry ?? _queryDefaultsFor(defaulted.queryKey).retry;
-    return configured == null
-        ? defaulted.withRetry(RetryPolicy.never)
-        : defaulted;
-  }
-
-  /// Resumes every mutation that paused while offline.
+  /// Resumes every paused mutation that can run right now, completing once
+  /// they have all settled.
   ///
-  /// A no-op while still offline — resuming would only park on the same wait,
-  /// and callers (including [mount]'s own listeners) would hang on a future
-  /// that cannot complete until the network returns.
-  Future<void> resumePausedMutations() => onlineManager.isOnline()
-      ? mutationCache.resumePaused()
-      : Future<void>.value();
+  /// The gate is per mutation, not global: a mutation under
+  /// [NetworkMode.online] is skipped while the device is offline — resuming
+  /// it would only park it on the same wait, and callers (including
+  /// [mount]'s own listeners) would hang on a future that cannot complete
+  /// until the network returns — while one under [NetworkMode.always] or
+  /// [NetworkMode.offlineFirst] paused for focus or for its scope is resumed
+  /// regardless. Upstream gates the whole call on `onlineManager.isOnline()`,
+  /// so an `always` mutation paused in the background was not resumed by a
+  /// refocus while offline (fifth review, 2026-09-09).
+  ///
+  /// [mount]'s listeners await this before the queries react, so every
+  /// paused mutation — scope queues included — settles before a focus or
+  /// reconnect refetch runs. The returned future completes when the
+  /// mutations' *states* have settled; an `async` `onSuccess` or `onSettled`
+  /// callback may still be running after it does.
+  Future<void> resumePausedMutations() => mutationCache.resumePaused();
 
   /// Empties both caches, cancelling in-flight fetches and every `gcTime`
   /// timer. This is the teardown call: a widget test ends with it, since
   /// Flutter's test binding asserts that no timer outlives the tree.
   /// Upstream's `clear`.
+  ///
+  /// Observers are not stopped: a subscribed observer — a polling one in
+  /// particular — rebuilds its query on its next interaction and keeps
+  /// fetching. Destroy the observers first (the Flutter binding's controllers
+  /// do that in `dispose`, so a torn-down tree leaves none), then clear.
   void clear() {
     queryCache.clear();
     mutationCache.clear();
@@ -988,4 +1048,12 @@ class QueryClient {
     QueryObserverOptions<TQueryData, TData> options,
   ) =>
       QueryObserver<TQueryData, TData>(this, options);
+
+  /// A one-off infinite observer for [options] — the twin of [observe], as
+  /// [infiniteQuery] is of [query]. The caller owns its lifetime.
+  InfiniteQueryObserver<TPageData, TPageParam, TData>
+      observeInfinite<TPageData, TPageParam, TData>(
+    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+  ) =>
+          InfiniteQueryObserver<TPageData, TPageParam, TData>(this, options);
 }

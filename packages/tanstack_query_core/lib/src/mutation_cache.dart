@@ -9,6 +9,7 @@ import 'filters.dart';
 import 'mutation.dart';
 import 'mutation_options.dart';
 import 'query_client.dart';
+import 'retryer.dart';
 import 'subscribable.dart';
 
 /// Something happened to a mutation in the cache. The mutation-side twin of
@@ -201,16 +202,18 @@ class MutationCache
 
   /// Every mutation matching [filters], in submission order — all of them
   /// when the filters are empty. Partial key matching by default, as
-  /// upstream's `findAll`.
-  List<Mutation<Object?, Object?, Object?>> findAll([
+  /// upstream's `findAll`. Iterates a copy, as `QueryCache` does: a predicate
+  /// may remove the mutation it is shown.
+  List<Mutation<Object?, Object?, Object?>> findAll({
     MutationFilters filters = const MutationFilters(),
-  ]) =>
-      _mutations.where(filters.matches).toList();
+  }) =>
+      mutations.where(filters.matches).toList();
 
   /// The first matching mutation. An unset `exact` means an exact match
   /// here, as upstream's `find` defaults `{ exact: true, ...filters }`.
-  Mutation<Object?, Object?, Object?>? find(MutationFilters filters) {
-    for (final mutation in _mutations) {
+  Mutation<Object?, Object?, Object?>? find(
+      {required MutationFilters filters}) {
+    for (final mutation in mutations) {
       if (filters.matches(mutation, exactByDefault: true)) {
         return mutation;
       }
@@ -232,16 +235,30 @@ class MutationCache
     }
   }
 
-  /// Replays paused mutations in submission order.
-  /// Releases every paused mutation at once.
+  /// Releases every paused mutation that can run right now.
   ///
   /// All of them are continued together, as upstream does: what serialises
   /// mutations is [canRunMutation]'s scope rule, not the order they are
   /// resumed in. Resuming them one after another would make every paused
   /// mutation wait for the slowest one before it.
+  ///
+  /// A mutation under [NetworkMode.online] is left alone while the device is
+  /// offline — it would only park on the same wait, and the returned future
+  /// would not complete until the network came back. The gate is per
+  /// mutation, so an `always` or `offlineFirst` mutation paused for focus or
+  /// its scope is resumed regardless of the network; upstream gates the whole
+  /// call in `QueryClient.resumePausedMutations` instead (fifth review,
+  /// 2026-09-09). Completes when the states have settled; an async
+  /// `onSuccess` or `onSettled` may still be running.
   Future<void> resumePaused() async {
-    final paused =
-        _mutations.where((mutation) => mutation.state.isPaused).toList();
+    final paused = _mutations
+        .where(
+          (mutation) =>
+              mutation.state.isPaused &&
+              canFetch(
+                  mutation.options.networkMode, mutation.client.onlineManager),
+        )
+        .toList();
     await Future.wait<void>(
       // Errors belong to each mutation's state, not to whoever resumed it —
       // upstream's `mutation.continue().catch(noop)`.
@@ -258,8 +275,12 @@ class MutationCache
   /// would put it in the same namespace as user-chosen scope ids, and
   /// `MutationScope(3)` would then queue behind whichever unscoped mutation
   /// happened to be the third one created.
+  ///
+  /// Read off the mutation's *run* rather than its options: a `setOptions`
+  /// during a run does not move the mutation between queues (see
+  /// [Mutation.schedulingScope]).
   Object? _scopeOf(Mutation<Object?, Object?, Object?> mutation) =>
-      mutation.options.scope?.id;
+      mutation.schedulingScope?.id;
 
   @override
   bool canRunMutation(Mutation<Object?, Object?, Object?> mutation) {

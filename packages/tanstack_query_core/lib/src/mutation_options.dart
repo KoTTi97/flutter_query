@@ -221,6 +221,10 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
 
   /// Mutations in the same scope run one at a time — see [MutationScope].
   /// Unset, mutations run concurrently.
+  ///
+  /// Read when a run starts and fixed for that run: changing it through an
+  /// observer's `setOptions` while the mutation is pending does not move the
+  /// mutation to the new queue, nor release the old one early.
   final MutationScope? scope;
 
   /// Arbitrary data carried along for logging, devtools or the callbacks.

@@ -40,7 +40,7 @@ void main() {
         queryFn: (_) => 'data',
         gcTime: const GcTime.duration(Duration(milliseconds: 10)),
       ));
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       expect(query.gcTime, const GcTime.duration(Duration(milliseconds: 200)));
     });
 
@@ -153,7 +153,7 @@ void main() {
       final caught =
           promise.then<Object?>((_) => null, onError: (Object e) => e);
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       // Check if the query is really paused
       await time.advance(ms(50));
@@ -187,7 +187,7 @@ void main() {
       );
 
       final unsubscribe = observer.subscribe((_) {});
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(query.state.fetchStatus, FetchStatus.paused);
       expect(query.state.status, QueryStatus.pending);
@@ -226,7 +226,8 @@ void main() {
       final unsubscribe = observer.subscribe((_) {});
       await time.advance(ms(100));
 
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.data, 'data');
+      expect(queryCache.find(filters: QueryFilters(queryKey: key))?.state.data,
+          'data');
 
       final promise = queryClient.query<String>(QueryOptions<String>(
         queryKey: key,
@@ -248,7 +249,8 @@ void main() {
       // Fetch should complete successfully without throwing a CancelledError
       expect(await promise, 'data');
 
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.data, 'data');
+      expect(queryCache.find(filters: QueryFilters(queryKey: key))?.state.data,
+          'data');
     });
 
     testFakeAsync('should provide context to queryFn', (time) async {
@@ -304,7 +306,7 @@ void main() {
 
       await time.advance(ms(90));
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(query.state.data, 'data');
       expect(query.state.status, QueryStatus.success);
@@ -340,7 +342,7 @@ void main() {
 
       await time.advance(ms(90));
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(query.state.hasData, isFalse);
       expect(query.state.status, QueryStatus.pending);
@@ -369,7 +371,7 @@ void main() {
       ));
       promise.then((_) {}, onError: (Object e) => error = e).ignore();
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(signal, isNotNull);
       expect(signal!.isCancelled, isFalse);
@@ -402,7 +404,7 @@ void main() {
       ));
       promise.then((_) {}, onError: (Object e) => error = e).ignore();
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       query.cancel().ignore();
 
       await time.advance(ms(100));
@@ -432,7 +434,7 @@ void main() {
           .ignore();
 
       // Ensure the query is pending
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       expect(query.state.status, QueryStatus.pending);
 
       // Reset the query while it is pending
@@ -463,7 +465,7 @@ void main() {
       queryClient
           .query<String>(QueryOptions<String>(queryKey: key, queryFn: queryFn))
           .ignore();
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       await time.advance(ms(10));
       query.cancel().ignore();
       await time.advance(ms(100));
@@ -484,7 +486,7 @@ void main() {
         queryKey: key,
         queryFn: (_) => 'data',
       ));
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       query.cancel().ignore();
       await time.advance(ms(10));
       expect(query.state.data, 'data');
@@ -501,7 +503,7 @@ void main() {
             queryFn: (_) => Future<String>.error(error),
           ))
           .then((_) {}, onError: (Object _) {});
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       query.cancel().ignore();
       await time.advance(ms(10));
 
@@ -527,8 +529,8 @@ void main() {
             },
           ))
           .then((_) {}, onError: (Object _) {});
-      final query =
-          testCache.find(QueryFilters(queryKey: key))! as Query<String>;
+      final query = testCache.find(filters: QueryFilters(queryKey: key))!
+          as Query<String>;
       final firstFuture = query.future;
       expect(firstFuture, isNotNull);
 
@@ -549,7 +551,7 @@ void main() {
 
       await queryClient.query<String>(
           QueryOptions<String>(queryKey: key, queryFn: (_) => 'data'));
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       expect(query.state.status, QueryStatus.success);
 
       await queryClient
@@ -597,12 +599,12 @@ void main() {
       unsubscribe1();
 
       await time.flushMicrotasks();
-      expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+      expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
       final unsubscribe2 = observer.subscribe((_) {});
       unsubscribe2();
 
       await time.flushMicrotasks();
-      expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+      expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
       // Upstream expects 1: its observer rejoins the query it last watched,
       // which the cache no longer holds, and shows its data without fetching.
       // Here a resubscribe re-resolves the key first, and a collected query
@@ -621,15 +623,17 @@ void main() {
           gcTime: const GcTime.duration(Duration.zero),
         ),
       );
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.status,
+      expect(
+          queryCache.find(filters: QueryFilters(queryKey: key))?.state.status,
           QueryStatus.pending);
       final unsubscribe = observer.subscribe((_) {});
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.status,
+      expect(
+          queryCache.find(filters: QueryFilters(queryKey: key))?.state.status,
           QueryStatus.pending);
       unsubscribe();
 
       await time.flushMicrotasks();
-      expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+      expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
     });
 
     testFakeAsync(
@@ -648,15 +652,17 @@ void main() {
       );
       final unsubscribe = observer.subscribe((_) {});
       await time.advance(ms(20));
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.data, 'data');
+      expect(queryCache.find(filters: QueryFilters(queryKey: key))?.state.data,
+          'data');
       observer.refetch().ignore();
       unsubscribe();
       // unsubscribe should not remove even though gcTime has elapsed b/c query
       // is still fetching
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.data, 'data');
+      expect(queryCache.find(filters: QueryFilters(queryKey: key))?.state.data,
+          'data');
       // should be removed after an additional staleTime wait
       await time.advance(ms(30));
-      expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+      expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
     });
 
     testFakeAsync(
@@ -670,17 +676,20 @@ void main() {
           gcTime: const GcTime.duration(Duration.zero),
         ),
       );
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.status,
+      expect(
+          queryCache.find(filters: QueryFilters(queryKey: key))?.state.status,
           QueryStatus.pending);
       final unsubscribe = observer.subscribe((_) {});
       await time.advance(ms(100));
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.data, 'data');
+      expect(queryCache.find(filters: QueryFilters(queryKey: key))?.state.data,
+          'data');
       unsubscribe();
       await time.advance(ms(100));
-      expect(queryCache.find(QueryFilters(queryKey: key)), isNull);
+      expect(queryCache.find(filters: QueryFilters(queryKey: key)), isNull);
       queryClient.setQueryData<String>(key, 'data');
       await time.advance(ms(100));
-      expect(queryCache.find(QueryFilters(queryKey: key))?.state.data, 'data');
+      expect(queryCache.find(filters: QueryFilters(queryKey: key))?.state.data,
+          'data');
     });
 
     testFakeAsync('should return proper count of observers', (time) async {
@@ -693,7 +702,7 @@ void main() {
       final observer = queryClient.observe<String, String>(options());
       final observer2 = queryClient.observe<String, String>(options());
       final observer3 = queryClient.observe<String, String>(options());
-      final query = queryCache.find(QueryFilters(queryKey: key));
+      final query = queryCache.find(filters: QueryFilters(queryKey: key));
 
       expect(query?.observersCount, 0);
 
@@ -722,7 +731,7 @@ void main() {
         meta: meta,
       ));
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(query.meta, same(meta));
       expect(query.options.meta, same(meta));
@@ -744,7 +753,7 @@ void main() {
         queryFn: queryFn,
       ));
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(query.meta, isNull);
       expect(query.options.meta, isNull);
@@ -760,7 +769,7 @@ void main() {
       await queryClient
           .query<String>(QueryOptions<String>(queryKey: key, queryFn: queryFn));
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(query.meta, same(meta));
     });
@@ -818,7 +827,7 @@ void main() {
 
       await queryClient.query<String>(
           QueryOptions<String>(queryKey: key, queryFn: (_) => 'data'));
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       expect(query.observersCount, 0);
 
       final observer = queryClient.observe<String, String>(
@@ -839,7 +848,7 @@ void main() {
 
       await queryClient.query<String>(
           QueryOptions<String>(queryKey: key, queryFn: (_) => 'data'));
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       final observer = queryClient.observe<String, String>(
         QueryObserverOptions<String, String>(queryKey: key),
       );
@@ -884,7 +893,7 @@ void main() {
 
       await queryClient.query<String>(
           QueryOptions<String>(queryKey: key, queryFn: (_) => 'data'));
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       query.invalidate();
       expect(query.state.isInvalidated, isTrue);
@@ -911,8 +920,8 @@ void main() {
           .query<String>(QueryOptions<String>(queryKey: key, queryFn: queryFn))
           .ignore();
       await time.advance(ms(10));
-      final query =
-          queryCache.find(QueryFilters(queryKey: key))! as Query<String>;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!
+          as Query<String>;
 
       final unsubscribe =
           queryCache.subscribe((event) => updates.add(eventName(event)));
@@ -966,7 +975,7 @@ void main() {
       final unsubscribe = queryCache.subscribe(events.add);
 
       queryClient.setQueryData<String>(key, 'data');
-      final query = queryCache.find(QueryFilters(queryKey: key));
+      final query = queryCache.find(filters: QueryFilters(queryKey: key));
 
       await time.advance(ms(10));
       expect(events.last, isA<QueryRemoved>());
@@ -1023,7 +1032,8 @@ void main() {
       await time.advance(ms(5));
 
       // reverted to previous data and idle fetchStatus
-      final state = queryCache.find(QueryFilters(queryKey: key))!.state;
+      final state =
+          queryCache.find(filters: QueryFilters(queryKey: key))!.state;
       expect(state.status, QueryStatus.success);
       expect(state.data, '1');
       expect(state.fetchStatus, FetchStatus.idle);
@@ -1090,7 +1100,7 @@ void main() {
           ))
           .ignore();
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
       expect(calls, 1);
       await time.advance(ms(10));
@@ -1152,7 +1162,8 @@ void main() {
         initialDataUpdatedAt: epoch,
       ));
 
-      final state = queryCache.find(QueryFilters(queryKey: key))!.state;
+      final state =
+          queryCache.find(filters: QueryFilters(queryKey: key))!.state;
       expect(state.data, 'initial');
       expect(state.status, QueryStatus.success);
       expect(state.dataUpdatedAt, epoch);
@@ -1213,7 +1224,7 @@ void main() {
       unsubscribe();
 
       // resetting should get us back to 'initialData'
-      queryCache.find(QueryFilters(queryKey: key))!.reset();
+      queryCache.find(filters: QueryFilters(queryKey: key))!.reset();
 
       state = queryClient.getQueryState<String>(key)!;
       expect(state.data, 'initialData');
@@ -1285,7 +1296,7 @@ void main() {
           .query<String>(QueryOptions<String>(queryKey: key, queryFn: queryFn))
           .ignore();
 
-      final query = queryCache.find(QueryFilters(queryKey: key))!;
+      final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       expect(query.state.hasData, isFalse);
       expect(query.state.dataUpdateCount, 0);
 

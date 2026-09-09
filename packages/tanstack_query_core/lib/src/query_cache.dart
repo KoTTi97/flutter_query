@@ -249,14 +249,14 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// Every query matching [filters], in insertion order — all of them when the
   /// filters are empty. Partial key matching by default, as upstream's
   /// `findAll`.
-  List<Query<Object?>> findAll([
+  List<Query<Object?>> findAll({
     QueryFilters filters = const QueryFilters(),
-  ]) =>
+  }) =>
       queries.where(filters.matches).toList();
 
   /// The first matching query. An unset `exact` means an exact match here,
   /// as upstream's `find` defaults `{ exact: true, ...filters }`.
-  Query<Object?>? find(QueryFilters filters) {
+  Query<Object?>? find({required QueryFilters filters}) {
     // A copy, like `findAll`: a predicate may remove the query it is shown.
     for (final query in queries) {
       if (filters.matches(query, exactByDefault: true)) {

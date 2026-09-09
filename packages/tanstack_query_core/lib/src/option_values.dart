@@ -23,8 +23,9 @@ sealed class StaleTime {
   /// Stale the moment it arrives — upstream's `staleTime: 0`, the default.
   static const StaleTime zero = StaleTimeDuration(Duration.zero);
 
-  /// Never stale and never refetched in the background — upstream's
-  /// `staleTime: 'static'`. Even an explicit `refetchQueries` skips it.
+  /// Never stale and never refetched by any trigger — upstream's
+  /// `staleTime: 'static'`. Even an explicit `refetchQueries` skips it; only
+  /// an explicit `refetchInterval` and a `refetch()` still fetch.
   static const StaleTime static = StaleTimeStatic();
 
   /// Never stale by time, but still refetched when asked — upstream's
@@ -78,10 +79,14 @@ final class StaleTimeDuration extends StaleTime {
   int get hashCode => duration.hashCode;
 }
 
-/// The [StaleTime.static] variant: never stale, and never refetched in the
-/// background either — not on mount, focus, reconnect, interval, invalidation
-/// or `refetchQueries`. Only a `refetch()` on the observer itself still
-/// fetches.
+/// The [StaleTime.static] variant: never stale, and never refetched by a
+/// trigger either — not on mount, focus, reconnect, invalidation or
+/// `refetchQueries`. Two things still fetch it: a `refetch()` on the observer
+/// itself, and an explicit `refetchInterval`, which polls a static query
+/// exactly as it polls any other — an interval is a request, not a trigger,
+/// and upstream (`50680b98c`) polls too; only `refetchQueries` filters
+/// static out. (This dartdoc used to list "interval" among the refetches
+/// static prevents; the behaviour never did — fifth review, 2026-09-09.)
 final class StaleTimeStatic extends StaleTime {
   /// The one instance is [StaleTime.static]; a `const StaleTimeStatic()` is
   /// the same value.

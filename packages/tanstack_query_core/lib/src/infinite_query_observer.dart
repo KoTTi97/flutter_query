@@ -8,13 +8,26 @@ import 'query_observer.dart';
 import 'query_options.dart';
 import 'query_result.dart';
 
+/// The paging flags that follow from the result and the fetch direction, as
+/// one value, so a change in any of them can be told apart from none.
+typedef _DirectionFlags = ({
+  bool isFetchingNextPage,
+  bool isFetchingPreviousPage,
+  bool isFetchNextPageError,
+  bool isFetchPreviousPageError,
+  bool isRefetching,
+  bool isRefetchError,
+});
+
 /// Watches one infinite query, and pages it.
 ///
 /// The paging surface lives here rather than on the result: upstream fattens
 /// its result object with `hasNextPage` and friends because a React hook
 /// returns exactly one value, while a sealed [QueryResult] cannot grow fields
 /// per query kind without every consumer paying for them
-/// (https://github.com/KoTTi97/flutter_query/issues/16).
+/// (https://github.com/KoTTi97/flutter_query/issues/16). What the shape
+/// costs is paid in [shouldNotify]: a listener is told when a paging flag
+/// changes, whether or not the result did.
 class InfiniteQueryObserver<TPageData, TPageParam, TData>
     extends QueryObserver<InfiniteData<TPageData, TPageParam>, TData> {
   /// Creates an observer for [options], whose paging half becomes the query's
@@ -128,6 +141,71 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
           isRefetchError && !isFetchNextPageError && !isFetchPreviousPageError,
         _ => false,
       };
+
+  _DirectionFlags get _directionFlags => (
+        isFetchingNextPage: isFetchingNextPage,
+        isFetchingPreviousPage: isFetchingPreviousPage,
+        isFetchNextPageError: isFetchNextPageError,
+        isFetchPreviousPageError: isFetchPreviousPageError,
+        isRefetching: isRefetching,
+        isRefetchError: isRefetchError,
+      );
+
+  // What the last notification carried: the direction flags, and the paging
+  // options `hasNextPage`/`hasPreviousPage` were answered with.
+  _DirectionFlags? _notifiedDirectionFlags;
+  InfiniteQueryOptions<TPageData, TPageParam>? _notifiedPagingOptions;
+
+  /// The base rule, or a change in any paging flag since the last
+  /// notification. The flags are not part of the result, so a
+  /// `fetchPreviousPage` cancelling a `fetchNextPage` (same data, still
+  /// fetching, other direction) and a `setOptions` whose new
+  /// `getNextPageParam` says "no more" (same result, `hasNextPage` now false)
+  /// both left listeners — and a binding's "load more" button — unaware
+  /// (fifth review, 2026-09-09). Upstream's flags ride on its result object
+  /// and are compared with the rest of it.
+  ///
+  /// Exact, but lazy about user code: the six flags that follow from the
+  /// result and the fetch direction are compared as values, while
+  /// `hasNextPage`/`hasPreviousPage` — each a call into the user's paging
+  /// function — are only re-asked when the paging functions differ from the
+  /// ones the last notification was answered with, old against new over the
+  /// same data. Equal results carry `==`-equal data, so with the same
+  /// functions the answer is the same; and the ported suite counts those
+  /// calls.
+  ///
+  /// The snapshot is taken here, on `true`, because `updateResult` notifies
+  /// exactly then.
+  @override
+  bool shouldNotify(QueryResult<TData>? previous, QueryResult<TData> next) {
+    final directionFlags = _directionFlags;
+    final pagingOptions = infiniteOptions;
+    final notify = super.shouldNotify(previous, next) ||
+        directionFlags != _notifiedDirectionFlags ||
+        _pageAvailabilityChanged(pagingOptions);
+    if (notify) {
+      _notifiedDirectionFlags = directionFlags;
+      _notifiedPagingOptions = pagingOptions;
+    }
+    return notify;
+  }
+
+  bool _pageAvailabilityChanged(
+    InfiniteQueryOptions<TPageData, TPageParam> pagingOptions,
+  ) {
+    final notified = _notifiedPagingOptions;
+    if (notified == null ||
+        (notified.getNextPageParam == pagingOptions.getNextPageParam &&
+            notified.getPreviousPageParam ==
+                pagingOptions.getPreviousPageParam)) {
+      return false;
+    }
+    final data = _data;
+    return hasNextPageOf(pagingOptions, data) !=
+            hasNextPageOf(notified, data) ||
+        hasPreviousPageOf(pagingOptions, data) !=
+            hasPreviousPageOf(notified, data);
+  }
 
   /// The result these options would produce right now — the infinite twin of
   /// [QueryObserver.getOptimisticResult], for a binding's first build.

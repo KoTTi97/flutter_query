@@ -31,6 +31,7 @@ class QueryFunctionContext {
   /// Built by the query for each fetch; a query function receives one rather
   /// than constructing it. [onSignalRead] is how the query learns that
   /// [signal] was consumed.
+  @internal
   QueryFunctionContext({
     required this.client,
     required this.queryKey,
@@ -663,8 +664,9 @@ final class _DefaultedQueryOptions<TQueryData>
 final class DefaultedQueryObserverOptions<TQueryData, TData>
     extends DefaultedQueryOptions<TQueryData> {
   /// Built by [QueryClient.defaultQueryObserverOptions]; not for callers.
+  /// Not `const`, so that [queryOptions] can be built once per instance.
   @internal
-  const DefaultedQueryObserverOptions({
+  DefaultedQueryObserverOptions({
     required super.queryKey,
     required super.queryFn,
     required super.enabled,
@@ -713,23 +715,26 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
   /// [QueryObserverOptions.retryOnMount], with the default applied.
   final bool retryOnMount;
 
-  /// The cache-layer view of these options.
-  DefaultedQueryOptions<TQueryData> get queryOptions =>
+  /// The cache-layer view of these options. Built on first read and kept:
+  /// the observer hands it to its query on every `setOptions` and every
+  /// fetch, and a fresh allocation each time was the only thing that
+  /// changed between them (fifth review, 2026-09-09).
+  late final DefaultedQueryOptions<TQueryData> queryOptions =
       DefaultedQueryOptions<TQueryData>(
-        queryKey: queryKey,
-        queryFn: queryFn,
-        enabled: enabled,
-        staleTime: staleTime,
-        gcTime: gcTime,
-        retry: retry,
-        retryDelay: retryDelay,
-        networkMode: networkMode,
-        initialData: initialData,
-        initialDataUpdatedAt: initialDataUpdatedAt,
-        structuralSharing: structuralSharing,
-        meta: meta,
-        behavior: behavior,
-      );
+    queryKey: queryKey,
+    queryFn: queryFn,
+    enabled: enabled,
+    staleTime: staleTime,
+    gcTime: gcTime,
+    retry: retry,
+    retryDelay: retryDelay,
+    networkMode: networkMode,
+    initialData: initialData,
+    initialDataUpdatedAt: initialDataUpdatedAt,
+    structuralSharing: structuralSharing,
+    meta: meta,
+    behavior: behavior,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

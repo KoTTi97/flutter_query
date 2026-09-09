@@ -33,6 +33,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     this._client,
     QueryObserverOptions<TQueryData, TData> options,
   ) {
+    _checkDataType(options);
     _options = _client.defaultQueryObserverOptions<TQueryData, TData>(options);
     _updateQuery();
     // The query takes the observer's options even when it already existed:
@@ -159,7 +160,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   }
 
   /// Replaces the options, switching queries if the key changed.
+  ///
+  /// Throws an [ArgumentError] before touching anything if the options have
+  /// no `select` and [TQueryData] is not a [TData] — see [QueryObserver.new].
   void setOptions(QueryObserverOptions<TQueryData, TData> options) {
+    _checkDataType(options);
     final prevOptions = _options;
     final prevQuery = _currentQuery;
 
@@ -218,6 +223,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   QueryResult<TData> getOptimisticResult(
     QueryObserverOptions<TQueryData, TData> options,
   ) {
+    _checkDataType(options);
     final defaulted = _client.defaultQueryObserverOptions<TQueryData, TData>(
       options,
     );
@@ -261,6 +267,30 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     }
   }
 
+  /// An observer with no `select` reports the query's data as its own, so
+  /// every [TQueryData] must be a [TData]. Checked here, on the way in, and
+  /// not only in `createResult`: there it was an `assert`, and the assertion
+  /// fired inside `Query._dispatch` during the *fetch* — the `AssertionError`
+  /// became the shared query's error state, this observer stayed pending, and
+  /// a correctly typed observer on the same key saw the query in error (fifth
+  /// review, 2026-09-09). A subtype test rather than exact equality, because
+  /// `QueryObserver<int, num>` without a `select` is sound and
+  /// `QueryObserver<int, String>` is not; on every platform the reified
+  /// `List<TQueryData>` is a `List<TData>` exactly when that holds.
+  static void _checkDataType<TQueryData, TData>(
+    QueryObserverOptions<TQueryData, TData> options,
+  ) {
+    if (options.select == null && <TQueryData>[] is! List<TData>) {
+      throw ArgumentError.value(
+        options,
+        'options',
+        'A QueryObserver<$TQueryData, $TData> with no select cannot report '
+            '$TQueryData as $TData. Give it a select, or make the two types '
+            'the same.',
+      );
+    }
+  }
+
   // ---------------------------------------------------------------- timers
 
   bool _shouldScheduleTimer(Duration? timeout) =>
@@ -281,16 +311,25 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       return;
     }
 
-    final elapsed = clock.now().difference(updatedAt);
-    final remaining = staleTime! - elapsed;
-    // Upstream adds a millisecond because its timer can fire just before the
-    // deadline; Dart's virtual and real timers do not, so the deadline is used
-    // as is.
+    final deadline = updatedAt.add(staleTime!);
+    // Rounded up to the millisecond a `Timer` is armed in, and clamped to
+    // what a web timer can take. Either way the timer can run before the
+    // deadline — a microsecond remainder truncated, or a 30-day stale time
+    // cut to 24.8 days — and the callback then finds the data still fresh.
+    // It used to stop there, and `isStale` never flipped by timer; upstream
+    // adds a millisecond for the truncation and has no clamp. The deadline is
+    // the truth: still fresh means "arm again for what is left" (fifth
+    // review, 2026-09-09).
     _staleTimer = Timer(
-        clampTimerDuration(remaining.isNegative ? Duration.zero : remaining),
-        () {
-      if (!_currentResult.isStale) {
+        clampTimerDuration(
+            ceilToMilliseconds(deadline.difference(clock.now()))), () {
+      if (_currentResult.isStale) {
+        return;
+      }
+      if (_isStale(_currentQuery, _options)) {
         updateResult();
+      } else {
+        _updateStaleTimeout();
       }
     });
   }
@@ -554,7 +593,20 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _selectErrorUpdatedAt = null;
   }
 
-  /// Recomputes the result and notifies listeners if it changed.
+  /// Whether listeners hear about [next], given [previous] — the result they
+  /// last heard about, `null` before the first. Here: the first result, and
+  /// then every one that is not value-equal to the last. `updateResult` has
+  /// already installed [next] as [currentResult] when this is asked, so a
+  /// subclass can read what it derives from the result and the query;
+  /// `InfiniteQueryObserver` adds its paging flags this way, which are not
+  /// part of the result and used to change without a word (fifth review,
+  /// 2026-09-09).
+  @protected
+  bool shouldNotify(QueryResult<TData>? previous, QueryResult<TData> next) =>
+      previous == null || next != previous;
+
+  /// Recomputes the result and notifies listeners if it changed — as
+  /// [shouldNotify] decides.
   void updateResult() {
     final prevResult = _previousResult;
     final nextResult = createResult(_currentQuery, _options);
@@ -566,12 +618,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       _lastQueryWithData = _currentQuery;
     }
 
-    if (prevResult != null && nextResult == prevResult) {
-      _currentResult = nextResult;
+    _currentResult = nextResult;
+    if (!shouldNotify(prevResult, nextResult)) {
       return;
     }
 
-    _currentResult = nextResult;
     _previousResult = nextResult;
 
     _client.notifyManager.batch(() {

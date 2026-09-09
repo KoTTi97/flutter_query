@@ -90,6 +90,7 @@ abstract interface class FetchBehavior<TQueryData> {
 class FetchContext<TQueryData> {
   /// Creates the description of one fetch. Built by [Query.fetch]; a behaviour
   /// receives one, it does not make one.
+  @internal
   FetchContext({
     required this.client,
     required this.queryKey,
@@ -142,8 +143,8 @@ class FetchContext<TQueryData> {
 /// `experimental_prefetchInRender` and hydration, neither of which is ported.
 @immutable
 class FetchOptions<TQueryData> {
-  /// Creates the overrides; both are unset by default.
-  const FetchOptions({this.cancelRefetch, this.meta});
+  /// Creates the overrides; all are unset by default.
+  const FetchOptions({this.cancelRefetch, this.meta, this.retry});
 
   /// Cancel a fetch that is already running and start a new one.
   final bool? cancelRefetch;
@@ -151,6 +152,15 @@ class FetchOptions<TQueryData> {
   /// Carried into [QueryState.fetchMeta]; infinite queries put the page
   /// direction here.
   final Object? meta;
+
+  /// A retry policy for *this fetch only*. It goes to the retryer and not
+  /// into the query's options, so the observers' `retry` is untouched by it.
+  /// `QueryClient.query` uses it for upstream's imperative rule — no retries
+  /// unless the caller asked — which upstream writes into the shared query's
+  /// options for good, so that the next `invalidateQueries` refetched an
+  /// observer's `retry: times(3)` query with a single attempt (fifth review,
+  /// 2026-09-09).
+  final RetryPolicy? retry;
 }
 
 /// A state transition. Sealed, so the reducer is exhaustive.
@@ -326,6 +336,15 @@ class Query<TQueryData> extends Removable {
       UnmodifiableListView<QueryObserverRef>(_observers);
 
   Retryer<TQueryData>? _retryer;
+
+  /// The in-flight fetch as its callers see it: settled only once the data is
+  /// in the cache and the cache hooks have run, or the error is in the state.
+  /// Kept apart from the retryer's own future, which is the transport alone —
+  /// a second caller that joined a running fetch used to get that one, and
+  /// so saw `42` as a success while the first caller and the query ended in
+  /// the error a throwing `structuralSharing` hook produced (fifth review,
+  /// 2026-09-09).
+  Completer<TQueryData>? _operation;
   QueryState<TQueryData>? _revertState;
   bool _signalConsumed = false;
 
@@ -333,8 +352,9 @@ class Query<TQueryData> extends Removable {
   /// listeners and devtools.
   Object? get meta => _options.meta;
 
-  /// The in-flight fetch, if there is one.
-  Future<TQueryData>? get future => _retryer?.future;
+  /// The in-flight fetch, if there is one: the future every caller of [fetch]
+  /// shares, settled once the cache has been written.
+  Future<TQueryData>? get future => _operation?.future;
 
   /// How many observers are attached right now. Upstream's
   /// `getObserversCount`.
@@ -407,6 +427,14 @@ class Query<TQueryData> extends Removable {
       _dispatch(QuerySetStateAction<TQueryData>(state));
 
   /// Cancels the in-flight fetch, completing once it has settled.
+  ///
+  /// [revert] puts the state back to what it was before the fetch. [silent]
+  /// dispatches no error and is only meaningful when a new fetch takes over
+  /// — it is how a cancel-refetch hands one fetch's callers to the next.
+  /// A silent cancel with no successor leaves the query `fetching` for good:
+  /// nothing is running, and nothing will end the status. Use it only from a
+  /// fetch that follows on the same key; an explicit cancel is
+  /// `QueryClient.cancelQueries`, which is not silent.
   Future<void> cancel({bool revert = false, bool silent = false}) async {
     final pending = _retryer?.future;
     _retryer?.cancel(revert: revert, silent: silent);
@@ -604,10 +632,21 @@ class Query<TQueryData> extends Removable {
   }
 
   /// Runs the query function, through the retryer and any behaviour.
+  ///
+  /// Every caller gets the same future — the one that settles once the data
+  /// has been written to the cache and the cache hooks have run, or the
+  /// error is in the state — whether it started the fetch or joined one
+  /// already running. The retryer is installed *before* the fetch is
+  /// announced, so a listener that reacts to the `fetch` action (a
+  /// `cancelQueries` on `isFetching`, a `client.query` of the same key from
+  /// a cache event, a `clear()`) finds something to cancel or to join;
+  /// upstream announces first and installs after, and both of those ran the
+  /// query function twice or not at all as asked (fifth review,
+  /// 2026-09-09).
   Future<TQueryData> fetch({
     DefaultedQueryOptions<TQueryData>? options,
     FetchOptions<TQueryData>? fetchOptions,
-  }) async {
+  }) {
     if (_state.fetchStatus != FetchStatus.idle &&
         _retryer?.status != RetryerStatus.rejected) {
       if (_state.hasData && (fetchOptions?.cancelRefetch ?? false)) {
@@ -617,10 +656,11 @@ class Query<TQueryData> extends Removable {
         cancel(silent: true).ignore();
       } else {
         final retryer = _retryer;
-        if (retryer != null) {
+        final operation = _operation;
+        if (retryer != null && operation != null) {
           // Retries stopped by an unmount can continue.
           retryer.continueRetry();
-          return retryer.future;
+          return operation.future;
         }
       }
     }
@@ -687,14 +727,7 @@ class Query<TQueryData> extends Removable {
     // Kept in case this fetch has to be reverted.
     _revertState = _state;
 
-    // Unconditional. Upstream skips the action when `fetchStatus !== 'idle'
-    // && fetchMeta === meta`, and that never holds: a `null` fetchMeta is not
-    // an unset `undefined`, and a page fetch builds a fresh meta object per
-    // call. Comparing value-equal `FetchMore`s (or two `null`s) here skipped
-    // it, so a refetch that cancelled a retrying fetch kept the old
-    // `fetchFailureCount` (fourth review, 2026-09-09).
-    _dispatch(QueryFetchAction(meta: fetchOptions?.meta));
-
+    // Constructing a retryer runs nothing; `start()` does, below.
     final retryer = Retryer<TQueryData>(
       fn: context.fetchFn,
       focusManager: client.focusManager,
@@ -703,8 +736,10 @@ class Query<TQueryData> extends Removable {
       // A missing query function is a configuration error, and retrying it
       // only delays the message by the whole backoff. Upstream retries it
       // like any other failure; here the one attempt is the answer (fourth
-      // review, 2026-09-09).
-      retry: missingQueryFn ? RetryPolicy.never : _options.retry,
+      // review, 2026-09-09). A per-fetch `retry` outranks the options'.
+      retry: missingQueryFn
+          ? RetryPolicy.never
+          : fetchOptions?.retry ?? _options.retry,
       retryDelay: _options.retryDelay,
       networkMode: _options.networkMode,
       onFail: (failureCount, error, stackTrace) =>
@@ -721,40 +756,76 @@ class Query<TQueryData> extends Removable {
         cancelToken.cancel();
       },
     );
+    final operation = Completer<TQueryData>();
     _retryer = retryer;
+    _operation = operation;
 
+    // Unconditional. Upstream skips the action when `fetchStatus !== 'idle'
+    // && fetchMeta === meta`, and that never holds: a `null` fetchMeta is not
+    // an unset `undefined`, and a page fetch builds a fresh meta object per
+    // call. Comparing value-equal `FetchMore`s (or two `null`s) here skipped
+    // it, so a refetch that cancelled a retrying fetch kept the old
+    // `fetchFailureCount` (fourth review, 2026-09-09).
+    _dispatch(QueryFetchAction(meta: fetchOptions?.meta));
+
+    _settle(retryer, operation).ignore();
+    return operation.future;
+  }
+
+  /// Runs [retryer] to its end and completes [operation] with what the cache
+  /// ended up holding: the data once written and the hooks run, or the
+  /// error once dispatched.
+  Future<void> _settle(
+    Retryer<TQueryData> retryer,
+    Completer<TQueryData> operation,
+  ) async {
     try {
       final data = await retryer.start();
       setData(data);
       _cache.onQueryFetchSuccess(this, data);
-      return data;
+      operation.complete(data);
     } catch (error, stackTrace) {
       if (error is CancelledError) {
         if (error.silent) {
           // A silent cancel means a new fetch is starting: ride along with it.
-          // When no new fetch replaced this one, `_retryer` is still this
-          // rejected retryer, so the caller sees the CancelledError — and no
-          // error is dispatched into the query's state, which is what a silent
-          // cancel means.
-          final replacement = _retryer;
-          if (replacement != null) {
-            return replacement.future;
+          // When no new fetch replaced this one, `_operation` is still this
+          // fetch's, so the caller sees the CancelledError — and no error is
+          // dispatched into the query's state, which is what a silent cancel
+          // means.
+          final replacement = _operation;
+          if (replacement != null && !identical(replacement, operation)) {
+            operation.complete(replacement.future);
+          } else {
+            operation.completeError(error, stackTrace);
           }
+          return;
         } else if (error.revert) {
-          if (!_state.hasData) {
-            rethrow;
+          if (_state.hasData) {
+            operation.complete(_state.data as TQueryData);
+          } else {
+            operation.completeError(error, stackTrace);
           }
-          return _state.data as TQueryData;
+          return;
         }
       }
       _dispatch(QueryErrorAction(error, stackTrace));
       _cache.onQueryFetchError(this, error, stackTrace);
-      rethrow;
+      operation.completeError(error, stackTrace);
     } finally {
       if (identical(_retryer, retryer)) {
         _retryer = null;
       }
-      scheduleGc();
+      if (identical(_operation, operation)) {
+        _operation = null;
+      }
+      // Only when nobody is watching, the rule the mutation side settled on
+      // in the fourth review: an observer leaving arms the timer in
+      // `removeObserver`, and a timer standing while a widget is mounted is
+      // what Flutter's widget tests assert against (fifth review,
+      // 2026-09-09).
+      if (_observers.isEmpty) {
+        scheduleGc();
+      }
     }
   }
 
@@ -764,7 +835,16 @@ class Query<TQueryData> extends Removable {
     client.notifyManager.batch(() {
       // A stable copy: an observer may unsubscribe while being notified.
       for (final observer in List<QueryObserverRef>.of(_observers)) {
-        observer.onQueryUpdate();
+        // Isolated like the cache listeners: an observer recomputes its
+        // result here, and that runs user code (`StaleTime.dynamic`,
+        // `Enabled.when`, `PlaceholderData.compute`). One observer's throw
+        // must neither become the shared fetch's error nor skip the observers
+        // after it (fifth review, 2026-09-09).
+        try {
+          observer.onQueryUpdate();
+        } catch (error, stackTrace) {
+          Zone.current.handleUncaughtError(error, stackTrace);
+        }
       }
       _cache.onQueryStateUpdated(this, action);
     });

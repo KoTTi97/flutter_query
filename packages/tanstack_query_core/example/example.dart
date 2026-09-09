@@ -32,6 +32,11 @@ QueryOptions<List<String>> sensorsQuery() => QueryOptions<List<String>>(
 
 Future<void> main() async {
   final client = QueryClient();
+  // Mounted, the client reacts to focus and connectivity: refetch on focus
+  // and reconnect, and paused mutations resume when the network is back. In
+  // pure Dart you drive the managers yourself (`client.onlineManager
+  // .setOnline(false)` and back); the Flutter binding wires them to the app.
+  client.mount();
 
   // Imperative: fetch, cache, and complete with the data.
   final sensors = await client.query(sensorsQuery());
@@ -78,7 +83,9 @@ Future<void> main() async {
   );
   print('after invalidation (api calls: ${api.calls})');
 
-  // A client owns gcTime timers; clear them so the program can exit.
+  // A client owns gcTime timers and, mounted, the manager subscriptions;
+  // release both so the program can exit.
   unsubscribe();
+  client.unmount();
   client.clear();
 }
