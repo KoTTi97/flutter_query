@@ -181,15 +181,21 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
           InfiniteQueryObserver<TPageData, TPageParam, TData>(client, options),
         );
 
-  InfiniteQueryObserverOptions<TPageData, TPageParam, TData> _infiniteOptions;
+  /// The typed options last applied, or `null` once [setOptions] applied
+  /// untyped ones; then the base class's copy is the current one.
+  InfiniteQueryObserverOptions<TPageData, TPageParam, TData>? _infiniteOptions;
 
   /// The observer underneath, typed.
   InfiniteQueryObserver<TPageData, TPageParam, TData> get infiniteObserver =>
       observer as InfiniteQueryObserver<TPageData, TPageParam, TData>;
 
   @override
-  QueryResult<TData> get optimisticValue =>
-      infiniteObserver.getOptimisticInfiniteResult(_infiniteOptions);
+  QueryResult<TData> get optimisticValue {
+    final options = _infiniteOptions;
+    return options == null
+        ? super.optimisticValue
+        : infiniteObserver.getOptimisticInfiniteResult(options);
+  }
 
   /// Replaces the options, paging half included. See
   /// [QueryController.setOptions] on why this does not notify.
@@ -197,21 +203,25 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
   ) {
     _infiniteOptions = options;
+    _options = null;
     infiniteObserver.setInfiniteOptions(options);
   }
 
-  /// Not for infinite queries: the plain observer options carry no paging
-  /// half, so applying them here would silently drop it. Throws in every
-  /// build mode, where an `assert` would have made it a silent no-op in
-  /// release.
+  /// Accepts any options that carry the paging behaviour — what
+  /// [setInfiniteOptions] and the core's own conversions produce — and
+  /// forwards them to the observer, exactly as
+  /// `InfiniteQueryObserver.setOptions` does. Plain observer options have no
+  /// paging half; applying them would silently drop it, so they are refused
+  /// with an [UnsupportedError] in every build mode (an `assert` would have
+  /// made that a silent no-op in release). Nothing is kept when the observer
+  /// refuses.
   @override
   void setOptions(
     QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
   ) {
-    throw UnsupportedError(
-      'Use setInfiniteOptions on an InfiniteQueryController; plain observer '
-      'options have no paging half.',
-    );
+    infiniteObserver.setOptions(options);
+    _infiniteOptions = null;
+    _options = options;
   }
 
   bool get hasNextPage => infiniteObserver.hasNextPage;

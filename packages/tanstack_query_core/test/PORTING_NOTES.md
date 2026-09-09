@@ -195,6 +195,10 @@ immediately after unsubscribe, both times — is unchanged.
   and `should call initialData function when it is a function` construct a
   `Query` directly upstream. A `Query` here is always born into a cache, so both
   build through `QueryCache.build`.
+- **adapted (1):** `should provide context to queryFn` no longer asserts
+  `args.pageParam` is undefined. `QueryFunctionContext` has no `pageParam` (or
+  `direction`): nothing ever set them, because an infinite query's page
+  function is handed its own typed `InfinitePageContext` (A5, below).
 - **note:** the suite's name `should not throw a CancelledError when fetchQuery
   is in progress ...` is kept verbatim even though the method is now
   `QueryClient.query`.
@@ -952,6 +956,95 @@ identity `Set` now. `defaultQueryObserverOptions` resolved the merged
 defaults twice per build — `defaultQueryOptions` plus its own scan, each over
 every registered default with deep key matching; resolved once and shared.
 
+#### API decisions (fourth review)
+
+The review's API findings were decided together, after the behavioural fixes
+above; the decisions are numbered A1–A27, and this is the record of each.
+Their tests are the `A<n> …` cases at the end of `fourthReview()` in
+`port_specifics_test.dart` and of the fourth-review section of the binding's
+`review_regressions_test.dart`.
+
+- **A1 — done.** `queryKey` is `required` and non-nullable on `QueryOptions`,
+  `QueryObserverOptions` and the infinite pair; the runtime `ArgumentError`
+  in `QueryClient` and the `!`s in the binding are gone. `copyWith`'s
+  parameter stays optional.
+- **A2 — decided against.** `MutationResult` does not gain a
+  `TOnMutateResult` type parameter: the `onMutate` result's job is the
+  rollback, which `onError`/`onSettled` receive, and a third type parameter
+  on a sealed result would tax every `switch` for a value widgets almost
+  never read. A divergence row below.
+- **A3 — done.** `InfiniteQueryController.setOptions` forwards any options
+  that carry the paging behaviour to the observer, which accepts them since
+  finding 41; plain options are still refused with `UnsupportedError`.
+- **A4 — done.** `InfiniteQueryOptions.copyWith` and
+  `InfiniteQueryObserverOptions.copyWith` return their own type and keep the
+  paging half, with the paging fields as optional parameters; `queryFn` and
+  `behavior` are rejected (an infinite query's function is `pageFn`), and so
+  is `pages` on the observer options, whose field doc says why it is read
+  only through `QueryClient.infiniteQuery`.
+- **A5 — done.** `QueryFunctionContext.pageParam` and `.direction` removed;
+  nothing set them. One ported assertion adapted (`query.test.tsx`, above).
+- **A6 — done.** `Mutation.continueMutation()` rejects with the error the
+  mutation settled on, as upstream's `continue()` does; the swallow lives in
+  `MutationCache.resumePaused` (`.catch(noop)` upstream), and the one other
+  caller `.ignore()`s.
+- **A7 — done.** The class docs of `QueryOptions`, `QueryObserverOptions` and
+  `MutationOptions` say there is no value equality on purpose: inline options
+  are re-applied every build and the observer compares resolved values.
+- **A8 — done.** The core README states the rule — one key, one exact type,
+  related types included — and `docs/coming-from-react-query.md` has a row.
+- **A10 — done.** `QueryCache.build(state: …)` asserts that a `success` state
+  carries data, naming the persistence door in the message.
+- **A11 — done.** An infinite refetch whose first held page param is `null`
+  starts from `initialPageParam`, as upstream's
+  `oldPageParams[0] ?? options.initialPageParam`; `initialPageParam`'s doc
+  says a nullable `TPageParam` cannot tell "none" from `null`.
+- **A12 — done.** The barrel exports what the public cache events name: the
+  `QueryAction` and `MutationAction` families and the `QueryObserverRef` /
+  `MutationObserverRef` interfaces, documented as read-only from outside.
+  `*CacheRef`, `FetchContext` and `FetchBehavior` stay hidden — no event
+  names them.
+- **A13 — done, one kept.** `FetchOptions.initialFuture`,
+  `FetchContext.signalConsumed` and `QueryFunctionContext.signalConsumed`
+  removed (unused; the query tracks consumption through `onSignalRead`).
+  `Retryer.initialFuture` stays: the ported `retryer.test.tsx` case `should
+  reuse the initialPromise on the first run …` exercises it, and `Retryer`
+  is not exported.
+- **A14 — done.** Observer listeners are private (`hasListeners` is the
+  read); `Query.observers` and `Mutation.observers` are unmodifiable views,
+  with `addObserver`/`removeObserver` the only way in; `Removable.gcTime` is
+  a getter and only the `@protected` `updateGcTime` moves it (no setter was
+  needed); `Query.destroy` and `Mutation.destroy` are `@internal`.
+- **A15 — done.** `InitialDataCompute` and `PlaceholderDataCompute` compare
+  by their function: equal tear-offs are equal, two inline closures are not.
+- **A16 — done.** `getQueriesData` throws `QueryDataTypeError` on a
+  mismatch like `getQueryData`; no ported `queryClient.test.tsx` case relied
+  on the silent `null`.
+- **A17 — done.** `DefaultedMutationOptions` and
+  `DefaultedQueryObserverOptions` are `final`; `DefaultedQueryOptions` is
+  `sealed` (the observer options extend it) with a private final subclass
+  its constructor redirects to, so nothing outside the library can extend
+  or implement any of the three.
+- **A18 — done.** `QueryError.==` includes `hasStaleData`; `QueryDefaults`,
+  `MutationDefaults` and `DefaultOptions` have `==`/`hashCode` (functions by
+  identity); `StructuralSharing`'s doc says a nullable type cannot tell "no
+  previous" from a previous `null`.
+- **A19 — recorded.** The observer diffs against the last *notified* result;
+  a divergence row below, worded after reading both implementations.
+- **A20 — done.** A `MissingQueryFunctionError` is never retried, decided in
+  `Query.fetch` where the retryer is built; a divergence row below.
+- **A21 — done.** `MutationOptions.simple<TData, TVariables>(…)` returns a
+  `MutationOptions<TData, TVariables, void>` with every parameter but
+  `onMutate`, so a mutation without an optimistic step infers its types from
+  `mutationFn`. Used by the binding's example and the demo's
+  `createSensorMutation`; the binding README and the JS-to-Dart map mention
+  it, and a binding test compiles it with no type arguments under
+  strict inference.
+- **A26 / A27 — done.** The binding README's "What rebuilds, and when" says
+  `buildWhen`'s `previous` is the last *built* result (the opposite of
+  `bloc`), and that Dart records already have value equality, which makes
+  them the easy pick for a `select` output.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -992,3 +1085,6 @@ suite does not have to go looking:
 | a cache listener that throws during a dispatch escapes into the retryer, and the fetch never settles | cache and mutation-observer listeners are isolated and reported to the zone; a throw reaching a retryer hook is the fetch's error | fourth review, 2026-09-09 |
 | `onSubscribe` leaves the result stale after joining a running fetch (the React adapter re-reads) | refreshed on subscribe when the query's state moved on | fourth review, 2026-09-09 |
 | a standing `select` error is stamped `Date.now()` on every result | stamped once, when the selector threw | fourth review, 2026-09-09 |
+| `MutationResult.context` (what `onMutate` returned) | not on `MutationResult`: the rollback handle goes to `onError`/`onSettled`, and a third type parameter on the sealed result would tax every `switch` for it | A2, fourth review 2026-09-09 |
+| `updateResult` diffs the next result against `#currentResult` — the last one *assigned*, which `getOptimisticResult` also assigns, so a real result equal to an optimistic read is not reported (the React adapter re-reads on render) | diffed against `_previousResult`, the last result listeners were *told*; `currentResult` still follows an optimistic read, but a result that differs from the last notification is reported even when it equals the optimistic one. A listener's baseline is what it was told, and the binding's readers swallow an equal notification by `==` | A19, fourth review 2026-09-09 |
+| a fetch with no query function is retried like any failure, `retry` and backoff included | `MissingQueryFunctionError` is never retried: a configuration error, so the one attempt is the answer and the message is seen at once | A20, fourth review 2026-09-09 |

@@ -147,8 +147,9 @@ extension QueryContext on BuildContext {
 }
 
 /// The scope `context.query` reads through. Installed by
-/// `QueryClientProvider`; you never place one yourself.
-@internal
+/// `QueryClientProvider`; you never place one yourself. Not public API: the
+/// package barrel hides it (an `@internal` annotation would need `meta`,
+/// which Flutter 3.27's `foundation` does not yet re-export).
 class QueryScope extends InheritedWidget {
   const QueryScope({super.key, required this.client, required super.child});
 
@@ -220,7 +221,7 @@ class _Reader {
 }
 
 /// Keeps each reading widget's observers alive for as long as it reads them.
-@internal
+/// Not public API; hidden from the barrel like [QueryScope].
 class QueryScopeElement extends InheritedElement {
   QueryScopeElement(QueryScope super.widget);
 
@@ -238,7 +239,7 @@ class QueryScopeElement extends InheritedElement {
     Element reader,
     Object? id,
   ) {
-    final identity = (options.queryKey!, TQueryData, TData, id);
+    final identity = (options.queryKey, TQueryData, TData, id);
     final state = _startEpochFor(reader);
     final repeat = state.current.contains(identity);
     final entry = _entryFor(

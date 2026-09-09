@@ -58,9 +58,10 @@ class SensorsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Style 1: read in build. The widget rebuilds when the result changes.
     final sensors = context.query(sensorsQuery());
-    // A mutation, the same way; `void` is what `onMutate` would return.
+    // A mutation, the same way. `MutationOptions.simple` is the form without
+    // an `onMutate` step: its types come from `api.add`.
     final add = context.mutation(
-      MutationOptions<void, String, void>(
+      MutationOptions.simple(
         mutationFn: api.add,
         onSuccess: (_, __, ___) =>
             QueryClientProvider.read(context).invalidateQueries(

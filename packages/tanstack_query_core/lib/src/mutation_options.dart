@@ -65,7 +65,12 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
 /// `TOnMutateResult` is upstream's renamed `TContext`: what [onMutate] returns
 /// and [onError]/[onSettled] receive — the rollback handle for an optimistic
 /// update. The rename matters more in Flutter, where `BuildContext` owns the
-/// word.
+/// word. A mutation with no optimistic step has no such result; [simple]
+/// spells that out as `void` so the other two types infer from [mutationFn].
+///
+/// No value equality, on purpose: options built inline are re-applied on
+/// every build, and the observer compares the resolved values — so inline
+/// callbacks are not a change by themselves.
 @immutable
 class MutationOptions<TData, TVariables, TOnMutateResult> {
   const MutationOptions({
@@ -82,6 +87,63 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
     this.scope,
     this.meta,
   });
+
+  /// Options for a mutation without an [onMutate] step.
+  ///
+  /// The same parameters as the constructor, minus `onMutate`, on a
+  /// `MutationOptions<TData, TVariables, void>` — so the two types that matter
+  /// infer from [mutationFn], and nothing has to be written out:
+  ///
+  /// ```dart
+  /// context.mutation(MutationOptions.simple(
+  ///   mutationFn: (String name) => api.add(name),
+  ///   onSuccess: (_, __, ___) => client.invalidateQueries(…),
+  /// ));
+  /// ```
+  ///
+  /// A static method rather than a typedef, because a typedef cannot fix one
+  /// type argument of a class constructor and leave the others to inference.
+  static MutationOptions<TData, TVariables, void> simple<TData, TVariables>({
+    QueryKey? mutationKey,
+    MutationFn<TData, TVariables>? mutationFn,
+    FutureOr<void> Function(
+      TData data,
+      TVariables variables,
+      void onMutateResult,
+    )? onSuccess,
+    FutureOr<void> Function(
+      Object error,
+      StackTrace stackTrace,
+      TVariables variables,
+      void onMutateResult,
+    )? onError,
+    FutureOr<void> Function(
+      TData? data,
+      Object? error,
+      StackTrace? stackTrace,
+      TVariables variables,
+      void onMutateResult,
+    )? onSettled,
+    RetryPolicy? retry,
+    RetryDelay? retryDelay,
+    NetworkMode? networkMode,
+    GcTime? gcTime,
+    MutationScope? scope,
+    Object? meta,
+  }) =>
+      MutationOptions<TData, TVariables, void>(
+        mutationKey: mutationKey,
+        mutationFn: mutationFn,
+        onSuccess: onSuccess,
+        onError: onError,
+        onSettled: onSettled,
+        retry: retry,
+        retryDelay: retryDelay,
+        networkMode: networkMode,
+        gcTime: gcTime,
+        scope: scope,
+        meta: meta,
+      );
 
   final QueryKey? mutationKey;
   final MutationFn<TData, TVariables>? mutationFn;
@@ -120,9 +182,9 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
 }
 
 /// Mutation options with every default resolved. Only `QueryClient` produces
-/// one.
+/// one, and `final` keeps it that way.
 @immutable
-class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
+final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   @internal
   const DefaultedMutationOptions({
     required this.mutationKey,

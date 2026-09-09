@@ -267,7 +267,8 @@ void main() {
 
       expect(contexts, hasLength(1));
       final args = contexts.single;
-      expect(args.pageParam, isNull);
+      // Upstream asserts `args.pageParam` is undefined; the port's context
+      // has no such field (PORTING_NOTES, `query.test.tsx`).
       expect(args.queryKey, key);
       expect(args.signal, isA<QueryCancelToken>());
       expect(args.client, same(queryClient));

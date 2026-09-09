@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:clock/clock.dart';
 import 'package:meta/meta.dart';
@@ -15,6 +16,10 @@ import 'retryer.dart';
 enum MutationStatus { idle, pending, success, error }
 
 /// What a [Mutation] needs from an observer.
+///
+/// Exported because the cache's `MutationObserverAdded` and friends name
+/// their observer through it; implementing it yourself is not supported —
+/// `MutationObserver` is the one implementation.
 abstract interface class MutationObserverRef {
   void onMutationUpdate(MutationAction action);
 }
@@ -63,6 +68,11 @@ abstract interface class MutationCacheRef {
   );
 }
 
+/// A state transition. Sealed, so the reducer is exhaustive.
+///
+/// Exported so that a cache listener can `switch` on the `action` a
+/// `MutationUpdated` event carries — read-only from outside: only a
+/// [Mutation] dispatches one.
 @immutable
 sealed class MutationAction {
   const MutationAction();
@@ -204,7 +214,13 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   MutationState<TData, TVariables, TOnMutateResult> _state;
   MutationState<TData, TVariables, TOnMutateResult> get state => _state;
 
-  final List<MutationObserverRef> observers = <MutationObserverRef>[];
+  final List<MutationObserverRef> _observers = <MutationObserverRef>[];
+
+  /// The observers attached right now, read-only; [addObserver] and
+  /// [removeObserver] are the only way in and out.
+  List<MutationObserverRef> get observers =>
+      UnmodifiableListView<MutationObserverRef>(_observers);
+
   Retryer<TData>? _retryer;
 
   Object? get meta => _options.meta;
@@ -219,8 +235,8 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   @internal
   void addObserver(MutationObserverRef observer) {
-    if (!observers.contains(observer)) {
-      observers.add(observer);
+    if (!_observers.contains(observer)) {
+      _observers.add(observer);
       clearGcTimeout();
       _cache.onMutationObserverAdded(
           this as Mutation<Object?, Object?, Object?>, observer);
@@ -229,7 +245,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   @internal
   void removeObserver(MutationObserverRef observer) {
-    if (!observers.remove(observer)) {
+    if (!_observers.remove(observer)) {
       return;
     }
     _cache.onMutationObserverRemoved(
@@ -242,7 +258,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   @override
   void optionalRemove() {
-    if (observers.isNotEmpty) {
+    if (_observers.isNotEmpty) {
       return;
     }
     if (_state.status == MutationStatus.pending) {
@@ -254,7 +270,10 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     _cache.onMutationRemovalRequested(this);
   }
 
-  /// Releases a paused mutation, completing when it settles.
+  /// Releases a paused mutation, completing when it settles — or rejecting
+  /// with the error it settled on, as upstream's `continue()` does. The cache's
+  /// `resumePaused` is the caller that swallows it; a direct caller who does
+  /// not want the error `.ignore()`s the future.
   ///
   /// A mutation restored from persistence is `pending` with no retryer at all;
   /// continuing it means running it, which is how an offline mutation survives
@@ -262,22 +281,22 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   Future<void> continueMutation() {
     final retryer = _retryer;
     if (retryer != null) {
-      return retryer.continueFetch().then((_) {}).catchError((Object _) {});
+      return retryer.continueFetch().then((_) {});
     }
     if (_state.status == MutationStatus.pending && _state.hasVariables) {
-      return execute(_state.variables as TVariables)
-          .then((_) {})
-          .catchError((Object _) {});
+      return execute(_state.variables as TVariables).then((_) {});
     }
     return Future<void>.value();
   }
 
   /// Cancels the pending collection, and stops this mutation re-arming one.
   ///
-  /// Called by the cache when the mutation is removed. Upstream leaves the
-  /// timer running — in a browser nobody notices a stray `setTimeout`, but
+  /// Called by the cache when the mutation is removed; user code removes a
+  /// mutation through `MutationCache.remove`. Upstream leaves the timer
+  /// running — in a browser nobody notices a stray `setTimeout`, but
   /// Flutter's own widget tests assert that no timer outlives the tree, and a
   /// removed mutation has nothing left to be collected from.
+  @internal
   @override
   void destroy() {
     _removed = true;
@@ -476,7 +495,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       // leaves — and a timer standing while a widget is mounted is exactly
       // what Flutter's widget tests assert against (fourth review,
       // 2026-09-09).
-      if (observers.isEmpty) {
+      if (_observers.isEmpty) {
         scheduleGc();
       }
     }
@@ -486,7 +505,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     _state = _reduce(_state, action);
 
     client.notifyManager.batch(() {
-      for (final observer in List<MutationObserverRef>.of(observers)) {
+      for (final observer in List<MutationObserverRef>.of(_observers)) {
         observer.onMutationUpdate(action);
       }
       _cache.onMutationStateUpdated(

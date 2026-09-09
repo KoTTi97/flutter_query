@@ -230,6 +230,17 @@ final class QueryError<TData> extends QueryResult<TData> {
   /// A refetch failed over data that is still on screen.
   bool get isRefetchError => hasStaleData;
 
+  // The base compares `staleData` through `dataOrNull`; `hasStaleData` is
+  // what tells a real `null` from no data, so it is part of the identity too.
+  @override
+  bool operator ==(Object other) =>
+      super == other &&
+      other is QueryError<TData> &&
+      other.hasStaleData == hasStaleData;
+
+  @override
+  int get hashCode => Object.hash(super.hashCode, hasStaleData);
+
   @override
   String toString() => 'QueryError($error, hasStaleData: $hasStaleData, '
       'fetchStatus: $fetchStatus)';

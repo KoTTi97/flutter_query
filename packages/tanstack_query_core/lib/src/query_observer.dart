@@ -49,17 +49,17 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   // Function(QueryResult<TData>)>` puts TData in a contravariant position of a
   // superinterface, which the language forbids. Composition costs a dozen
   // lines and keeps the listener type exact.
-  final List<QueryObserverListener<TData>> listeners =
+  final List<QueryObserverListener<TData>> _listeners =
       <QueryObserverListener<TData>>[];
 
-  bool get hasListeners => listeners.isNotEmpty;
+  bool get hasListeners => _listeners.isNotEmpty;
 
   /// Registers [listener] and returns the function that removes it again.
   void Function() subscribe(QueryObserverListener<TData> listener) {
-    listeners.add(listener);
+    _listeners.add(listener);
     _onSubscribe();
     return () {
-      listeners.remove(listener);
+      _listeners.remove(listener);
       _onUnsubscribe();
     };
   }
@@ -101,7 +101,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   Query<TQueryData> get currentQuery => _currentQuery;
 
   void _onSubscribe() {
-    if (listeners.length == 1) {
+    if (_listeners.length == 1) {
       // Re-resolve the query first. The one this observer last watched may
       // have been collected while nobody was listening, and a fresh entry
       // may already stand in its place; upstream only re-resolves on
@@ -140,7 +140,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// Stops observing: clears listeners and timers and leaves the query, which
   /// starts its `gcTime` clock.
   void destroy() {
-    listeners.clear();
+    _listeners.clear();
     _clearStaleTimeout();
     _clearRefetchInterval();
     _currentQuery.removeObserver(this);
@@ -563,7 +563,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _previousResult = nextResult;
 
     _client.notifyManager.batch(() {
-      for (final listener in List.of(listeners)) {
+      for (final listener in List.of(_listeners)) {
         // A listener's throw is the listener's problem, not the query's:
         // reaching `Query.fetch` it would be recorded as the fetch's error.
         // Reported to the zone, the way the mutation callbacks already are.

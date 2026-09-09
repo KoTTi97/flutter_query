@@ -130,7 +130,7 @@ typedef PageParamFn<TPageData, TPageParam> = TPageParam? Function(
 class InfiniteQueryOptions<TPageData, TPageParam>
     extends QueryOptions<InfiniteData<TPageData, TPageParam>> {
   const InfiniteQueryOptions({
-    required QueryKey super.queryKey,
+    required super.queryKey,
     required this.pageFn,
     required this.initialPageParam,
     required this.getNextPageParam,
@@ -152,6 +152,10 @@ class InfiniteQueryOptions<TPageData, TPageParam>
   final InfinitePageFn<TPageData, TPageParam> pageFn;
 
   /// The param the first page is fetched with.
+  ///
+  /// Also what a refetch falls back to when the first held page param is
+  /// `null` — which is why a nullable [TPageParam] cannot tell "no param"
+  /// from a param that is `null`, and is a poor choice of type.
   final TPageParam initialPageParam;
 
   final PageParamFn<TPageData, TPageParam> getNextPageParam;
@@ -164,7 +168,78 @@ class InfiniteQueryOptions<TPageData, TPageParam>
 
   /// How many pages to fetch up front — used to warm a cache with several
   /// pages, or to refetch a fixed number of them.
+  ///
+  /// Read only on the options handed to `QueryClient.infiniteQuery` (or
+  /// `query`). On an [InfiniteQueryObserverOptions] it is always `null`: an
+  /// observer refetches as many pages as the query already holds, as
+  /// upstream's observer does, and a fixed count there would throw away the
+  /// pages the user had paged to on the next refetch.
   final int? pages;
+
+  /// This, with the given fields replaced — paging fields included, so the
+  /// copy is still an infinite query. `queryFn` and `behavior` are not
+  /// accepted: an infinite query's function is [pageFn], and its behaviour is
+  /// derived from these very options.
+  @override
+  InfiniteQueryOptions<TPageData, TPageParam> copyWith({
+    QueryKey? queryKey,
+    QueryFn<InfiniteData<TPageData, TPageParam>>? queryFn,
+    Enabled? enabled,
+    StaleTime? staleTime,
+    GcTime? gcTime,
+    RetryPolicy? retry,
+    RetryDelay? retryDelay,
+    NetworkMode? networkMode,
+    InitialData<InfiniteData<TPageData, TPageParam>>? initialData,
+    DateTime? initialDataUpdatedAt,
+    StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
+    Object? meta,
+    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
+    InfinitePageFn<TPageData, TPageParam>? pageFn,
+    TPageParam? initialPageParam,
+    PageParamFn<TPageData, TPageParam>? getNextPageParam,
+    PageParamFn<TPageData, TPageParam>? getPreviousPageParam,
+    int? maxPages,
+    int? pages,
+  }) {
+    _rejectQueryFnAndBehavior(queryFn, behavior);
+    return InfiniteQueryOptions<TPageData, TPageParam>(
+      queryKey: queryKey ?? this.queryKey,
+      pageFn: pageFn ?? this.pageFn,
+      initialPageParam: initialPageParam ?? this.initialPageParam,
+      getNextPageParam: getNextPageParam ?? this.getNextPageParam,
+      getPreviousPageParam: getPreviousPageParam ?? this.getPreviousPageParam,
+      maxPages: maxPages ?? this.maxPages,
+      pages: pages ?? this.pages,
+      enabled: enabled ?? this.enabled,
+      staleTime: staleTime ?? this.staleTime,
+      gcTime: gcTime ?? this.gcTime,
+      retry: retry ?? this.retry,
+      retryDelay: retryDelay ?? this.retryDelay,
+      networkMode: networkMode ?? this.networkMode,
+      initialData: initialData ?? this.initialData,
+      initialDataUpdatedAt: initialDataUpdatedAt ?? this.initialDataUpdatedAt,
+      structuralSharing: structuralSharing ?? this.structuralSharing,
+      meta: meta ?? this.meta,
+    );
+  }
+
+  static void _rejectQueryFnAndBehavior(Object? queryFn, Object? behavior) {
+    if (queryFn != null) {
+      throw ArgumentError.value(
+        queryFn,
+        'queryFn',
+        'An infinite query has no queryFn; its function is pageFn.',
+      );
+    }
+    if (behavior != null) {
+      throw ArgumentError.value(
+        behavior,
+        'behavior',
+        'An infinite query derives its behaviour from its own paging options.',
+      );
+    }
+  }
 
   /// The paging behaviour, derived from these options.
   ///
@@ -223,6 +298,75 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
   final RefetchInterval? refetchInterval;
   final bool? refetchIntervalInBackground;
   final bool? retryOnMount;
+
+  /// This, with the given fields replaced, observer half included. `pages`
+  /// is not accepted either: see [InfiniteQueryOptions.pages].
+  @override
+  InfiniteQueryObserverOptions<TPageData, TPageParam, TData> copyWith({
+    QueryKey? queryKey,
+    QueryFn<InfiniteData<TPageData, TPageParam>>? queryFn,
+    Enabled? enabled,
+    StaleTime? staleTime,
+    GcTime? gcTime,
+    RetryPolicy? retry,
+    RetryDelay? retryDelay,
+    NetworkMode? networkMode,
+    InitialData<InfiniteData<TPageData, TPageParam>>? initialData,
+    DateTime? initialDataUpdatedAt,
+    StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
+    Object? meta,
+    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
+    InfinitePageFn<TPageData, TPageParam>? pageFn,
+    TPageParam? initialPageParam,
+    PageParamFn<TPageData, TPageParam>? getNextPageParam,
+    PageParamFn<TPageData, TPageParam>? getPreviousPageParam,
+    int? maxPages,
+    int? pages,
+    TData Function(InfiniteData<TPageData, TPageParam> data)? select,
+    PlaceholderData<InfiniteData<TPageData, TPageParam>>? placeholderData,
+    RefetchOn? refetchOnMount,
+    RefetchOn? refetchOnWindowFocus,
+    RefetchOn? refetchOnReconnect,
+    RefetchInterval? refetchInterval,
+    bool? refetchIntervalInBackground,
+    bool? retryOnMount,
+  }) {
+    InfiniteQueryOptions._rejectQueryFnAndBehavior(queryFn, behavior);
+    if (pages != null) {
+      throw ArgumentError.value(
+        pages,
+        'pages',
+        'An observer refetches as many pages as the query holds.',
+      );
+    }
+    return InfiniteQueryObserverOptions<TPageData, TPageParam, TData>(
+      queryKey: queryKey ?? this.queryKey,
+      pageFn: pageFn ?? this.pageFn,
+      initialPageParam: initialPageParam ?? this.initialPageParam,
+      getNextPageParam: getNextPageParam ?? this.getNextPageParam,
+      getPreviousPageParam: getPreviousPageParam ?? this.getPreviousPageParam,
+      maxPages: maxPages ?? this.maxPages,
+      enabled: enabled ?? this.enabled,
+      staleTime: staleTime ?? this.staleTime,
+      gcTime: gcTime ?? this.gcTime,
+      retry: retry ?? this.retry,
+      retryDelay: retryDelay ?? this.retryDelay,
+      networkMode: networkMode ?? this.networkMode,
+      initialData: initialData ?? this.initialData,
+      initialDataUpdatedAt: initialDataUpdatedAt ?? this.initialDataUpdatedAt,
+      structuralSharing: structuralSharing ?? this.structuralSharing,
+      meta: meta ?? this.meta,
+      select: select ?? this.select,
+      placeholderData: placeholderData ?? this.placeholderData,
+      refetchOnMount: refetchOnMount ?? this.refetchOnMount,
+      refetchOnWindowFocus: refetchOnWindowFocus ?? this.refetchOnWindowFocus,
+      refetchOnReconnect: refetchOnReconnect ?? this.refetchOnReconnect,
+      refetchInterval: refetchInterval ?? this.refetchInterval,
+      refetchIntervalInBackground:
+          refetchIntervalInBackground ?? this.refetchIntervalInBackground,
+      retryOnMount: retryOnMount ?? this.retryOnMount,
+    );
+  }
 }
 
 /// Which end of an infinite query a fetch is extending. Travels in
@@ -362,10 +506,13 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
       } else {
         final remaining = pages ?? oldPages.length;
         do {
+          // Upstream's `oldPageParams[0] ?? options.initialPageParam`: a held
+          // first param of `null` (a nullable `TPageParam`) starts over from
+          // the initial one rather than fetching page `null`.
           final param = currentPage == 0
               ? (oldPageParams.isEmpty
                   ? options.initialPageParam
-                  : oldPageParams.first)
+                  : oldPageParams.first ?? options.initialPageParam)
               : nextPageParam<TPageData, TPageParam>(options, result);
           if (currentPage > 0 && param == null) {
             break;

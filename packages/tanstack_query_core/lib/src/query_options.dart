@@ -24,14 +24,15 @@ import 'query_key.dart';
 /// exactly what upstream's `Object.defineProperty` getter does. If the query
 /// function never touches it, losing the last observer stops the retry loop but
 /// lets the in-flight request finish and populate the cache.
+///
+/// An infinite query's page function is handed an `InfinitePageContext`
+/// instead, which carries the page param and the direction, typed.
 class QueryFunctionContext {
   QueryFunctionContext({
     required this.client,
     required this.queryKey,
     required QueryCancelToken signal,
     this.meta,
-    this.pageParam,
-    this.direction,
     void Function()? onSignalRead,
   })  : _signal = signal,
         _onSignalRead = onSignalRead;
@@ -40,29 +41,17 @@ class QueryFunctionContext {
   final QueryKey queryKey;
   final Object? meta;
 
-  /// Set for infinite queries only.
-  final Object? pageParam;
-
-  /// Set for infinite queries only: which end of the pages is being fetched.
-  final FetchDirection? direction;
-
   final QueryCancelToken _signal;
 
   /// Told the moment [signal] is read, so the query can react *during* the
   /// fetch rather than after it — upstream's `#abortSignalConsumed` is set by
   /// the same getter.
   final void Function()? _onSignalRead;
-  bool _signalConsumed = false;
 
   QueryCancelToken get signal {
-    _signalConsumed = true;
     _onSignalRead?.call();
     return _signal;
   }
-
-  /// Whether the query function read [signal].
-  @internal
-  bool get signalConsumed => _signalConsumed;
 }
 
 /// Which end of an infinite query is being fetched.
@@ -85,6 +74,11 @@ typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
 /// cache write; what `select` and `placeholderData` produce always goes
 /// through `replaceEqualDeep`, because the hook is typed on the cache's data
 /// and a selector's output is another type.
+///
+/// [previous] is `null` when nothing has been cached yet. With a nullable
+/// `TQueryData` the hook cannot tell that apart from a previous value that
+/// *was* `null`; a hook that needs the distinction reads
+/// `query.state.hasData` instead.
 typedef StructuralSharing<TQueryData> = TQueryData Function(
     TQueryData? previous, TQueryData next);
 
@@ -134,6 +128,16 @@ final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
 final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
   const InitialDataCompute(this.compute);
   final TQueryData? Function() compute;
+
+  // Equal when the function is: two tear-offs of one function compare equal
+  // in Dart, two inline closures never do — so a `.compute(seedFromCache)`
+  // written with a tear-off survives a rebuild as "unchanged", and an inline
+  // closure is honestly a new one.
+  @override
+  bool operator ==(Object other) =>
+      other is InitialDataCompute<TQueryData> && other.compute == compute;
+  @override
+  int get hashCode => Object.hash(InitialDataCompute<TQueryData>, compute);
 }
 
 /// Data shown while the real data is missing. Never written to the cache.
@@ -192,13 +196,26 @@ final class PlaceholderDataCompute<TQueryData>
     TQueryData? previousData,
     Query<TQueryData>? previousQuery,
   ) compute;
+
+  // See `InitialDataCompute`: equal when the function is.
+  @override
+  bool operator ==(Object other) =>
+      other is PlaceholderDataCompute<TQueryData> && other.compute == compute;
+  @override
+  int get hashCode => Object.hash(PlaceholderDataCompute<TQueryData>, compute);
 }
 
 /// Everything that describes a query, at the cache layer.
+///
+/// No value equality, on purpose: options built inline in a `build` are
+/// re-applied on every build, as upstream re-applies them on every render,
+/// and the observer works out what actually changed by comparing the
+/// *resolved* values — so two inline closures for `queryFn` do not count as a
+/// change, and neither does a fresh `Enabled.when(…)`.
 @immutable
 class QueryOptions<TQueryData> {
   const QueryOptions({
-    this.queryKey,
+    required this.queryKey,
     this.queryFn,
     this.enabled,
     this.staleTime,
@@ -213,7 +230,10 @@ class QueryOptions<TQueryData> {
     this.behavior,
   });
 
-  final QueryKey? queryKey;
+  /// The key this query is cached under. Bound to exactly one data type: a
+  /// key read as another type — a supertype included — throws
+  /// `QueryDataTypeError`.
+  final QueryKey queryKey;
   final QueryFn<TQueryData>? queryFn;
   final Enabled? enabled;
   final StaleTime? staleTime;
@@ -266,10 +286,15 @@ class QueryOptions<TQueryData> {
 }
 
 /// Query options plus everything only an observer cares about.
+///
+/// Like [QueryOptions], deliberately without value equality: an observer is
+/// handed the options a widget built on every build and compares what they
+/// resolve to, so a `select` or `placeholderData` written inline is not a
+/// change by itself.
 @immutable
 class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
   const QueryObserverOptions({
-    super.queryKey,
+    required super.queryKey,
     super.queryFn,
     super.enabled,
     super.staleTime,
@@ -363,10 +388,31 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
 /// half-resolved options, and no internal code has to ask whether defaults were
 /// applied. Fields that always have a value are non-nullable here — the type
 /// carries the guarantee instead of a comment.
+///
+/// Sealed rather than `final` because [DefaultedQueryObserverOptions] extends
+/// it; the effect is the same — nothing outside this library can extend or
+/// implement it — and the plain cache-layer instance is a private subclass
+/// the constructor redirects to.
 @immutable
-class DefaultedQueryOptions<TQueryData> {
+sealed class DefaultedQueryOptions<TQueryData> {
   @internal
-  const DefaultedQueryOptions({
+  const factory DefaultedQueryOptions({
+    required QueryKey queryKey,
+    required QueryFn<TQueryData>? queryFn,
+    required Enabled enabled,
+    required StaleTime staleTime,
+    required GcTime gcTime,
+    required RetryPolicy retry,
+    required RetryDelay retryDelay,
+    required NetworkMode networkMode,
+    required InitialData<TQueryData>? initialData,
+    required DateTime? initialDataUpdatedAt,
+    required StructuralSharing<TQueryData>? structuralSharing,
+    required Object? meta,
+    required FetchBehavior<TQueryData>? behavior,
+  }) = _DefaultedQueryOptions<TQueryData>;
+
+  const DefaultedQueryOptions._({
     required this.queryKey,
     required this.queryFn,
     required this.enabled,
@@ -456,6 +502,26 @@ class DefaultedQueryOptions<TQueryData> {
       );
 }
 
+/// The cache-layer instance: [DefaultedQueryOptions] and nothing more.
+final class _DefaultedQueryOptions<TQueryData>
+    extends DefaultedQueryOptions<TQueryData> {
+  const _DefaultedQueryOptions({
+    required super.queryKey,
+    required super.queryFn,
+    required super.enabled,
+    required super.staleTime,
+    required super.gcTime,
+    required super.retry,
+    required super.retryDelay,
+    required super.networkMode,
+    required super.initialData,
+    required super.initialDataUpdatedAt,
+    required super.structuralSharing,
+    required super.meta,
+    required super.behavior,
+  }) : super._();
+}
+
 /// [DefaultedQueryOptions] plus the observer-only options.
 @immutable
 final class DefaultedQueryObserverOptions<TQueryData, TData>
@@ -483,7 +549,7 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
     required this.refetchInterval,
     required this.refetchIntervalInBackground,
     required this.retryOnMount,
-  });
+  }) : super._();
 
   final TData Function(TQueryData data)? select;
   final PlaceholderData<TQueryData>? placeholderData;

@@ -860,6 +860,88 @@ void main() {
       client.clear();
     });
   });
+
+  // The API decisions that followed the fourth review (the core's
+  // PORTING_NOTES, "API decisions (fourth review)"), the binding's share.
+
+  group('A3 InfiniteQueryController.setOptions', () {
+    test('accepts options that carry the paging behaviour', () async {
+      final client = newClient();
+      InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>> options(
+        int? Function(int page, List<int> pages, int param, List<int> params)
+            next,
+      ) =>
+          InfiniteQueryObserverOptions(
+            queryKey: key,
+            initialPageParam: 0,
+            pageFn: (context) async => context.pageParam,
+            getNextPageParam: next,
+          );
+      final controller =
+          InfiniteQueryController<int, int, InfiniteData<int, int>>(
+        client,
+        options((_, __, ___, ____) => null),
+      );
+      void listener() {}
+      controller.addListener(listener);
+      await pumpEventQueue();
+      expect(controller.value.dataOrNull?.pages, <int>[0]);
+      expect(controller.hasNextPage, isFalse);
+
+      // Plain observer options that carry the paging behaviour — what the
+      // core's own conversion produces, and the only public holder of an
+      // `InfiniteQueryBehavior` is an `InfiniteQueryOptions`, so the test
+      // reaches for the core's internal conversion to build them.
+      int? next(int _, List<int> __, int param, List<int> ___) => param + 1;
+      // ignore: invalid_use_of_internal_member
+      final paged = client.infiniteObserverOptions(options(next));
+      controller.setOptions(paged);
+      expect(controller.hasNextPage, isTrue);
+      await controller.fetchNextPage();
+      expect(controller.value.dataOrNull?.pages, <int>[0, 1]);
+
+      controller.removeListener(listener);
+      // Read before anyone listens again: the optimistic value comes through
+      // the plain options now.
+      expect(controller.value.dataOrNull?.pages, <int>[0, 1]);
+      controller.dispose();
+      client.clear();
+    });
+  });
+
+  group('A21 MutationOptions.simple', () {
+    testWidgets('infers both types from mutationFn under strict inference',
+        (tester) async {
+      final client = newClient();
+      final seen = <Object?>[];
+      await tester.pumpWidget(app(client, _A21Reader(seen)));
+      expect(seen.single, isA<MutationController<int, String, void>>());
+      (seen.single as MutationController<int, String, void>).mutate('four');
+      await tester.pump();
+      expect(find.text('4'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      client.clear();
+    });
+  });
+}
+
+class _A21Reader extends StatelessWidget {
+  const _A21Reader(this.seen);
+
+  final List<Object?> seen;
+
+  @override
+  Widget build(BuildContext context) {
+    // No type arguments anywhere: `simple` fixes the third to `void`, and
+    // `mutationFn` supplies the other two.
+    final add = context.mutation(
+      MutationOptions.simple(mutationFn: (String v) async => v.length),
+    );
+    if (seen.isEmpty) {
+      seen.add(add);
+    }
+    return Text('${add.value.dataOrNull}');
+  }
 }
 
 Widget _provided(QueryClient client, Stream<bool> online) =>

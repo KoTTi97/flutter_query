@@ -76,6 +76,12 @@ matter at the call site:
 - **`QueryKey` is a value type**, deep-frozen with structural equality — not a
   hashed string. `queryKeyHashFn` is gone; the hash string survives as
   `debugString`.
+- **One key, one exact type.** A key is bound to the data type it was first
+  used with, and reading it as any other type throws `QueryDataTypeError` —
+  related types included: `int` and `int?` are two types, and so are
+  `List<Sensor>` and `List<Object?>`. Upstream casts blindly and cannot tell;
+  here `getQueryData<T>`, `getQueriesData<T>`, `setQueryData<T>` and an
+  observer's `TQueryData` all have to agree with the key's first use.
 - **Every option union is a sealed value type.** `StaleTime`, `GcTime`,
   `Enabled`, `RetryPolicy`, `RetryDelay`, `RefetchOn`, `RefetchInterval`. `null`
   means "not configured" on every field; "off" is a value, never a magic number.

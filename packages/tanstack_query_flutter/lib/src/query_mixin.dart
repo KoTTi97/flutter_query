@@ -105,7 +105,7 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     QueryObserverOptions<TQueryData, TData> options, {
     Object? id,
   }) {
-    final identity = (options.queryKey!, TQueryData, TData, id);
+    final identity = (options.queryKey, TQueryData, TData, id);
     final repeat = _startEpoch().contains(identity);
     final entry = _entryFor(
       identity,

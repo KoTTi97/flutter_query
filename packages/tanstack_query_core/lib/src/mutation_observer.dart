@@ -31,15 +31,15 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   // See the note in QueryObserver: Dart's variance rules stop an observer from
   // extending `Subscribable` with a listener type that mentions its own type
   // parameters.
-  final List<MutationObserverListener<TData, TVariables>> listeners =
+  final List<MutationObserverListener<TData, TVariables>> _listeners =
       <MutationObserverListener<TData, TVariables>>[];
 
-  bool get hasListeners => listeners.isNotEmpty;
+  bool get hasListeners => _listeners.isNotEmpty;
 
   void Function() subscribe(
       MutationObserverListener<TData, TVariables> listener) {
-    listeners.add(listener);
-    if (listeners.length == 1) {
+    _listeners.add(listener);
+    if (_listeners.length == 1) {
       // Re-attaching after an unsubscribe: the mutation may have moved on, or
       // even settled, while nobody was watching.
       final mutation = _currentMutation;
@@ -49,7 +49,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
       }
     }
     return () {
-      listeners.remove(listener);
+      _listeners.remove(listener);
       if (!hasListeners) {
         _currentMutation?.removeObserver(this);
       }
@@ -146,7 +146,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// mutation that ran without listeners keeps an observer nobody will ever
   /// remove and can never be collected.
   void destroy() {
-    listeners.clear();
+    _listeners.clear();
     _currentMutation?.removeObserver(this);
     _currentMutation = null;
   }
@@ -180,7 +180,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// throwing on a `failed` action escaped into the retryer's loop, and one
   /// throwing on `success` turned the success into the error path.
   void _notifyListeners() {
-    for (final listener in List.of(listeners)) {
+    for (final listener in List.of(_listeners)) {
       try {
         listener(_currentResult);
       } catch (error, stackTrace) {

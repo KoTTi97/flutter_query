@@ -43,6 +43,7 @@ alternatives — there is no recommended default, pick per situation:
 | `setQueryData(key, updaterFn)` | `updateQueryData(key, (previous) => …)`; returning `null` leaves the cache untouched |
 | `setQueriesData(filters, updaterFn)` | `updateQueriesData(filters, updater)` |
 | `getQueryData(key)` | `getQueryData<T>(key)` — a type mismatch throws `QueryDataTypeError` |
+| a key read as a looser type (`number \| undefined` where `number` was cached) | throws too: one key, one exact type — `int` and `int?`, `List<Sensor>` and `List<Object?>` are different types, and `getQueriesData<T>` checks like `getQueryData<T>` |
 | `invalidateQueries({ queryKey })` | `invalidateQueries(filters: QueryFilters(queryKey: …))` |
 | `queryKeyHashFn` | gone: `QueryKey` is a value type with structural equality; `debugString` is the readable form |
 | `focusManager`, `onlineManager`, `notifyManager` (module-level) | per-client instances: `client.focusManager`, `client.onlineManager`, `client.notifyManager` |
@@ -104,6 +105,8 @@ alternatives — there is no recommended default, pick per situation:
 | `mutate(vars, { onSuccess })` | `mutate(vars, callbacks: MutateCallbacks(onSuccess: …))` |
 | `mutateAsync(vars)` | `mutateAsync(vars)` |
 | `onMutate` returning rollback context | `onMutate` returning `TOnMutateResult`, the observer's third type parameter |
+| `useMutation` without `onMutate` | `MutationOptions.simple(mutationFn: …)` — fixes the third type parameter to `void`, so the other two infer from `mutationFn` |
+| `result.context` (what `onMutate` returned, on the mutation result) | not on `MutationResult`: its job is the rollback, which `onError` and `onSettled` receive as their last argument |
 
 ## Not here at all
 

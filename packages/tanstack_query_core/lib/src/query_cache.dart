@@ -95,11 +95,22 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   final Map<QueryKey, Query<Object?>> _queries = <QueryKey, Query<Object?>>{};
 
   /// The query for [options]'s key, creating it if it does not exist yet.
+  ///
+  /// [state] is the door a persistence layer restores through; it is used
+  /// only when the query is created here. A `success` state must carry data
+  /// (`hasData`), or the first result built from it would fail on a cast.
   Query<TQueryData> build<TQueryData>(
     QueryClient client,
     DefaultedQueryOptions<TQueryData> options, {
     QueryState<TQueryData>? state,
   }) {
+    assert(
+      state == null || state.status != QueryStatus.success || state.hasData,
+      'A QueryState restored through QueryCache.build with status == success '
+      'must have hasData == true: a success state is one that holds data. '
+      'This is the persistence door; check what was persisted for '
+      '${options.queryKey}.',
+    );
     final existing = get<TQueryData>(options.queryKey);
     if (existing != null) {
       return existing;

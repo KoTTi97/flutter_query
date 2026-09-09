@@ -16,15 +16,18 @@ import 'timers.dart';
 abstract class Removable {
   Timer? _gcTimer;
 
+  GcTime? _gcTime;
+
   /// How long this may sit unused before it is collected. `null` until
-  /// options are applied. Public, as upstream has it: devtools and tests read
-  /// the value that actually won.
-  GcTime? gcTime;
+  /// options are applied. Readable, as upstream has it — devtools and tests
+  /// read the value that actually won — but only [updateGcTime] moves it,
+  /// because the longest request has to keep winning.
+  GcTime? get gcTime => _gcTime;
 
   @protected
   void scheduleGc() {
     clearGcTimeout();
-    final gcTime = this.gcTime;
+    final gcTime = _gcTime;
     if (gcTime is GcTimeDuration) {
       _gcTimer = Timer(clampTimerDuration(gcTime.duration), optionalRemove);
     }
@@ -34,8 +37,8 @@ abstract class Removable {
   void updateGcTime(GcTime? newGcTime) {
     // The longest requested duration wins, exactly as upstream does when
     // several observers disagree.
-    gcTime = GcTime.longest(
-        gcTime,
+    _gcTime = GcTime.longest(
+        _gcTime,
         newGcTime ??
             const GcTime.duration(
               Duration(minutes: 5),

@@ -120,6 +120,19 @@ identified by `id`, else by its `mutationKey`, each together with its three
 type arguments; without either, by the types alone. Like a query, it is released
 after the frame once a build stops reading it.
 
+The third type argument is what `onMutate` returns — the rollback handle of an
+optimistic update. A mutation without one uses `MutationOptions.simple`, which
+fixes it to `void` and lets the other two infer from `mutationFn`:
+
+```dart
+final add = context.mutation(MutationOptions.simple(
+  mutationFn: (String name) => api.add(name),
+  onSuccess: (_, __, ___) => client.invalidateQueries(
+    filters: QueryFilters(queryKey: sensorsKey),
+  ),
+));
+```
+
 ## What rebuilds, and when
 
 The rule is upstream's: **a widget rebuilds whenever its result changes**, and
@@ -131,7 +144,10 @@ equal is not reported. Equal by value: a `select` returning a fresh list every
 call is fine (lists are shared element by element), and so is a fresh instance
 of a class with `==`/`hashCode`. A fresh instance of a class *without* value
 equality is a different value every build — the widget would rebuild on every
-frame, for good. Give such a model `==`, or select a list or a scalar.
+frame, for good. Give such a model `==`, or select a list or a scalar. Dart
+records already have value equality, which makes them the easy pick for a
+`select` output: `select: (data) => (connected: data.connected, total:
+data.total)` rebuilds only when one of the two numbers changes.
 
 `buildWhen`, on every builder (`QueryBuilder`, `QuerySelectBuilder`,
 `InfiniteQueryBuilder`, `MutationBuilder`), skips the rest:
@@ -145,8 +161,12 @@ QueryBuilder<Sensor>(
 ```
 
 It is upstream's `notifyOnChangeProps`, expressed as a function of the two
-results. The other three styles have no equivalent: with them, `select` is the
-tool.
+results. `previous` is the result the builder last *built*, not the last one
+it saw — a result `buildWhen` skipped is not remembered, so the next
+comparison is against what is actually on screen. That is the documented
+semantics of the field, and it is the opposite of `bloc`'s `buildWhen`, where
+`previous` is the last state emitted whether or not it was built. The other
+three styles have no equivalent: with them, `select` is the tool.
 
 ## Setting up
 

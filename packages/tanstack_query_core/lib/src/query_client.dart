@@ -97,6 +97,48 @@ class QueryDefaults {
       meta: other.meta ?? meta,
     );
   }
+
+  // Field by field, functions by identity — like the `Defaulted*` options,
+  // and for the same reason: a `setQueryDefaults` with an equal value must
+  // not read as a change.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QueryDefaults &&
+          other.queryFn == queryFn &&
+          other.structuralSharing == structuralSharing &&
+          other.enabled == enabled &&
+          other.staleTime == staleTime &&
+          other.gcTime == gcTime &&
+          other.retry == retry &&
+          other.retryDelay == retryDelay &&
+          other.retryOnMount == retryOnMount &&
+          other.networkMode == networkMode &&
+          other.refetchOnMount == refetchOnMount &&
+          other.refetchOnWindowFocus == refetchOnWindowFocus &&
+          other.refetchOnReconnect == refetchOnReconnect &&
+          other.refetchInterval == refetchInterval &&
+          other.refetchIntervalInBackground == refetchIntervalInBackground &&
+          other.meta == meta;
+
+  @override
+  int get hashCode => Object.hash(
+        queryFn,
+        structuralSharing,
+        enabled,
+        staleTime,
+        gcTime,
+        retry,
+        retryDelay,
+        retryOnMount,
+        networkMode,
+        refetchOnMount,
+        refetchOnWindowFocus,
+        refetchOnReconnect,
+        refetchInterval,
+        refetchIntervalInBackground,
+        meta,
+      );
 }
 
 /// Type-agnostic mutation defaults.
@@ -137,6 +179,29 @@ class MutationDefaults {
       meta: other.meta ?? meta,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MutationDefaults &&
+          other.mutationFn == mutationFn &&
+          other.retry == retry &&
+          other.retryDelay == retryDelay &&
+          other.networkMode == networkMode &&
+          other.gcTime == gcTime &&
+          other.scope == scope &&
+          other.meta == meta;
+
+  @override
+  int get hashCode => Object.hash(
+        mutationFn,
+        retry,
+        retryDelay,
+        networkMode,
+        gcTime,
+        scope,
+        meta,
+      );
 }
 
 /// Client-wide defaults.
@@ -145,6 +210,16 @@ class DefaultOptions {
   const DefaultOptions({this.queries, this.mutations});
   final QueryDefaults? queries;
   final MutationDefaults? mutations;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DefaultOptions &&
+          other.queries == queries &&
+          other.mutations == mutations;
+
+  @override
+  int get hashCode => Object.hash(queries, mutations);
 }
 
 /// The cache's front door: everything imperative happens here.
@@ -256,20 +331,24 @@ class QueryClient {
   QueryState<TQueryData>? getQueryState<TQueryData>(QueryKey queryKey) =>
       queryCache.get<TQueryData>(queryKey)?.state;
 
+  /// The cached data of every matching query, `null` where a query holds
+  /// none yet.
+  ///
+  /// Throws [QueryDataTypeError] if a matching query holds another type, as
+  /// [getQueryData] does — a `null` there would read as "nothing cached" and
+  /// hide the bug (fourth review, 2026-09-09).
   List<(QueryKey, TQueryData?)> getQueriesData<TQueryData>(
     QueryFilters filters,
   ) =>
-      queryCache
-          .findAll(filters)
-          .map(
-            (query) => (
-              query.queryKey,
-              query is Query<TQueryData> && query.state.hasData
-                  ? query.state.data
-                  : null,
-            ),
-          )
-          .toList();
+      queryCache.findAll(filters).map((query) {
+        if (query.dataType != TQueryData) {
+          throw QueryDataTypeError(query.queryKey, TQueryData, query.dataType);
+        }
+        return (
+          query.queryKey,
+          query.state.hasData ? query.state.data as TQueryData : null,
+        );
+      }).toList();
 
   // ------------------------------------------------------------- writing
 
@@ -544,17 +623,12 @@ class QueryClient {
   /// Resolves [options] against the client and key defaults.
   DefaultedQueryOptions<TQueryData> defaultQueryOptions<TQueryData>(
     QueryOptions<TQueryData> options,
-  ) {
-    final queryKey = options.queryKey;
-    if (queryKey == null) {
-      throw ArgumentError('QueryOptions.queryKey is required to build a query');
-    }
-    return _defaultQueryOptionsWith<TQueryData>(
-      options,
-      queryKey,
-      _queryDefaultsFor(queryKey),
-    );
-  }
+  ) =>
+      _defaultQueryOptionsWith<TQueryData>(
+        options,
+        options.queryKey,
+        _queryDefaultsFor(options.queryKey),
+      );
 
   DefaultedQueryOptions<TQueryData> _defaultQueryOptionsWith<TQueryData>(
     QueryOptions<TQueryData> options,
@@ -672,9 +746,6 @@ class QueryClient {
     QueryObserverOptions<TQueryData, TData> options,
   ) {
     final queryKey = options.queryKey;
-    if (queryKey == null) {
-      throw ArgumentError('QueryOptions.queryKey is required to build a query');
-    }
     // Resolved once: the scan over the registered defaults, with its deep key
     // matching, runs on every build.
     final queryDefaults = _queryDefaultsFor(queryKey);

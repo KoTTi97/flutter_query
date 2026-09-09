@@ -201,11 +201,13 @@ MutationOptions<Sensor, MatterInput, SensorSnapshot>
 
 typedef CreateInput = ({String name, String? room, SensorType? type});
 
+/// No optimistic step, so no `onMutate` and nothing to roll back:
+/// `MutationOptions.simple` is the form for that.
 MutationOptions<Sensor, CreateInput, void> createSensorMutation(
   QueryClient client,
   SensorApi api,
 ) =>
-    MutationOptions<Sensor, CreateInput, void>(
+    MutationOptions.simple(
       mutationKey: QueryKey(const <Object?>['createSensor']),
       mutationFn: (input) => api.createSensor(
           name: input.name, room: input.room, type: input.type),

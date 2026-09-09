@@ -171,9 +171,11 @@ class MutationCache
     final paused =
         _mutations.where((mutation) => mutation.state.isPaused).toList();
     await Future.wait<void>(
-      // Errors belong to each mutation's state, not to whoever resumed it;
-      // `continueMutation` already swallows them.
-      paused.map((mutation) => mutation.continueMutation()),
+      // Errors belong to each mutation's state, not to whoever resumed it —
+      // upstream's `mutation.continue().catch(noop)`.
+      paused.map(
+        (mutation) => mutation.continueMutation().catchError((Object _) {}),
+      ),
     );
   }
 

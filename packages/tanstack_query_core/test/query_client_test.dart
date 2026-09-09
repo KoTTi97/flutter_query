@@ -2,8 +2,6 @@
 /// `50680b98c`. Omissions and adaptations: `test/PORTING_NOTES.md`.
 library;
 
-// The unit under test is internal plumbing the package does not export.
-import 'package:tanstack_query_core/src/query.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 import 'package:test/test.dart';
 
