@@ -24,6 +24,9 @@ abstract class Removable {
   /// because the longest request has to keep winning.
   GcTime? get gcTime => _gcTime;
 
+  /// Arms the collection timer for the current [gcTime], replacing any that is
+  /// already running. Called when the last observer leaves; a [GcTime.never]
+  /// arms nothing.
   @protected
   void scheduleGc() {
     clearGcTimeout();
@@ -33,6 +36,8 @@ abstract class Removable {
     }
   }
 
+  /// Folds [newGcTime] (or upstream's five-minute default when `null`) into
+  /// [gcTime], keeping whichever of the old and new values is longer.
   @protected
   void updateGcTime(GcTime? newGcTime) {
     // The longest requested duration wins, exactly as upstream does when
@@ -45,6 +50,8 @@ abstract class Removable {
             ));
   }
 
+  /// Cancels the collection timer without touching [gcTime]. Called whenever an
+  /// observer attaches or a fetch starts, so a used entry is never collected.
   @protected
   void clearGcTimeout() {
     _gcTimer?.cancel();

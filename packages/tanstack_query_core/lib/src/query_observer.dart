@@ -16,6 +16,8 @@ import 'retryer.dart';
 import 'structural_sharing.dart';
 import 'timers.dart';
 
+/// What a [QueryObserver.subscribe] listener receives: the new
+/// [QueryResult], each time it changes.
 typedef QueryObserverListener<TData> = void Function(QueryResult<TData> result);
 
 /// Watches one query and turns its state into a [QueryResult].
@@ -24,6 +26,9 @@ typedef QueryObserverListener<TData> = void Function(QueryResult<TData> result);
 /// ([TQueryData]) and what the consumer sees after `select` ([TData]).
 /// See https://github.com/KoTTi97/flutter_query/issues/7.
 class QueryObserver<TQueryData, TData> implements QueryObserverRef {
+  /// Creates an observer for [options], resolved against the client's
+  /// defaults, and builds — or joins — the query for its key. No fetch happens
+  /// until the first [subscribe]; [currentResult] is readable at once.
   QueryObserver(
     this._client,
     QueryObserverOptions<TQueryData, TData> options,
@@ -52,6 +57,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   final List<QueryObserverListener<TData>> _listeners =
       <QueryObserverListener<TData>>[];
 
+  /// Whether anyone is subscribed — upstream's "mounted". Fetch-on-mount, the
+  /// stale timer and the polling timer only run while this is true.
   bool get hasListeners => _listeners.isNotEmpty;
 
   /// Registers [listener] and returns the function that removes it again.
@@ -65,6 +72,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   }
 
   late DefaultedQueryObserverOptions<TQueryData, TData> _options;
+
+  /// The options in force, fully resolved against the client's defaults.
   DefaultedQueryObserverOptions<TQueryData, TData> get options => _options;
 
   // Null only between construction and the first `_updateQuery`.
@@ -98,6 +107,9 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// The most recently computed result.
   QueryResult<TData> get currentResult => _currentResult;
 
+  /// The cache entry this observer is watching right now. Changes when
+  /// [setOptions] is given a different key, or when the previous entry was
+  /// collected while nobody was listening.
   Query<TQueryData> get currentQuery => _currentQuery;
 
   void _onSubscribe() {
@@ -228,11 +240,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     return _currentResult;
   }
 
-  // Defaults to false, as upstream's unset `cancelRefetch` does: only an
-  // explicit `refetch()` cancels a fetch that is already running.
-  //
-  // [meta] rides along into `QueryState.fetchMeta`; infinite queries put the
-  // page direction there.
+  /// Defaults to false, as upstream's unset `cancelRefetch` does: only an
+  /// explicit `refetch()` cancels a fetch that is already running.
+  ///
+  /// [meta] rides along into `QueryState.fetchMeta`; infinite queries put the
+  /// page direction there.
   @protected
   Future<void> executeFetch({bool cancelRefetch = false, Object? meta}) async {
     _updateQuery();

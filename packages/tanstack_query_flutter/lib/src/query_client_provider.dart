@@ -35,6 +35,9 @@ import 'query_context.dart';
 ///    package is a dependency — see the README for the `connectivity_plus`
 ///    snippet.
 class QueryClientProvider extends StatefulWidget {
+  /// Provides [client] to [child] and wires it to Flutter for as long as this
+  /// widget is mounted — the three things the class doc lists. A different
+  /// [client] on a later build unmounts the old one and mounts the new.
   const QueryClientProvider({
     super.key,
     required this.client,
@@ -43,7 +46,14 @@ class QueryClientProvider extends StatefulWidget {
     this.observeAppLifecycle = true,
   });
 
+  /// The client every builder, controller and `context.query` below runs on
+  /// unless it names one of its own. Mounted while this widget is; swapping it
+  /// recreates every observer below, because each belonged to the old client.
   final QueryClient client;
+
+  /// The subtree that can reach [client] — through [of], [maybeOf] and
+  /// [read], and through the builders, mixin and `context.query` built on
+  /// them.
   final Widget child;
 
   /// Optional connectivity signal. `true` means "assume the network is

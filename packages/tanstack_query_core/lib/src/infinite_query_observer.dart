@@ -17,6 +17,8 @@ import 'query_result.dart';
 /// (https://github.com/KoTTi97/flutter_query/issues/16).
 class InfiniteQueryObserver<TPageData, TPageParam, TData>
     extends QueryObserver<InfiniteData<TPageData, TPageParam>, TData> {
+  /// Creates an observer for [options], whose paging half becomes the query's
+  /// fetch behaviour; otherwise exactly [QueryObserver.new].
   InfiniteQueryObserver(
     QueryClient client,
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
@@ -91,15 +93,22 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
     return meta is FetchMore ? meta.direction : null;
   }
 
+  /// Whether a [fetchNextPage] is in flight. Upstream's `isFetchingNextPage`.
   bool get isFetchingNextPage =>
       currentResult.isFetching && _fetchDirection == FetchDirection.forward;
 
+  /// Whether a [fetchPreviousPage] is in flight. Upstream's
+  /// `isFetchingPreviousPage`.
   bool get isFetchingPreviousPage =>
       currentResult.isFetching && _fetchDirection == FetchDirection.backward;
 
+  /// Whether the query's error came from a [fetchNextPage] rather than a
+  /// refetch or the initial load. Upstream's `isFetchNextPageError`.
   bool get isFetchNextPageError =>
       currentResult.isError && _fetchDirection == FetchDirection.forward;
 
+  /// Whether the query's error came from a [fetchPreviousPage]. Upstream's
+  /// `isFetchPreviousPageError`.
   bool get isFetchPreviousPageError =>
       currentResult.isError && _fetchDirection == FetchDirection.backward;
 

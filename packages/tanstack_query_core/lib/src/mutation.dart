@@ -13,7 +13,23 @@ import 'query_key.dart';
 import 'removable.dart';
 import 'retryer.dart';
 
-enum MutationStatus { idle, pending, success, error }
+/// Where a mutation is in its life. Upstream's `MutationStatus`: `idle`
+/// before the first run, `pending` while running (or paused), then `success`
+/// or `error` until the next run or a reset.
+enum MutationStatus {
+  /// Never run, or reset since. No data, no error, no variables.
+  idle,
+
+  /// Running: `onMutate` and the mutation function are in flight, or the run
+  /// is paused offline. `variables` is set.
+  pending,
+
+  /// The last run resolved; `data` holds what the mutation function returned.
+  success,
+
+  /// The last run failed for good; `error` holds why.
+  error,
+}
 
 /// What a [Mutation] needs from an observer.
 ///
@@ -21,36 +37,65 @@ enum MutationStatus { idle, pending, success, error }
 /// their observer through it; implementing it yourself is not supported —
 /// `MutationObserver` is the one implementation.
 abstract interface class MutationObserverRef {
+  /// The mutation's state changed by [action]. The observer recomputes its
+  /// result and, for a success or error, runs the per-call callbacks.
   void onMutationUpdate(MutationAction action);
 }
 
 /// What a [Mutation] needs from its cache.
 abstract interface class MutationCacheRef {
+  /// Told after every dispatch, with the [action] that produced [mutation]'s
+  /// new state; the cache turns it into a `MutationUpdated` event.
   void onMutationStateUpdated(
     Mutation<Object?, Object?, Object?> mutation,
     MutationAction action,
   );
+
+  /// Told when [mutation]'s collection timer fired with nothing observing it
+  /// and the run settled; the cache removes it.
   void onMutationRemovalRequested(Mutation<Object?, Object?, Object?> mutation);
+
+  /// Told when [observer] attached to [mutation]; the cache emits
+  /// `MutationObserverAdded`.
   void onMutationObserverAdded(
     Mutation<Object?, Object?, Object?> mutation,
     MutationObserverRef observer,
   );
+
+  /// Told when [observer] detached from [mutation]; the cache emits
+  /// `MutationObserverRemoved`.
   void onMutationObserverRemoved(
     Mutation<Object?, Object?, Object?> mutation,
     MutationObserverRef observer,
   );
+
+  /// Whether [mutation] may start or resume right now — `false` while another
+  /// mutation in the same scope is pending. The retryer asks before every
+  /// attempt.
   bool canRunMutation(Mutation<Object?, Object?, Object?> mutation);
+
+  /// Told when [mutation]'s run has settled either way, so the cache can
+  /// release the next paused mutation in the same scope.
   void onMutationSettled(Mutation<Object?, Object?, Object?> mutation);
+
+  /// The cache-wide `onMutate` hook: runs before the mutation's own
+  /// `onMutate`, with the [variables] the run was given.
   FutureOr<void> onMutationStarting(
     Mutation<Object?, Object?, Object?> mutation,
     Object? variables,
   );
+
+  /// The cache-wide `onSuccess` hook: runs before the mutation's own
+  /// `onSuccess`, with the [data], the [variables] and the [onMutateResult].
   FutureOr<void> onMutationSuccess(
     Mutation<Object?, Object?, Object?> mutation,
     Object? data,
     Object? variables,
     Object? onMutateResult,
   );
+
+  /// The cache-wide `onError` hook: runs before the mutation's own `onError`,
+  /// with the [error], the [variables] and the [onMutateResult].
   FutureOr<void> onMutationError(
     Mutation<Object?, Object?, Object?> mutation,
     Object error,
@@ -58,6 +103,11 @@ abstract interface class MutationCacheRef {
     Object? variables,
     Object? onMutateResult,
   );
+
+  /// The cache-wide `onSettled` hook: runs before the mutation's own
+  /// `onSettled`, with whichever of [data] and [error] applies. Distinct from
+  /// [onMutationSettled], which is the scope bookkeeping rather than a user
+  /// callback.
   FutureOr<void> onMutationSettledCallback(
     Mutation<Object?, Object?, Object?> mutation,
     Object? data,
@@ -78,46 +128,89 @@ sealed class MutationAction {
   const MutationAction();
 }
 
+/// A run started. Replaces the whole state: status `pending`, the run's
+/// [variables], a fresh `submittedAt`, and [isPaused] when the run cannot
+/// start yet. Dispatched a second time once `onMutate` has produced a
+/// result. Upstream's `pending` action.
 final class MutationPendingAction extends MutationAction {
+  /// Creates the action for a run of [variables].
   const MutationPendingAction({
     required this.variables,
     required this.onMutateResult,
     required this.isPaused,
   });
+
+  /// What the mutation function is being called with.
   final Object? variables;
+
+  /// What `onMutate` returned — `null` on the first dispatch, before it ran.
   final Object? onMutateResult;
+
+  /// Whether the run is parked from the start: offline, backgrounded, or
+  /// queued behind its scope.
   final bool isPaused;
 }
 
+/// The mutation function resolved and every success callback has run.
+/// Status becomes `success` and the error and failure count are cleared.
+/// Upstream's `success` action.
 final class MutationSuccessAction extends MutationAction {
+  /// Creates the action carrying [data].
   const MutationSuccessAction(this.data);
+
+  /// What the mutation function returned.
   final Object? data;
 }
 
+/// The run failed for good and every error callback has run. Status becomes
+/// `error`, the data is cleared, and the failure count is bumped one last
+/// time. Upstream's `error` action.
 final class MutationErrorAction extends MutationAction {
+  /// Creates the action for the error that settled the run.
   const MutationErrorAction(this.error, this.stackTrace);
+
+  /// What the run finally failed with.
   final Object error;
+
+  /// Where it was thrown from.
   final StackTrace stackTrace;
 }
 
+/// One attempt failed and will be retried. Records the count and the reason;
+/// status stays `pending`. Upstream's `failed` action.
 final class MutationFailedAction extends MutationAction {
+  /// Creates the action for the attempt that just failed.
   const MutationFailedAction(this.failureCount, this.error, this.stackTrace);
+
+  /// How many attempts have failed so far in this run, including this one.
   final int failureCount;
+
+  /// What the attempt threw.
   final Object error;
+
+  /// Where it was thrown from.
   final StackTrace stackTrace;
 }
 
+/// The retryer suspended the run: offline, backgrounded, or blocked by its
+/// scope. `isPaused` becomes true. Upstream's `pause` action.
 final class MutationPauseAction extends MutationAction {
+  /// Creates the action.
   const MutationPauseAction();
 }
 
+/// A paused run resumed — or a restored one was re-run. `isPaused` becomes
+/// false. Upstream's `continue` action.
 final class MutationContinueAction extends MutationAction {
+  /// Creates the action.
   const MutationContinueAction();
 }
 
 /// A mutation's state at one point in time.
 @immutable
 final class MutationState<TData, TVariables, TOnMutateResult> {
+  /// Creates a state; with no arguments, the idle state a fresh mutation
+  /// starts in.
   const MutationState({
     this.status = MutationStatus.idle,
     this.hasData = false,
@@ -133,23 +226,50 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
     this.submittedAt,
   });
 
+  /// Where the mutation is in its life.
   final MutationStatus status;
+
+  /// Whether [data] is authoritative. Travels with [data] so that a mutation
+  /// whose function legitimately returned `null` still reads as having data.
   final bool hasData;
+
+  /// What the last successful run returned; meaningful only while [hasData].
   final TData? data;
+
+  /// Why the last run failed; `null` unless [status] is `error`.
   final Object? error;
+
+  /// Where [error] was thrown from.
   final StackTrace? errorStackTrace;
 
   /// The variables of the run in flight or last finished — what optimistic UI
   /// reads while the mutation is pending.
   final TVariables? variables;
+
+  /// Whether [variables] have been set by a run — a `null` variables value is
+  /// a real value once this is true.
   final bool hasVariables;
+
+  /// What `onMutate` returned for the run in flight or last finished; handed
+  /// to the success, error and settled callbacks.
   final TOnMutateResult? onMutateResult;
 
+  /// How many attempts of the current run have failed. Reset on success;
+  /// bumped once more when the run settles in error.
   final int failureCount;
+
+  /// What the last failed attempt threw, kept while retries continue.
   final Object? failureReason;
+
+  /// Whether the run is parked, waiting for the network, the foreground, or
+  /// its scope.
   final bool isPaused;
+
+  /// When the current (or last) run was started.
   final DateTime? submittedAt;
 
+  /// A copy with the given fields replaced. `null` leaves a field as it was;
+  /// the `clear*` flags are how a field is set back to nothing.
   MutationState<TData, TVariables, TOnMutateResult> copyWith({
     MutationStatus? status,
     bool? hasData,
@@ -189,6 +309,10 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
 
 /// One mutation: its options, its state, and one run of its mutation function.
 class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
+  /// Creates a mutation for [options] with [mutationId], idle unless a
+  /// restored [state] is given, and arms its collection timer straight away.
+  /// Constructed by `MutationCache.build`; user code runs mutations through an
+  /// observer.
   Mutation({
     required this.client,
     required MutationCacheRef cache,
@@ -203,15 +327,27 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     scheduleGc();
   }
 
+  /// The client this mutation belongs to: the source of its managers and its
+  /// notify batching.
   final QueryClient client;
   final MutationCacheRef _cache;
+
+  /// A number unique within the cache, in submission order. Upstream's
+  /// `mutationId`; devtools use it to tell mutations apart.
   final int mutationId;
 
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult> _options;
+
+  /// The options in force, fully resolved. The mutation function and the retry
+  /// settings are read from here per attempt, so an update during a run takes
+  /// effect on the next one.
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult> get options =>
       _options;
 
   MutationState<TData, TVariables, TOnMutateResult> _state;
+
+  /// The current state. Replaced on every dispatch; observers compute their
+  /// results from it.
   MutationState<TData, TVariables, TOnMutateResult> get state => _state;
 
   final List<MutationObserverRef> _observers = <MutationObserverRef>[];
@@ -223,8 +359,13 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   Retryer<TData>? _retryer;
 
+  /// The options' `meta`, as upstream exposes it on the mutation for cache
+  /// listeners and devtools.
   Object? get meta => _options.meta;
 
+  /// Replaces the options and folds their `gcTime` in. Called by an observer
+  /// whose options changed while this mutation is still pending; not for user
+  /// code.
   @internal
   void setOptions(
     DefaultedMutationOptions<TData, TVariables, TOnMutateResult> options,
@@ -233,6 +374,9 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     updateGcTime(options.gcTime);
   }
 
+  /// Attaches [observer], cancelling the pending collection and emitting
+  /// `MutationObserverAdded`. Attaching twice is a no-op. Called by the
+  /// observer; not for user code.
   @internal
   void addObserver(MutationObserverRef observer) {
     if (!_observers.contains(observer)) {
@@ -243,6 +387,10 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     }
   }
 
+  /// Detaches [observer], emits `MutationObserverRemoved` and arms the
+  /// collection timer. The run is never cut short — a pending mutation keeps
+  /// going, callbacks included, and is only collected once it settles. Called
+  /// by the observer; not for user code.
   @internal
   void removeObserver(MutationObserverRef observer) {
     if (!_observers.remove(observer)) {
@@ -567,8 +715,11 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
 /// Thrown when a mutation runs without a `mutationFn`.
 final class MissingMutationFunctionError implements Exception {
+  /// Creates the error for [mutationKey], which may be `null` for an unkeyed
+  /// mutation.
   const MissingMutationFunctionError(this.mutationKey);
 
+  /// The key of the mutation that had no function to run, if it had one.
   final QueryKey? mutationKey;
 
   @override

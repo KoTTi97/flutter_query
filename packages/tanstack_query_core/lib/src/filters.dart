@@ -11,11 +11,35 @@ import 'query_state.dart';
 
 /// Which queries a filtered operation applies to. `null` on a filter means
 /// "all of them", so a default-constructed [QueryFilters] matches everything.
-enum QueryTypeFilter { all, active, inactive }
+enum QueryTypeFilter {
+  /// Every query, observed or not.
+  all,
+
+  /// Queries with at least one enabled observer — upstream's
+  /// `type: 'active'`.
+  active,
+
+  /// Queries with no enabled observer — upstream's `type: 'inactive'`.
+  inactive,
+}
 
 /// Which queries `invalidateQueries` refetches once it has marked them stale.
 /// [RefetchType.none] marks without refetching anything.
-enum RefetchType { active, inactive, all, none }
+enum RefetchType {
+  /// Refetch the invalidated queries that have an enabled observer. The
+  /// default, unless the filters name a `type` of their own.
+  active,
+
+  /// Refetch only the invalidated queries nobody is observing.
+  inactive,
+
+  /// Refetch every invalidated query.
+  all,
+
+  /// Mark stale and refetch nothing; observers pick it up on their next
+  /// trigger.
+  none,
+}
 
 /// Selects a set of queries.
 ///
@@ -24,6 +48,7 @@ enum RefetchType { active, inactive, all, none }
 /// uses (https://github.com/KoTTi97/flutter_query/issues/17).
 @immutable
 class QueryFilters {
+  /// Every argument is optional; leave one unset to not filter on it.
   const QueryFilters({
     this.queryKey,
     this.exact,
@@ -42,9 +67,19 @@ class QueryFilters {
   /// its filters default to a prefix, and a nullable field is how one value
   /// carries both defaults.
   final bool? exact;
+
+  /// Restricts to observed queries, unobserved ones, or both. Unset means
+  /// both.
   final QueryTypeFilter? type;
+
+  /// Matches queries whose `isStale()` is this value. Unset ignores
+  /// staleness.
   final bool? stale;
+
+  /// Matches queries in this fetch status: fetching, paused or idle.
   final FetchStatus? fetchStatus;
+
+  /// Matches queries in this status: pending, success or error.
   final QueryStatus? status;
 
   /// Receives the erased query: a predicate spanning mixed data types cannot
@@ -108,6 +143,7 @@ class QueryFilters {
 /// Selects a set of mutations.
 @immutable
 class MutationFilters {
+  /// Every argument is optional; leave one unset to not filter on it.
   const MutationFilters({
     this.mutationKey,
     this.exact,
@@ -115,13 +151,22 @@ class MutationFilters {
     this.predicate,
   });
 
+  /// Matched as a prefix unless [exact] is set. A mutation without a key
+  /// never matches a key filter.
   final QueryKey? mutationKey;
 
   /// See [QueryFilters.exact].
   final bool? exact;
+
+  /// Matches mutations in this status: idle, pending, success or error.
   final MutationStatus? status;
+
+  /// Receives the erased mutation, for the same reason as
+  /// [QueryFilters.predicate].
   final bool Function(Mutation<Object?, Object?, Object?> mutation)? predicate;
 
+  /// Whether [mutation] matches. [exactByDefault] is what an unset [exact]
+  /// means to the caller: prefix for the bulk operations, exact for `find`.
   bool matches(
     Mutation<Object?, Object?, Object?> mutation, {
     bool exactByDefault = false,

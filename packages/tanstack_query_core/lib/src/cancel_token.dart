@@ -12,6 +12,8 @@ import 'dart:async';
 /// An [Exception], not an [Error]: cancelling is an expected outcome, not a
 /// programming mistake.
 final class CancelledError implements Exception {
+  /// Creates the error a cancelled fetch resolves with. [revert] and [silent]
+  /// are the two flags upstream's `cancel` options carry; both default to off.
   const CancelledError({this.revert = false, this.silent = false});
 
   /// Whether the query's state is restored to what it was before the fetch.
@@ -44,6 +46,8 @@ class QueryCancelToken {
   final Completer<void> _completer = Completer<void>();
   final List<void Function()> _callbacks = <void Function()>[];
 
+  /// Whether [cancel] has been called. Once `true` it stays `true`: a token is
+  /// never reused across fetches.
   bool get isCancelled => _completer.isCompleted;
 
   /// Completes when the fetch is cancelled, and never otherwise.

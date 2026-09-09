@@ -17,38 +17,83 @@ import 'subscribable.dart';
 @immutable
 sealed class QueryCacheEvent {
   const QueryCacheEvent(this.query);
+
+  /// The query the event is about. Typed as `Query<Object?>`, since a cache
+  /// listener sees every key; read `dataType` or `get<T>` it from the cache to
+  /// recover the concrete type.
   final Query<Object?> query;
 }
 
+/// A query was created and put into the cache, by [QueryCache.build] or
+/// [QueryCache.add]. Upstream's `added` event.
 final class QueryAdded extends QueryCacheEvent {
+  /// Creates the event for [query].
   const QueryAdded(super.query);
 }
 
+/// A query left the cache: it was garbage-collected, or removed through
+/// `QueryClient.removeQueries`, [QueryCache.remove] or [QueryCache.clear].
+/// Upstream's `removed` event.
 final class QueryRemoved extends QueryCacheEvent {
+  /// Creates the event for [query].
   const QueryRemoved(super.query);
 }
 
+/// A query's state changed. Emitted for every dispatched [QueryAction] —
+/// fetch, success, error, invalidate, pause, and the rest — so this is the
+/// event a devtools panel or a persister keys its work off. Upstream's
+/// `updated` event.
 final class QueryUpdated extends QueryCacheEvent {
+  /// Creates the event for [query], carrying the [action] that changed it.
   const QueryUpdated(super.query, this.action);
+
+  /// The transition that produced the query's new state. Sealed, so a listener
+  /// can `switch` over it exhaustively.
   final QueryAction action;
 }
 
+/// An observer subscribed to the query. Emitted the moment the observer
+/// attaches, which is also what cancels the query's pending collection.
+/// Upstream's `observerAdded` event.
 final class QueryObserverAdded extends QueryCacheEvent {
+  /// Creates the event for [query] and the [observer] that attached.
   const QueryObserverAdded(super.query, this.observer);
+
+  /// The observer that attached. Read-only from outside: it is an identity to
+  /// hold and compare, not something to drive.
   final QueryObserverRef observer;
 }
 
+/// An observer unsubscribed from the query. Emitted after the observer has
+/// been detached — and, when it was the last one, after the retryer has been
+/// told to stop retrying and the collection timer has been armed. Upstream's
+/// `observerRemoved` event.
 final class QueryObserverRemoved extends QueryCacheEvent {
+  /// Creates the event for [query] and the [observer] that detached.
   const QueryObserverRemoved(super.query, this.observer);
+
+  /// The observer that detached. Read-only from outside.
   final QueryObserverRef observer;
 }
 
+/// An observer's options were replaced while it stayed attached to the same
+/// query — a rebuild that changed `staleTime`, `enabled` or a callback, say.
+/// Not emitted when the new options move the observer to a different key;
+/// that is a removal and an addition. Upstream's `observerOptionsUpdated`
+/// event.
 final class QueryObserverOptionsUpdated extends QueryCacheEvent {
+  /// Creates the event for [query] and the [observer] whose options changed.
   const QueryObserverOptionsUpdated(super.query, this.observer);
+
+  /// The observer whose options changed. Read-only from outside.
   final QueryObserverRef observer;
 }
 
+/// An observer of the query delivered a new result to its listeners. Emitted
+/// once per delivery, after the listeners have run, so a devtools panel can
+/// mirror what the UI just saw. Upstream's `observerResultsUpdated` event.
 final class QueryObserverResultsUpdated extends QueryCacheEvent {
+  /// Creates the event for [query].
   const QueryObserverResultsUpdated(super.query);
 }
 
@@ -62,10 +107,18 @@ final class QueryObserverResultsUpdated extends QueryCacheEvent {
 /// when the default that produced the value has no key to name: a sharing
 /// hook sees only the data, and a mutation function only its variables.
 final class QueryDataTypeError implements Exception {
+  /// Creates the error for a read of [queryKey] that [expected] one type and
+  /// found [actual].
   const QueryDataTypeError(this.queryKey, this.expected, this.actual);
 
+  /// The key that was read, or `null` when the mismatch came from a keyless
+  /// default such as a `structuralSharing` hook.
   final QueryKey? queryKey;
+
+  /// The data type the caller asked for.
   final Type expected;
+
+  /// The data type the query (or the default's value) actually holds.
   final Type actual;
 
   @override
@@ -79,12 +132,22 @@ final class QueryDataTypeError implements Exception {
 /// Every query, keyed by [QueryKey].
 class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     implements QueryCacheRef {
+  /// Creates an empty cache. The three hooks are optional and cache-wide; a
+  /// [QueryClient] constructs one of these when none is passed to it.
   QueryCache({this.onSuccess, this.onError, this.onSettled});
 
   /// Cache-wide hooks, upstream's `QueryCacheConfig`.
   final void Function(Object? data, Query<Object?> query)? onSuccess;
+
+  /// Runs after any query's fetch fails for good — once retries are
+  /// exhausted, not per attempt — with the error and the query. Upstream's
+  /// `QueryCacheConfig.onError`.
   final void Function(
       Object error, StackTrace stackTrace, Query<Object?> query)? onError;
+
+  /// Runs after any query's fetch settles, success or failure, with whichever
+  /// of data and error applies. Runs after [onSuccess] or [onError].
+  /// Upstream's `QueryCacheConfig.onSettled`.
   final void Function(
     Object? data,
     Object? error,
@@ -127,6 +190,10 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     return query;
   }
 
+  /// Puts [query] into the cache under its key and emits [QueryAdded]. A key
+  /// already present keeps the query it has; nothing is replaced. [build] is
+  /// the usual way in — this is upstream's `add`, for a query constructed by
+  /// hand.
   void add(Query<Object?> query) {
     if (!_queries.containsKey(query.queryKey)) {
       _queries[query.queryKey] = query;
@@ -134,6 +201,10 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     }
   }
 
+  /// Takes [query] out of the cache, cancelling its fetch silently and stopping
+  /// its collection timer, then emits [QueryRemoved]. The key's slot is only
+  /// cleared when it still holds this very query — a stale reference cannot
+  /// evict its successor. Upstream's `remove`.
   void remove(Query<Object?> query) {
     final existing = _queries[query.queryKey];
     if (existing != null) {
@@ -145,6 +216,8 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     }
   }
 
+  /// Removes every query, one [QueryRemoved] each. `QueryClient.clear` calls
+  /// this together with the mutation cache's.
   void clear() {
     for (final query in queries) {
       remove(query);
@@ -169,8 +242,13 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     throw QueryDataTypeError(queryKey, TQueryData, query.dataType);
   }
 
+  /// Every query in the cache, as a copy: safe to iterate while removing.
+  /// Upstream's `getAll`.
   List<Query<Object?>> get queries => List<Query<Object?>>.of(_queries.values);
 
+  /// Every query matching [filters], in insertion order — all of them when the
+  /// filters are empty. Partial key matching by default, as upstream's
+  /// `findAll`.
   List<Query<Object?>> findAll([
     QueryFilters filters = const QueryFilters(),
   ]) =>
@@ -202,14 +280,20 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     }
   }
 
+  /// Emits [QueryObserverAdded]. Called by [Query.addObserver]; not for user
+  /// code.
   @internal
   void notifyObserverAdded(Query<Object?> query, QueryObserverRef observer) =>
       notify(QueryObserverAdded(query, observer));
 
+  /// Emits [QueryObserverRemoved]. Called by [Query.removeObserver]; not for
+  /// user code.
   @internal
   void notifyObserverRemoved(Query<Object?> query, QueryObserverRef observer) =>
       notify(QueryObserverRemoved(query, observer));
 
+  /// Emits [QueryObserverOptionsUpdated]. Called by the observer's `setOptions`
+  /// when it stays on the same query; not for user code.
   @internal
   void notifyObserverOptionsUpdated(
     Query<Object?> query,
@@ -217,6 +301,8 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   ) =>
       notify(QueryObserverOptionsUpdated(query, observer));
 
+  /// Emits [QueryObserverResultsUpdated]. Called by the observer after it has
+  /// notified its own listeners; not for user code.
   @internal
   void notifyObserverResultsUpdated(Query<Object?> query) =>
       notify(QueryObserverResultsUpdated(query));

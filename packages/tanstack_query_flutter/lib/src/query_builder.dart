@@ -35,6 +35,9 @@ typedef BuildWhen<T> = bool Function(T previous, T current);
 /// upstream re-applies them on every render; the observer decides what, if
 /// anything, actually changed. Every builder here takes its options that way.
 class QueryBuilder<TData> extends StatefulWidget {
+  /// Observes [options]'s query on [client] — or, when none is given, the
+  /// nearest [QueryClientProvider]'s — and builds its subtree from the result
+  /// through [builder].
   const QueryBuilder({
     super.key,
     required this.options,
@@ -45,6 +48,11 @@ class QueryBuilder<TData> extends StatefulWidget {
 
   /// The query. Re-applied every build; the observer decides what changed.
   final QueryObserverOptions<TData, TData> options;
+
+  /// Builds this widget's subtree from the query's current result — a sealed
+  /// [QueryResult], so a `switch` over `QueryPending`, `QuerySuccess` and
+  /// `QueryError` is exhaustive. Called on the first build and then whenever
+  /// the result changes and [buildWhen] lets it through.
   final Widget Function(BuildContext context, QueryResult<TData> result)
       builder;
 
@@ -58,7 +66,10 @@ class QueryBuilder<TData> extends StatefulWidget {
   /// ```
   final BuildWhen<QueryResult<TData>>? buildWhen;
 
-  /// Defaults to the nearest [QueryClientProvider].
+  /// The client to observe on, when it is not the nearest
+  /// [QueryClientProvider]'s. A different client on a later build recreates
+  /// the controller, because everything it observed belonged to the old one;
+  /// changed [options] on the same client are applied in place.
   final QueryClient? client;
 
   @override
@@ -119,6 +130,8 @@ bool _shouldRebuild<T>(
 /// [QueryBuilder] for a query with a `select`, where what the cache holds and
 /// what the widget sees are different types.
 class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget {
+  /// Observes [options]'s query, `select` included, on [client] or else the
+  /// nearest [QueryClientProvider]'s, and hands [builder] the selected result.
   const QuerySelectBuilder({
     super.key,
     required this.options,
@@ -129,11 +142,16 @@ class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget {
 
   /// See [QueryBuilder.options].
   final QueryObserverOptions<TQueryData, TData> options;
+
+  /// See [QueryBuilder.builder]. Sees the *selected* result — `TData`, not the
+  /// `TQueryData` the cache holds.
   final Widget Function(BuildContext context, QueryResult<TData> result)
       builder;
 
   /// See [QueryBuilder.buildWhen].
   final BuildWhen<QueryResult<TData>>? buildWhen;
+
+  /// See [QueryBuilder.client].
   final QueryClient? client;
 
   @override
@@ -190,6 +208,9 @@ class _QuerySelectBuilderState<TQueryData, TData>
 /// ```
 class InfiniteQueryBuilder<TPageData, TPageParam, TData>
     extends StatefulWidget {
+  /// Observes [options]'s infinite query on [client] or else the nearest
+  /// [QueryClientProvider]'s, and hands [builder] the controller, which is
+  /// where paging lives.
   const InfiniteQueryBuilder({
     super.key,
     required this.options,
@@ -200,6 +221,13 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData>
 
   /// See [QueryBuilder.options].
   final InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options;
+
+  /// Builds this widget's subtree from the infinite query, given its
+  /// controller rather than a bare result: the pages are in `query.value`,
+  /// and [InfiniteQueryController.hasNextPage],
+  /// [InfiniteQueryController.fetchNextPage] and the other paging members are
+  /// on the controller. Called on the first build and then whenever the
+  /// result changes and [buildWhen] lets it through.
   final Widget Function(
     BuildContext context,
     InfiniteQueryController<TPageData, TPageParam, TData> query,
@@ -207,6 +235,8 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData>
 
   /// See [QueryBuilder.buildWhen]. Compares the controller's results.
   final BuildWhen<QueryResult<TData>>? buildWhen;
+
+  /// See [QueryBuilder.client].
   final QueryClient? client;
 
   @override
@@ -271,6 +301,9 @@ class _InfiniteQueryBuilderState<TPageData, TPageParam, TData>
 /// ```
 class MutationBuilder<TData, TVariables, TOnMutateResult>
     extends StatefulWidget {
+  /// Observes a mutation with [options] on [client] or else the nearest
+  /// [QueryClientProvider]'s, and hands [builder] the controller that starts
+  /// it.
   const MutationBuilder({
     super.key,
     required this.options,
@@ -281,6 +314,12 @@ class MutationBuilder<TData, TVariables, TOnMutateResult>
 
   /// See [QueryBuilder.options].
   final MutationOptions<TData, TVariables, TOnMutateResult> options;
+
+  /// Builds this widget's subtree from the mutation, given its controller:
+  /// the current [MutationResult] is `mutation.value`, and
+  /// [MutationController.mutate] or [MutationController.mutateAsync] starts a
+  /// run. Called on the first build and then whenever the result changes and
+  /// [buildWhen] lets it through.
   final Widget Function(
     BuildContext context,
     MutationController<TData, TVariables, TOnMutateResult> mutation,
@@ -288,6 +327,8 @@ class MutationBuilder<TData, TVariables, TOnMutateResult>
 
   /// See [QueryBuilder.buildWhen]. Compares the mutation's results.
   final BuildWhen<MutationResult<TData, TVariables>>? buildWhen;
+
+  /// See [QueryBuilder.client].
   final QueryClient? client;
 
   @override

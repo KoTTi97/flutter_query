@@ -32,6 +32,9 @@ import 'query_state.dart';
 /// site.
 @immutable
 class QueryDefaults {
+  /// Creates a set of defaults; every field is optional, and an unset one
+  /// defers to the next layer down (the client-wide defaults, then upstream's
+  /// built-in values).
   const QueryDefaults({
     this.queryFn,
     this.structuralSharing,
@@ -62,20 +65,56 @@ class QueryDefaults {
   /// Erased for the same reason as [queryFn].
   final Object? Function(Object? previous, Object? next)? structuralSharing;
 
+  /// Default for `enabled`: whether queries under this default fetch on their
+  /// own.
   final Enabled? enabled;
+
+  /// Default for `staleTime`: how long fetched data counts as fresh.
   final StaleTime? staleTime;
+
+  /// Default for `gcTime`: how long an unobserved query stays in the cache.
   final GcTime? gcTime;
+
+  /// Default for `retry`: whether and how often a failed fetch is retried.
   final RetryPolicy? retry;
+
+  /// Default for `retryDelay`: the backoff between retries.
   final RetryDelay? retryDelay;
+
+  /// Default for `retryOnMount`: whether a query in error state is retried
+  /// when a new observer subscribes.
   final bool? retryOnMount;
+
+  /// Default for `networkMode`: when a fetch may run relative to the online
+  /// state.
   final NetworkMode? networkMode;
+
+  /// Default for `refetchOnMount`: whether a subscribing observer refetches
+  /// data it already has.
   final RefetchOn? refetchOnMount;
+
+  /// Default for `refetchOnWindowFocus`: whether the app returning to the
+  /// foreground refetches.
   final RefetchOn? refetchOnWindowFocus;
+
+  /// Default for `refetchOnReconnect`: whether the device coming back online
+  /// refetches.
   final RefetchOn? refetchOnReconnect;
+
+  /// Default for `refetchInterval`: how often to poll, if at all.
   final RefetchInterval? refetchInterval;
+
+  /// Default for `refetchIntervalInBackground`: whether polling continues while
+  /// the app is not in the foreground.
   final bool? refetchIntervalInBackground;
+
+  /// Default for `meta`: opaque data handed to the query function's context and
+  /// readable off the query.
   final Object? meta;
 
+  /// These defaults with [other]'s laid over them, field by field: a field
+  /// [other] sets wins, one it leaves `null` falls through to this. `null`
+  /// [other] returns this unchanged.
   QueryDefaults mergedWith(QueryDefaults? other) {
     if (other == null) return this;
     return QueryDefaults(
@@ -144,6 +183,8 @@ class QueryDefaults {
 /// Type-agnostic mutation defaults.
 @immutable
 class MutationDefaults {
+  /// Creates a set of defaults; every field is optional, and an unset one
+  /// defers to the next layer down.
   const MutationDefaults({
     this.mutationFn,
     this.retry,
@@ -160,13 +201,30 @@ class MutationDefaults {
   /// every variable and result type under a key prefix.
   final MutationFn<Object?, Object?>? mutationFn;
 
+  /// Default for `retry`: whether and how often a failed mutation is retried.
+  /// Upstream's built-in is no retries at all.
   final RetryPolicy? retry;
+
+  /// Default for `retryDelay`: the backoff between retries.
   final RetryDelay? retryDelay;
+
+  /// Default for `networkMode`: when a mutation may run relative to the online
+  /// state.
   final NetworkMode? networkMode;
+
+  /// Default for `gcTime`: how long a settled, unobserved mutation stays in
+  /// the cache.
   final GcTime? gcTime;
+
+  /// Default for `scope`: mutations sharing a scope run one at a time, in
+  /// submission order.
   final MutationScope? scope;
+
+  /// Default for `meta`: opaque data readable off the mutation.
   final Object? meta;
 
+  /// These defaults with [other]'s laid over them, field by field; a `null`
+  /// [other] returns this unchanged.
   MutationDefaults mergedWith(MutationDefaults? other) {
     if (other == null) return this;
     return MutationDefaults(
@@ -207,8 +265,15 @@ class MutationDefaults {
 /// Client-wide defaults.
 @immutable
 class DefaultOptions {
+  /// Creates the client-wide defaults; either half may be left out.
   const DefaultOptions({this.queries, this.mutations});
+
+  /// Applied to every query the client resolves, beneath any key-specific
+  /// [QueryClient.setQueryDefaults].
   final QueryDefaults? queries;
+
+  /// Applied to every mutation the client resolves, beneath any key-specific
+  /// [QueryClient.setMutationDefaults].
   final MutationDefaults? mutations;
 
   @override
@@ -224,6 +289,11 @@ class DefaultOptions {
 
 /// The cache's front door: everything imperative happens here.
 class QueryClient {
+  /// Creates a client. Every collaborator is optional: a fresh [QueryCache],
+  /// [MutationCache], [AppFocusManager], [OnlineManager] and [NotifyManager]
+  /// are made when none is passed, and [defaultOptions] starts empty. Call
+  /// [mount] to have it react to focus and connectivity, and [clear] when it
+  /// is done — a client owns `gcTime` timers that outlive any widget tree.
   QueryClient({
     QueryCache? queryCache,
     MutationCache? mutationCache,
@@ -242,13 +312,25 @@ class QueryClient {
         notifyManager = notifyManager ?? NotifyManager(),
         _defaultOptions = defaultOptions ?? const DefaultOptions();
 
+  /// Every query, keyed by [QueryKey]. Subscribe to it for cache events; most
+  /// reads and writes go through the client's own methods instead.
   final QueryCache queryCache;
+
+  /// Every mutation, in submission order. Subscribe to it for cache events.
   final MutationCache mutationCache;
 
   /// Owned by the client rather than global, so tests are hermetic
   /// (https://github.com/KoTTi97/flutter_query/issues/19).
   final AppFocusManager focusManager;
+
+  /// Whether the device is believed to be online. The Flutter binding drives
+  /// its `setOnline` from an optional connectivity stream; a [mount]ed client
+  /// listens to it and resumes paused mutations and queries on reconnect.
   final OnlineManager onlineManager;
+
+  /// Batches this client's listener notifications. The Flutter binding
+  /// installs a build-phase-aware scheduler on it; pass [NotifyManager.shared]
+  /// to batch across clients.
   final NotifyManager notifyManager;
 
   DefaultOptions _defaultOptions;
@@ -309,11 +391,16 @@ class QueryClient {
 
   // ------------------------------------------------------------- reading
 
+  /// How many queries matching [filters] are fetching right now — actually
+  /// fetching, not paused. Every query when the filters are empty. Upstream's
+  /// `isFetching`.
   int isFetching([QueryFilters filters = const QueryFilters()]) => queryCache
       .findAll(filters)
       .where((query) => query.state.fetchStatus == FetchStatus.fetching)
       .length;
 
+  /// How many mutations matching [filters] are pending right now. Every
+  /// mutation when the filters are empty. Upstream's `isMutating`.
   int isMutating([MutationFilters filters = const MutationFilters()]) =>
       mutationCache
           .findAll(filters)
@@ -328,6 +415,10 @@ class QueryClient {
     return query != null && query.state.hasData ? query.state.data : null;
   }
 
+  /// The full state of the query under [queryKey] — status, fetch status,
+  /// timestamps and counters, not just the data — or `null` if there is none.
+  /// Throws [QueryDataTypeError] if the entry holds a different type.
+  /// Upstream's `getQueryState`.
   QueryState<TQueryData>? getQueryState<TQueryData>(QueryKey queryKey) =>
       queryCache.get<TQueryData>(queryKey)?.state;
 
@@ -387,6 +478,11 @@ class QueryClient {
     return setQueryData<TQueryData>(queryKey, next, updatedAt: updatedAt);
   }
 
+  /// Runs [updater] over every query matching [filters] and returns each key
+  /// with what it now holds. One batch, so listeners hear a single round; a
+  /// type mismatch anywhere under the filters throws before anything is
+  /// written. The filtered twin of [updateQueryData], upstream's
+  /// `setQueriesData`.
   List<(QueryKey, TQueryData?)> updateQueriesData<TQueryData>(
     QueryFilters filters,
     TQueryData? Function(TQueryData? previous) updater, {
@@ -437,6 +533,10 @@ class QueryClient {
     );
   }
 
+  /// Removes every query matching [filters] from the cache — all of them when
+  /// the filters are empty — cancelling their fetches silently. Observers
+  /// still attached to a removed query build a fresh entry on their next
+  /// interaction. Upstream's `removeQueries`.
   void removeQueries([QueryFilters filters = const QueryFilters()]) =>
       notifyManager.batch(() {
         for (final query in queryCache.findAll(filters)) {
@@ -570,6 +670,10 @@ class QueryClient {
       ? mutationCache.resumePaused()
       : Future<void>.value();
 
+  /// Empties both caches, cancelling in-flight fetches and every `gcTime`
+  /// timer. This is the teardown call: a widget test ends with it, since
+  /// Flutter's test binding asserts that no timer outlives the tree.
+  /// Upstream's `clear`.
   void clear() {
     queryCache.clear();
     mutationCache.clear();
@@ -577,8 +681,12 @@ class QueryClient {
 
   // ------------------------------------------------------------ defaults
 
+  /// The client-wide defaults in force. Upstream's `getDefaultOptions`.
   DefaultOptions getDefaultOptions() => _defaultOptions;
 
+  /// Replaces the client-wide defaults. Takes effect on the next options
+  /// resolution — an observer's next `setOptions` or a query's next fetch —
+  /// not retroactively. Upstream's `setDefaultOptions`.
   void setDefaultOptions(DefaultOptions options) => _defaultOptions = options;
 
   /// Defaults for every query whose key starts with [queryKey].
@@ -601,9 +709,15 @@ class QueryClient {
     return merged;
   }
 
+  /// Defaults for every mutation whose key starts with [mutationKey]; the
+  /// mutation twin of [setQueryDefaults]. A second registration under the
+  /// same key replaces the first.
   void setMutationDefaults(QueryKey mutationKey, MutationDefaults defaults) =>
       _mutationDefaults[mutationKey] = defaults;
 
+  /// The registered defaults matching [mutationKey], merged in registration
+  /// order, later registrations winning per field — or `null` when none
+  /// match. The mutation twin of [getQueryDefaults].
   MutationDefaults? getMutationDefaults(QueryKey mutationKey) {
     MutationDefaults? merged;
     for (final entry in _mutationDefaults.entries) {

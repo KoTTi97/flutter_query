@@ -8,6 +8,8 @@ import 'mutation_options.dart';
 import 'mutation_result.dart';
 import 'query_client.dart';
 
+/// What a [MutationObserver.subscribe] listener receives: the new
+/// [MutationResult], each time it changes.
 typedef MutationObserverListener<TData, TVariables> = void Function(
     MutationResult<TData, TVariables> result);
 
@@ -15,6 +17,8 @@ typedef MutationObserverListener<TData, TVariables> = void Function(
 /// [MutationResult].
 class MutationObserver<TData, TVariables, TOnMutateResult>
     implements MutationObserverRef {
+  /// Creates an idle observer for [options], resolved against the client's
+  /// defaults. Nothing runs until [mutate] or [mutateAsync] is called.
   MutationObserver(
     this._client,
     MutationOptions<TData, TVariables, TOnMutateResult> options,
@@ -34,8 +38,15 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   final List<MutationObserverListener<TData, TVariables>> _listeners =
       <MutationObserverListener<TData, TVariables>>[];
 
+  /// Whether anyone is subscribed. Per-call callbacks only run while this is
+  /// true — a `mutate` from a widget that has since gone must not call back
+  /// into it.
   bool get hasListeners => _listeners.isNotEmpty;
 
+  /// Registers [listener] and returns the function that removes it again. The
+  /// first listener re-attaches the observer to the mutation it was watching
+  /// and brings the result up to date; the last one leaving detaches it, which
+  /// starts the mutation's `gcTime` clock.
   void Function() subscribe(
       MutationObserverListener<TData, TVariables> listener) {
     _listeners.add(listener);
@@ -57,6 +68,8 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   }
 
   late DefaultedMutationOptions<TData, TVariables, TOnMutateResult> _options;
+
+  /// The options in force, fully resolved against the client's defaults.
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult> get options =>
       _options;
 
@@ -64,8 +77,14 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   late MutationResult<TData, TVariables> _currentResult;
   MutateCallbacks<TData, TVariables, TOnMutateResult>? _callCallbacks;
 
+  /// The most recently computed result — idle until the first `mutate`, then
+  /// whatever the observed mutation's state maps to.
   MutationResult<TData, TVariables> get currentResult => _currentResult;
 
+  /// Replaces the options, resolving them against the client's defaults. A
+  /// changed `mutationKey` means a different mutation, so the observer
+  /// [reset]s; otherwise a mutation still in flight takes the new options and
+  /// a settled one keeps the ones it ran with.
   void setOptions(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) {

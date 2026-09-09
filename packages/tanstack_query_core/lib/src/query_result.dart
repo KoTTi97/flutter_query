@@ -33,6 +33,7 @@ typedef QueryRefetch<TData> = Future<QueryResult<TData>> Function(
 /// is refetching in the background is the ordinary stale-while-revalidate case.
 @immutable
 sealed class QueryResult<TData> {
+  /// Built by the observer; each argument is the field of the same name.
   const QueryResult({
     required this.fetchStatus,
     required this.dataUpdatedAt,
@@ -52,18 +53,31 @@ sealed class QueryResult<TData> {
   /// What the query is doing right now, independent of what it holds.
   final FetchStatus fetchStatus;
 
+  /// When the data was last written — upstream's `dataUpdatedAt`, and what
+  /// `staleTime` counts from. `null` until something has been.
   final DateTime? dataUpdatedAt;
+
+  /// When the query last ended in an error — upstream's `errorUpdatedAt`.
+  /// `null` until it has.
   final DateTime? errorUpdatedAt;
 
   /// Failures within the *current* fetch. A query retrying in the background
   /// reports progress here while still showing its last good data.
   final int failureCount;
+
+  /// What the latest failed attempt of the current fetch threw — upstream's
+  /// `failureReason`. `null` between fetches and once an attempt succeeds.
   final Object? failureReason;
+
+  /// The stack trace that came with [failureReason].
   final StackTrace? failureStackTrace;
 
   /// How many times this query has ended in an error over its whole life.
   final int errorUpdateCount;
 
+  /// Whether the data is older than this observer's `staleTime`, or has been
+  /// invalidated — upstream's `isStale`. A query with no data is stale; a
+  /// disabled query never is, since nothing would refetch it.
   final bool isStale;
 
   /// Whether this observer's options currently allow the query to run.
@@ -78,19 +92,35 @@ sealed class QueryResult<TData> {
   /// Whether the data shown is `placeholderData` rather than cached data.
   final bool isPlaceholderData;
 
+  /// Refetches this query regardless of `enabled` and `staleTime` —
+  /// upstream's `refetch`. With `cancelRefetch: true`, the default, a fetch
+  /// already in flight is cancelled and started over; with `false` the
+  /// in-flight one is awaited instead.
   final QueryRefetch<TData> refetch;
 
+  /// Which variant this is, as an enum — upstream's `status`, for callers
+  /// that store or compare it rather than pattern-match.
   QueryStatus get status => switch (this) {
         QueryPending<TData>() => QueryStatus.pending,
         QuerySuccess<TData>() => QueryStatus.success,
         QueryError<TData>() => QueryStatus.error,
       };
 
+  /// Whether this is a [QueryPending] — upstream's `isPending`.
   bool get isPending => this is QueryPending<TData>;
+
+  /// Whether this is a [QuerySuccess] — upstream's `isSuccess`.
   bool get isSuccess => this is QuerySuccess<TData>;
+
+  /// Whether this is a [QueryError] — upstream's `isError`.
   bool get isError => this is QueryError<TData>;
 
+  /// Whether a fetch is in flight, first load and refetch alike — upstream's
+  /// `isFetching`.
   bool get isFetching => fetchStatus == FetchStatus.fetching;
+
+  /// Whether a fetch wants to run but is waiting for the network — upstream's
+  /// `isPaused`.
   bool get isPaused => fetchStatus == FetchStatus.paused;
 
   /// The first load: pending *and* fetching.
@@ -143,6 +173,7 @@ sealed class QueryResult<TData> {
 
 /// Nothing has resolved yet.
 final class QueryPending<TData> extends QueryResult<TData> {
+  /// Built by the observer; each argument is the field of the same name.
   const QueryPending({
     required super.fetchStatus,
     required super.dataUpdatedAt,
@@ -165,6 +196,7 @@ final class QueryPending<TData> extends QueryResult<TData> {
 
 /// The query holds data — fetched, seeded, or a placeholder.
 final class QuerySuccess<TData> extends QueryResult<TData> {
+  /// Built by the observer; each argument is the field of the same name.
   const QuerySuccess({
     required this.data,
     required super.fetchStatus,
@@ -182,6 +214,8 @@ final class QuerySuccess<TData> extends QueryResult<TData> {
     required super.refetch,
   });
 
+  /// The data — fetched, seeded, or a placeholder when [isPlaceholderData]
+  /// is true — after `select`, when the observer has one.
   final TData data;
 
   @override
@@ -194,6 +228,7 @@ final class QuerySuccess<TData> extends QueryResult<TData> {
 /// [staleData] is what upstream's error reducer deliberately keeps: a failed
 /// background refetch over content that is already on screen must not blank it.
 final class QueryError<TData> extends QueryResult<TData> {
+  /// Built by the observer; each argument is the field of the same name.
   const QueryError({
     required this.error,
     required this.stackTrace,
@@ -214,7 +249,10 @@ final class QueryError<TData> extends QueryResult<TData> {
     required super.refetch,
   });
 
+  /// What the last attempt threw — upstream's `error`.
   final Object error;
+
+  /// Where [error] was thrown.
   final StackTrace stackTrace;
 
   /// The last good data, if there is any.

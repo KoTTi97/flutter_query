@@ -36,8 +36,12 @@ abstract interface class QueryObserverRef {
   /// Whether this observer's current result considers the data stale.
   bool get currentResultIsStale;
 
+  /// Whether this observer's `refetchOnWindowFocus` asks for a refetch when the
+  /// app returns to the foreground, given the data it currently sees.
   bool shouldFetchOnWindowFocus();
 
+  /// Whether this observer's `refetchOnReconnect` asks for a refetch when the
+  /// device comes back online, given the data it currently sees.
   bool shouldFetchOnReconnect();
 
   /// Refetch without cancelling a fetch that is already running.
@@ -49,9 +53,20 @@ abstract interface class QueryObserverRef {
 
 /// What a [Query] needs from its cache.
 abstract interface class QueryCacheRef {
+  /// Told after every dispatch, with the [action] that produced [query]'s new
+  /// state; the cache turns it into a `QueryUpdated` event.
   void onQueryStateUpdated(Query<Object?> query, QueryAction action);
+
+  /// Told when [query]'s collection timer fired with nothing observing it and
+  /// no fetch running; the cache removes it.
   void onQueryRemovalRequested(Query<Object?> query);
+
+  /// Told when a fetch of [query] resolved with [data]; the cache runs its
+  /// `onSuccess` and `onSettled` hooks.
   void onQueryFetchSuccess(Query<Object?> query, Object? data);
+
+  /// Told when a fetch of [query] rejected for good — retries exhausted or a
+  /// non-silent cancel; the cache runs its `onError` and `onSettled` hooks.
   void onQueryFetchError(
     Query<Object?> query,
     Object error,
@@ -65,11 +80,16 @@ abstract interface class QueryCacheRef {
 /// a loop over pages; nothing else does, and users never set one
 /// (https://github.com/KoTTi97/flutter_query/issues/16).
 abstract interface class FetchBehavior<TQueryData> {
+  /// Called once per fetch, before the retryer is built, to rewrite
+  /// [FetchContext.fetchFn] — and read anything else the context carries — for
+  /// [query].
   void onFetch(FetchContext<TQueryData> context, Query<TQueryData> query);
 }
 
 /// The mutable description of one fetch, handed to a [FetchBehavior].
 class FetchContext<TQueryData> {
+  /// Creates the description of one fetch. Built by [Query.fetch]; a behaviour
+  /// receives one, it does not make one.
   FetchContext({
     required this.client,
     required this.queryKey,
@@ -82,10 +102,22 @@ class FetchContext<TQueryData> {
   })  : _signal = signal,
         _onSignalRead = onSignalRead;
 
+  /// The client the query belongs to, so a behaviour can reach its managers
+  /// and caches.
   final QueryClient client;
+
+  /// The key of the query being fetched.
   final QueryKey queryKey;
+
+  /// The fully resolved options this fetch runs with.
   final DefaultedQueryOptions<TQueryData> options;
+
+  /// The query's state as the fetch begins — what an infinite query reads its
+  /// existing pages from.
   final QueryState<TQueryData> state;
+
+  /// The per-fetch overrides passed to [Query.fetch], if any. An infinite query
+  /// finds its page direction in [FetchOptions.meta].
   final FetchOptions<TQueryData>? fetchOptions;
 
   /// Replaced by a behaviour to change what the fetch actually does.
@@ -94,6 +126,10 @@ class FetchContext<TQueryData> {
   final QueryCancelToken _signal;
   final void Function()? _onSignalRead;
 
+  /// The cancellation token for this fetch. Reading it counts as consuming the
+  /// signal, exactly as reading `signal` on upstream's context does: the query
+  /// then knows the transport can be stopped, and cancels the request rather
+  /// than only the retry loop when its last observer leaves.
   QueryCancelToken get signal {
     _onSignalRead?.call();
     return _signal;
@@ -106,6 +142,7 @@ class FetchContext<TQueryData> {
 /// `experimental_prefetchInRender` and hydration, neither of which is ported.
 @immutable
 class FetchOptions<TQueryData> {
+  /// Creates the overrides; both are unset by default.
   const FetchOptions({this.cancelRefetch, this.meta});
 
   /// Cancel a fetch that is already running and start a new one.
@@ -126,46 +163,98 @@ sealed class QueryAction {
   const QueryAction();
 }
 
+/// A fetch started. Resets the failure count, records [meta], and moves
+/// `fetchStatus` to fetching — or paused, when the network mode forbids
+/// starting. Upstream's `fetch` action.
 final class QueryFetchAction extends QueryAction {
+  /// Creates the action, with the fetch's [meta] if it has any.
   const QueryFetchAction({this.meta});
+
+  /// What [FetchOptions.meta] carried in; becomes `QueryState.fetchMeta`.
   final Object? meta;
 }
 
+/// One attempt failed and will be retried. Records the count and the reason
+/// without touching `status` or the data. Upstream's `failed` action.
 final class QueryFailedAction extends QueryAction {
+  /// Creates the action for the attempt that just failed.
   const QueryFailedAction(this.failureCount, this.error, this.stackTrace);
+
+  /// How many attempts have failed so far in this fetch, including this one.
   final int failureCount;
+
+  /// What the attempt threw.
   final Object error;
+
+  /// Where it was thrown from.
   final StackTrace stackTrace;
 }
 
+/// Data arrived: from a fetch, or from a manual write through
+/// `QueryClient.setQueryData`. Bumps `dataUpdateCount`, clears the error and
+/// the invalidation, and — unless [manual] — ends the fetch. Upstream's
+/// `success` action.
 final class QuerySuccessAction<TQueryData> extends QueryAction {
+  /// Creates the action carrying [data].
   const QuerySuccessAction(this.data,
       {this.dataUpdatedAt, this.manual = false});
+
+  /// The new data, already passed through structural sharing.
   final TQueryData data;
+
+  /// When the data is to be dated, or `null` for "now".
   final DateTime? dataUpdatedAt;
+
+  /// Whether the data was written by hand rather than fetched. A manual write
+  /// leaves an in-flight fetch's status alone and becomes the state a later
+  /// cancel-with-revert returns to.
   final bool manual;
 }
 
+/// A fetch failed for good: retries exhausted, or cancelled without `silent`.
+/// Moves `status` to error, ends the fetch and flags existing data as
+/// invalidated. Upstream's `error` action.
 final class QueryErrorAction extends QueryAction {
+  /// Creates the action for the error that settled the fetch.
   const QueryErrorAction(this.error, this.stackTrace);
+
+  /// What the fetch finally failed with.
   final Object error;
+
+  /// Where it was thrown from.
   final StackTrace stackTrace;
 }
 
+/// The retryer suspended the fetch: offline or backgrounded. `fetchStatus`
+/// becomes paused. Upstream's `pause` action.
 final class QueryPauseAction extends QueryAction {
+  /// Creates the action.
   const QueryPauseAction();
 }
 
+/// A paused fetch resumed; `fetchStatus` is fetching again. Upstream's
+/// `continue` action.
 final class QueryContinueAction extends QueryAction {
+  /// Creates the action.
   const QueryContinueAction();
 }
 
+/// The query was marked stale by `QueryClient.invalidateQueries`. Only
+/// `isInvalidated` changes; whether a refetch follows is the caller's
+/// decision. Upstream's `invalidate` action.
 final class QueryInvalidateAction extends QueryAction {
+  /// Creates the action.
   const QueryInvalidateAction();
 }
 
+/// The whole state was replaced through [Query.setState] — a reset, a
+/// revert after cancellation, or a persistence layer restoring. Upstream's
+/// `setState` action.
 final class QuerySetStateAction<TQueryData> extends QueryAction {
+  /// Creates the action carrying the replacement [state].
   const QuerySetStateAction(this.state);
+
+  /// The state the query now holds, verbatim.
   final QueryState<TQueryData> state;
 }
 
@@ -176,6 +265,10 @@ final class QuerySetStateAction<TQueryData> extends QueryAction {
 /// transform lives in the observer
 /// (https://github.com/KoTTi97/flutter_query/issues/7).
 class Query<TQueryData> extends Removable {
+  /// Creates a cache entry for [queryKey] with [options], seeded from
+  /// `initialData` or from a restored [state], and arms its collection timer
+  /// straight away — a query nobody observes yet is collectable. Constructed by
+  /// `QueryCache.build`; user code reaches a query through the cache.
   Query({
     required this.client,
     required QueryCacheRef cache,
@@ -190,8 +283,12 @@ class Query<TQueryData> extends Removable {
     scheduleGc();
   }
 
+  /// The client this query belongs to: the source of its managers and its
+  /// notify batching.
   final QueryClient client;
   final QueryCacheRef _cache;
+
+  /// The key this query is stored under in the cache.
   final QueryKey queryKey;
 
   /// The data type this query holds, exactly.
@@ -204,9 +301,16 @@ class Query<TQueryData> extends Removable {
   Type get dataType => TQueryData;
 
   DefaultedQueryOptions<TQueryData> _options;
+
+  /// The options in force, fully resolved. They are the last options any
+  /// observer or fetch handed in; `queryFn`, `retry`, `networkMode` and the
+  /// like are read from here at fetch time.
   DefaultedQueryOptions<TQueryData> get options => _options;
 
   late QueryState<TQueryData> _state;
+
+  /// The current state: data, error, status, fetch status and the counters.
+  /// Replaced on every dispatch; observers compute their results from it.
   QueryState<TQueryData> get state => _state;
 
   late QueryState<TQueryData> _initialState;
@@ -225,13 +329,20 @@ class Query<TQueryData> extends Removable {
   QueryState<TQueryData>? _revertState;
   bool _signalConsumed = false;
 
+  /// The options' `meta`, as upstream exposes it on the query for cache
+  /// listeners and devtools.
   Object? get meta => _options.meta;
 
   /// The in-flight fetch, if there is one.
   Future<TQueryData>? get future => _retryer?.future;
 
+  /// How many observers are attached right now. Upstream's
+  /// `getObserversCount`.
   int get observersCount => _observers.length;
 
+  /// Replaces the options and folds their `gcTime` in. Called by observers as
+  /// they attach and by [fetch]; not for user code, which sets options through
+  /// an observer or the client.
   @internal
   void setOptions(DefaultedQueryOptions<TQueryData> options) {
     _options = options;
@@ -366,6 +477,7 @@ class Query<TQueryData> extends Removable {
     return !isFetched();
   }
 
+  /// Whether at least one fetch — or a manual write — has ever settled.
   bool isFetched() => _state.dataUpdateCount + _state.errorUpdateCount > 0;
 
   /// Whether any observer declared this query permanently fresh.
@@ -373,6 +485,8 @@ class Query<TQueryData> extends Removable {
       observersCount > 0 &&
       _observers.any((observer) => observer.isStaticForQuery);
 
+  /// Whether the data should be refetched: any observer's result says so, or —
+  /// with no observers — there is no data or it has been invalidated.
   bool isStale() {
     if (observersCount > 0) {
       return _observers.any((observer) => observer.currentResultIsStale);
@@ -409,6 +523,9 @@ class Query<TQueryData> extends Removable {
     return !clock.now().isBefore(updatedAt.add(resolved.duration));
   }
 
+  /// Reacts to the app returning to the foreground: the first observer whose
+  /// `refetchOnWindowFocus` asks for it refetches, and a paused fetch is given
+  /// the chance to resume. Called by the cache's `onFocus`; not for user code.
   @internal
   void onFocus() {
     for (final observer in _observers) {
@@ -420,6 +537,9 @@ class Query<TQueryData> extends Removable {
     _retryer?.continueFetch().ignore();
   }
 
+  /// Reacts to the device coming back online: the first observer whose
+  /// `refetchOnReconnect` asks for it refetches, and a paused fetch is given
+  /// the chance to resume. Called by the cache's `onOnline`; not for user code.
   @internal
   void onOnline() {
     for (final observer in _observers) {
@@ -431,6 +551,9 @@ class Query<TQueryData> extends Removable {
     _retryer?.continueFetch().ignore();
   }
 
+  /// Attaches [observer], cancelling the pending collection and emitting
+  /// `QueryObserverAdded`. Attaching twice is a no-op. Called by the observer's
+  /// `subscribe`; not for user code.
   @internal
   void addObserver(QueryObserverRef observer) {
     if (!_observers.contains(observer)) {
@@ -440,6 +563,11 @@ class Query<TQueryData> extends Removable {
     }
   }
 
+  /// Detaches [observer] and emits `QueryObserverRemoved`. When it was the last
+  /// one, an in-flight fetch is either cancelled and reverted (if the query
+  /// function consumed the signal, or the fetch was still paused before any
+  /// data) or left to finish with only its retries stopped, and the collection
+  /// timer is armed. Called by the observer's unsubscribe; not for user code.
   @internal
   void removeObserver(QueryObserverRef observer) {
     if (!_observers.remove(observer)) {
@@ -466,6 +594,9 @@ class Query<TQueryData> extends Removable {
     client.queryCache.notifyObserverRemoved(this, observer);
   }
 
+  /// Marks the data stale, dispatching [QueryInvalidateAction] unless it
+  /// already is. `QueryClient.invalidateQueries` calls this and then decides
+  /// about the refetch.
   void invalidate() {
     if (!_state.isInvalidated) {
       _dispatch(const QueryInvalidateAction());
@@ -750,8 +881,10 @@ class Query<TQueryData> extends Removable {
 /// error after its one attempt, so the message is seen at once rather than
 /// after the full backoff.
 final class MissingQueryFunctionError implements Exception {
+  /// Creates the error for [queryKey].
   const MissingQueryFunctionError(this.queryKey);
 
+  /// The key of the query that had no function to run.
   final QueryKey queryKey;
 
   @override

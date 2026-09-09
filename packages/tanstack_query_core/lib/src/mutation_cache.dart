@@ -11,37 +11,76 @@ import 'mutation_options.dart';
 import 'query_client.dart';
 import 'subscribable.dart';
 
+/// Something happened to a mutation in the cache. The mutation-side twin of
+/// `QueryCacheEvent`, delivered to [MutationCache.subscribe] listeners.
 @immutable
 sealed class MutationCacheEvent {
+  /// Creates an event about [mutation].
   const MutationCacheEvent(this.mutation);
+
+  /// The mutation the event is about, with its type arguments erased — a cache
+  /// listener sees every mutation there is.
   final Mutation<Object?, Object?, Object?> mutation;
 }
 
+/// A mutation was created and appended to the cache, which happens the moment
+/// `mutate` is called (or an observer is built with a restored state).
+/// Upstream's `added` event.
 final class MutationAdded extends MutationCacheEvent {
+  /// Creates the event for [mutation].
   const MutationAdded(super.mutation);
 }
 
+/// A mutation left the cache: garbage-collected after its last observer
+/// left, or removed through [MutationCache.remove] or [MutationCache.clear].
+/// Upstream's `removed` event.
 final class MutationRemoved extends MutationCacheEvent {
+  /// Creates the event for [mutation].
   const MutationRemoved(super.mutation);
 }
 
+/// A mutation's state changed. Emitted for every dispatched [MutationAction]
+/// — pending, success, error, pause, continue and the rest. Upstream's
+/// `updated` event.
 final class MutationUpdated extends MutationCacheEvent {
+  /// Creates the event for [mutation], carrying the [action] that changed it.
   const MutationUpdated(super.mutation, this.action);
+
+  /// The transition that produced the mutation's new state. Sealed, so a
+  /// listener can `switch` over it exhaustively.
   final MutationAction action;
 }
 
+/// An observer subscribed to the mutation, which also cancels its pending
+/// collection. Upstream's `observerAdded` event.
 final class MutationObserverAdded extends MutationCacheEvent {
+  /// Creates the event for [mutation] and the [observer] that attached.
   const MutationObserverAdded(super.mutation, this.observer);
+
+  /// The observer that attached. Read-only from outside: an identity to hold
+  /// and compare, not something to drive.
   final MutationObserverRef observer;
 }
 
+/// An observer unsubscribed from the mutation; when it was the last one, the
+/// collection timer has been armed by the time this fires. Upstream's
+/// `observerRemoved` event.
 final class MutationObserverRemoved extends MutationCacheEvent {
+  /// Creates the event for [mutation] and the [observer] that detached.
   const MutationObserverRemoved(super.mutation, this.observer);
+
+  /// The observer that detached. Read-only from outside.
   final MutationObserverRef observer;
 }
 
+/// An observer's options were replaced while it stayed attached to the same
+/// mutation — a rebuild that changed a callback or `retry`, say. Upstream's
+/// `observerOptionsUpdated` event.
 final class MutationObserverOptionsUpdated extends MutationCacheEvent {
+  /// Creates the event for [mutation] and the [observer] whose options changed.
   const MutationObserverOptionsUpdated(super.mutation, this.observer);
+
+  /// The observer whose options changed. Read-only from outside.
   final MutationObserverRef observer;
 }
 
@@ -49,6 +88,8 @@ final class MutationObserverOptionsUpdated extends MutationCacheEvent {
 class MutationCache
     extends Subscribable<void Function(MutationCacheEvent event)>
     implements MutationCacheRef {
+  /// Creates an empty cache. All four hooks are optional and cache-wide; a
+  /// [QueryClient] constructs one of these when none is passed to it.
   MutationCache({this.onMutate, this.onSuccess, this.onError, this.onSettled});
 
   /// Cache-wide hooks. They run *before* the per-mutation callbacks, which is
@@ -57,12 +98,20 @@ class MutationCache
     Object? variables,
     Mutation<Object?, Object?, Object?> mutation,
   )? onMutate;
+
+  /// Runs after any mutation succeeds, before the mutation's own `onSuccess`,
+  /// with the data, the variables, and whatever the `onMutate` hook returned.
+  /// Upstream's `MutationCacheConfig.onSuccess`.
   final FutureOr<void> Function(
     Object? data,
     Object? variables,
     Object? onMutateResult,
     Mutation<Object?, Object?, Object?> mutation,
   )? onSuccess;
+
+  /// Runs after any mutation fails for good, before the mutation's own
+  /// `onError`, with the error, the variables, and the `onMutate` result.
+  /// Upstream's `MutationCacheConfig.onError`.
   final FutureOr<void> Function(
     Object error,
     StackTrace stackTrace,
@@ -70,6 +119,10 @@ class MutationCache
     Object? onMutateResult,
     Mutation<Object?, Object?, Object?> mutation,
   )? onError;
+
+  /// Runs after any mutation settles, success or failure, before the
+  /// mutation's own `onSettled`, with whichever of data and error applies.
+  /// Upstream's `MutationCacheConfig.onSettled`.
   final FutureOr<void> Function(
     Object? data,
     Object? error,
@@ -83,9 +136,15 @@ class MutationCache
       <Mutation<Object?, Object?, Object?>>[];
   int _nextMutationId = 1;
 
+  /// Every mutation in the cache, in submission order, as a copy: safe to
+  /// iterate while removing. Upstream's `getAll`.
   List<Mutation<Object?, Object?, Object?>> get mutations =>
       List<Mutation<Object?, Object?, Object?>>.of(_mutations);
 
+  /// Creates a mutation for [options], assigns it the next id, adds it to the
+  /// cache and returns it. Unlike a query, every call creates a new entry —
+  /// mutations are never shared by key. [state] is the door a persistence
+  /// layer restores an offline mutation through.
   Mutation<TData, TVariables, TOnMutateResult>
       build<TData, TVariables, TOnMutateResult>(
     QueryClient client,
@@ -103,6 +162,8 @@ class MutationCache
     return mutation;
   }
 
+  /// Emits [MutationObserverOptionsUpdated]. Called by the observer's
+  /// `setOptions` when it stays on the same mutation; not for user code.
   @internal
   void notifyObserverOptionsUpdated(
     Mutation<Object?, Object?, Object?> mutation,
@@ -110,11 +171,17 @@ class MutationCache
   ) =>
       notify(MutationObserverOptionsUpdated(mutation, observer));
 
+  /// Appends [mutation] to the cache and emits [MutationAdded]. [build] is the
+  /// usual way in; this is upstream's `add`, for a mutation constructed by
+  /// hand.
   void add(Mutation<Object?, Object?, Object?> mutation) {
     _mutations.add(mutation);
     notify(MutationAdded(mutation));
   }
 
+  /// Takes [mutation] out of the cache, stopping its collection timer, and
+  /// emits [MutationRemoved]. A running mutation is not cancelled — its
+  /// retryer finishes on its own, as upstream's does. Upstream's `remove`.
   void remove(Mutation<Object?, Object?, Object?> mutation) {
     if (_mutations.remove(mutation)) {
       mutation.destroy();
@@ -124,12 +191,17 @@ class MutationCache
     notify(MutationRemoved(mutation));
   }
 
+  /// Removes every mutation, one [MutationRemoved] each. `QueryClient.clear`
+  /// calls this together with the query cache's.
   void clear() {
     for (final mutation in mutations) {
       remove(mutation);
     }
   }
 
+  /// Every mutation matching [filters], in submission order — all of them
+  /// when the filters are empty. Partial key matching by default, as
+  /// upstream's `findAll`.
   List<Mutation<Object?, Object?, Object?>> findAll([
     MutationFilters filters = const MutationFilters(),
   ]) =>

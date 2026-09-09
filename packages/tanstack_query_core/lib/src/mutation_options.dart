@@ -15,7 +15,11 @@ import 'query_key.dart';
 /// reorders them, which is exactly what an offline queue must not do.
 @immutable
 final class MutationScope {
+  /// Scopes with equal [id]s are the same scope.
   const MutationScope(this.id);
+
+  /// The scope's identity — upstream's `scope: { id }`. Any value with value
+  /// equality; a string naming the record being edited is the usual choice.
   final Object id;
 
   @override
@@ -36,14 +40,21 @@ typedef MutationFn<TData, TVariables> = FutureOr<TData> Function(
 /// in the options.
 @immutable
 class MutateCallbacks<TData, TVariables, TOnMutateResult> {
+  /// Any of the three may be left unset.
   const MutateCallbacks({this.onSuccess, this.onError, this.onSettled});
 
+  /// Runs after the options' `onSuccess`, with the data, the variables, and
+  /// what `onMutate` returned. Like the other two, it is skipped when the
+  /// observer has stopped listening before the mutation settled — upstream's
+  /// per-call `onSuccess`.
   final FutureOr<void> Function(
     TData data,
     TVariables variables,
     TOnMutateResult? onMutateResult,
   )? onSuccess;
 
+  /// Runs after the options' `onError`, once retries are spent — upstream's
+  /// per-call `onError`.
   final FutureOr<void> Function(
     Object error,
     StackTrace stackTrace,
@@ -51,6 +62,9 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
     TOnMutateResult? onMutateResult,
   )? onError;
 
+  /// Runs after the options' `onSettled`, on success and error alike, with
+  /// whichever of `data` and `error` applies — upstream's per-call
+  /// `onSettled`.
   final FutureOr<void> Function(
     TData? data,
     Object? error,
@@ -73,6 +87,8 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
 /// callbacks are not a change by themselves.
 @immutable
 class MutationOptions<TData, TVariables, TOnMutateResult> {
+  /// Every field is optional; an unset field takes the client's default when
+  /// the mutation is built.
   const MutationOptions({
     this.mutationKey,
     this.mutationFn,
@@ -145,19 +161,31 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
         meta: meta,
       );
 
+  /// Groups mutations for the cache's filters, for `isMutating`, and for the
+  /// defaults registered with `QueryClient.setMutationDefaults`. Optional: a
+  /// mutation without a key simply cannot be addressed by one.
   final QueryKey? mutationKey;
+
+  /// Runs the mutation. Left unset, the function registered for the key with
+  /// `setMutationDefaults` is used, and a mutation with none fails with
+  /// `MissingMutationFunctionError`.
   final MutationFn<TData, TVariables>? mutationFn;
 
   /// Runs before the mutation function; its result is handed to [onError] and
   /// [onSettled] so an optimistic update can be rolled back.
   final FutureOr<TOnMutateResult?> Function(TVariables variables)? onMutate;
 
+  /// Runs when the mutation function succeeds, before the result reports
+  /// success. Throwing here turns the success into an error, as upstream
+  /// does.
   final FutureOr<void> Function(
     TData data,
     TVariables variables,
     TOnMutateResult? onMutateResult,
   )? onSuccess;
 
+  /// Runs when the mutation fails for good, retries spent, with what
+  /// [onMutate] returned so an optimistic update can be rolled back.
   final FutureOr<void> Function(
     Object error,
     StackTrace stackTrace,
@@ -165,6 +193,8 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
     TOnMutateResult? onMutateResult,
   )? onError;
 
+  /// Runs after [onSuccess] or [onError], with whichever of `data` and
+  /// `error` applies.
   final FutureOr<void> Function(
     TData? data,
     Object? error,
@@ -173,11 +203,27 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
     TOnMutateResult? onMutateResult,
   )? onSettled;
 
+  /// Whether a failed attempt is retried. Default [RetryPolicy.never] —
+  /// upstream's `retry: 0` for mutations, which are rarely safe to repeat.
   final RetryPolicy? retry;
+
+  /// How long to wait between attempts. Default [RetryDelay.defaultValue].
   final RetryDelay? retryDelay;
+
+  /// How connectivity gates the run. Default [NetworkMode.online]: submitted
+  /// offline, the mutation pauses, and a mounted client resumes it on
+  /// reconnect.
   final NetworkMode? networkMode;
+
+  /// How long a settled mutation stays in the cache once nothing observes
+  /// it. Default [GcTime.defaultValue], five minutes.
   final GcTime? gcTime;
+
+  /// Mutations in the same scope run one at a time — see [MutationScope].
+  /// Unset, mutations run concurrently.
   final MutationScope? scope;
+
+  /// Arbitrary data carried along for logging, devtools or the callbacks.
   final Object? meta;
 }
 
@@ -185,6 +231,7 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
 /// one, and `final` keeps it that way.
 @immutable
 final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
+  /// Built by `QueryClient.defaultMutationOptions`; not for callers.
   @internal
   const DefaultedMutationOptions({
     required this.mutationKey,
@@ -201,20 +248,32 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
     required this.meta,
   });
 
+  /// [MutationOptions.mutationKey]; there is no default.
   final QueryKey? mutationKey;
+
+  /// [MutationOptions.mutationFn], with the key's registered default applied.
+  /// Still nullable: the mutation fails only when it runs.
   final MutationFn<TData, TVariables>? mutationFn;
+
+  /// [MutationOptions.onMutate], with the key's registered default applied.
   final FutureOr<TOnMutateResult?> Function(TVariables variables)? onMutate;
+
+  /// [MutationOptions.onSuccess], with the key's registered default applied.
   final FutureOr<void> Function(
     TData data,
     TVariables variables,
     TOnMutateResult? onMutateResult,
   )? onSuccess;
+
+  /// [MutationOptions.onError], with the key's registered default applied.
   final FutureOr<void> Function(
     Object error,
     StackTrace stackTrace,
     TVariables variables,
     TOnMutateResult? onMutateResult,
   )? onError;
+
+  /// [MutationOptions.onSettled], with the key's registered default applied.
   final FutureOr<void> Function(
     TData? data,
     Object? error,
@@ -222,11 +281,23 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
     TVariables variables,
     TOnMutateResult? onMutateResult,
   )? onSettled;
+
+  /// [MutationOptions.retry], with the default applied.
   final RetryPolicy retry;
+
+  /// [MutationOptions.retryDelay], with the default applied.
   final RetryDelay retryDelay;
+
+  /// [MutationOptions.networkMode], with the default applied.
   final NetworkMode networkMode;
+
+  /// [MutationOptions.gcTime], with the default applied.
   final GcTime gcTime;
+
+  /// [MutationOptions.scope], with the key's registered default applied.
   final MutationScope? scope;
+
+  /// [MutationOptions.meta], with the key's registered default applied.
   final Object? meta;
 
   /// Field-by-field equality, functions compared by identity — upstream's

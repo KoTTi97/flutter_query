@@ -11,9 +11,13 @@ import 'package:meta/meta.dart';
 abstract class Subscribable<TListener extends Function> {
   final Set<TListener> _listeners = <TListener>{};
 
+  /// The listeners currently registered, in subscription order. Subclasses
+  /// iterate a copy when notifying, since a listener may unsubscribe mid-loop.
   @protected
   Set<TListener> get listeners => _listeners;
 
+  /// Whether at least one listener is registered — what tells a manager to keep
+  /// its platform event source installed.
   bool get hasListeners => _listeners.isNotEmpty;
 
   /// Registers [listener] and returns the function that removes it again.
@@ -26,9 +30,13 @@ abstract class Subscribable<TListener extends Function> {
     };
   }
 
+  /// Called after every [subscribe]. Subclasses use it to install their event
+  /// source when the first listener arrives.
   @protected
   void onSubscribe() {}
 
+  /// Called after every unsubscribe. Subclasses use it to tear their event
+  /// source down once [hasListeners] turns false.
   @protected
   void onUnsubscribe() {}
 }

@@ -18,6 +18,9 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   void Function()? _cleanup;
   FocusSetup? _setup;
 
+  /// Whether the app is currently in the foreground. Reads the value last set
+  /// by [setFocused], or `true` when nothing has been set — pure Dart cannot
+  /// tell, so it assumes the best case.
   bool isFocused() => _focused ?? true;
 
   @override

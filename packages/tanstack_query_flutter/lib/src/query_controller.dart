@@ -29,6 +29,9 @@ import 'package:tanstack_query_core/tanstack_query_core.dart';
 /// cache entry.
 class QueryController<TQueryData, TData> extends ChangeNotifier
     implements ValueListenable<QueryResult<TData>> {
+  /// Creates the observer for [options] on [client]. Nothing is fetched until
+  /// the first listener arrives — until then [value] is the optimistic result.
+  /// Call [dispose] when done; it destroys the observer.
   QueryController(
     this.client,
     QueryObserverOptions<TQueryData, TData> options,
@@ -172,6 +175,9 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
 /// ```
 class InfiniteQueryController<TPageData, TPageParam, TData>
     extends QueryController<InfiniteData<TPageData, TPageParam>, TData> {
+  /// Creates an [InfiniteQueryObserver] for [options] on [client], with the
+  /// same contract as [QueryController.new]: nothing is fetched until the
+  /// first listener, and [dispose] destroys the observer.
   InfiniteQueryController(
     QueryClient client,
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
@@ -224,11 +230,33 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
     _options = options;
   }
 
+  /// Whether [fetchNextPage] has a page to fetch: the options'
+  /// `getNextPageParam`, given the pages held, returns a param. False before
+  /// the first page is in, and false — not an error — once the paging function
+  /// says there is no more.
   bool get hasNextPage => infiniteObserver.hasNextPage;
+
+  /// Whether [fetchPreviousPage] has a page to fetch: the options'
+  /// `getPreviousPageParam` returns a param for the pages held. Always false
+  /// when the options have none.
   bool get hasPreviousPage => infiniteObserver.hasPreviousPage;
+
+  /// Whether the fetch in flight is a [fetchNextPage] — the result's
+  /// `isFetching`, narrowed to the forward direction, so a refetch of the
+  /// pages already held ([isRefetching]) does not count.
   bool get isFetchingNextPage => infiniteObserver.isFetchingNextPage;
+
+  /// The backwards twin of [isFetchingNextPage]: the fetch in flight is a
+  /// [fetchPreviousPage].
   bool get isFetchingPreviousPage => infiniteObserver.isFetchingPreviousPage;
+
+  /// Whether the result's error came from a [fetchNextPage] — the result's
+  /// `isError`, narrowed to the forward direction. The pages already held are
+  /// still there; a failed refetch of *those* is [isRefetchError] instead.
   bool get isFetchNextPageError => infiniteObserver.isFetchNextPageError;
+
+  /// The backwards twin of [isFetchNextPageError]: the error came from a
+  /// [fetchPreviousPage].
   bool get isFetchPreviousPageError =>
       infiniteObserver.isFetchPreviousPageError;
 
@@ -252,6 +280,9 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
 class MutationController<TData, TVariables, TOnMutateResult>
     extends ChangeNotifier
     implements ValueListenable<MutationResult<TData, TVariables>> {
+  /// Creates a [MutationObserver] with [options] on [client]. Idle until
+  /// [mutate] or [mutateAsync] starts a run; [dispose] detaches it from
+  /// whatever mutation it ran, so that mutation can be collected.
   MutationController(
     this.client,
     MutationOptions<TData, TVariables, TOnMutateResult> options,
@@ -267,6 +298,8 @@ class MutationController<TData, TVariables, TOnMutateResult>
   void Function()? _unsubscribe;
   bool _disposed = false;
 
+  /// The observer underneath, for what the controller does not mirror — the
+  /// defaulted `options` it runs with, for one.
   MutationObserver<TData, TVariables, TOnMutateResult> get observer =>
       _observer;
 

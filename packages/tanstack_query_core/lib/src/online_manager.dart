@@ -20,6 +20,9 @@ class OnlineManager extends Subscribable<void Function(bool online)> {
   void Function()? _cleanup;
   OnlineSetup? _setup;
 
+  /// Whether the device is currently believed to be online. Reads the value
+  /// last passed to [setOnline], or `true` when nothing has been set; the
+  /// retryer consults it before starting and before resuming a paused fetch.
   bool isOnline() => _online;
 
   @override

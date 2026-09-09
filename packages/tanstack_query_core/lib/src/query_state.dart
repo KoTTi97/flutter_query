@@ -5,7 +5,18 @@ import 'package:meta/meta.dart';
 
 /// What a query *holds*. Orthogonal to [FetchStatus], which is what it is
 /// *doing* — the pair is upstream's central design and is ported unchanged.
-enum QueryStatus { pending, success, error }
+enum QueryStatus {
+  /// Nothing has resolved: no data and no error — upstream's `'pending'`.
+  pending,
+
+  /// The query holds data, fetched or seeded; [QueryState.data] is
+  /// meaningful.
+  success,
+
+  /// The last fetch failed and its retries are spent; [QueryState.error] says
+  /// why. Data from an earlier success is kept alongside.
+  error,
+}
 
 /// What a query is doing right now.
 enum FetchStatus {
@@ -39,6 +50,8 @@ enum FetchStatus {
 /// (https://github.com/KoTTi97/flutter_query/issues/17).
 @immutable
 final class QueryState<TQueryData> {
+  /// The initial state unless told otherwise: pending, idle, no data, every
+  /// counter at zero. Each argument is the field of the same name.
   const QueryState({
     this.hasData = false,
     this.data,
@@ -59,28 +72,57 @@ final class QueryState<TQueryData> {
 
   /// Whether [data] means anything. See the class doc.
   final bool hasData;
+
+  /// The cached data. Meaningful only while [hasData] is true.
   final TQueryData? data;
+
+  /// How many times data has been written, by fetches and `setQueryData`
+  /// alike — upstream's `dataUpdateCount`.
   final int dataUpdateCount;
+
+  /// When [data] was last written, which is what `staleTime` counts from.
+  /// `null` until the first write.
   final DateTime? dataUpdatedAt;
 
+  /// Why the last fetch failed, if it did. Cleared by the next success; a
+  /// query that has data keeps it alongside the error.
   final Object? error;
+
+  /// The stack trace that came with [error].
   final StackTrace? errorStackTrace;
+
+  /// How many times the query has ended in an error over its whole life —
+  /// upstream's `errorUpdateCount`.
   final int errorUpdateCount;
+
+  /// When the query last ended in an error. Not cleared with [error], so
+  /// "last failed at" survives the refetch that follows.
   final DateTime? errorUpdatedAt;
 
   /// Failures inside the *current* fetch, reset when a new one starts. A query
   /// retrying in the background reports progress here without changing
   /// [status].
   final int fetchFailureCount;
+
+  /// What the latest failed attempt of the current fetch threw; `null` once
+  /// an attempt succeeds or a new fetch starts.
   final Object? fetchFailureReason;
+
+  /// The stack trace that came with [fetchFailureReason].
   final StackTrace? fetchFailureStackTrace;
 
   /// Whatever the fetch behaviour attached to this fetch (infinite queries use
   /// it to carry the page direction).
   final Object? fetchMeta;
 
+  /// Whether `invalidateQueries` has marked the data stale regardless of
+  /// `staleTime`. Reset by the next successful fetch.
   final bool isInvalidated;
+
+  /// What the query holds: pending, success or error.
   final QueryStatus status;
+
+  /// What the query is doing: fetching, paused or idle.
   final FetchStatus fetchStatus;
 
   /// Whether anything has ever been fetched, successfully or not.

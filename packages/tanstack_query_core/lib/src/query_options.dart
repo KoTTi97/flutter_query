@@ -28,6 +28,9 @@ import 'query_key.dart';
 /// An infinite query's page function is handed an `InfinitePageContext`
 /// instead, which carries the page param and the direction, typed.
 class QueryFunctionContext {
+  /// Built by the query for each fetch; a query function receives one rather
+  /// than constructing it. [onSignalRead] is how the query learns that
+  /// [signal] was consumed.
   QueryFunctionContext({
     required this.client,
     required this.queryKey,
@@ -37,8 +40,15 @@ class QueryFunctionContext {
   })  : _signal = signal,
         _onSignalRead = onSignalRead;
 
+  /// The client the query lives in — upstream's `client` on the context, and
+  /// the way a query function reaches the cache for related data.
   final QueryClient client;
+
+  /// The key of the query being fetched — upstream's `queryKey` — so one
+  /// function can serve every key it is registered for.
   final QueryKey queryKey;
+
+  /// The query's [QueryOptions.meta], if one was set.
   final Object? meta;
 
   final QueryCancelToken _signal;
@@ -48,6 +58,11 @@ class QueryFunctionContext {
   /// the same getter.
   final void Function()? _onSignalRead;
 
+  /// The cancel token for this fetch — upstream's `AbortSignal`.
+  ///
+  /// Reading it marks the fetch as cancellable: from then on, losing the last
+  /// observer or a `cancelQueries` cancels the token and the query function
+  /// is expected to stop. A function that never reads it is left to finish.
   QueryCancelToken get signal {
     _onSignalRead?.call();
     return _signal;
@@ -55,7 +70,13 @@ class QueryFunctionContext {
 }
 
 /// Which end of an infinite query is being fetched.
-enum FetchDirection { forward, backward }
+enum FetchDirection {
+  /// Appending after the last page — `fetchNextPage`.
+  forward,
+
+  /// Prepending before the first page — `fetchPreviousPage`.
+  backward,
+}
 
 /// The function a query runs to get its data.
 typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
@@ -87,9 +108,12 @@ typedef StructuralSharing<TQueryData> = TQueryData Function(
 sealed class InitialData<TQueryData> {
   const InitialData();
 
+  /// A seed that is always present — upstream's `initialData: value`.
   const factory InitialData.value(TQueryData data) =
       InitialDataValue<TQueryData>;
 
+  /// A seed computed when the query is first built, and skipped when
+  /// [compute] returns `null` — upstream's `initialData: () => value`.
   const factory InitialData.compute(TQueryData? Function() compute) =
       InitialDataCompute<TQueryData>;
 
@@ -112,8 +136,13 @@ sealed class InitialData<TQueryData> {
       };
 }
 
+/// The [InitialData.value] variant: a seed that is always present, even when
+/// [data] is `null` for a nullable data type.
 final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
+  /// Seeds the cache with [data].
   const InitialDataValue(this.data);
+
+  /// The seed.
   final TQueryData data;
 
   // Value equality, like every other option value: an `InitialData.value`
@@ -125,8 +154,14 @@ final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
   int get hashCode => Object.hash(InitialDataValue<TQueryData>, data);
 }
 
+/// The [InitialData.compute] variant: a seed computed lazily, once, when the
+/// query is first built — upstream's `initialData: () => value`.
 final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
+  /// Seeds the cache with what [compute] returns, unless that is `null`.
   const InitialDataCompute(this.compute);
+
+  /// Called once, when the query is created. Returning `null` means "no seed
+  /// after all" — upstream's `undefined`.
   final TQueryData? Function() compute;
 
   // Equal when the function is: two tear-offs of one function compare equal
@@ -145,6 +180,8 @@ final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
 sealed class PlaceholderData<TQueryData> {
   const PlaceholderData();
 
+  /// A fixed placeholder, shown whenever the query has no data of its own —
+  /// upstream's `placeholderData: value`.
   const factory PlaceholderData.value(TQueryData data) =
       PlaceholderDataValue<TQueryData>;
 
@@ -177,9 +214,14 @@ sealed class PlaceholderData<TQueryData> {
       };
 }
 
+/// The [PlaceholderData.value] variant: a fixed placeholder, shown whenever
+/// the query has no data of its own.
 final class PlaceholderDataValue<TQueryData>
     extends PlaceholderData<TQueryData> {
+  /// Shows [data] until real data arrives.
   const PlaceholderDataValue(this.data);
+
+  /// The placeholder.
   final TQueryData data;
 
   @override
@@ -189,9 +231,18 @@ final class PlaceholderDataValue<TQueryData>
   int get hashCode => Object.hash(PlaceholderDataValue<TQueryData>, data);
 }
 
+/// The [PlaceholderData.compute] variant: a placeholder computed from what
+/// the observer showed last — upstream's
+/// `placeholderData: (previousData, previousQuery) => value`.
 final class PlaceholderDataCompute<TQueryData>
     extends PlaceholderData<TQueryData> {
+  /// Shows what [compute] returns, unless that is `null`.
   const PlaceholderDataCompute(this.compute);
+
+  /// Called whenever the observer needs a placeholder. `previousData` and
+  /// `previousQuery` are what this observer last showed and the query it
+  /// showed it for — `null` on the first build. Returning `null` means "no
+  /// placeholder".
   final TQueryData? Function(
     TQueryData? previousData,
     Query<TQueryData>? previousQuery,
@@ -214,6 +265,8 @@ final class PlaceholderDataCompute<TQueryData>
 /// change, and neither does a fresh `Enabled.when(…)`.
 @immutable
 class QueryOptions<TQueryData> {
+  /// Every field but [queryKey] is optional; an unset field takes the
+  /// client's default when the query is built.
   const QueryOptions({
     required this.queryKey,
     this.queryFn,
@@ -234,15 +287,48 @@ class QueryOptions<TQueryData> {
   /// key read as another type — a supertype included — throws
   /// `QueryDataTypeError`.
   final QueryKey queryKey;
+
+  /// Fetches the data. Left unset, the query uses the function registered for
+  /// its key with [QueryClient.setQueryDefaults], and a fetch with no function
+  /// at all fails with [MissingQueryFunctionError].
   final QueryFn<TQueryData>? queryFn;
+
+  /// Whether the query may fetch on its own. Default [Enabled.yes]. A disabled
+  /// query still serves whatever the cache holds and can still be refetched
+  /// by hand.
   final Enabled? enabled;
+
+  /// How long fetched data counts as fresh. Default [StaleTime.zero]: stale
+  /// the moment it arrives, so every mount, focus and reconnect refetches.
   final StaleTime? staleTime;
+
+  /// How long the query stays cached after its last observer leaves. Default
+  /// [GcTime.defaultValue], five minutes.
   final GcTime? gcTime;
+
+  /// Whether a failed fetch is retried. Default `RetryPolicy.times(3)` —
+  /// upstream's `retry: 3`, three retries after the first failure.
   final RetryPolicy? retry;
+
+  /// How long to wait between attempts. Default [RetryDelay.defaultValue]:
+  /// exponential back-off from one second, capped at thirty.
   final RetryDelay? retryDelay;
+
+  /// How connectivity gates the fetch. Default [NetworkMode.online]: an
+  /// offline device pauses the fetch until it is back.
   final NetworkMode? networkMode;
+
+  /// Data the cache starts with, as if it had been fetched. Unlike
+  /// `placeholderData` it *is* written to the cache, and it goes stale by
+  /// [staleTime] from [initialDataUpdatedAt] on.
   final InitialData<TQueryData>? initialData;
+
+  /// When [initialData] was fetched, for the staleness clock. Unset, the seed
+  /// counts as fetched the moment the query is created.
   final DateTime? initialDataUpdatedAt;
+
+  /// How new data is reconciled with what the cache already holds — see
+  /// [StructuralSharing]. Unset, the port applies `replaceEqualDeep`.
   final StructuralSharing<TQueryData>? structuralSharing;
 
   /// Arbitrary data carried along for logging, devtools or a query function.
@@ -253,6 +339,8 @@ class QueryOptions<TQueryData> {
   @internal
   final FetchBehavior<TQueryData>? behavior;
 
+  /// This, with the given fields replaced. Passing `null` leaves a field as it
+  /// is; a copy cannot unset one.
   QueryOptions<TQueryData> copyWith({
     QueryKey? queryKey,
     QueryFn<TQueryData>? queryFn,
@@ -293,6 +381,8 @@ class QueryOptions<TQueryData> {
 /// change by itself.
 @immutable
 class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
+  /// The cache-layer fields plus the observer's own. Every field but
+  /// [queryKey] is optional and takes the client's default.
   const QueryObserverOptions({
     required super.queryKey,
     super.queryFn,
@@ -321,12 +411,31 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
   /// cached data has to touch before a listener is notified.
   final TData Function(TQueryData data)? select;
 
+  /// Data shown while the query has none of its own. Never written to the
+  /// cache: a result built from it reports `isPlaceholderData`, and it gives
+  /// way the moment real data arrives.
   final PlaceholderData<TQueryData>? placeholderData;
 
+  /// Whether this observer subscribing triggers a refetch. Default
+  /// [RefetchOn.ifStale]: only when the data is older than [staleTime].
   final RefetchOn? refetchOnMount;
+
+  /// Whether the app regaining focus triggers a refetch. Default
+  /// [RefetchOn.ifStale].
   final RefetchOn? refetchOnWindowFocus;
+
+  /// Whether the device coming back online triggers a refetch. Default
+  /// [RefetchOn.ifStale] — except under [NetworkMode.always], where it is
+  /// [RefetchOn.never]: a fetch that ignores connectivity has nothing to
+  /// catch up on.
   final RefetchOn? refetchOnReconnect;
+
+  /// Polls the query on a timer while this observer is subscribed. Default
+  /// [RefetchInterval.off].
   final RefetchInterval? refetchInterval;
+
+  /// Whether [refetchInterval] keeps polling while the app is not focused.
+  /// Default `false`: the timer skips its turns until focus returns.
   final bool? refetchIntervalInBackground;
 
   /// Whether a query that ended in an error retries when an observer mounts.
@@ -428,18 +537,45 @@ sealed class DefaultedQueryOptions<TQueryData> {
     required this.behavior,
   });
 
+  /// [QueryOptions.queryKey].
   final QueryKey queryKey;
+
+  /// [QueryOptions.queryFn], with the key's registered default applied. Still
+  /// nullable: a query can be built without a function and fails only when it
+  /// tries to fetch.
   final QueryFn<TQueryData>? queryFn;
+
+  /// [QueryOptions.enabled], with the default applied.
   final Enabled enabled;
+
+  /// [QueryOptions.staleTime], with the default applied.
   final StaleTime staleTime;
+
+  /// [QueryOptions.gcTime], with the default applied.
   final GcTime gcTime;
+
+  /// [QueryOptions.retry], with the default applied.
   final RetryPolicy retry;
+
+  /// [QueryOptions.retryDelay], with the default applied.
   final RetryDelay retryDelay;
+
+  /// [QueryOptions.networkMode], with the default applied.
   final NetworkMode networkMode;
+
+  /// [QueryOptions.initialData]; there is no default.
   final InitialData<TQueryData>? initialData;
+
+  /// [QueryOptions.initialDataUpdatedAt]; there is no default.
   final DateTime? initialDataUpdatedAt;
+
+  /// [QueryOptions.structuralSharing]; `null` still means `replaceEqualDeep`.
   final StructuralSharing<TQueryData>? structuralSharing;
+
+  /// [QueryOptions.meta], with the key's registered default applied.
   final Object? meta;
+
+  /// [QueryOptions.behavior]: set for infinite queries, `null` otherwise.
   final FetchBehavior<TQueryData>? behavior;
 
   /// Field-by-field equality, functions compared by identity — the direct
@@ -526,6 +662,7 @@ final class _DefaultedQueryOptions<TQueryData>
 @immutable
 final class DefaultedQueryObserverOptions<TQueryData, TData>
     extends DefaultedQueryOptions<TQueryData> {
+  /// Built by [QueryClient.defaultQueryObserverOptions]; not for callers.
   @internal
   const DefaultedQueryObserverOptions({
     required super.queryKey,
@@ -551,13 +688,29 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
     required this.retryOnMount,
   }) : super._();
 
+  /// [QueryObserverOptions.select]; there is no default.
   final TData Function(TQueryData data)? select;
+
+  /// [QueryObserverOptions.placeholderData]; there is no default.
   final PlaceholderData<TQueryData>? placeholderData;
+
+  /// [QueryObserverOptions.refetchOnMount], with the default applied.
   final RefetchOn refetchOnMount;
+
+  /// [QueryObserverOptions.refetchOnWindowFocus], with the default applied.
   final RefetchOn refetchOnWindowFocus;
+
+  /// [QueryObserverOptions.refetchOnReconnect], with the default applied.
   final RefetchOn refetchOnReconnect;
+
+  /// [QueryObserverOptions.refetchInterval], with the default applied.
   final RefetchInterval refetchInterval;
+
+  /// [QueryObserverOptions.refetchIntervalInBackground], with the default
+  /// applied.
   final bool refetchIntervalInBackground;
+
+  /// [QueryObserverOptions.retryOnMount], with the default applied.
   final bool retryOnMount;
 
   /// The cache-layer view of these options.

@@ -27,6 +27,9 @@ import 'package:meta/meta.dart';
 /// never match a second, equal key.
 @immutable
 final class QueryKey {
+  /// A key of [parts], each list, set and map in them deep-copied into an
+  /// unmodifiable one. In debug builds, asserts that every part has value
+  /// equality.
   QueryKey(List<Object?> parts)
       : parts = List<Object?>.unmodifiable(parts.map<Object?>(_freeze)) {
     assert(

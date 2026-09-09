@@ -151,8 +151,12 @@ extension QueryContext on BuildContext {
 /// package barrel hides it (an `@internal` annotation would need `meta`,
 /// which Flutter 3.27's `foundation` does not yet re-export).
 class QueryScope extends InheritedWidget {
+  /// Placed by `QueryClientProvider` around its child; nothing else
+  /// constructs one.
   const QueryScope({super.key, required this.client, required super.child});
 
+  /// The provider's client, on which every observer read through this scope
+  /// is created. A new client is what makes the scope notify its readers.
   final QueryClient client;
 
   @override
@@ -223,6 +227,8 @@ class _Reader {
 /// Keeps each reading widget's observers alive for as long as it reads them.
 /// Not public API; hidden from the barrel like [QueryScope].
 class QueryScopeElement extends InheritedElement {
+  /// Created by [QueryScope.createElement]; holds every reading widget's
+  /// observers for as long as the scope is mounted.
   QueryScopeElement(QueryScope super.widget);
 
   final Map<Element, _Reader> _readers = <Element, _Reader>{};
@@ -230,6 +236,9 @@ class QueryScopeElement extends InheritedElement {
   int _epoch = 0;
   bool _sweepScheduled = false;
 
+  /// The scope's current client — the one every observer created from here on
+  /// runs on. When it changes, [update] has already released the observers
+  /// that belonged to the old one.
   QueryClient get client => (widget as QueryScope).client;
 
   /// Creates or reuses [reader]'s observer for [options] and returns its

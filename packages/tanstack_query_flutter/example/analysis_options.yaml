@@ -1,0 +1,3 @@
+# The example is a one-file tour, not API: it takes the repo-wide rules but not
+# the binding's public_member_api_docs.
+include: ../../../analysis_options.yaml

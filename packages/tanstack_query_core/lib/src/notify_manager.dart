@@ -25,6 +25,7 @@ typedef BatchNotifyFunction = void Function(void Function() callback);
 ///   upstream's single shared queue get it by default via
 ///   [NotifyManager.shared].
 class NotifyManager {
+  /// Creates an independent queue with the default microtask scheduler.
   NotifyManager();
 
   /// The process-wide instance used when a client is constructed without one.

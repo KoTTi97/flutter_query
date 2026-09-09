@@ -11,4 +11,8 @@
   `QueryClientProvider.onlineStatus`.
 - App lifecycle drives the client's focus state, and results that arrive
   mid-build are delivered after the frame.
-- Requires Flutter 3.27 or later.
+- A widget builds once per changed result: an equal result rebuilds nothing,
+  `buildWhen` on every builder decides the rest.
+- `QueryClientProvider.maybeOf`; a controller's `value` before its first
+  listener is the optimistic result, as a first build sees it.
+- Requires Flutter 3.27 or later (tested on 3.27.4 and current stable).

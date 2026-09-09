@@ -9,7 +9,19 @@ import 'online_manager.dart';
 import 'option_values.dart';
 import 'timers.dart';
 
-enum RetryerStatus { pending, resolved, rejected }
+/// Where a [Retryer] is in its life: still attempting (or paused), resolved
+/// with data, or rejected with an error or a [CancelledError]. Terminal once
+/// it leaves `pending`.
+enum RetryerStatus {
+  /// Attempting, waiting out a retry delay, or paused.
+  pending,
+
+  /// Settled with data.
+  resolved,
+
+  /// Settled with an error, a [CancelledError] included.
+  rejected,
+}
 
 /// Whether a fetch may begin under [networkMode] right now.
 ///
@@ -27,6 +39,9 @@ bool canFetch(NetworkMode networkMode, OnlineManager onlineManager) =>
 /// so `RetryPolicy.times(3)` means three retries after the first failure, and the
 /// delay is computed from the pre-increment count.
 class Retryer<TData> {
+  /// Creates a retryer for [fn] that has not started yet; call [start] to run
+  /// it. Every option defaults to upstream's: three retries, exponential delay,
+  /// [NetworkMode.online].
   Retryer({
     required this.fn,
     required this.focusManager,
@@ -47,18 +62,52 @@ class Retryer<TData> {
     _completer.future.ignore();
   }
 
+  /// The work to run once per attempt. For a query this is the query function
+  /// wrapped with its context; for a mutation, the mutation function.
   final Future<TData> Function() fn;
+
+  /// A future already in flight to adopt as the first attempt instead of
+  /// calling [fn]. A restored offline mutation resumes this way so its original
+  /// request is not duplicated.
   final Future<TData>? initialFuture;
+
+  /// Where a paused fetch asks whether the app is in the foreground before
+  /// resuming.
   final AppFocusManager focusManager;
+
+  /// Where the loop asks whether it may start or resume under [networkMode].
   final OnlineManager onlineManager;
+
+  /// Whether the owner allows an attempt right now. Mutations use it to queue
+  /// behind a scope; queries always answer `true`.
   final bool Function() canRun;
+
+  /// Whether — and how often — a failed attempt is tried again. Consulted with
+  /// the pre-increment failure count, as upstream does.
   final RetryPolicy retry;
+
+  /// How long to wait before the next attempt, computed from the failure count
+  /// and the error.
   final RetryDelay retryDelay;
+
+  /// When the loop may run relative to the online state: only online, always,
+  /// or offline-first.
   final NetworkMode networkMode;
+
+  /// Called after each failed attempt that will be retried, with the already
+  /// incremented failure count. The owner dispatches a `failed` action here.
   final void Function(int failureCount, Object error, StackTrace stackTrace)?
       onFail;
+
+  /// Called when the loop suspends itself because it cannot continue — offline,
+  /// backgrounded, or blocked by [canRun]. The owner dispatches `pause`.
   final void Function()? onPause;
+
+  /// Called when a paused loop resumes. The owner dispatches `continue`.
   final void Function()? onContinue;
+
+  /// Called by [cancel] with the error the fetch was rejected with, so the
+  /// owner can revert or silence the result as the flags ask.
   final void Function(CancelledError error)? onCancel;
 
   final Completer<TData> _completer = Completer<TData>();
@@ -68,8 +117,17 @@ class Retryer<TData> {
   bool _isRetryCancelledImmediately = false;
   int _failureCount = 0;
 
+  /// The result of the whole loop: the first successful attempt's data, or the
+  /// last error once retries are exhausted or cancelled. Already `ignore()`d
+  /// internally, so an unheard rejection is harmless.
   Future<TData> get future => _completer.future;
+
+  /// Whether the loop is still pending, has resolved, or has rejected.
   RetryerStatus get status => _status;
+
+  /// Whether the loop has settled either way. Every path through the loop
+  /// checks this before acting, so a late callback cannot resurrect a
+  /// finished fetch.
   bool get isResolved => _status != RetryerStatus.pending;
 
   /// Whether the fetch may begin right now.
@@ -113,6 +171,8 @@ class Retryer<TData> {
     }
   }
 
+  /// Undoes [cancelRetry], letting the loop attempt again. A query calls this
+  /// when a new observer arrives while an earlier `cancelRetry` is in force.
   void continueRetry() {
     _isRetryCancelled = false;
     _isRetryCancelledImmediately = false;
