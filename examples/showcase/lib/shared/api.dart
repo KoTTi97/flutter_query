@@ -131,9 +131,14 @@ class ShowcaseApi {
         query: _knobs(delay: delay, fail: fail),
       );
 
-  Future<Post> post(int id, {QueryCancelToken? signal, Duration? delay}) =>
+  Future<Post> post(
+    int id, {
+    QueryCancelToken? signal,
+    Duration? delay,
+    int? fail,
+  }) =>
       _one('/posts/$id', Post.fromJson,
-          signal: signal, query: _knobs(delay: delay));
+          signal: signal, query: _knobs(delay: delay, fail: fail));
 
   Future<List<Comment>> comments(int postId, {QueryCancelToken? signal}) =>
       _list('/posts/$postId/comments', Comment.fromJson, signal: signal);
