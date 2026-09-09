@@ -9,7 +9,8 @@ Two packages go to pub.dev, in a fixed order, from a tag each.
 2. **`tanstack_query_flutter` second**, once the core version is visible on
    pub.dev (a minute or two after publishing).
 
-The demo (`examples/sensor_demo`) is never published (`publish_to: none`).
+The examples (`examples/showcase`, `examples/sensor_demo`) are never published
+(`publish_to: none`).
 
 ## Before tagging
 
@@ -19,7 +20,7 @@ The demo (`examples/sensor_demo`) is never published (`publish_to: none`).
   validates it.
 - CI is green on `main`: it runs the tests, the analyzer, the formatter,
   `dart doc`, `dart pub publish --dry-run` for both packages, a web build of
-  the demo and the Playwright suite.
+  each example and both Playwright suites.
 
 ## Tags
 

@@ -108,6 +108,27 @@ alternatives — there is no recommended default, pick per situation:
 | `useMutation` without `onMutate` | `MutationOptions.simple(mutationFn: …)` — fixes the third type parameter to `void`, so the other two infer from `mutationFn` |
 | `result.context` (what `onMutate` returned, on the mutation result) | not on `MutationResult`: its job is the rollback, which `onError` and `onSettled` receive as their last argument |
 
+## See it running
+
+Every row above has a screen in [`examples/showcase/`](../examples/showcase)
+that shows the behaviour on a real backend, with widget tests and end-to-end
+tests that prove it. Open the app and pick the feature, or read the screen's
+file — each starts with what it shows and how it is proven:
+
+| Topic | Screen |
+|---|---|
+| reading a query, the four call styles | `simple`, `four-call-styles` |
+| `select`, `buildWhen`, structural sharing | `select-and-sharing` |
+| `initialData`, `placeholderData` | `initial-and-placeholder` |
+| `staleTime`, `gcTime` | `stale-and-gc`, `cache-inspector` |
+| `enabled` | `dependent-queries` |
+| the client's imperative surface, filters | `invalidation-and-filters`, `prefetching`, `default-query-function` |
+| infinite queries | `load-more`, `max-pages`; `pagination` for the page-numbered shape |
+| mutations, optimistic updates | `mutations`, `optimistic-updates`, `playground` |
+| retries, cancellation | `retry`, `cancellation` |
+| `refetchInterval`, focus, online | `auto-refetching`, `focus-refetch`, `offline` |
+| cache callbacks, `meta` | `global-callbacks` |
+
 ## Not here at all
 
 Persistence and hydration, `useQueries`, `streamedQuery`, Suspense, SSR and

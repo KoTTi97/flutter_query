@@ -4,6 +4,11 @@ The React demo's sensor manager, rebuilt on `tanstack_query_flutter` — same
 gateway, same cache policy, same scripted failures, so the two clients can be
 put side by side.
 
+> **The legacy example.** This app was the port's acceptance bar: one screen
+> pair, one cache policy, the React demo's behaviours reproduced. It stays as
+> it is. The example that shows *every* feature, each with widget tests and
+> end-to-end tests, is [`examples/showcase/`](../showcase); start there.
+
 ## Running it
 
 Start the gateway the React demo uses (port 5174). It runs its TypeScript

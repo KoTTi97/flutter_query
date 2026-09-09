@@ -11,7 +11,8 @@ work is first-class here, not an add-on.
 |---|---|
 | **`packages/tanstack_query_core/`** — the pure-Dart core | **done, six times reviewed.** 507 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
 | **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, four times reviewed.** 56 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter |
-| **`examples/sensor_demo/`** — the react-demo port | **done.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
+| **`examples/showcase/`** — every feature as a screen | **in progress (2026-09-09, #25).** One screen per feature (24), each with widget tests against a dio fake of the backend and Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test that runs the same cases against fake and server |
+| **`examples/sensor_demo/`** — the react-demo port, **legacy** | **done, kept as is.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
@@ -40,25 +41,40 @@ cd examples/sensor_demo && flutter test
 ```
 
 ```bash
-dart analyze --fatal-infos packages && dart format --set-exit-if-changed packages
+cd examples/showcase && flutter test
+```
+
+```bash
+dart analyze --fatal-infos packages examples && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test
 ```
 
 That is the per-module gate: tests, analyzer, formatter, and a PORTING_NOTES
 entry, all in the same commit. `.github/workflows/ci.yml` runs the same gates
 plus `dart doc`, both publish dry-runs and a web build of the demo on every
-push; a `floors` job runs the three test suites on Flutter 3.27.4 (the declared
+push; a `floors` job runs the four test suites on Flutter 3.27.4 (the declared
 floor — it caught three dependency pins and a `foundation` export that current
-stable hides); and a third job runs the demo's Playwright end-to-end suite
-(`examples/sensor_demo/e2e/`: the real web build in Chromium against the real
-express gateway — see the demo README before touching it; it reads Flutter's
-semantics tree, not the canvas). Nothing is published yet; the order, tags and
-the pub.dev-side switch are in [`docs/releasing.md`](docs/releasing.md).
+stable hides); and an `e2e` matrix job runs each example's Playwright
+end-to-end suite (the real web build in Chromium against the real express
+backend — read the example's README before touching one; they read Flutter's
+semantics tree, not the canvas, and nothing in them asserts on a clock). The
+showcase leg also runs `backend_contract_test.dart` against the real server.
+Nothing is published yet; the order, tags and the pub.dev-side switch are in
+[`docs/releasing.md`](docs/releasing.md).
+
+**The showcase's rules** are in [`examples/showcase/README.md`](examples/showcase/README.md):
+one self-contained directory per feature under `lib/features/`, a
+`QueryDebugStrip` per cache entry a test reads, no clock in any assertion,
+one backend scenario per end-to-end test (`x-scenario`), and the widget-test
+harness `showcaseTest` in `test/harness.dart`.
 
 **Widget tests need one extra step.** A `QueryClient` outlives the tree and owns
 `gcTime` timers; Flutter's test binding asserts no timer is pending when the
 tree comes down, *before* any `tearDown` runs. So a widget test ends with
 `await tester.pumpWidget(const SizedBox()); client.clear();` — see the
-`widgetTest` helper in `packages/tanstack_query_flutter/test/binding_test.dart`.
+`widgetTest` helper in `packages/tanstack_query_flutter/test/binding_test.dart`
+and `showcaseTest` in `examples/showcase/test/harness.dart`. And
+`pumpAndSettle` only pumps while a frame is scheduled: a fake backend's latency
+or a `refetchInterval` is a timer, stepped with `tester.pump(duration)`.
 
 ## The wayfinder map
 
@@ -130,7 +146,8 @@ by `/domain-modeling` when the first term or decision is resolved. See
 |---|---|---|
 | `packages/tanstack_query_core/` | The pure-Dart core. | yes |
 | `packages/tanstack_query_flutter/` | The Flutter binding. | yes |
-| `examples/sensor_demo/` | The react-demo port, and the MVP acceptance suite. | yes |
+| `examples/showcase/` | Every feature as a screen, its dummy backend (`server/`), its widget and end-to-end tests. | yes |
+| `examples/sensor_demo/` | The react-demo port, and the MVP acceptance suite. Legacy, kept as is. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |
 | `docs/research/` | Research findings behind the map's tickets. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |

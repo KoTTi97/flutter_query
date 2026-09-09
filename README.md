@@ -19,8 +19,9 @@ the fidelity work.
 |---|---|
 | [`packages/tanstack_query_core/`](packages/tanstack_query_core) | The pure-Dart core: queries, mutations, infinite queries, observers, client and caches. No Flutter dependency. Every applicable upstream suite ported case-for-case; the audit is [PORTING_NOTES.md](packages/tanstack_query_core/test/PORTING_NOTES.md). |
 | [`packages/tanstack_query_flutter/`](packages/tanstack_query_flutter) | The Flutter binding: `QueryClientProvider`, listenable controllers, builder widgets, a `State` mixin and `context.query(...)`. Four equal call styles, no dependency beyond Flutter. |
-| [`examples/sensor_demo/`](examples/sensor_demo) | The React demo's sensor manager rebuilt on the binding, against the same gateway and the same cache policy, with an acceptance test per row of the MVP checklist. |
-| [`react-demo/`](react-demo) | The React sensor demo and its express gateway, vendored: they define the bar the Flutter demo has to meet. |
+| [`examples/showcase/`](examples/showcase) | Every feature of the library as its own screen, on a dummy backend built for it, each screen with widget tests and a Playwright end-to-end suite. The catalogue is its README. |
+| [`examples/sensor_demo/`](examples/sensor_demo) | The legacy example: the React demo's sensor manager rebuilt on the binding, against the same gateway and the same cache policy, with an acceptance test per row of the MVP checklist. |
+| [`react-demo/`](react-demo) | The React sensor demo and its express gateway, vendored: they defined the bar the first Flutter demo had to meet. |
 
 Upstream is pinned at `50680b98c`; the `query/` checkout it needs is a nested,
 gitignored clone (see [CLAUDE.md](CLAUDE.md) for the clone command).
@@ -36,18 +37,20 @@ cd packages/tanstack_query_flutter && flutter test
 ```
 
 ```bash
-cd examples/sensor_demo && flutter test
+cd examples/showcase && flutter test
 ```
 
-The demo's README says how to run it against the gateway.
+The showcase's README says how to run it against its backend and how to run
+its end-to-end suite; the legacy demo's README does the same for the gateway.
 
 ## Requirements and platforms
 
-The core is pure Dart (SDK `^3.6.0`). The binding and the demo need **Flutter
-3.27 or later**; CI runs the tests on that floor and on current stable. The demo
-has been run on the iOS simulator and on the web; other platforms are untested.
-Its UI is German, like the React demo it mirrors. The gateway both demos talk to
-is Node (23.6 or later, for TypeScript type stripping).
+The core is pure Dart (SDK `^3.6.0`). The binding and the examples need
+**Flutter 3.27 or later**; CI runs the tests on that floor and on current
+stable. The examples have been run on the web and (the legacy demo) on the iOS
+simulator; other platforms are untested. The legacy demo's UI is German, like
+the React demo it mirrors; the showcase is English. The backends the examples
+talk to are Node (23.6 or later, for TypeScript type stripping).
 
 ## Coming from TanStack Query (JS)
 
