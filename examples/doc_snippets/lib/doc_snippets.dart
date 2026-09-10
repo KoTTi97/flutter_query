@@ -277,8 +277,7 @@ QueryObserverOptions<Task, Task> withoutStructuralSharing(String id) =>
 // guides/rebuilds.md
 // ---------------------------------------------------------------------------
 
-QueryObserverOptions<List<Task>, int> doneCountQuery() =>
-    QueryObserverOptions(
+QueryObserverOptions<List<Task>, int> doneCountQuery() => QueryObserverOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
       select: (tasks) => tasks.where((s) => s.done).length,
@@ -286,15 +285,15 @@ QueryObserverOptions<List<Task>, int> doneCountQuery() =>
 
 /// A record has value equality already, which makes it the easy pick for a
 /// `select` output.
-QueryObserverOptions<List<Task>, ({int done, int total})>
-    doneRecordQuery() => QueryObserverOptions(
-          queryKey: tasksKey,
-          queryFn: (context) => api.listTasks(signal: context.signal),
-          select: (data) => (
-            done: data.where((s) => s.done).length,
-            total: data.length,
-          ),
-        );
+QueryObserverOptions<List<Task>, ({int done, int total})> doneRecordQuery() =>
+    QueryObserverOptions(
+      queryKey: tasksKey,
+      queryFn: (context) => api.listTasks(signal: context.signal),
+      select: (data) => (
+        done: data.where((s) => s.done).length,
+        total: data.length,
+      ),
+    );
 
 Widget buildWhenSample(String id) => QueryBuilder<Task>(
       options: taskQuery(id),
