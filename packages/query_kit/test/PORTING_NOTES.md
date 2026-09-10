@@ -1038,7 +1038,7 @@ Their tests are the `A<n> …` cases at the end of `fourthReview()` in
   `MutationOptions` say there is no value equality on purpose: inline options
   are re-applied every build and the observer compares resolved values.
 - **A8 — done.** The core README states the rule — one key, one exact type,
-  related types included — and `docs/coming-from-react-query.md` has a row.
+  related types included — and `website/docs/reference/coming-from-react-query.md` has a row.
 - **A10 — done.** `QueryCache.build(state: …)` asserts that a `success` state
   carries data, naming the persistence door in the message.
 - **A11 — done.** An infinite refetch whose first held page param is `null`
@@ -1408,7 +1408,7 @@ Decisions taken on the way, with the alternatives:
   file except `port_specifics_test.dart` (the other half's file — the exact
   rewrite it needs is in the report), the binding's `binding_test.dart`,
   the demo's `queries.dart` and `acceptance_test.dart`, and two rows of
-  `docs/coming-from-react-query.md`. Ported test names unchanged.
+  `website/docs/reference/coming-from-react-query.md`. Ported test names unchanged.
 - **D7 scope:** `Retryer.start()` rejects only when it *cannot* start;
   a removed mutation that can start runs its one attempt. The narrower
   reading of the finding, and consistent with "an in-flight attempt still

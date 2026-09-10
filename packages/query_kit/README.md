@@ -140,17 +140,16 @@ matter at the call site:
   default of `Duration.zero` is upstream's behaviour.
 
 The full JS-to-Dart name map is
-[`docs/coming-from-react-query.md`](https://github.com/KoTTi97/flutter_query/blob/main/docs/coming-from-react-query.md)
-in the repository.
+[in the documentation](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/reference/coming-from-react-query.md).
 
-## Deliberately not in v1
+## Deliberately not in 0.1
 
 Each row is recorded, with its reason, in
 [`test/PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
 
 | Upstream | Here |
 |---|---|
-| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in v1; `Query.setState` is the door a persister would use |
+| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 0.1; `Query.setState` is the door a persister would use |
 | `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the binding's builders |
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |

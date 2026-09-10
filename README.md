@@ -103,10 +103,11 @@ talk to are Node (23.6 or later, for TypeScript type stripping).
 
 ## Coming from TanStack Query (JS)
 
-[`docs/coming-from-react-query.md`](docs/coming-from-react-query.md) maps the
+[The name map](website/docs/reference/coming-from-react-query.md) takes the
 JavaScript names to the Dart ones — `useQuery` to the four equal call styles,
 `fetchQuery` to `QueryClient.query`, `staleTime: Infinity` to
-`StaleTime.infinite`, and the rest.
+`StaleTime.infinite`, and the rest — and names the showcase screen that
+demonstrates each.
 
 ## Deliberately not in 0.1
 
