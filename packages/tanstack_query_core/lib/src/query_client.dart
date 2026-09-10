@@ -396,6 +396,13 @@ class QueryClient {
 
   /// Stops listening. Balanced with [mount].
   void unmount() {
+    if (_mountCount == 0) {
+      // Never below zero. An unmount without a matching mount used to leave
+      // the count at -1, and the next `mount()` then took it to 0 and
+      // subscribed to nothing: focus and reconnect refetching off for the
+      // life of the client, silently (eighth review, 2026-09-10).
+      return;
+    }
     _mountCount--;
     if (_mountCount != 0) {
       return;
@@ -550,6 +557,10 @@ class QueryClient {
   /// fetch — upstream's default too. [silent] is *not* on by default: a silent
   /// cancel means "a new fetch is taking over", which is not what an explicit
   /// cancel is.
+  ///
+  /// [silent] cancels without dispatching an error. A silently cancelled
+  /// fetch that nothing replaces is put back to `idle` rather than left
+  /// `fetching` forever — see [Query.cancel].
   Future<void> cancelQueries({
     QueryFilters filters = const QueryFilters(),
     bool revert = true,
@@ -1031,7 +1042,13 @@ class QueryClient {
   /// Resolves infinite-query options into the observer options a
   /// `Query<InfiniteData<…>>` runs on. The paging behaviour is the options'
   /// own ([InfiniteQueryOptions.behavior]); this only adds the observer half.
-  @internal
+  ///
+  /// Public because it is the only legal input to
+  /// `InfiniteQueryObserver.setOptions` and `InfiniteQueryController.setOptions`
+  /// — plain observer options are refused there — and a documented path that
+  /// nothing outside the package may take is not a path (seventh review,
+  /// 2026-09-10). [InfiniteQueryObserver.setInfiniteOptions] is the shorter
+  /// way to the same thing.
   QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>
       infiniteObserverOptions<TPageData, TPageParam, TData>(
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,

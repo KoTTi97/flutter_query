@@ -423,21 +423,44 @@ class Query<TQueryData> extends Removable {
 
   /// Replaces this query's state wholesale — the door persistence and devtools
   /// come through (https://github.com/KoTTi97/flutter_query/issues/17).
-  void setState(QueryState<TQueryData> state) =>
-      _dispatch(QuerySetStateAction<TQueryData>(state));
+  ///
+  /// A `success` state must carry data, the same invariant
+  /// [QueryCache.build] checks on the other half of that door: a success
+  /// state is by definition one that holds data, and an observer built on
+  /// `success` with none casts `null` to the data type and throws — in its
+  /// constructor, into whatever zone happened to be running, leaving a reader
+  /// that never recovers. Rejected here in every build mode: an `assert`
+  /// would let a release build accept the state and fail later somewhere that
+  /// says nothing about where it came from (eighth review, 2026-09-10).
+  void setState(QueryState<TQueryData> state) {
+    if (state.status == QueryStatus.success && !state.hasData) {
+      throw ArgumentError.value(
+        state,
+        'state',
+        'A QueryState with status == success must have hasData == true. '
+            'This is the persistence and devtools door; check what was '
+            'restored for $queryKey',
+      );
+    }
+    _dispatch(QuerySetStateAction<TQueryData>(state));
+  }
 
   /// Cancels the in-flight fetch, completing once it has settled.
   ///
   /// [revert] puts the state back to what it was before the fetch. [silent]
-  /// dispatches no error and is only meaningful when a new fetch takes over
-  /// — it is how a cancel-refetch hands one fetch's callers to the next.
-  /// A silent cancel with no successor leaves the query `fetching` for good:
-  /// nothing is running, and nothing will end the status. Use it only from a
-  /// fetch that follows on the same key; an explicit cancel is
-  /// `QueryClient.cancelQueries`, which is not silent.
+  /// dispatches no error — it is how a cancel-refetch hands one fetch's
+  /// callers to the next, and the successor's own `fetch` action is what ends
+  /// the `fetching` status.
+  ///
+  /// When no successor turns up, this puts the fetch status back to `idle`
+  /// itself. Upstream leaves it `fetching` with nothing running and no way
+  /// out — reachable from one public call,
+  /// `QueryClient.cancelQueries(silent: true)` — and a query wedged that way
+  /// never loads again (eighth review, 2026-09-10).
   Future<void> cancel({bool revert = false, bool silent = false}) async {
-    final pending = _retryer?.future;
-    _retryer?.cancel(revert: revert, silent: silent);
+    final cancelled = _retryer;
+    final pending = cancelled?.future;
+    cancelled?.cancel(revert: revert, silent: silent);
     if (pending == null) {
       return;
     }
@@ -445,6 +468,15 @@ class Query<TQueryData> extends Removable {
       await pending;
     } catch (_) {
       // The error belongs to the query's state, not to whoever cancelled.
+    }
+    // Nothing replaced this fetch: `_retryer` is either cleared by its own
+    // settle or still the one just cancelled. A successor is installed
+    // synchronously by `fetch()`, before this await resumes, so a different
+    // retryer here means the handoff happened and it owns the status.
+    final successor = _retryer;
+    final replaced = successor != null && !identical(successor, cancelled);
+    if (silent && !replaced && _state.fetchStatus != FetchStatus.idle) {
+      setState(_state.copyWith(fetchStatus: FetchStatus.idle));
     }
   }
 

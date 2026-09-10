@@ -451,6 +451,7 @@ void main() {
   fourthReview();
   fifthReviewObserver();
   showcaseFindings();
+  eighthReview();
 }
 
 // -----------------------------------------------------------------------------
@@ -2025,4 +2026,147 @@ void showcaseFindings() {
     expect(identical(reported, cached), isTrue);
     client.clear();
   });
+}
+
+// -----------------------------------------------------------------------------
+// Eighth review, 2026-09-10 (of `56950db`). Core findings, each reproduced
+// before the fix; the binding's are in
+// `tanstack_query_flutter/test/review_regressions_test.dart`.
+
+void eighthReview() {
+  test('E1 setState refuses a success state with no data', () {
+    final client = testClient();
+    final query = client.queryCache.build<String>(
+      client,
+      client.defaultQueryOptions(
+        QueryObserverOptions<String, String>(queryKey: queryKey()),
+      ),
+    );
+    // The other half of the persistence door, `QueryCache.build`, has always
+    // checked this. Accepting it here left the next observer casting `null`
+    // to the data type — and it throws in its *constructor*, into whatever
+    // zone is running, leaving a reader that never recovers.
+    expect(
+      () => query.setState(QueryState<String>(
+        status: QueryStatus.success,
+        fetchStatus: FetchStatus.idle,
+        dataUpdatedAt: DateTime.now(),
+        errorUpdatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        fetchFailureCount: 0,
+        isInvalidated: false,
+      )),
+      throwsA(isA<ArgumentError>()),
+    );
+    client.clear();
+  });
+
+  test('E2 one subscriber cannot unsubscribe another with an equal tear-off',
+      () {
+    final client = testClient();
+    final watcher = _CacheWatcher();
+    final first = client.queryCache.subscribe(watcher.onEvent);
+    final second = client.queryCache.subscribe(watcher.onEvent);
+    // In JavaScript two functions are never equal, so upstream's `Set` is
+    // only an ordered list. In Dart `watcher.onEvent` is `==` to itself, and
+    // the two subscriptions collapsed into one: the first unsubscribe
+    // silenced the second.
+    first();
+    client.setQueryData<String>(queryKey(), 'v');
+    expect(watcher.calls, greaterThan(0));
+    second();
+    client.clear();
+  });
+
+  testFakeAsync('E3 a silent cancel that nothing replaces lands idle',
+      (time) async {
+    final client = testClient();
+    final gate = Completer<String>();
+    // One key, held: `queryKey()` mints a fresh one on every call.
+    final key = queryKey();
+    final observer = client.observe<String, String>(QueryObserverOptions(
+      queryKey: key,
+      queryFn: (_) => gate.future,
+    ));
+    observer.subscribe((_) {});
+    await time.advance(Duration.zero);
+    expect(observer.currentResult.fetchStatus, FetchStatus.fetching);
+
+    // Reachable from one public call. Upstream leaves the query `fetching`
+    // with nothing running and no way out: it never loads again.
+    // Not awaited directly: under fake async the clock has to move for the
+    // cancelled fetch to settle.
+    client
+        .cancelQueries(
+          filters: QueryFilters(queryKey: key),
+          revert: false,
+          silent: true,
+        )
+        .ignore();
+    await time.advance(const Duration(milliseconds: 10));
+    expect(observer.currentResult.fetchStatus, FetchStatus.idle);
+
+    observer.destroy();
+    if (!gate.isCompleted) {
+      gate.complete('late');
+    }
+    client.clear();
+  });
+
+  testFakeAsync('E4 unmount() before mount() leaves the client mountable',
+      (time) async {
+    final client = testClient();
+    // The count used to go to -1, and the next `mount()` took it to 0 and
+    // subscribed to nothing: focus and reconnect refetching off for good.
+    client.unmount();
+    client.mount();
+    var fetches = 0;
+    final observer = client.observe<String, String>(QueryObserverOptions(
+      queryKey: queryKey(),
+      queryFn: (_) async {
+        fetches += 1;
+        return 'v';
+      },
+      refetchOnWindowFocus: RefetchOn.always,
+    ));
+    observer.subscribe((_) {});
+    await time.advance(Duration.zero);
+    final afterSubscribe = fetches;
+    client.focusManager.setFocused(false);
+    client.focusManager.setFocused(true);
+    await time.advance(Duration.zero);
+    expect(fetches, afterSubscribe + 1);
+    observer.destroy();
+    client.unmount();
+    client.clear();
+  });
+
+  testFakeAsync('E5 a missing mutationFn is not retried', (time) async {
+    final client = testClient();
+    final observer = MutationObserver<String, int, void>(
+      client,
+      MutationOptions<String, int, void>(
+        retry: const RetryPolicy.times(3),
+        retryDelay: const RetryDelay.fixed(Duration(seconds: 10)),
+      ),
+    );
+    observer.subscribe((_) {});
+    observer.mutate(1);
+    // The query twin has answered at once since the fourth review: a missing
+    // function is a configuration error, and retrying only delays the
+    // message by the whole backoff. The mutation took 30 seconds to say the
+    // same thing.
+    await time.advance(Duration.zero);
+    expect(observer.currentResult.errorOrNull,
+        isA<MissingMutationFunctionError>());
+    expect(observer.currentResult.isError, isTrue);
+    observer.destroy();
+    client.clear();
+  });
+}
+
+/// Two subscriptions passing a tear-off of one method on one object.
+class _CacheWatcher {
+  int calls = 0;
+
+  void onEvent(QueryCacheEvent event) => calls += 1;
 }

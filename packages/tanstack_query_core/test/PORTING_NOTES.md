@@ -1422,6 +1422,79 @@ Decisions taken on the way, with the alternatives:
   accepted; Dart allows it, and splitting `InfiniteData` out would move a
   public type for the sake of a graph nobody navigates. Not restructured.
 
+### Eighth review (2026-09-10, of `56950db`)
+
+A review of the core, arriving with the two of the binding. Each finding was
+reproduced before anything changed; the regressions are `E1`–`E5` in
+`port_specifics_test.dart`.
+
+1. **`Query.setState` accepted a `success` state with no data.**
+   `QueryCache.build` has always asserted that invariant — it is the same
+   persistence door, and `setState` is the other half of it. What an
+   inconsistent state does is not subtle: the next `QueryObserver` casts
+   `null` to the data type and throws *in its constructor*, into whatever
+   zone happens to be running, and the reader never recovers. Rejected now
+   with an `ArgumentError` in every build mode; an `assert` would let a
+   release build take the state and fail somewhere that says nothing about
+   where it came from.
+
+2. **`Subscribable` kept its listeners in a `Set`, and Dart tear-offs are
+   equal.** See the divergence table below: two independent subscribers that
+   both passed `watcher.onEvent` collapsed into one entry, and the first to
+   unsubscribe silenced the second. `QueryCache`, `MutationCache`,
+   `FocusManager` and `OnlineManager` all inherit it. Now a list, one entry
+   per `subscribe`, each handle removing its own — and calling a handle twice
+   removes nothing the second time.
+
+3. **`cancelQueries(revert: false, silent: true)` wedged the query in
+   `fetching` for good.** A silent cancel dispatches no error because the
+   fetch that replaces it announces itself instead; with no replacement,
+   nothing ever ends the status and the query never loads again. `Query.cancel`
+   documented the hazard, but `cancelQueries` is public, takes the flag, and
+   said nothing. Upstream has the same hole. `cancel` now puts the status back
+   to `idle` itself when nothing replaced the fetch — told apart by whether
+   `_retryer` is a *different* retryer, since `fetch()` installs a successor
+   synchronously before the cancel's await resumes.
+
+4. **`unmount()` before `mount()` disabled focus and reconnect refetching for
+   the life of the client.** The count went to -1, and the next `mount()`
+   took it to 0 — never to 1, so nothing was ever subscribed. Silent, and
+   permanent. `unmount()` now ignores a call that would take the count below
+   zero. The README's claim that `unmount()` was the reader's to call beside
+   `clear()` was the likeliest way to reach it, and is corrected too.
+
+5. **A missing `mutationFn` was retried with the full backoff.** The query
+   side has answered at once since the fourth review — a missing function is
+   a configuration error, and retrying only delays the message — while the
+   mutation twin took the whole backoff to say the same thing (30 seconds at
+   the default policy). Now decided by what the options hold when the attempt
+   starts: `RetryPolicy.never` when there is no function. The check stays
+   *inside* the attempt so the error still reaches the state and the
+   callbacks like any other failure.
+
+6. **Documentation that described something unreachable.**
+   `hasNextPageOf`/`hasPreviousPageOf` were documented "for callers holding
+   only options and data (a binding rendering from a cache snapshot, say)"
+   and hidden from the barrel, so no such caller could have them; they are
+   exported now. `QueryClient.infiniteObserverOptions` was `@internal` while
+   being the only legal input to `InfiniteQueryObserver.setOptions` and
+   `InfiniteQueryController.setOptions` — every public call to those threw —
+   so it is public. Four `DefaultedMutationOptions` fields claimed "with the
+   key's registered default applied" for callbacks `MutationDefaults` does
+   not carry. And `Enabled.when` is asked seven times for a single
+   subscribe-and-fetch, `StaleTime.dynamic` four; both now say that they must
+   be cheap and free of side effects, and that the number is not one to rely
+   on.
+
+**A throwing cache-wide `onSuccess` turns a successful fetch into an error**
+was reported and is *not* changed. It is faithful to upstream — `query.ts`
+runs the cache callback inside the same `try`, so a throw there becomes the
+fetch's failure — and the data stays cached, so the next read is correct. It
+is a real sharp edge in an otherwise complete user-code isolation policy, but
+changing it would diverge from upstream on an error path the ported suite
+pins, and no reproduction showed harm beyond the status. Recorded here so the
+decision can be reopened rather than rediscovered.
+
 ### Found by the showcase (2026-09-09, from `24eae03` on)
 
 The showcase (`examples/showcase/`, #25) exercises every feature through real
@@ -1571,6 +1644,7 @@ suite does not have to go looking:
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `MutationFunctionContext` (a mutation function's second argument) | not ported: `MutationFn` takes variables only |  [#14](https://github.com/KoTTi97/flutter_query/issues/14) |
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
+| a `Set` of listeners in `Subscribable` | a `List`: Dart tear-offs are `==`, so a Set let one subscriber's unsubscribe silence another's | eighth review 2026-09-10 |
 | module-level managers | instances the `QueryClient` owns — the `NotifyManager` too since the third review (`NotifyManager.shared` opts back in) | [#19](https://github.com/KoTTi97/flutter_query/issues/19), review 2026-09-09 |
 | `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |
 | `persister` | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
@@ -1578,6 +1652,23 @@ suite does not have to go looking:
 | `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` — and a *subtype* is a mismatch: one key, one exact type | [#7](https://github.com/KoTTi97/flutter_query/issues/7), fourth review 2026-09-09 |
+
+### A `Set` of listeners does not port
+
+`subscribable.ts` keeps `listeners` in a `Set`, and one ported case —
+"should deduplicate the same listener reference" — pins that: subscribing the
+same function three times and unsubscribing once leaves nothing.
+
+In JavaScript that is nearly unobservable, because two function objects are
+never equal; the `Set` is an insertion-ordered list that merely cannot hold
+one closure twice. In Dart a tear-off of a method on an object is `==` to
+itself, so `cache.subscribe(logger.onEvent)` called from two unrelated places
+produced **one** registration — and the first unsubscribe took the other
+subscriber's listener with it. The port keeps a `List`: one entry per
+`subscribe`, each returned handle removing its own, and a handle called twice
+removing nothing more. The ported case is renamed "registers the same listener
+reference once per subscribe" and asserts the port's answer, with two
+port-specific cases beside it (eighth review, 2026-09-10).
 | `MutationCache.remove` leaves the mutation's gc timer running | the timer is cancelled, so a removed mutation cannot ask to be removed again | [#22](https://github.com/KoTTi97/flutter_query/issues/22) |
 | a cancelled retry can still flip its query from `idle` to `paused` after its delay | the retryer checks `isResolved` after the delay | review, 2026-09-08 |
 | a removed query or mutation re-arms its own gc timer from the fetch's `finally` | removal marks it, and a marked one schedules nothing | [#24](https://github.com/KoTTi97/flutter_query/issues/24) |

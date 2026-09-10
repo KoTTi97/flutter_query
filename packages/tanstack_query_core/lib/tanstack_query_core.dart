@@ -25,7 +25,7 @@ export 'src/infinite_query.dart'
         hasPreviousPage,
         nextPageParam,
         previousPageParam;
-export 'src/infinite_query_observer.dart' hide hasNextPageOf, hasPreviousPageOf;
+export 'src/infinite_query_observer.dart';
 export 'src/mutation.dart' hide MutationCacheRef;
 export 'src/mutation_cache.dart';
 export 'src/mutation_observer.dart';

@@ -33,6 +33,12 @@ sealed class StaleTime {
   static const StaleTime infinite = StaleTimeInfinite();
 
   /// Computed per query, from its current state.
+  ///
+  /// Asked every time staleness is decided, which is several times per
+  /// operation — four times for a single subscribe-and-fetch as this is
+  /// written, and no number worth relying on. Keep [compute] cheap and free
+  /// of side effects; it is a question about the query, not a place to do
+  /// work (eighth review, 2026-09-10).
   const factory StaleTime.dynamic(
       StaleTime Function(Query<Object?> query) compute) = StaleTimeDynamic;
 
@@ -199,6 +205,12 @@ sealed class Enabled {
   /// Decided per query, each time it matters — upstream's
   /// `enabled: (query) => boolean`. A predicate that reads the query's state
   /// can, for instance, keep a query enabled only until it first succeeds.
+  ///
+  /// "Each time it matters" is often: seven calls for a single
+  /// subscribe-and-fetch as this is written, and not a number to depend on.
+  /// [predicate] must be cheap and free of side effects — it answers a
+  /// question about the query, and anything else it does happens an
+  /// unpredictable number of times (eighth review, 2026-09-10).
   const factory Enabled.when(bool Function(Query<Object?> query) predicate) =
       EnabledWhen;
 

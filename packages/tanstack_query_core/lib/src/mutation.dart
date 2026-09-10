@@ -8,6 +8,7 @@ import 'package:clock/clock.dart';
 import 'package:meta/meta.dart';
 
 import 'mutation_options.dart';
+import 'option_values.dart';
 import 'query_client.dart';
 import 'query_key.dart';
 import 'removable.dart';
@@ -560,7 +561,14 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       focusManager: client.focusManager,
       onlineManager: client.onlineManager,
       canRun: () => _cache.canRunMutation(_erased),
-      retry: _options.retry,
+      // A missing function is a configuration error, and retrying it only
+      // delays the message by the whole backoff — the same answer the query
+      // side has given since the fourth review. Decided by what the options
+      // hold now: a `setMutationDefaults` between attempts could supply one,
+      // but a caller waiting 30 seconds to be told the function was never
+      // there is the certain cost against that unlikely benefit (eighth
+      // review, 2026-09-10).
+      retry: _options.mutationFn == null ? RetryPolicy.never : _options.retry,
       retryDelay: _options.retryDelay,
       networkMode: _options.networkMode,
       onFail: (failureCount, error, stackTrace) =>
