@@ -1,0 +1,175 @@
+# The per-module gate from CLAUDE.md, on a fresh checkout: tests, analyzer,
+# formatter, and one real app build of the demo.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.8
+          cache: true
+      - run: flutter pub get
+      - name: core tests
+        run: dart test
+        working-directory: packages/query_kit
+      # The port serves the web as a first-class target, and two reviews found
+      # bugs only a JavaScript runtime shows (32-bit timers, int/double being
+      # one type); the whole core suite runs compiled to JS as well.
+      - name: core tests, compiled to JavaScript
+        run: dart test --platform chrome
+        working-directory: packages/query_kit
+      - name: binding tests
+        run: flutter test
+        working-directory: packages/query_kit_flutter
+      - name: demo tests
+        run: flutter test
+        working-directory: examples/task_manager
+      - name: showcase tests
+        run: flutter test
+        working-directory: examples/showcase
+      # `dart pub publish --dry-run` exits 65 when validation finds a warning
+      # (a missing CHANGELOG, say) and 0 when the package is clean, so a
+      # warning fails the job without any extra flag.
+      - name: core publish dry-run
+        run: dart pub publish --dry-run
+        working-directory: packages/query_kit
+      - name: binding publish dry-run
+        run: dart pub publish --dry-run
+        working-directory: packages/query_kit_flutter
+      - name: analyzer
+        run: dart analyze --fatal-infos packages examples/task_manager examples/showcase examples/doc_snippets tool
+      # `dart doc` reports unresolved doc references and broken links as
+      # warnings; the API reference is the first page a pub.dev reader opens.
+      - name: core docs
+        run: dart doc --validate-links
+        working-directory: packages/query_kit
+      - name: binding docs
+        run: dart doc --validate-links
+        working-directory: packages/query_kit_flutter
+      - name: formatter
+        run: dart format --set-exit-if-changed --output=none packages examples/task_manager/lib examples/task_manager/test examples/showcase/lib examples/showcase/test examples/doc_snippets/lib tool
+      - name: demo web build
+        run: flutter build web --no-pub
+        working-directory: examples/task_manager
+      - name: showcase web build
+        run: flutter build web --no-pub
+        working-directory: examples/showcase
+
+  # The declared floors (Dart 3.6 / Flutter 3.27), tests only: the formatter
+  # and analyzer output differ between SDK versions, the behaviour must not.
+  floors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.27.4
+          cache: true
+      - run: flutter pub get
+      - name: core tests
+        run: dart test
+        working-directory: packages/query_kit
+      - name: binding tests
+        run: flutter test
+        working-directory: packages/query_kit_flutter
+      - name: demo tests
+        run: flutter test
+        working-directory: examples/task_manager
+      - name: showcase tests
+        run: flutter test
+        working-directory: examples/showcase
+
+  # The documentation site. Nothing is deployed — this job exists because
+  # `onBrokenLinks: 'throw'` turns a link to a page that does not exist into a
+  # failed build, which is the only thing that keeps a docs site honest as the
+  # prose moves around.
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+        working-directory: website
+      - name: typecheck
+        run: npm run typecheck
+        working-directory: website
+      - name: build
+        run: npm run build
+        working-directory: website
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: website/build
+          retention-days: 7
+
+  # The end-to-end suites: each app's real web build in a real Chromium
+  # against its real express backend, driven by Playwright. The task manager
+  # (examples/task_manager/e2e) runs against its own express backend; the
+  # showcase (examples/showcase/e2e) against its own scenario-isolated
+  # backend, and that leg also runs the backend contract test against the
+  # real server, which is what proves the widget tests' fake mirrors it.
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: task_manager
+            server: examples/task_manager/server
+            build: --dart-define=E2E=true
+          - app: showcase
+            server: examples/showcase/server
+            build: --dart-define=E2E=true --pwa-strategy=none --no-web-resources-cdn
+    name: e2e (${{ matrix.app }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.8
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: flutter pub get
+      - name: web build with semantics on
+        run: flutter build web --no-pub ${{ matrix.build }}
+        working-directory: examples/${{ matrix.app }}
+      - name: backend dependencies
+        run: npm ci
+        working-directory: ${{ matrix.server }}
+      - name: backend contract against the real server
+        if: matrix.app == 'showcase'
+        run: |
+          (cd server && PORT=5176 node server.ts &)
+          for i in $(seq 1 50); do curl -sf localhost:5176/api/__scenario/probe/requests > /dev/null && break; sleep 0.2; done
+          SHOWCASE_SERVER=http://localhost:5176/api flutter test test/backend_contract_test.dart
+        working-directory: examples/showcase
+      - name: playwright
+        run: npm ci && npx playwright install --with-deps chromium
+        working-directory: examples/${{ matrix.app }}/e2e
+      - name: end-to-end tests
+        run: npx playwright test
+        working-directory: examples/${{ matrix.app }}/e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.app }}
+          path: |
+            examples/${{ matrix.app }}/e2e/playwright-report
+            examples/${{ matrix.app }}/e2e/test-results
+          retention-days: 7

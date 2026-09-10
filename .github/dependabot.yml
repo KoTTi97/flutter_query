@@ -1,0 +1,22 @@
+# The published packages have no third-party dependencies, so there is nothing
+# to update there. What does age is the tooling: the actions this workflow
+# runs, the two example backends, the two Playwright suites and the
+# documentation site.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directories:
+      - /examples/showcase/server
+      - /examples/showcase/e2e
+      - /examples/task_manager/server
+      - /examples/task_manager/e2e
+      - /website
+    schedule:
+      interval: monthly
+    groups:
+      dev-tooling:
+        patterns: ['*']
