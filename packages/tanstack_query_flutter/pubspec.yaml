@@ -22,10 +22,13 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  # For `lib/testing.dart` only — a test file imports it, an app never does,
+  # and both are SDK packages, so nothing is pulled from pub.dev.
+  flutter_test:
+    sdk: flutter
+  meta: ^1.15.0
   tanstack_query_core: ^0.1.0-dev
 
 dev_dependencies:
   clock: ^1.1.1
-  flutter_test:
-    sdk: flutter
   lints: '>=5.1.1 <7.0.0'

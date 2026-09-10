@@ -4,6 +4,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
@@ -17,19 +18,23 @@ import 'query_context.dart';
 ///
 /// 1. **App lifecycle → focus.** Every [AppLifecycleState] the app reports —
 ///    the one it is already in, and each transition after — is mapped onto
-///    the client's focus state: `resumed` and `inactive` are focused, `hidden`,
-///    `paused` and `detached` are not. `inactive` counts as focused on
-///    purpose: on iOS it fires for the notification shade and every system
-///    dialog, and treating those as "unfocused" would refetch the world on the
-///    way back.
+///    the client's focus state by [isAppShown]. `resumed` is focused;
+///    `hidden`, `paused` and `detached` are not. `inactive` depends on the
+///    platform, because the state means two different things: on iOS and
+///    Android it is a transient interruption (the notification shade, the app
+///    switcher, an incoming call) and counts as focused, since treating those
+///    as "unfocused" would refetch the world on the way back; on macOS,
+///    Windows and Linux it is precisely the window losing focus — the event
+///    `refetchOnWindowFocus` is named after — and counts as unfocused. Pass
+///    [isAppShown] to decide it yourself.
 /// 2. **The notify scheduler.** Notifications that arrive while a build is in
 ///    flight are deferred to a post-frame callback, so a query resolving
 ///    mid-build cannot call `setState` during that build. The scheduler is
 ///    installed on the client's own `NotifyManager` and the previous one is
-///    put back when the provider goes away. (A client constructed with
-///    `NotifyManager.shared` shares the manager with every other such client;
-///    two providers over shared managers hand the scheduler back and forth in
-///    mount order.)
+///    put back when the last provider using that manager goes away — the
+///    installation is counted per manager, so providers whose lifetimes
+///    overlap without nesting (siblings, or an old and a new one for a frame)
+///    cannot uninstall each other's.
 /// 3. **Connectivity, only if you bring it.** Pass [onlineStatus] and the
 ///    client follows it. Nothing is installed by default and no connectivity
 ///    package is a dependency — see the README for the `connectivity_plus`
@@ -45,12 +50,14 @@ class QueryClientProvider extends StatefulWidget {
     Stream<bool>? onlineStatus,
     bool? initialOnlineStatus,
     bool observeAppLifecycle = true,
+    bool Function(AppLifecycleState state)? isAppShown,
   }) =>
       _OwnedQueryClientProvider(
         key: key,
         create: create,
         onlineStatus: onlineStatus,
         initialOnlineStatus: initialOnlineStatus,
+        isAppShown: isAppShown,
         observeAppLifecycle: observeAppLifecycle,
         child: child,
       );
@@ -65,6 +72,7 @@ class QueryClientProvider extends StatefulWidget {
     this.onlineStatus,
     this.initialOnlineStatus,
     this.observeAppLifecycle = true,
+    this.isAppShown,
   });
 
   /// The client every builder, controller and `context.query` below runs on
@@ -94,6 +102,15 @@ class QueryClientProvider extends StatefulWidget {
 
   /// Whether to map the app's lifecycle onto the client's focus state.
   final bool observeAppLifecycle;
+
+  /// Which [AppLifecycleState]s count as "the user is looking at the app",
+  /// and so as focused for `refetchOnWindowFocus`.
+  ///
+  /// `null` uses the built-in mapping the class doc describes, which reads
+  /// `AppLifecycleState.inactive` differently per platform. Override it for a
+  /// platform whose conventions differ, or to switch focus refetching to a
+  /// signal of your own (sixth review, 2026-09-10).
+  final bool Function(AppLifecycleState state)? isAppShown;
 
   /// The nearest client above [context].
   ///
@@ -142,6 +159,7 @@ class _OwnedQueryClientProvider extends StatefulWidget {
     required this.onlineStatus,
     required this.initialOnlineStatus,
     required this.observeAppLifecycle,
+    required this.isAppShown,
   });
 
   final QueryClient Function() create;
@@ -149,6 +167,7 @@ class _OwnedQueryClientProvider extends StatefulWidget {
   final Stream<bool>? onlineStatus;
   final bool? initialOnlineStatus;
   final bool observeAppLifecycle;
+  final bool Function(AppLifecycleState state)? isAppShown;
 
   @override
   State<_OwnedQueryClientProvider> createState() =>
@@ -170,6 +189,7 @@ class _OwnedQueryClientProviderState extends State<_OwnedQueryClientProvider> {
         onlineStatus: widget.onlineStatus,
         initialOnlineStatus: widget.initialOnlineStatus,
         observeAppLifecycle: widget.observeAppLifecycle,
+        isAppShown: widget.isAppShown,
         child: widget.child,
       );
 
@@ -210,15 +230,16 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     // The listener only reports transitions; the state the app is already in
     // has to be read. A provider mounted while the app is hidden would
     // otherwise keep the client "focused" until the next show.
+    final isShown = widget.isAppShown ?? _isShown;
     final current = WidgetsBinding.instance.lifecycleState;
     if (current != null) {
-      client.focusManager.setFocused(_isShown(current));
+      client.focusManager.setFocused(isShown(current));
     }
     // Every transition, through one mapping — not `onShow`/`onHide`, which
     // are two of the transitions: `detached → resumed` fires neither, and
     // left the client unfocused for good.
     _lifecycle = AppLifecycleListener(
-      onStateChange: (state) => client.focusManager.setFocused(_isShown(state)),
+      onStateChange: (state) => client.focusManager.setFocused(isShown(state)),
     );
   }
 
@@ -268,12 +289,28 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     widget.client.onlineManager.setOnline(online);
   }
 
-  /// `resumed` and `inactive` are shown, the rest is not (see the class doc).
+  /// `resumed` is shown, `hidden`/`paused`/`detached` are not, and
+  /// `inactive` depends on the platform (see the class doc).
   static bool _isShown(AppLifecycleState state) => switch (state) {
-        AppLifecycleState.resumed || AppLifecycleState.inactive => true,
+        AppLifecycleState.resumed => true,
+        AppLifecycleState.inactive => _inactiveIsShown,
         AppLifecycleState.hidden ||
         AppLifecycleState.paused ||
         AppLifecycleState.detached =>
+          false,
+      };
+
+  /// On a phone `inactive` is an interruption the user did not choose and
+  /// will be back from in a moment; on a desktop it is the window losing
+  /// focus, which is the whole point of `refetchOnWindowFocus`.
+  static bool get _inactiveIsShown => switch (defaultTargetPlatform) {
+        TargetPlatform.iOS ||
+        TargetPlatform.android ||
+        TargetPlatform.fuchsia =>
+          true,
+        TargetPlatform.macOS ||
+        TargetPlatform.windows ||
+        TargetPlatform.linux =>
           false,
       };
 

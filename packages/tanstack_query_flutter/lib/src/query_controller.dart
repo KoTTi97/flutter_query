@@ -39,7 +39,7 @@ Object? observedStateOf(ValueListenable<Object?> controller) =>
 /// One query, as a [ValueListenable].
 ///
 /// ```dart
-/// final sensor = QueryController.of<Sensor>(client, sensorQuery(id));
+/// final sensor = QueryController.create<Sensor>(client, sensorQuery(id));
 /// // …
 /// sensor.dispose();
 /// ```
@@ -72,7 +72,16 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
         _options = null;
 
   /// The common case: no `select`, so the query's data type is what you get.
-  static QueryController<TData, TData> of<TData>(
+  ///
+  /// A static method rather than a named constructor because it drops a type
+  /// parameter, which a constructor cannot. It *creates* a controller — and
+  /// hands you something to [dispose] — so it deliberately does not use the
+  /// name `of`: in Flutter that means "find the one already there", and a
+  /// call in `build` that leaked an observer and its timers on every rebuild
+  /// would be the reader's reasonable mistake, not theirs to debug (sixth
+  /// review, 2026-09-10). In this package `of` belongs to
+  /// [QueryClientProvider.of] alone.
+  static QueryController<TData, TData> create<TData>(
     QueryClient client,
     QueryObserverOptions<TData, TData> options,
   ) =>

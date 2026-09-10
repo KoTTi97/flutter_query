@@ -141,7 +141,7 @@ class _FourCallStylesScreenState extends State<FourCallStylesScreen> {
     // life of the app, and a subscribing lookup is not allowed here anyway.
     _api = context.getInheritedWidgetOfExactType<ShowcaseScope>()!.api;
     _client = QueryClientProvider.read(context);
-    _controller = QueryController.of(_client, postsQuery(_api));
+    _controller = QueryController.create(_client, postsQuery(_api));
   }
 
   @override
@@ -314,7 +314,7 @@ class _ControllerCard extends StatelessWidget {
         listenable: controller,
         builder: (context, _) => _ReaderCard(
           title: '4. QueryController',
-          code: 'QueryController.of(client, postsQuery(api))',
+          code: 'QueryController.create(client, postsQuery(api))',
           note: 'A ListenableBuilder rebuilds on every notification, '
               'because a Listenable carries no value to compare. That can '
               'leave this count one ahead of the other four, which drop a '

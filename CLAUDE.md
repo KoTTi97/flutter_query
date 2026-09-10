@@ -70,9 +70,11 @@ harness `showcaseTest` in `test/harness.dart`.
 **Widget tests need one extra step.** A `QueryClient` outlives the tree and owns
 `gcTime` timers; Flutter's test binding asserts no timer is pending when the
 tree comes down, *before* any `tearDown` runs. So a widget test ends with
-`await tester.pumpWidget(const SizedBox()); client.clear();` — see the
-`widgetTest` helper in `packages/tanstack_query_flutter/test/binding_test.dart`
-and `showcaseTest` in `examples/showcase/test/harness.dart`. And
+`await tester.pumpWidget(const SizedBox()); client.clear();`. The binding ships
+that as `queryWidgetTest` in
+`packages/tanstack_query_flutter/lib/testing.dart` — a user's first widget test
+fails without it, so it is API, not a snippet — and the examples wrap their own
+(`showcaseTest` in `examples/showcase/test/harness.dart`). And
 `pumpAndSettle` only pumps while a frame is scheduled: a fake backend's latency
 or a `refetchInterval` is a timer, stepped with `tester.pump(duration)`.
 

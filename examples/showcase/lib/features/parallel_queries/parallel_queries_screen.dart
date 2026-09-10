@@ -75,9 +75,9 @@ class _ParallelQueriesScreenState extends State<ParallelQueriesScreen> {
     // life of the app, and a subscribing lookup is not allowed here anyway.
     _api = context.getInheritedWidgetOfExactType<ShowcaseScope>()!.api;
     final client = QueryClientProvider.read(context);
-    _post1 = QueryController.of(client, postQuery(_api, 1));
-    _post2 = QueryController.of(client, postQuery(_api, 2));
-    _post3 = QueryController.of(client, postQuery(_api, 3));
+    _post1 = QueryController.create(client, postQuery(_api, 1));
+    _post2 = QueryController.create(client, postQuery(_api, 2));
+    _post3 = QueryController.create(client, postQuery(_api, 3));
     _all = Listenable.merge(<Listenable>[_post1, _post2, _post3]);
   }
 

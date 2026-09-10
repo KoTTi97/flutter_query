@@ -91,7 +91,7 @@ the placeholder has nothing previous to show.
 ### `QueryController`
 
 ```dart
-final sensor = QueryController.of(client, sensorQuery(id));   // no select
+final sensor = QueryController.create(client, sensorQuery(id));   // no select
 // … sensor.value, sensor.addListener, sensor.refetch() …
 sensor.dispose();
 ```
@@ -193,15 +193,32 @@ The rule is upstream's: **a widget rebuilds whenever its result changes**, and
 a background refetch that brings back equal data is still a change, because
 `dataUpdatedAt` moved. Two tools narrow that down.
 
-`select` narrows what a widget sees, and a result whose selected data is
-equal is not reported. Equal by value: a `select` returning a fresh list every
-call is fine (lists are shared element by element), and so is a fresh instance
-of a class with `==`/`hashCode`. A fresh instance of a class *without* value
-equality is a different value every build — the widget would rebuild on every
-frame, for good. Give such a model `==`, or select a list or a scalar. Dart
-records already have value equality, which makes them the easy pick for a
-`select` output: `select: (data) => (connected: data.connected, total:
-data.total)` rebuilds only when one of the two numbers changes.
+`select` narrows the **data** a widget sees. A fetch that brings back data
+whose selection is equal stops at the observer: no new result is produced, so
+nothing rebuilds. What it does not narrow is the rest of the result — a widget
+is handed a `QueryResult`, and `fetchStatus`, `failureCount` and
+`dataUpdatedAt` are part of it. A background refetch that returns identical
+data still moves `dataUpdatedAt`, and that is a changed result, so the widget
+rebuilds with an unchanged `data`. `select` is the tool for *what a widget
+reads*; `buildWhen` below is the tool for *when it rebuilds*, and only the
+second one can ignore a metadata change.
+
+Equal by value, for the part `select` does control: a `select` returning a
+fresh list every call is fine (lists are shared element by element), and so is
+a fresh instance of a class with `==`/`hashCode`. A fresh instance of a class
+*without* value equality is a different value every time, so every fetch
+reaches the widget as a change. Give such a model `==`, or select a list or a
+scalar. Dart records already have value equality, which makes them the easy
+pick for a `select` output: `select: (data) => (connected: data.connected,
+total: data.total)`.
+
+> Upstream narrows this further than the port does. React Query tracks which
+> fields of the result a component actually touched during a render
+> (`trackedProps`) and re-renders only when one of those changed. That trick
+> needs a proxy around the result and a render pass it can observe; a Flutter
+> widget reads its result in `build` with no such seam, so this port compares
+> whole results instead and rebuilds where upstream sometimes would not.
+> `buildWhen` is the explicit form of the same thing.
 
 `buildWhen`, on every builder (`QueryBuilder`, `QuerySelectBuilder`,
 `InfiniteQueryBuilder`, `MutationBuilder`), skips the rest:
@@ -239,8 +256,12 @@ runApp(
 a provider change, `read` finds it without subscribing (for handlers), and
 `maybeOf` returns `null` instead of throwing where a widget can do without one.
 The provider does not dispose the client: a `QueryClient` outlives the tree, so
-`client.clear()` (and `unmount()`) is yours to call — at the end of a widget
-test, on a sign-out, before a hot restart swaps the app.
+`client.clear()` is yours to call — at the end of a widget test, on a sign-out,
+before a hot restart swaps the app. **`mount()`/`unmount()` are not.** The
+provider mounts the client it is given and unmounts it again when it goes, and
+that count is what keeps focus and reconnect refetches wired; an extra
+`unmount()` of your own unbalances it and the client stops listening to either.
+Call `unmount()` only to balance a `mount()` you made yourself.
 
 `QueryClientProvider.create` is the other half of that trade: it builds the
 client itself and `clear()`s it once the tree comes down, which is what an app
@@ -306,7 +327,7 @@ Not dependencies here, and not planned as such. Because a controller is a
 listenables — `signals_flutter` has `valueListenableToSignal`, for one:
 
 ```dart
-final sensor = QueryController.of(client, sensorQuery(id));
+final sensor = QueryController.create(client, sensorQuery(id));
 final signal = valueListenableToSignal(sensor);        // signals_flutter
 final connected = computed(() => signal.value.dataOrNull?.connected ?? false);
 ```
@@ -318,19 +339,31 @@ Nothing is needed from this package for that.
 A `QueryClient` outlives the widget tree by design — it owns the cache and its
 `gcTime` timers. Flutter's test binding asserts that no timer is pending when
 the tree comes down, and it checks that **before** any `tearDown` runs, so the
-cleanup has to happen inside the test body:
+cleanup has to happen inside the test body. `package:tanstack_query_flutter/testing.dart`
+does it for you:
 
 ```dart
-testWidgets('…', (tester) async {
-  await tester.pumpWidget(app(client, const SensorScreen()));
-  // … assertions …
+import 'package:tanstack_query_flutter/testing.dart';
 
-  await tester.pumpWidget(const SizedBox()); // let the widgets go
-  client.clear();                            // and the cache with them
+queryWidgetTest('the list loads', (tester, client) async {
+  await tester.pumpWidget(app(client, const SensorScreen()));
+  await tester.pumpAndSettle();
+  expect(find.text('Sensor a'), findsOneWidget);
 });
 ```
 
-`test/binding_test.dart` wraps that in a small `widgetTest` helper worth copying.
+The client is built for the case and taken down after it; pass `createClient`
+to give it `defaultOptions`. For a test that builds its own clients, or drives
+more than one, `tearDownQueryClient(tester, client)` is the same three steps on
+their own:
+
+```dart
+await tester.pumpWidget(const SizedBox()); // let the widgets go
+await tester.pumpAndSettle();              // and the frame after them run
+client.clear();                            // then the cache and its timers
+```
+
+Import that library from `test/` only — it pulls in `flutter_test`.
 
 ## Licence
 

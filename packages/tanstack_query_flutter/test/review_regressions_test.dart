@@ -9,6 +9,7 @@ import 'dart:async';
 // The core reads staleness from `package:clock`, so shifting that clock is
 // how a test makes data go stale between two reads.
 import 'package:clock/clock.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -352,6 +353,114 @@ void main() {
         await tester.pump();
         expect(client.onlineManager.isOnline(), isTrue);
         await online.close();
+      });
+    });
+  });
+
+  group('R08 the desktop reading of AppLifecycleState.inactive', () {
+    testWidgets('a window losing focus is a focus event on desktop',
+        (tester) async {
+      // Reset inside the body: the binding checks the foundation debug
+      // variables before any `tearDown` runs.
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final client = QueryClient();
+      var fetches = 0;
+      try {
+        await withClient(tester, <QueryClient>[client], () async {
+          await tester.pumpWidget(QueryClientProvider(
+            client: client,
+            child: MaterialApp(
+              home: QueryBuilder<String>(
+                options: QueryObserverOptions(
+                  queryKey: key,
+                  queryFn: (_) async => 'v${++fetches}',
+                  refetchOnWindowFocus: RefetchOn.always,
+                ),
+                builder: (_, result) => Text(result.dataOrNull ?? 'none'),
+              ),
+            ),
+          ));
+          await tester.pumpAndSettle();
+          // A test binding starts with no lifecycle state at all, so settle on
+          // a known-focused baseline before measuring a transition.
+          tester.binding
+              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+          await tester.pumpAndSettle();
+          final baseline = fetches;
+
+          // On macOS, Windows and Linux `inactive` *is* the window losing
+          // focus — the event `refetchOnWindowFocus` is named after. Counting
+          // it as focused, as a phone must, turned the option off on desktop.
+          tester.binding
+              .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+          await tester.pump();
+          tester.binding
+              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+          await tester.pumpAndSettle();
+          expect(fetches, baseline + 1);
+        });
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('a phone interruption is not', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final client = QueryClient();
+      var fetches = 0;
+      try {
+        await withClient(tester, <QueryClient>[client], () async {
+          await tester.pumpWidget(QueryClientProvider(
+            client: client,
+            child: MaterialApp(
+              home: QueryBuilder<String>(
+                options: QueryObserverOptions(
+                  queryKey: key,
+                  queryFn: (_) async => 'v${++fetches}',
+                  refetchOnWindowFocus: RefetchOn.always,
+                ),
+                builder: (_, result) => Text(result.dataOrNull ?? 'none'),
+              ),
+            ),
+          ));
+          await tester.pumpAndSettle();
+          tester.binding
+              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+          await tester.pumpAndSettle();
+          final baseline = fetches;
+
+          // The notification shade and the app switcher must not refetch the
+          // world on the way back.
+          tester.binding
+              .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+          await tester.pump();
+          tester.binding
+              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+          await tester.pumpAndSettle();
+          expect(fetches, baseline);
+        });
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('isAppShown overrides the mapping', (tester) async {
+      final client = QueryClient();
+      final seen = <AppLifecycleState>[];
+      await withClient(tester, <QueryClient>[client], () async {
+        await tester.pumpWidget(QueryClientProvider(
+          client: client,
+          isAppShown: (state) {
+            seen.add(state);
+            return false;
+          },
+          child: const SizedBox(),
+        ));
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pump();
+        expect(seen, contains(AppLifecycleState.resumed));
+        expect(client.focusManager.isFocused(), isFalse);
       });
     });
   });
@@ -1048,7 +1157,7 @@ void main() {
   group('A-25 a controller read before anyone listens', () {
     test('reports the optimistic result, as a first build would', () {
       final client = newClient();
-      final controller = QueryController.of<String>(
+      final controller = QueryController.create<String>(
         client,
         QueryObserverOptions(
           queryKey: key,
@@ -1068,7 +1177,7 @@ void main() {
 
     test('a query that will not fetch stays idle', () {
       final client = newClient();
-      final controller = QueryController.of<String>(
+      final controller = QueryController.create<String>(
         client,
         QueryObserverOptions(queryKey: key, enabled: Enabled.no),
       );

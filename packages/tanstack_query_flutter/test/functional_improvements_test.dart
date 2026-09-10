@@ -158,7 +158,7 @@ void main() {
       (tester) async {
     final key = QueryKey(['listener']);
     client.setQueryData(key, 1);
-    final controller = QueryController.of<int>(
+    final controller = QueryController.create<int>(
         client, QueryObserverOptions(queryKey: key, enabled: Enabled.no));
     final transitions = <(int?, int?)>[];
     final accepted = <int?>[];
@@ -192,7 +192,7 @@ void main() {
     QueryController<int, int> make(String id) {
       final key = QueryKey([id]);
       client.setQueryData(key, 1);
-      return QueryController.of(client,
+      return QueryController.create(client,
           QueryObserverOptions<int, int>(queryKey: key, enabled: Enabled.no));
     }
 
@@ -223,7 +223,7 @@ void main() {
       (tester) async {
     final key = QueryKey(['build']);
     client.setQueryData(key, 1);
-    final controller = QueryController.of(client,
+    final controller = QueryController.create(client,
         QueryObserverOptions<int, int>(queryKey: key, enabled: Enabled.no));
     var effect = 0;
     var changed = false;

@@ -217,7 +217,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
       _api = ShowcaseScope.apiOf(context);
       _client = QueryClientProvider.of(context);
       _thresholdClient = _newThresholdClient(_minBackground);
-      _readerA = QueryController.of<ServerTime>(_client, _optionsA);
+      _readerA = QueryController.create<ServerTime>(_client, _optionsA);
       // The switch shows what the focus manager holds, not what this screen
       // last set: a test that calls `setFocused` straight on the client, or a
       // real lifecycle transition, moves it too.
