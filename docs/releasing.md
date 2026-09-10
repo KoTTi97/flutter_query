@@ -53,16 +53,16 @@ cd packages/query_kit_flutter && dart pub publish
 
 ## Naming
 
-**`query_kit` and `query_kit_flutter` are a codename, not the decision.** A
-name on pub.dev is permanent — the policy has no way to free one — so the
-choice is deliberately left until the moment before the first
-`dart pub publish`, and everything else is made ready around a placeholder.
-The candidates, which names are still free, what the MIT licence obliges and
-what TanStack has and has not said about ports are in
+**The names are `query_kit` and `query_kit_flutter`, and that is the
+decision** (2026-09-10). A name on pub.dev is permanent — the policy has no
+way to free one — so it was deliberately left until last rather than picked
+first; everything else was made ready around it in the meantime. The
+candidates, which names were free, what the MIT licence obliges and what
+TanStack has and has not said about ports are in
 [`docs/research/package-naming-and-affiliation.md`](research/package-naming-and-affiliation.md).
 
-Changing it is one command, and it is the same command that produced the
-current names, so the path is already exercised:
+Moving them is still one command, and it is the same command that produced
+them, so the path stays exercised:
 
 ```bash
 dart run tool/rename_packages.dart --core <core> --flutter <core>_flutter

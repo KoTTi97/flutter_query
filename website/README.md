@@ -18,9 +18,10 @@ of building it in CI.
 
 ## Conventions
 
-- **The package name is a codename.** `docusaurus.config.ts` names it once at
-  the top, and `tool/rename_packages.dart` rewrites everything else, this
-  directory included. Do not work around it.
+- **The package name reaches this directory through
+  `tool/rename_packages.dart`.** The name is settled — `query_kit` — but it is
+  still that one pass that would move it, this directory included, so do not
+  write it in a way the pass cannot find.
 - **Every Dart sample appears in `examples/doc_snippets/`**, compiled and
   analyzed at `--fatal-infos` in CI, under a comment naming the page it is on.
   A sample and its twin are kept identical; that is the only reason to trust

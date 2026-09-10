@@ -124,10 +124,10 @@ the map is where that conversation belongs.
 - One concern per pull request; a green gate before you open it.
 - Say what you changed and how you know it works. If a review finding prompted
   it, say whether you reproduced it and how.
-- The package name is a codename (see
-  [`docs/releasing.md`](docs/releasing.md)); don't hard-code it in prose you
-  could phrase around, and never edit `tool/rename_packages.dart`'s frozen
-  list without a reason.
+- The package names are settled — `query_kit` and `query_kit_flutter` (see
+  [`docs/releasing.md`](docs/releasing.md)) — but they still travel through
+  `tool/rename_packages.dart`, so never edit its frozen list without a
+  reason.
 
 ## Licence
 

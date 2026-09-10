@@ -18,9 +18,8 @@ pub.dev builds and hosts the reference for every version:
 - `https://pub.dev/documentation/query_kit/latest/`
 - `https://pub.dev/documentation/query_kit_flutter/latest/`
 
-Nothing is published yet — the package name is a
-[codename](../project/releasing.md) — so those links are what they will be, not
-what they are.
+Nothing is published yet, so those links are [what they will
+be](../project/releasing.md), not what they are.
 
 ## Locally, today
 

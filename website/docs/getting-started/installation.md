@@ -9,9 +9,8 @@ description: Which package to add, what it depends on, and which SDK versions ar
 Two packages. Add the one that matches what you are building.
 
 :::warning Not published yet
-Nothing is on pub.dev at the time of writing — the package name is a codename
-and is decided right before the first publish. The `pubspec.yaml` snippets
-below are what installation *will* look like; the [git
+Nothing is on pub.dev at the time of writing. The `pubspec.yaml` snippets below
+are what installation *will* look like; the [git
 dependency](#before-the-first-publish) below is what works today.
 :::
 

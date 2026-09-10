@@ -1,31 +1,35 @@
 ---
 title: The name, and releasing
 sidebar_position: 3
-description: Why query_kit is a codename, how the rename works, and what publishing to pub.dev looks like.
+description: Why the name is query_kit, how the rename pass works, and what publishing to pub.dev looks like.
 ---
 
 # The name, and releasing
 
-## `query_kit` is a codename
+## The name is `query_kit`
 
 A package name on pub.dev is **permanent**. The policy disallows unpublishing
 except in a few narrow cases; the alternative is marking a package
 discontinued, which keeps it published and keeps the name taken. Nobody else
 can have it, and neither can you, once it is spent.
 
-So the name is the last decision, not the first. Everything else is made ready
-around a placeholder, and the placeholder is swappable:
+So it was made the last decision rather than the first, and everything else was
+made ready around it in the meantime. **It is decided now: `query_kit` for the
+core, `query_kit_flutter` for the Flutter binding.** Those are the names that
+will be published.
+
+Moving them is still one command, and it is the same command that produced
+them, so the path stays exercised:
 
 ```bash
 dart run tool/rename_packages.dart --core <core> --flutter <core>_flutter
 ```
 
-That is the same command that produced the current names, so the path is
-already exercised. It rewrites the pubspecs, every import, every path that
-carries the name and every mention in prose, moves the two package directories
-and their library entrypoints, and drops the stale `.dart_tool` so the first
-`pub get` afterwards is honest. Then the whole gate runs — the names reach the
-tests, the examples, both workflows and this website.
+It rewrites the pubspecs, every import, every path that carries the name and
+every mention in prose, moves the two package directories and their library
+entrypoints, and drops the stale `.dart_tool` so the first `pub get` afterwards
+is honest. Then the whole gate runs — the names reach the tests, the examples,
+both workflows and this website.
 
 The one file it leaves alone is the naming research: the names in its
 availability table are a record of what pub.dev held on a particular day, not
@@ -34,7 +38,7 @@ references to this package.
 ### What the research says
 
 [`docs/research/package-naming-and-affiliation.md`](https://github.com/KoTTi97/flutter_query/blob/main/docs/research/package-naming-and-affiliation.md)
-has the facts the decision rests on, gathered rather than assumed:
+has the facts the decision rested on, gathered rather than assumed:
 
 - which candidate names were free on pub.dev, and who owns the taken ones —
   seven of them are Dart libraries that describe themselves as

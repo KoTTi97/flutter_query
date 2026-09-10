@@ -158,7 +158,7 @@ by `/domain-modeling` when the first term or decision is resolved. See
 | `examples/task_manager/` | The acceptance demo — one small to-do app — its dummy backend (`server/`) and the acceptance suite. | yes |
 | `website/` | The documentation site (Docusaurus). Built in CI, deployed nowhere. | yes — its `build/` and `.docusaurus/` are ignored |
 | `examples/doc_snippets/` | Every Dart sample on the site, as code the analyzer sees. Not an app; its job is to fail when a sample stops compiling. | yes |
-| `tool/` | `rename_packages.dart`: the package names are a codename, and this is the swap. | yes |
+| `tool/` | `rename_packages.dart`: the one pass that renames both packages everywhere. The names are settled (`query_kit`, `query_kit_flutter`); this is what set them. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |
 | `docs/research/` | Research findings behind the map's tickets. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |

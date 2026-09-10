@@ -2,14 +2,14 @@
 // import and every mention in prose — in one pass.
 //
 // The name a package is published under is permanent (pub.dev never frees a
-// name), so the decision is deliberately deferred: the repository runs on a
-// codename until the maintainer picks the final one. This script is what
-// makes deferring safe. It is run once for the codename, and once more for
-// the final name; the second run is the same operation as the first, already
-// exercised.
+// name), so the decision was deliberately left until last rather than made
+// first. This script is what made that safe, and it is what produced the
+// settled names — `query_kit` and `query_kit_flutter`, decided 2026-09-10.
+// It stays because the path it takes is the only supported way to move a
+// name, and because keeping it exercised is what makes the names cheap to
+// move if pub.dev ever forces the question.
 //
 //   dart run tool/rename_packages.dart --core query_kit --flutter query_kit_flutter
-//   dart run tool/rename_packages.dart --core <final> --flutter <final>_flutter
 //
 // Add --dry-run to see the plan without touching anything. After a real run,
 // the whole gate has to pass — `docs/releasing.md` says which commands.

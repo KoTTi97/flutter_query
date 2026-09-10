@@ -33,12 +33,6 @@ Both of those deserve more than a line — [credits, and what this is
 not](project/credits.md).
 :::
 
-:::info The name is a codename
-`query_kit` is a placeholder. A name on pub.dev is permanent, so the published
-name is chosen right before the first publish; changing it is
-[one command](project/releasing.md).
-:::
-
 ## The bet
 
 Several Dart packages cover the *idea* of TanStack Query. This one ports the

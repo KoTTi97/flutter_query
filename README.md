@@ -3,10 +3,10 @@
 A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
 `query-core`, with a Flutter binding on top.
 
-> **The package name is a codename.** `query_kit` and `query_kit_flutter` are
-> placeholders: a name on pub.dev is permanent, so the real one is chosen right
-> before the first `dart pub publish`. Changing it is one command —
-> [`docs/releasing.md`](docs/releasing.md).
+> **The package names are settled: `query_kit` and `query_kit_flutter`.** A
+> name on pub.dev is permanent, so it was left to be the last decision rather
+> than the first — and it was made on 2026-09-10. The reasoning, and what
+> publishing looks like, are in [`docs/releasing.md`](docs/releasing.md).
 
 The bet is fidelity: rather than reimplementing the *idea* of TanStack Query,
 this ports the behavioral core and then ports upstream's test suite against it,
@@ -58,7 +58,7 @@ Judge it on that basis. The evidence is all in the repository.
 | [`examples/task_manager/`](examples/task_manager) | One whole small app rather than a catalogue: a to-do manager against a deliberately slow backend with scripted failures, and an acceptance test per row of its feature checklist. |
 | [`website/`](website) | The documentation site — Docusaurus, built in CI, deployed nowhere yet. `npm ci && npm start`. |
 | [`examples/doc_snippets/`](examples/doc_snippets) | Every Dart sample on that site, as code the analyzer sees, so a sample that stops compiling fails the build. |
-| [`tool/`](tool) | `rename_packages.dart`, which is what makes the codename safe. |
+| [`tool/`](tool) | `rename_packages.dart`: the one pass that renames both packages everywhere. The names are settled now; this is what set them. |
 
 Upstream is pinned at `50680b98c`; the `query/` checkout it needs is a nested,
 gitignored clone (see [CLAUDE.md](CLAUDE.md) for the clone command).
