@@ -15,11 +15,12 @@ upstream's test names so the two files diff against each other:
 
 | upstream suite | ported | upstream suite | ported |
 |---|---|---|---|
-| `query` | 43 / 51 | `mutation` | 28 / 28 |
+| `query` | 44 / 51 | `mutation` | 28 / 28 |
 | `queryCache` | 14 / 16 | `mutationCache` | 16 / 16 |
 | `queryObserver` | 62 / 75 | `mutationObserver` | 16 / 16 |
-| `queryClient` | 104 / 156 | `infiniteQueryBehavior` | 7 / 9 |
+| `queryClient` | 106 / 156 | `infiniteQueryBehavior` | 7 / 9 |
 | `retryer` | 13 / 13 | `infiniteQueryObserver` | 6 / 7 |
+| `queriesObserver` | 12 / 22 | | |
 
 Every case that is *not* ported is listed by name and category in
 [`test/PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/tanstack_query_core/test/PORTING_NOTES.md), together with every place this
@@ -104,6 +105,19 @@ matter at the call site:
   `InfinitePageContext` with `pageParam` and `direction`; the paging surface
   (`hasNextPage`, `fetchNextPage`) is on `InfiniteQueryObserver`.
 - **Time goes through `package:clock`**, so `fake_async` controls it completely.
+- **Stale-while-revalidate is `client.query(options, revalidateIfStale: true)`.**
+  Cached data comes back at once while a stale entry refreshes behind it; with
+  nothing cached the fetch is awaited as usual.
+- **A list of queries is `QueriesObserver`**, upstream's `useQueries` without
+  the heterogeneous tuple: one data type per collection, `select` when the
+  selected type differs, and observers reused by key and occurrence.
+- **Cache-wide mutation state is `MutationStateObserver`**, upstream's
+  `useMutationState`: `MutationFilters` plus a `select`, with concurrent runs
+  under one key kept apart.
+- **`AppFocusManager(refetchMinBackgroundDuration:)`** suppresses focus
+  refetches after an absence too short to matter — a divergence from upstream,
+  which always refetches. It never blocks paused work from resuming, and the
+  default of `Duration.zero` is upstream's behaviour.
 
 The full JS-to-Dart name map is
 [`docs/coming-from-react-query.md`](https://github.com/KoTTi97/flutter_query/blob/main/docs/coming-from-react-query.md)
@@ -121,11 +135,10 @@ Each row is recorded, with its reason, in
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |
 | `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook |
-| `useQueries` / `QueriesObserver` | not ported |
+| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous; mixed data types need a `select`, and the returned list is mapped by the caller |
 | `streamedQuery` | not ported |
 | `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
 | `select` on `fetchQuery` | map the future |
-| `initialDataUpdatedAt` as a function | `DateTime?` only |
 | SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
 | `MutationFunctionContext` | not ported; a mutation function takes its variables only |
 | Callbacks in `setMutationDefaults` | not ported |

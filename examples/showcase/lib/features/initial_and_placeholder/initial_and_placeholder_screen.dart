@@ -18,6 +18,18 @@
 ///   button switches the key to the next one. The read carries an `id`, which
 ///   is what makes the mixin's observer follow the key instead of starting a
 ///   new one (see the binding's `key_change_test.dart`).
+/// - **D.** `initialDataUpdatedAtCompute`, the lazy form of
+///   `initialDataUpdatedAt`: a callback consulted only when the seed is
+///   actually written, so a rebuild — and a mode whose entry already holds
+///   data — costs nothing. `computeCalls=` counts it. The consequence is the
+///   point: `fresh` returns `null`, which the library reads as "date it
+///   `clock.now()`", and the seed is inside `staleTime`, so the mount
+///   fetches nothing; `backdated` returns a timestamp older than
+///   `staleTime`, and the same mount refetches at once. The two modes seed
+///   two different keys, so flipping back to one already seeded shows the
+///   callback staying at one call. Supplying `initialDataUpdatedAt` *and*
+///   `initialDataUpdatedAtCompute` is an `ArgumentError` when the options are
+///   defaulted; the screen supplies only the callback.
 ///
 /// Proofs (widget tests in `test/features/initial_and_placeholder_test.dart`,
 /// end-to-end in `e2e/tests/initial_and_placeholder.spec.ts`): a detail
@@ -27,7 +39,10 @@
 /// while the request is held and `getQueryData` stays null, then the real
 /// title with `false`; switching post 5 to 6 keeps 5's title as placeholder
 /// until 6 arrives; a detail opened before the list has settled seeds nothing
-/// and fetches.
+/// and fetches; card D's callback shows `computeCalls=1` through any number
+/// of rebuilds and through a mode selected a second time, `fresh` settles on
+/// `isStale=false` with `fetches=0`, and `backdated` shows the seed with
+/// `isStale=true` while its one refetch is in flight.
 library;
 
 import 'package:flutter/material.dart';
@@ -96,6 +111,56 @@ QueryObserverOptions<Post, Post> placeholderPostQuery(ShowcaseApi api) =>
       ),
     );
 
+/// Card D's mode: nothing seeded yet, or one of the two timestamps.
+enum LazySeedMode {
+  /// No reader, so nothing is seeded and the callback has not run.
+  off,
+
+  /// The callback returns `null`; the library dates the seed `clock.now()`.
+  fresh,
+
+  /// The callback returns a timestamp older than [seededPostStaleTime].
+  backdated,
+}
+
+/// Card D's two seeds. A key each, so selecting a mode a second time meets an
+/// entry that already holds data — which is where the callback is *not*
+/// consulted again, and that is the guarantee the card is about.
+const Post freshSeedPost =
+    Post(id: 8, title: 'Seed · fresh timestamp', body: '');
+
+/// The seed card D writes under [LazySeedMode.backdated]. Replaced on screen
+/// by the real post 9 as soon as the mount's refetch lands.
+const Post backdatedSeedPost =
+    Post(id: 9, title: 'Seed · backdated timestamp', body: '');
+
+/// Which post [mode] seeds, or `null` while nothing is seeded.
+Post? lazySeedFor(LazySeedMode mode) => switch (mode) {
+      LazySeedMode.off => null,
+      LazySeedMode.fresh => freshSeedPost,
+      LazySeedMode.backdated => backdatedSeedPost,
+    };
+
+/// Card D: [seed] written to the cache, dated by [seededAt] — the lazy form
+/// of `initialDataUpdatedAt`.
+///
+/// The callback runs exactly once per entry, when the seed is written, and
+/// never again: not on a rebuild, and not when the entry is met a second time
+/// with data already in it. Returning `null` is "no opinion", and the library
+/// falls back to `clock.now()`.
+QueryObserverOptions<Post, Post> lazySeededPostQuery(
+  ShowcaseApi api, {
+  required Post seed,
+  required DateTime? Function() seededAt,
+}) =>
+    QueryObserverOptions<Post, Post>(
+      queryKey: ShowcaseKeys.post(seed.id),
+      queryFn: (context) => api.post(seed.id, signal: context.signal),
+      staleTime: const StaleTime.duration(seededPostStaleTime),
+      initialData: InitialData<Post>.value(seed),
+      initialDataUpdatedAtCompute: seededAt,
+    );
+
 /// Upstream's `keepPreviousData`: whatever this observer showed last stands
 /// in for the new key. A tear-off rather than an inline closure, so the
 /// options built on every rebuild compare equal.
@@ -137,6 +202,12 @@ class _InitialAndPlaceholderScreenState
   /// Card C's selected post.
   int _previousId = 5;
 
+  /// Card D's mode, and how often its timestamp callback has run per mode.
+  /// Counted rather than logged: the number is the assertion, and it must
+  /// stay at one however often the card rebuilds.
+  LazySeedMode _lazySeedMode = LazySeedMode.off;
+  final Map<LazySeedMode, int> _lazySeedCalls = <LazySeedMode, int>{};
+
   void _openPost(int id) {
     setState(() {
       _openId = id;
@@ -170,6 +241,29 @@ class _InitialAndPlaceholderScreenState
         : listUpdatedAt;
   }
 
+  /// Card D's `initialDataUpdatedAtCompute`. A tear-off of this method rather
+  /// than a closure built in `build`, so the options a rebuild produces carry
+  /// the same callback and the observer sees no change; it reads
+  /// [_lazySeedMode] instead of taking it as an argument for the same reason.
+  ///
+  /// `null` means "no opinion": the library dates the seed `clock.now()`, so
+  /// it is inside [seededPostStaleTime] and the mount fetches nothing. The
+  /// backdated timestamp is derived from the posts list's own `dataUpdatedAt`
+  /// rather than from a wall clock, the way card A's is — right under a
+  /// test's fake clock too. With no list yet there is nothing to backdate
+  /// from, and the seed is dated `clock.now()` like the fresh one.
+  DateTime? _lazySeededAt() {
+    final mode = _lazySeedMode;
+    _lazySeedCalls.update(mode, (count) => count + 1, ifAbsent: () => 1);
+    if (mode != LazySeedMode.backdated) {
+      return null;
+    }
+    return queryClient
+        .getQueryState<List<Post>>(ShowcaseKeys.posts)
+        ?.dataUpdatedAt
+        ?.subtract(seededPostStaleTime * 2);
+  }
+
   @override
   Widget build(BuildContext context) {
     final api = ShowcaseScope.apiOf(context);
@@ -191,6 +285,20 @@ class _InitialAndPlaceholderScreenState
       previousPostQuery(api, _previousId),
       id: 'previous',
     );
+    final lazySeed = lazySeedFor(_lazySeedMode);
+    final lazy = lazySeed == null
+        ? null
+        : watchQuery(lazySeededPostQuery(
+            api,
+            seed: lazySeed,
+            seededAt: _lazySeededAt,
+          ));
+    // Seeding is not fetching: `dataUpdateCount` stays at zero for an entry
+    // that only ever held its seed, so it says whether the mount refetched
+    // without anyone reading a clock.
+    final lazyState = lazySeed == null
+        ? null
+        : queryClient.getQueryState<Post>(ShowcaseKeys.post(lazySeed.id));
     // Read from the cache, not from the result: a placeholder is only ever
     // in the result, and this is what shows it.
     final cached = queryClient.getQueryData<Post>(ShowcaseKeys.post(4));
@@ -289,6 +397,77 @@ class _InitialAndPlaceholderScreenState
           queryKey: ShowcaseKeys.post(_previousId),
           label: 'post-$_previousId',
         ),
+        SectionCard(
+          title: 'D. A seed timestamp computed lazily',
+          trailing: IconButton(
+            tooltip: 'Rebuild card D',
+            onPressed: () => setState(() {}),
+            icon: const Icon(Icons.refresh),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'initialDataUpdatedAtCompute is the lazy form of '
+                'initialDataUpdatedAt: it runs only when the seed is actually '
+                'written. fresh returns null, which the library reads as '
+                'clock.now(), so the seed is inside the 30 s staleTime and '
+                'the mount fetches nothing. backdated returns a minute '
+                'earlier, so the same mount refetches at once. Picking a mode '
+                'again meets an entry that already holds data, and the '
+                'callback is not consulted a second time.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              // Explicit child nodes: without them the three segments fold
+              // into one label and `fresh` is not a text a test can read.
+              Semantics(
+                container: true,
+                explicitChildNodes: true,
+                label: 'lazy-seed mode',
+                child: SegmentedButton<LazySeedMode>(
+                  key: const ValueKey<String>('lazy-seed-mode'),
+                  showSelectedIcon: false,
+                  segments: const <ButtonSegment<LazySeedMode>>[
+                    ButtonSegment<LazySeedMode>(
+                      value: LazySeedMode.off,
+                      label: Text('off'),
+                    ),
+                    ButtonSegment<LazySeedMode>(
+                      value: LazySeedMode.fresh,
+                      label: Text('fresh'),
+                    ),
+                    ButtonSegment<LazySeedMode>(
+                      value: LazySeedMode.backdated,
+                      label: Text('backdated'),
+                    ),
+                  ],
+                  selected: <LazySeedMode>{_lazySeedMode},
+                  onSelectionChanged: (selection) =>
+                      setState(() => _lazySeedMode = selection.first),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (lazy == null)
+                const Text('Nothing seeded: pick a timestamp above.')
+              else
+                _PostDetail(
+                  lazy,
+                  card: 'D',
+                  facts: <String>[
+                    'mode=${_lazySeedMode.name}',
+                    'computeCalls=${_lazySeedCalls[_lazySeedMode] ?? 0}',
+                    'refetched=${(lazyState?.dataUpdateCount ?? 0) > 0}',
+                  ],
+                ),
+            ],
+          ),
+        ),
+        if (lazySeed != null)
+          QueryDebugStrip(
+            queryKey: ShowcaseKeys.post(lazySeed.id),
+            label: 'lazy-seed',
+          ),
       ],
     );
   }

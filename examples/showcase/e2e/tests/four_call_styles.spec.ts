@@ -2,9 +2,9 @@ import type { Page } from '@playwright/test'
 
 import { expect, fact, holdRequest, test } from './fixtures'
 
-// Six cards and two strips: taller than the default viewport, and a lazily
+// Seven cards and two strips: taller than the default viewport, and a lazily
 // built list only has what is in view.
-test.use({ viewport: { width: 1280, height: 2400 } })
+test.use({ viewport: { width: 1280, height: 3400 } })
 
 const POSTS = '**/api/posts*'
 
@@ -15,6 +15,11 @@ const readers = ['context', 'builder', 'mixin', 'controller', 'observer'] as con
 /// and by the strip, so nothing here can be found by text alone.
 const reader = (page: Page, name: string, text: string) =>
   page.getByRole('group', { name: `reader ${name}`, exact: true }).getByText(text, { exact: true })
+
+/// One fact of the listener card. `child-builds=1` is in the same group,
+/// said by the child the listener hands back.
+const listener = (page: Page, text: string) =>
+  page.getByRole('group', { name: 'listener', exact: true }).getByText(text, { exact: true })
 
 const mutation = (page: Page, name: string, text: string) =>
   page.getByRole('group', { name: `mutation ${name}`, exact: true }).getByText(text, { exact: true })
@@ -140,4 +145,42 @@ test('either mutation button increments the counter and the invalidation refetch
   await expect(page.getByText('counter=2', { exact: true })).toBeVisible()
   expect(await scenario.count('POST', /^\/api\/counter\/increment$/)).toBe(2)
   expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(3)
+})
+
+test('the listener reacts to a change of the data and never rebuilds its child', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/four-call-styles')
+  await expectEveryReader(page, 'posts=30')
+
+  // Nothing is delivered on mount, so the one call is the first fetch
+  // landing — the transition after it. The listener borrowed card 4's
+  // controller, so there is still no sixth observer.
+  await expect(listener(page, 'listener-calls=1')).toBeVisible()
+  await expect(listener(page, 'last=pending/fetching:none->success/idle:30')).toBeVisible()
+  await expect(listener(page, 'child-builds=1')).toBeVisible()
+  await expect(fact(page, 'posts', 'observers=5')).toBeVisible()
+
+  // A refetch returns the same 30 posts: dataUpdatedAt and fetchStatus moved,
+  // the data did not, and listenWhen refused both transitions.
+  await button(page, 'Refetch').click()
+  await expect(fact(page, 'posts', 'fetches=2')).toBeVisible()
+  await expectEveryReader(page, 'fetching=false')
+  await expect(listener(page, 'listener-calls=1')).toBeVisible()
+  await expect(listener(page, 'last=pending/fetching:none->success/idle:30')).toBeVisible()
+
+  // A cache write is a change of the data like any other, and one call.
+  await button(page, 'Drop a post').click()
+  await expectEveryReader(page, 'posts=29')
+  await expect(listener(page, 'listener-calls=2')).toBeVisible()
+  await expect(listener(page, 'last=success/idle:30->success/idle:29')).toBeVisible()
+  await expect(listener(page, '#2 success/idle:30->success/idle:29')).toBeVisible()
+
+  // Two calls, four refusals, and every one of them rebuilt the card around
+  // the listener — the child it was handed built once, on mount.
+  await expect(listener(page, 'child-builds=1')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/posts$/)).toBe(2)
 })

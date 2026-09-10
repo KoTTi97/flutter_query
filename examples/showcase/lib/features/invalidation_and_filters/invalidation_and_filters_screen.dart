@@ -124,11 +124,11 @@ class _InvalidationAndFiltersScreenState
     // life of the app, and a subscribing lookup is not allowed here anyway.
     _api = context.getInheritedWidgetOfExactType<ShowcaseScope>()!.api;
     _client = QueryClientProvider.read(context);
-    _posts =
-        QueryController.of(_client, postsQuery(_api, nextDelay: _takeDelay));
-    _post1 = QueryController.of(_client, postQuery(_api, 1));
-    _post2 = QueryController.of(_client, _post2Options);
-    _todos = QueryController.of(_client, todosQuery(_api));
+    _posts = QueryController.create(
+        _client, postsQuery(_api, nextDelay: _takeDelay));
+    _post1 = QueryController.create(_client, postQuery(_api, 1));
+    _post2 = QueryController.create(_client, _post2Options);
+    _todos = QueryController.create(_client, todosQuery(_api));
     // Post 3 has no reader: fetched once, imperatively, it sits in the cache
     // as an inactive entry — what `type: inactive` and `RefetchType.all`
     // are about.

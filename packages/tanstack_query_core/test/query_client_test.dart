@@ -25,6 +25,46 @@ void main() {
       queryClient.unmount();
     });
 
+    group('query revalidation (adapted ensureQueryData)', () {
+      testFakeAsync(
+          'should return the cached query data if the query is found and preFetchQuery in the background when revalidateIfStale is set',
+          (time) async {
+        final key = queryKey();
+        queryClient.setQueryData(key, 'old');
+        final options = QueryOptions<String>(
+            queryKey: key, queryFn: (_) => sleep(ms(10)).then((_) => 'new'));
+        expect(
+            await queryClient.query(options, revalidateIfStale: true), 'old');
+        await time.advance(ms(20));
+        expect(
+            await queryClient.query(options, revalidateIfStale: true), 'new');
+      });
+    });
+
+    group('infinite revalidation (adapted ensureInfiniteQueryData)', () {
+      testFakeAsync(
+          'should return the cached query data if the query is found and preFetchQuery in the background when revalidateIfStale is set',
+          (time) async {
+        final key = queryKey();
+        queryClient.setQueryData(
+            key, InfiniteData<String, int>(pages: ['old'], pageParams: [0]));
+        final options = InfiniteQueryOptions<String, int>(
+            queryKey: key,
+            initialPageParam: 1,
+            getNextPageParam: (_, __, ___, ____) => null,
+            pageFn: (_) => sleep(ms(10)).then((_) => 'new'));
+        final old =
+            await queryClient.infiniteQuery(options, revalidateIfStale: true);
+        expect(old.pages, ['old']);
+        expect(old.pageParams, [0]);
+        await time.advance(ms(20));
+        final next =
+            await queryClient.infiniteQuery(options, revalidateIfStale: true);
+        expect(next.pages, ['new']);
+        expect(next.pageParams, [0]);
+      });
+    });
+
     group('defaultOptions', () {
       testFakeAsync('should merge defaultOptions', (time) async {
         final key = queryKey();

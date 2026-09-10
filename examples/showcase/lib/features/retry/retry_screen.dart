@@ -132,7 +132,7 @@ class _RetryScreenState extends State<RetryScreen> {
       _initialised = true;
       _api = ShowcaseScope.apiOf(context);
       _client = QueryClientProvider.of(context);
-      _reader = QueryController.of<ServerTime>(_client, _options);
+      _reader = QueryController.create<ServerTime>(_client, _options);
     }
   }
 
@@ -161,7 +161,7 @@ class _RetryScreenState extends State<RetryScreen> {
     setState(() {
       // A new controller is a new observer, and subscribing it is a mount —
       // which is the moment `retryOnMount` decides.
-      _reader = QueryController.of<ServerTime>(_client, _options);
+      _reader = QueryController.create<ServerTime>(_client, _options);
     });
   }
 

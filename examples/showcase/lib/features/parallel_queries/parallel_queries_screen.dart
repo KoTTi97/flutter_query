@@ -1,8 +1,9 @@
 /// Parallel queries: three independent queries in one widget, and the global
 /// fetching count. Port-specific — the upstream docs page
 /// `guides/parallel-queries.md` says a fixed number of queries needs nothing
-/// more than writing them side by side, and the port has no `useQueries` for
-/// the dynamic case, so this screen is the stand-in.
+/// more than writing them side by side, which is exactly this screen. When the
+/// number is *not* fixed, `query-collections` is the screen: it uses
+/// `QueriesBuilder` over a list that changes at runtime.
 ///
 /// Each post has a `QueryController` of its own, created in `initState`,
 /// disposed in `dispose`, and read through a `ListenableBuilder`; the toolbar
@@ -74,9 +75,9 @@ class _ParallelQueriesScreenState extends State<ParallelQueriesScreen> {
     // life of the app, and a subscribing lookup is not allowed here anyway.
     _api = context.getInheritedWidgetOfExactType<ShowcaseScope>()!.api;
     final client = QueryClientProvider.read(context);
-    _post1 = QueryController.of(client, postQuery(_api, 1));
-    _post2 = QueryController.of(client, postQuery(_api, 2));
-    _post3 = QueryController.of(client, postQuery(_api, 3));
+    _post1 = QueryController.create(client, postQuery(_api, 1));
+    _post2 = QueryController.create(client, postQuery(_api, 2));
+    _post3 = QueryController.create(client, postQuery(_api, 3));
     _all = Listenable.merge(<Listenable>[_post1, _post2, _post3]);
   }
 

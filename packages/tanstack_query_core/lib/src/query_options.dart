@@ -181,6 +181,11 @@ final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
 sealed class PlaceholderData<TQueryData> {
   const PlaceholderData();
 
+  /// Keeps the previous data while the new key loads. A previous `null`
+  /// means no placeholder, just as `.compute((previous, _) => previous)`.
+  const factory PlaceholderData.keepPrevious() =
+      PlaceholderDataKeepPrevious<TQueryData>;
+
   /// A fixed placeholder, shown whenever the query has no data of its own —
   /// upstream's `placeholderData: value`.
   const factory PlaceholderData.value(TQueryData data) =
@@ -203,6 +208,10 @@ sealed class PlaceholderData<TQueryData> {
     Query<TQueryData>? previousQuery,
   ) =>
       switch (this) {
+        PlaceholderDataKeepPrevious<TQueryData>() => (
+            hasData: previousData != null,
+            data: previousData,
+          ),
         PlaceholderDataValue<TQueryData>(:final data) => (
             hasData: true,
             data: data,
@@ -213,6 +222,20 @@ sealed class PlaceholderData<TQueryData> {
             final data => (hasData: true, data: data),
           },
       };
+}
+
+/// The [PlaceholderData.keepPrevious] variant, with no callback allocation.
+final class PlaceholderDataKeepPrevious<TQueryData>
+    extends PlaceholderData<TQueryData> {
+  /// Keeps the last non-null data as a placeholder.
+  const PlaceholderDataKeepPrevious();
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlaceholderDataKeepPrevious<TQueryData>;
+
+  @override
+  int get hashCode => (PlaceholderDataKeepPrevious<TQueryData>).hashCode;
 }
 
 /// The [PlaceholderData.value] variant: a fixed placeholder, shown whenever
@@ -279,6 +302,7 @@ class QueryOptions<TQueryData> {
     this.networkMode,
     this.initialData,
     this.initialDataUpdatedAt,
+    this.initialDataUpdatedAtCompute,
     this.structuralSharing,
     this.meta,
     this.behavior,
@@ -328,6 +352,10 @@ class QueryOptions<TQueryData> {
   /// counts as fetched the moment the query is created.
   final DateTime? initialDataUpdatedAt;
 
+  /// Computes the seed timestamp only when data is actually seeded.
+  /// Mutually exclusive with [initialDataUpdatedAt]; a null result uses now.
+  final DateTime? Function()? initialDataUpdatedAtCompute;
+
   /// How new data is reconciled with what the cache already holds — see
   /// [StructuralSharing]. Unset, the port applies `replaceEqualDeep`.
   final StructuralSharing<TQueryData>? structuralSharing;
@@ -341,7 +369,7 @@ class QueryOptions<TQueryData> {
   final FetchBehavior<TQueryData>? behavior;
 
   /// This, with the given fields replaced. Passing `null` leaves a field as it
-  /// is; a copy cannot unset one.
+  /// is. Supplying one seed timestamp form clears its previous alternative.
   QueryOptions<TQueryData> copyWith({
     QueryKey? queryKey,
     QueryFn<TQueryData>? queryFn,
@@ -353,6 +381,7 @@ class QueryOptions<TQueryData> {
     NetworkMode? networkMode,
     InitialData<TQueryData>? initialData,
     DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<TQueryData>? structuralSharing,
     Object? meta,
     FetchBehavior<TQueryData>? behavior,
@@ -367,7 +396,14 @@ class QueryOptions<TQueryData> {
         retryDelay: retryDelay ?? this.retryDelay,
         networkMode: networkMode ?? this.networkMode,
         initialData: initialData ?? this.initialData,
-        initialDataUpdatedAt: initialDataUpdatedAt ?? this.initialDataUpdatedAt,
+        initialDataUpdatedAt: initialDataUpdatedAt ??
+            (initialDataUpdatedAtCompute == null
+                ? this.initialDataUpdatedAt
+                : null),
+        initialDataUpdatedAtCompute: initialDataUpdatedAtCompute ??
+            (initialDataUpdatedAt == null
+                ? this.initialDataUpdatedAtCompute
+                : null),
         structuralSharing: structuralSharing ?? this.structuralSharing,
         meta: meta ?? this.meta,
         behavior: behavior ?? this.behavior,
@@ -395,6 +431,7 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
     super.networkMode,
     super.initialData,
     super.initialDataUpdatedAt,
+    super.initialDataUpdatedAtCompute,
     super.structuralSharing,
     super.meta,
     super.behavior,
@@ -454,6 +491,7 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
     NetworkMode? networkMode,
     InitialData<TQueryData>? initialData,
     DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<TQueryData>? structuralSharing,
     Object? meta,
     FetchBehavior<TQueryData>? behavior,
@@ -476,7 +514,14 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
         retryDelay: retryDelay ?? this.retryDelay,
         networkMode: networkMode ?? this.networkMode,
         initialData: initialData ?? this.initialData,
-        initialDataUpdatedAt: initialDataUpdatedAt ?? this.initialDataUpdatedAt,
+        initialDataUpdatedAt: initialDataUpdatedAt ??
+            (initialDataUpdatedAtCompute == null
+                ? this.initialDataUpdatedAt
+                : null),
+        initialDataUpdatedAtCompute: initialDataUpdatedAtCompute ??
+            (initialDataUpdatedAt == null
+                ? this.initialDataUpdatedAtCompute
+                : null),
         structuralSharing: structuralSharing ?? this.structuralSharing,
         meta: meta ?? this.meta,
         behavior: behavior ?? this.behavior,
@@ -517,6 +562,7 @@ sealed class DefaultedQueryOptions<TQueryData> {
     required NetworkMode networkMode,
     required InitialData<TQueryData>? initialData,
     required DateTime? initialDataUpdatedAt,
+    required DateTime? Function()? initialDataUpdatedAtCompute,
     required StructuralSharing<TQueryData>? structuralSharing,
     required Object? meta,
     required FetchBehavior<TQueryData>? behavior,
@@ -533,6 +579,7 @@ sealed class DefaultedQueryOptions<TQueryData> {
     required this.networkMode,
     required this.initialData,
     required this.initialDataUpdatedAt,
+    required this.initialDataUpdatedAtCompute,
     required this.structuralSharing,
     required this.meta,
     required this.behavior,
@@ -570,6 +617,10 @@ sealed class DefaultedQueryOptions<TQueryData> {
   /// [QueryOptions.initialDataUpdatedAt]; there is no default.
   final DateTime? initialDataUpdatedAt;
 
+  /// Computes the seed timestamp only when data is actually seeded.
+  /// Mutually exclusive with [initialDataUpdatedAt]; a null result uses now.
+  final DateTime? Function()? initialDataUpdatedAtCompute;
+
   /// [QueryOptions.structuralSharing]; `null` still means `replaceEqualDeep`.
   final StructuralSharing<TQueryData>? structuralSharing;
 
@@ -597,6 +648,7 @@ sealed class DefaultedQueryOptions<TQueryData> {
           other.networkMode == networkMode &&
           other.initialData == initialData &&
           other.initialDataUpdatedAt == initialDataUpdatedAt &&
+          other.initialDataUpdatedAtCompute == initialDataUpdatedAtCompute &&
           other.structuralSharing == structuralSharing &&
           other.meta == meta &&
           other.behavior == behavior;
@@ -613,6 +665,7 @@ sealed class DefaultedQueryOptions<TQueryData> {
         networkMode,
         initialData,
         initialDataUpdatedAt,
+        initialDataUpdatedAtCompute,
         structuralSharing,
         meta,
         behavior,
@@ -633,6 +686,7 @@ sealed class DefaultedQueryOptions<TQueryData> {
         networkMode: networkMode,
         initialData: initialData,
         initialDataUpdatedAt: initialDataUpdatedAt,
+        initialDataUpdatedAtCompute: initialDataUpdatedAtCompute,
         structuralSharing: structuralSharing,
         meta: meta,
         behavior: behavior,
@@ -653,6 +707,7 @@ final class _DefaultedQueryOptions<TQueryData>
     required super.networkMode,
     required super.initialData,
     required super.initialDataUpdatedAt,
+    required super.initialDataUpdatedAtCompute,
     required super.structuralSharing,
     required super.meta,
     required super.behavior,
@@ -677,6 +732,7 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
     required super.networkMode,
     required super.initialData,
     required super.initialDataUpdatedAt,
+    required super.initialDataUpdatedAtCompute,
     required super.structuralSharing,
     required super.meta,
     required super.behavior,
@@ -731,6 +787,7 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
     networkMode: networkMode,
     initialData: initialData,
     initialDataUpdatedAt: initialDataUpdatedAt,
+    initialDataUpdatedAtCompute: initialDataUpdatedAtCompute,
     structuralSharing: structuralSharing,
     meta: meta,
     behavior: behavior,

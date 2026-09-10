@@ -58,13 +58,19 @@ class SensorsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Style 1: read in build. The widget rebuilds when the result changes.
     final sensors = context.query(sensorsQuery());
+    // The client, taken here in `build` rather than inside the callback
+    // below. A mutation outlives the widget that started it — disposing its
+    // controller does not cancel it — so `onSuccess` can run after this
+    // element is gone, and looking an ancestor up from a deactivated element
+    // throws. The cache work has to happen either way; the client is the
+    // right thing to close over, the `BuildContext` is not.
+    final client = QueryClientProvider.of(context);
     // A mutation, the same way. `MutationOptions.simple` is the form without
     // an `onMutate` step: its types come from `api.add`.
     final add = context.mutation(
       MutationOptions.simple(
         mutationFn: api.add,
-        onSuccess: (_, __, ___) =>
-            QueryClientProvider.read(context).invalidateQueries(
+        onSuccess: (_, __, ___) => client.invalidateQueries(
           filters: QueryFilters(queryKey: sensorsKey),
         ),
       ),

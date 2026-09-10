@@ -23,14 +23,38 @@ Future<void> settleDelayed(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// One segment of card D's mode button, by its label.
+Finder mode(String label) => find.descendant(
+      of: find.byKey(const ValueKey<String>('lazy-seed-mode')),
+      matching: find.text(label),
+    );
+
 /// Opens the screen on a view tall enough for all three cards and their
 /// strips: the scaffold's list builds only what is in view, and the default
-/// 800×600 test view ends inside card A.
-Future<void> open(WidgetTester tester, Harness h, {bool settle = true}) async {
-  tester.view.physicalSize = const Size(800, 1800);
+/// 800×600 test view ends inside card A. Card D sits below them, so the tests
+/// that read it ask for [height] 2600.
+Future<void> open(
+  WidgetTester tester,
+  Harness h, {
+  bool settle = true,
+  double height = 1800,
+}) async {
+  tester.view.physicalSize = Size(800, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await h.open(tester, '/initial-and-placeholder', settle: settle);
+}
+
+/// Opens the screen with card D in view and picks [label] on its mode button.
+Future<void> openAndSeed(
+  WidgetTester tester,
+  Harness h,
+  String label,
+) async {
+  await open(tester, h, height: 2600);
+  await settleDelayed(tester);
+  await tester.tap(mode(label));
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -221,5 +245,89 @@ void main() {
     expect(detail('A', 'initialData source=unused'), findsOneWidget);
     expect(h.fact('post-2', 'fetches=0'), findsOneWidget);
     expect(h.requests('GET', RegExp(r'^/api/posts/\d+$')), 2);
+  });
+
+  // Card D: `initialDataUpdatedAtCompute`, the lazy form of the timestamp.
+  // Nothing here reads a wall clock — the assertions are the callback's own
+  // count, `isStale`, and whether a request was made.
+  group('a lazily computed seed timestamp', () {
+    showcaseTest('runs the callback once, however often the card rebuilds',
+        (tester, h) async {
+      await openAndSeed(tester, h, 'fresh');
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+
+      for (var rebuild = 0; rebuild < 3; rebuild++) {
+        await tester.tap(find.byTooltip('Rebuild card D'));
+        await tester.pumpAndSettle();
+      }
+
+      // Every rebuild re-applies the options; the entry holds data, so the
+      // callback is never consulted again.
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+      expect(detail('D', 'refetched=false'), findsOneWidget);
+      expect(h.requests('GET', '/api/posts/8'), 0);
+    });
+
+    showcaseTest('null dates the seed now, so the mount fetches nothing',
+        (tester, h) async {
+      await openAndSeed(tester, h, 'fresh');
+
+      expect(detail('D', 'Seed · fresh timestamp'), findsOneWidget);
+      expect(detail('D', 'mode=fresh'), findsOneWidget);
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+      expect(detail('D', 'refetched=false'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'status=success'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'fetchStatus=idle'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'isStale=false'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'fetches=0'), findsOneWidget);
+      expect(h.requests('GET', '/api/posts/8'), 0);
+    });
+
+    showcaseTest('a backdated one is stale at once and refetches on mount',
+        (tester, h) async {
+      await open(tester, h, height: 2600);
+      await settleDelayed(tester);
+
+      h.backend.latency = const Duration(milliseconds: 200);
+      await tester.tap(mode('backdated'));
+      await tester.pump();
+
+      // The seed is on screen, and stale, before the backend has answered.
+      expect(detail('D', 'Seed · backdated timestamp'), findsOneWidget);
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+      expect(detail('D', 'refetched=false'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'status=success'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'isStale=true'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'fetchStatus=fetching'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(detail('D', 'Smart plug: setup guide'), findsOneWidget);
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+      expect(detail('D', 'refetched=true'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'fetches=1'), findsOneWidget);
+      expect(h.requests('GET', '/api/posts/9'), 1);
+    });
+
+    showcaseTest('is not consulted again for an entry that already has data',
+        (tester, h) async {
+      await openAndSeed(tester, h, 'fresh');
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+
+      await tester.tap(mode('backdated'));
+      await settleDelayed(tester);
+      expect(detail('D', 'mode=backdated'), findsOneWidget);
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+
+      // Post 8's entry outlived its observer and still holds its seed, so
+      // this is a mount without a seeding.
+      await tester.tap(mode('fresh'));
+      await tester.pumpAndSettle();
+      expect(detail('D', 'Seed · fresh timestamp'), findsOneWidget);
+      expect(detail('D', 'computeCalls=1'), findsOneWidget);
+      expect(h.fact('lazy-seed', 'fetches=0'), findsOneWidget);
+      expect(h.requests('GET', '/api/posts/8'), 0);
+      expect(h.requests('GET', '/api/posts/9'), 1);
+    });
   });
 }

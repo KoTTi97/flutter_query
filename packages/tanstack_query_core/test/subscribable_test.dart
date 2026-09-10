@@ -1,5 +1,7 @@
 /// Ported from `query-core/src/__tests__/subscribable.test.tsx`
-/// at upstream `50680b98c`. 9 of 9 cases.
+/// at upstream `50680b98c`. 9 of 9 cases, one of them with a changed
+/// assertion (see PORTING_NOTES, "a Set of listeners does not port"), plus
+/// two port-specific cases beside it.
 library;
 
 // The unit under test is internal plumbing the package does not export.
@@ -12,11 +14,25 @@ class SubscribableTest extends Subscribable<Listener> {
   int onSubscribeCalls = 0;
   int onUnsubscribeCalls = 0;
 
+  /// Calls every listener, so a test can see which ones are still there.
+  void notify() {
+    for (final listener in listeners.toList()) {
+      listener();
+    }
+  }
+
   @override
   void onSubscribe() => onSubscribeCalls++;
 
   @override
   void onUnsubscribe() => onUnsubscribeCalls++;
+}
+
+/// Two subscriptions passing a tear-off of one method on one object.
+class _Watcher {
+  int calls = 0;
+
+  void onEvent() => calls += 1;
 }
 
 void main() {
@@ -93,7 +109,15 @@ void main() {
       expect(subscribable.hasListeners, isTrue);
     });
 
-    test('should deduplicate the same listener reference', () {
+    // Upstream's name is "should deduplicate the same listener reference",
+    // and there it does: a `Set` of function objects, and one `delete`
+    // removes the single entry three `add`s produced. The port keeps a list
+    // instead, so each `subscribe` is its own registration and its own handle
+    // — see PORTING_NOTES, "a Set of listeners does not port". In JavaScript
+    // the difference is invisible (two functions are never equal); in Dart a
+    // tear-off of one method on one object is equal to itself, so deduping
+    // let one subscriber's unsubscribe silence another's.
+    test('registers the same listener reference once per subscribe', () {
       final subscribable = SubscribableTest();
       void listener() {}
 
@@ -105,7 +129,35 @@ void main() {
       final unsubscribe = subscribable.subscribe(listener);
       unsubscribe();
 
-      expect(subscribable.hasListeners, isFalse);
+      // Two registrations left, not zero: the handle removed its own.
+      expect(subscribable.hasListeners, isTrue);
+    });
+
+    test('one subscriber cannot unsubscribe another', () {
+      final subscribable = SubscribableTest();
+      // Two independent subscribers that happen to pass a tear-off of the
+      // same method on the same object — `==`-equal in Dart.
+      final watcher = _Watcher();
+      final first = subscribable.subscribe(watcher.onEvent);
+      subscribable.subscribe(watcher.onEvent);
+
+      first();
+      expect(subscribable.hasListeners, isTrue);
+      subscribable.notify();
+      expect(watcher.calls, 1);
+    });
+
+    test('an unsubscribe handle called twice removes nothing more', () {
+      final subscribable = SubscribableTest();
+      void listener() {}
+
+      final unsubscribe = subscribable.subscribe(listener);
+      subscribable.subscribe(listener);
+
+      unsubscribe();
+      unsubscribe();
+
+      expect(subscribable.hasListeners, isTrue);
     });
 
     test('should keep a stable subscribe reference when destructured', () {

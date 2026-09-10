@@ -259,17 +259,32 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// Still nullable: the mutation fails only when it runs.
   final MutationFn<TData, TVariables>? mutationFn;
 
-  /// [MutationOptions.onMutate], with the key's registered default applied.
+  /// [MutationOptions.onMutate], carried through as given.
+  ///
+  /// `MutationDefaults` carries no callbacks, so there is no per-key default
+  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
+  /// review, 2026-09-10).
   final FutureOr<TOnMutateResult?> Function(TVariables variables)? onMutate;
 
-  /// [MutationOptions.onSuccess], with the key's registered default applied.
+  /// [MutationOptions.onSuccess], carried through as given.
+  ///
+  /// `MutationDefaults` carries no callbacks, so there is no per-key default
+  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
+  /// review, 2026-09-10).
   final FutureOr<void> Function(
     TData data,
     TVariables variables,
     TOnMutateResult? onMutateResult,
   )? onSuccess;
 
-  /// [MutationOptions.onError], with the key's registered default applied.
+  /// [MutationOptions.onError], carried through as given.
+  ///
+  /// `MutationDefaults` carries no callbacks, so there is no per-key default
+  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
+  /// review, 2026-09-10).
   final FutureOr<void> Function(
     Object error,
     StackTrace stackTrace,
@@ -277,7 +292,12 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
     TOnMutateResult? onMutateResult,
   )? onError;
 
-  /// [MutationOptions.onSettled], with the key's registered default applied.
+  /// [MutationOptions.onSettled], carried through as given.
+  ///
+  /// `MutationDefaults` carries no callbacks, so there is no per-key default
+  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
+  /// review, 2026-09-10).
   final FutureOr<void> Function(
     TData? data,
     Object? error,

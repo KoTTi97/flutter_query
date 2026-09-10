@@ -163,6 +163,7 @@ class InfiniteQueryOptions<TPageData, TPageParam>
     super.networkMode,
     super.initialData,
     super.initialDataUpdatedAt,
+    super.initialDataUpdatedAtCompute,
     super.structuralSharing,
     super.meta,
   });
@@ -215,6 +216,7 @@ class InfiniteQueryOptions<TPageData, TPageParam>
     NetworkMode? networkMode,
     InitialData<InfiniteData<TPageData, TPageParam>>? initialData,
     DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
     Object? meta,
     FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
@@ -241,7 +243,14 @@ class InfiniteQueryOptions<TPageData, TPageParam>
       retryDelay: retryDelay ?? this.retryDelay,
       networkMode: networkMode ?? this.networkMode,
       initialData: initialData ?? this.initialData,
-      initialDataUpdatedAt: initialDataUpdatedAt ?? this.initialDataUpdatedAt,
+      initialDataUpdatedAt: initialDataUpdatedAt ??
+          (initialDataUpdatedAtCompute == null
+              ? this.initialDataUpdatedAt
+              : null),
+      initialDataUpdatedAtCompute: initialDataUpdatedAtCompute ??
+          (initialDataUpdatedAt == null
+              ? this.initialDataUpdatedAtCompute
+              : null),
       structuralSharing: structuralSharing ?? this.structuralSharing,
       meta: meta ?? this.meta,
     );
@@ -302,6 +311,7 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
     super.networkMode,
     super.initialData,
     super.initialDataUpdatedAt,
+    super.initialDataUpdatedAtCompute,
     super.structuralSharing,
     super.meta,
     this.select,
@@ -354,6 +364,7 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
     NetworkMode? networkMode,
     InitialData<InfiniteData<TPageData, TPageParam>>? initialData,
     DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
     Object? meta,
     FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
@@ -394,7 +405,14 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
       retryDelay: retryDelay ?? this.retryDelay,
       networkMode: networkMode ?? this.networkMode,
       initialData: initialData ?? this.initialData,
-      initialDataUpdatedAt: initialDataUpdatedAt ?? this.initialDataUpdatedAt,
+      initialDataUpdatedAt: initialDataUpdatedAt ??
+          (initialDataUpdatedAtCompute == null
+              ? this.initialDataUpdatedAt
+              : null),
+      initialDataUpdatedAtCompute: initialDataUpdatedAtCompute ??
+          (initialDataUpdatedAt == null
+              ? this.initialDataUpdatedAtCompute
+              : null),
       structuralSharing: structuralSharing ?? this.structuralSharing,
       meta: meta ?? this.meta,
       select: select ?? this.select,

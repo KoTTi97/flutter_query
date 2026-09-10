@@ -39,23 +39,25 @@ example it mirrors, and how it is proven. Its widget tests are
 | `default-query-function` | `QueryDefaults.queryFn` deriving the path from the key; per-key defaults | `default-query-function` |
 | `dependent-queries` | `Enabled.when`: a query that waits for another's data | — |
 | `parallel-queries` | several queries in one widget; `client.isFetching` | — |
-| `prefetching` | `client.query(...).ignore()` before the screen that needs it | `prefetching` |
+| `query-collections` | `QueriesBuilder` over a list that grows, shrinks and reorders; duplicate keys; partial failure | — |
+| `prefetching` | `client.query(...).ignore()` before the screen that needs it, and `revalidateIfStale` | `prefetching` |
 | `select-and-sharing` | `select`, `QuerySelectBuilder`, `buildWhen`, `structuralSharing`, rebuild counts | — |
-| `initial-and-placeholder` | `InitialData` with `initialDataUpdatedAt` versus `PlaceholderData`, `isPlaceholderData` | — |
+| `initial-and-placeholder` | `InitialData` with `initialDataUpdatedAt` and its lazy `initialDataUpdatedAtCompute`, versus `PlaceholderData`, `isPlaceholderData` | — |
 | `stale-and-gc` | every `StaleTime` and `GcTime` value, watched in the inspector | — |
-| `pagination` | `PlaceholderData.compute` keeping the previous page, prefetching the next | `pagination` |
+| `pagination` | `PlaceholderData.keepPrevious()` keeping the previous page, prefetching the next | `pagination` |
 | `load-more` | an infinite query appending pages on scroll; cache survival across navigation | `load-more-infinite-scroll` |
 | `max-pages` | pages in both directions with `maxPages: 3` | `infinite-query-with-max-pages` |
 | `mutations` | `mutate`, `mutateAsync`, `reset`, `isMutating`, per-call callbacks, `MutationScope` | — |
 | `optimistic-updates` | the write shown before the answer, from `variables` and from the cache with rollback | `nextjs-app-optimistic-updates` |
+| `mutation-state` | `MutationStateController`: every running mutation in the cache, read by a widget that owns none | — |
 | `playground` | todos with live stale time, gc time, latency and error rate | `playground` |
 | `invalidation-and-filters` | invalidate, refetch, reset, remove; prefix, exact, `type`, `predicate` | — |
 | `auto-refetching` | `RefetchInterval`, in the foreground and not | `auto-refetching` |
 | `retry` | `RetryPolicy`, `RetryDelay`, `failureCount`, loading versus refetch errors | — |
 | `cancellation` | `signal` to the transport, `cancelQueries`, search-as-you-type | — |
 | `offline` | `NetworkMode`, paused mutations, `resumePausedMutations`, `onlineStatus` | `offline` |
-| `focus-refetch` | `RefetchOn` for focus and mount | — |
-| `four-call-styles` | the same query through `context.query`, `QueryBuilder`, `QueryMixin`, `QueryController` | — |
+| `focus-refetch` | `RefetchOn` for focus and mount, and `refetchMinBackgroundDuration` | — |
+| `four-call-styles` | the same query through `context.query`, `QueryBuilder`, `QueryMixin`, `QueryController`, plus `QueryListener` for a side effect | — |
 | `global-callbacks` | `QueryCache`/`MutationCache` callbacks, `meta` | — |
 | `cache-inspector` | every entry and event of both caches, live | (devtools) |
 

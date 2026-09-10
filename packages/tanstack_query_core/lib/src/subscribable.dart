@@ -9,22 +9,42 @@ import 'package:meta/meta.dart';
 /// the alternative — handing back the listener and asking callers to pass it to
 /// `unsubscribe` — makes anonymous closures unremovable.
 abstract class Subscribable<TListener extends Function> {
-  final Set<TListener> _listeners = <TListener>{};
+  /// A `List`, where upstream keeps a `Set`.
+  ///
+  /// In JavaScript two functions are never equal, so a `Set` there is only an
+  /// insertion-ordered list that cannot hold the *same* closure twice. In
+  /// Dart a tear-off of one method on one object is `==` to itself, so two
+  /// independent subscribers passing `cache.onEvent` collapsed into a single
+  /// entry — and the first of them to unsubscribe silenced the other. A list
+  /// keeps one entry per `subscribe`, which is what the returned handle
+  /// promises to remove (eighth review, 2026-09-10). The observers already
+  /// kept a list for this reason.
+  final List<TListener> _listeners = <TListener>[];
 
   /// The listeners currently registered, in subscription order. Subclasses
   /// iterate a copy when notifying, since a listener may unsubscribe mid-loop.
   @protected
-  Set<TListener> get listeners => _listeners;
+  List<TListener> get listeners => _listeners;
 
   /// Whether at least one listener is registered — what tells a manager to keep
   /// its platform event source installed.
   bool get hasListeners => _listeners.isNotEmpty;
 
   /// Registers [listener] and returns the function that removes it again.
+  ///
+  /// Subscribing the same function twice registers it twice; each handle
+  /// removes its own registration, and calling one twice removes nothing the
+  /// second time.
   void Function() subscribe(TListener listener) {
     _listeners.add(listener);
     onSubscribe();
+    var removed = false;
     return () {
+      if (removed) {
+        return;
+      }
+      removed = true;
+      // By identity, so one handle never takes another's registration.
       _listeners.remove(listener);
       onUnsubscribe();
     };

@@ -22,6 +22,30 @@ void main() {
 
     tearDown(() => queryClient.clear());
 
+    testFakeAsync(
+        'constructor should call initialDataUpdatedAt if defined as a function',
+        (time) async {
+      var calls = 0;
+      final key = queryKey();
+      final seededAt = time.now.subtract(ms(500));
+      await queryClient.query<String>(QueryOptions(
+        queryKey: key,
+        queryFn: (_) => 'data',
+        initialData: const InitialData.value('initial'),
+        initialDataUpdatedAtCompute: () {
+          calls++;
+          return seededAt;
+        },
+        staleTime: StaleTime.duration(ms(1000)),
+      ));
+      // Evaluated once, at seeding, and the timestamp it returns is the one
+      // the state carries — so the seed is 500 ms old, not brand new.
+      expect(calls, 1);
+      final state = queryClient.getQueryState<String>(key)!;
+      expect(state.dataUpdatedAt, seededAt);
+      expect(state.data, 'initial');
+    });
+
     testFakeAsync('should use the longest garbage collection time it has seen',
         (time) async {
       final key = queryKey();

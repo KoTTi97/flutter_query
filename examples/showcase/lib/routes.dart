@@ -21,6 +21,7 @@ import 'features/initial_and_placeholder/initial_and_placeholder_screen.dart';
 import 'features/invalidation_and_filters/invalidation_and_filters_screen.dart';
 import 'features/load_more/load_more_screen.dart';
 import 'features/max_pages/max_pages_screen.dart';
+import 'features/mutation_state/mutation_state_screen.dart';
 import 'features/mutations/mutations_screen.dart';
 import 'features/offline/offline_screen.dart';
 import 'features/optimistic_updates/optimistic_updates_screen.dart';
@@ -28,6 +29,7 @@ import 'features/pagination/pagination_screen.dart';
 import 'features/parallel_queries/parallel_queries_screen.dart';
 import 'features/playground/playground_screen.dart';
 import 'features/prefetching/prefetching_screen.dart';
+import 'features/query_collections/query_collections_screen.dart';
 import 'features/retry/retry_screen.dart';
 import 'features/select_and_sharing/select_and_sharing_screen.dart';
 import 'features/simple/simple_screen.dart';
@@ -49,6 +51,7 @@ final List<FeatureEntry> featureEntries = <FeatureEntry>[
       defaultQueryFunctionFeature, (_) => const DefaultQueryFunctionScreen()),
   FeatureEntry(dependentQueriesFeature, (_) => const DependentQueriesScreen()),
   FeatureEntry(parallelQueriesFeature, (_) => const ParallelQueriesScreen()),
+  FeatureEntry(queryCollectionsFeature, (_) => const QueryCollectionsScreen()),
   FeatureEntry(prefetchingFeature, (_) => const PrefetchingScreen()),
   FeatureEntry(selectAndSharingFeature, (_) => const SelectAndSharingScreen()),
   FeatureEntry(
@@ -60,6 +63,7 @@ final List<FeatureEntry> featureEntries = <FeatureEntry>[
   FeatureEntry(mutationsFeature, (_) => const MutationsScreen()),
   FeatureEntry(
       optimisticUpdatesFeature, (_) => const OptimisticUpdatesScreen()),
+  FeatureEntry(mutationStateFeature, (_) => const MutationStateScreen()),
   FeatureEntry(playgroundFeature, (_) => const PlaygroundScreen()),
   FeatureEntry(invalidationAndFiltersFeature,
       (_) => const InvalidationAndFiltersScreen()),

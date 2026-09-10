@@ -25,15 +25,17 @@ export 'src/infinite_query.dart'
         hasPreviousPage,
         nextPageParam,
         previousPageParam;
-export 'src/infinite_query_observer.dart' hide hasNextPageOf, hasPreviousPageOf;
+export 'src/infinite_query_observer.dart';
 export 'src/mutation.dart' hide MutationCacheRef;
 export 'src/mutation_cache.dart';
 export 'src/mutation_observer.dart';
 export 'src/mutation_options.dart';
 export 'src/mutation_result.dart';
+export 'src/mutation_state_observer.dart';
 export 'src/notify_manager.dart';
 export 'src/online_manager.dart';
 export 'src/option_values.dart';
+export 'src/queries_observer.dart';
 export 'src/query.dart' hide FetchBehavior, FetchContext, QueryCacheRef;
 export 'src/query_cache.dart';
 export 'src/query_client.dart';

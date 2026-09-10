@@ -8,8 +8,13 @@
   `InfiniteQueryBuilder`, `MutationBuilder`), the `QueryMixin` `State` mixin
   and the `context.query(...)` extension — four equal call styles.
 - No dependency beyond Flutter; connectivity is opt-in through
-  `QueryClientProvider.onlineStatus`.
-- App lifecycle drives the client's focus state, and results that arrive
+  `QueryClientProvider.onlineStatus`, with `initialOnlineStatus` for what a
+  `Stream` cannot say before its first event.
+- `package:tanstack_query_flutter/testing.dart`: `queryWidgetTest` and
+  `tearDownQueryClient`, so a first widget test does not fail on a pending
+  `gcTime` timer.
+- App lifecycle drives the client's focus state — `AppLifecycleState.inactive`
+  read per platform, with `isAppShown` as the seam — and results that arrive
   mid-build are delivered after the frame.
 - A widget builds once per changed result: an equal result rebuilds nothing,
   `buildWhen` on every builder decides the rest.

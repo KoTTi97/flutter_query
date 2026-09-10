@@ -1,8 +1,10 @@
 import type { Page } from '@playwright/test'
 import { expect, fact, test } from './fixtures'
 
-// Two entries, two strips and four knobs on one screen.
-test.use({ viewport: { width: 1280, height: 1900 } })
+// Three entries, two strips and five knobs on one screen; entry C sits at the
+// bottom, and the scaffold's list only builds — and the semantics tree only
+// carries — what is in view.
+test.use({ viewport: { width: 1280, height: 3000 } })
 
 // Each entry's own facts live in a semantics group of its own, because the
 // other entry and both strips show an `isStale=` too.
@@ -167,4 +169,73 @@ test('one focus event, two answers: A always, B never', async ({ page, open, sce
   await expect(fact(page, 'focus-a', 'fetches=2')).toBeVisible()
   await expect(fact(page, 'focus-b', 'fetches=1')).toBeVisible()
   expect(await scenario.count('GET', /^\/api\/time$/)).toBe(3)
+})
+
+// Entry C's own focus source. It runs on a client of its own, so the app
+// switch above does not reach it: this one calls `setFocused` on entry C's
+// focus manager, which is where the threshold is measured.
+async function focusCycleC(page: Page) {
+  const toggle = page.getByRole('switch', { name: 'Entry C focused', exact: true })
+  await toggle.click()
+  await expect(reader(page, 'reader-c', 'focused=false')).toBeVisible()
+  await toggle.click()
+  await expect(reader(page, 'reader-c', 'focused=true')).toBeVisible()
+}
+
+test('min background long: a short absence raises the event and refetches nothing', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/focus-refetch')
+  await pick(page, 'min-background', 'long')
+  // A new threshold is a new manager, a new client and a new cache.
+  await expect(reader(page, 'reader-c', 'fetches=1')).toBeVisible()
+
+  await focusCycleC(page)
+
+  // The event reached the manager — focus came back — carrying "no new
+  // refetches", because the absence was far under the hour.
+  await expect(reader(page, 'reader-c', 'shouldRefetchOnFocus=false')).toBeVisible()
+  await expect(reader(page, 'reader-c', 'fetches=1')).toBeVisible()
+  // Two on the server, one per client: the default client fetched once before
+  // the knob replaced it, and the new one fetched once on mount. `fetches=1`
+  // above is the new client's own counter, and it did not move on the return.
+  expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(2)
+})
+
+test('min background none: the same absence and return does refetch', async ({ page, open, scenario }) => {
+  await scenario.config({ latency: 0 })
+  await open('/focus-refetch')
+  await expect(reader(page, 'reader-c', 'fetches=1')).toBeVisible()
+
+  await focusCycleC(page)
+
+  await expect(reader(page, 'reader-c', 'shouldRefetchOnFocus=true')).toBeVisible()
+  await expect(reader(page, 'reader-c', 'fetches=2')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(2)
+})
+
+test('the threshold knob swaps the client entry C runs on', async ({ page, open, scenario }) => {
+  await scenario.config({ latency: 0 })
+  await open('/focus-refetch')
+  await focusCycleC(page)
+  await expect(reader(page, 'reader-c', 'fetches=2')).toBeVisible()
+
+  await pick(page, 'min-background', 'long')
+  await expect(reader(page, 'reader-c', 'fetches=1')).toBeVisible()
+  await focusCycleC(page)
+  await expect(reader(page, 'reader-c', 'shouldRefetchOnFocus=false')).toBeVisible()
+  await expect(reader(page, 'reader-c', 'fetches=1')).toBeVisible()
+
+  await pick(page, 'min-background', 'none')
+  await expect(reader(page, 'reader-c', 'fetches=1')).toBeVisible()
+  await focusCycleC(page)
+  await expect(reader(page, 'reader-c', 'shouldRefetchOnFocus=true')).toBeVisible()
+  await expect(reader(page, 'reader-c', 'fetches=2')).toBeVisible()
+
+  // Entries A and B never left the app's own client, and the app switch was
+  // never touched: nothing on `/api/time` moved.
+  expect(await scenario.count('GET', /^\/api\/time$/)).toBe(2)
 })

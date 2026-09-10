@@ -187,11 +187,19 @@ class _Entry {
   /// about that very fetch lands after the frame (fourth review, 2026-09-09).
   Object? built;
 
-  /// Reads the current value and remembers it as this build's.
-  T read<T>() => (built = controller.value) as T;
+  /// What [observedStateOf] said when [built] was recorded: the result for
+  /// every controller but an infinite query's, which keeps its paging flags
+  /// beside the result (third review, 2026-09-10).
+  Object? builtState;
+
+  /// Reads the current value and remembers it as this build's, both halves.
+  T read<T>() {
+    builtState = observedStateOf(controller);
+    return (built = controller.value) as T;
+  }
 
   void _onChanged() {
-    if (reader.mounted && controller.value != built) {
+    if (reader.mounted && observedStateOf(controller) != builtState) {
       reader.markNeedsBuild();
     }
   }
@@ -208,6 +216,13 @@ class _Reader {
 
   /// The widget doing the reading.
   final Element reader;
+
+  /// Set when Flutter said this element stopped depending on the scope, and
+  /// cleared again the moment it reads. A deactivated element can come back
+  /// in the same frame — that is what moving a `GlobalKey` subtree is — so
+  /// the flag is a question the post-frame sweep answers, not an answer in
+  /// itself (third review, 2026-09-10).
+  bool detached = false;
 
   int epoch;
 
@@ -380,6 +395,9 @@ class QueryScopeElement extends InheritedElement {
 
   _Reader _startEpochFor(Element reader) {
     final state = _readers.putIfAbsent(reader, () => _Reader(reader, _epoch));
+    // It is reading, so it is here: whatever `removeDependent` said before
+    // this frame ended is void.
+    state.detached = false;
     if (state.epoch != _epoch) {
       // First read of a new frame: what it held before becomes provisional,
       // and whatever it does not read again this frame is released in the
@@ -405,9 +423,14 @@ class QueryScopeElement extends InheritedElement {
     });
   }
 
-  /// Releases the observers a reader stopped reading, mutations included.
+  /// Releases the observers a reader stopped reading, mutations included, and
+  /// the whole of a reader that left the scope and did not come back.
   void _sweep() {
-    for (final state in _readers.values) {
+    for (final state in _readers.values.toList()) {
+      if (state.detached) {
+        _readers.remove(state.reader)?.dispose();
+        continue;
+      }
       final released = state.pending.difference(state.current);
       state.pending = <Object>{};
       for (final identity in released) {
@@ -420,7 +443,19 @@ class QueryScopeElement extends InheritedElement {
   @override
   void removeDependent(Element dependent) {
     super.removeDependent(dependent);
-    _readers.remove(dependent)?.dispose();
+    // Not "gone": Flutter also calls this when an element is *deactivated*,
+    // and an element deactivated in one frame can be reactivated in the same
+    // one somewhere else in the tree — that is how a `GlobalKey` subtree
+    // moves. Destroying the controllers here took a running mutation's
+    // observation away from a widget that never left (third review,
+    // 2026-09-10). The sweep after the frame releases the readers that really
+    // did not come back.
+    final state = _readers[dependent];
+    if (state == null) {
+      return;
+    }
+    state.detached = true;
+    _scheduleSweep();
   }
 
   @override

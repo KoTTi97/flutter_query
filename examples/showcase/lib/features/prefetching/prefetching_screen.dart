@@ -15,13 +15,29 @@
 /// refused prefetch must be one request, not four, for a reader counting
 /// them.
 ///
+/// The last card contrasts the three imperative reads of one key, the
+/// backend's counter. `client.query(options)` awaits the fetch whenever the
+/// entry is stale and hands back the new value. `client.query(options,
+/// revalidateIfStale: true)` hands back what the cache holds on the spot and
+/// refreshes behind it, so the value it returns is the old one for as long as
+/// the fetch takes; it fails only when nothing at all is cached. The same
+/// call under `staleTime: StaleTime.static` returns the cached value and
+/// makes no request, background one included: a static entry is never stale.
+/// `Increment on the server` moves the counter without touching the cache,
+/// which is what makes a cached answer tell itself apart from a fresh one by
+/// its value alone.
+///
 /// Proofs (widget tests in `test/features/prefetching_test.dart`, end-to-end
 /// in `e2e/tests/prefetching.spec.ts`): a prefetch is one request and marks
 /// the row with nobody observing the entry; opening the prefetched post costs
 /// no request and shows the title at once; opening an unprefetched post costs
 /// one; a second prefetch within `staleTime` is a no-op and a third after it
 /// fetches again; a refused prefetch throws nothing into the UI, leaves the
-/// row unmarked, and the post opens normally afterwards.
+/// row unmarked, and the post opens normally afterwards; a stale read with
+/// `revalidateIfStale` returns the old value on the frame of the tap while
+/// the entry is fetching and the cache holds the new one once the answer
+/// lands, the plain read returns the new value, and the static read makes no
+/// request at all.
 library;
 
 import 'package:flutter/material.dart';
@@ -72,6 +88,30 @@ QueryOptions<Post> postPrefetch(ShowcaseApi api, int id) => QueryOptions<Post>(
       retry: RetryPolicy.never,
     );
 
+/// The key the imperative-read card reads. Its own, not one of
+/// [ShowcaseKeys]: the counter is a value a button can move on the server
+/// behind the cache's back, which is what makes "cached" and "fresh" tell
+/// themselves apart by the number alone.
+final QueryKey counterKey = QueryKey(const <Object?>['prefetching', 'counter']);
+
+/// The counter read: always stale, so the plain `client.query` fetches on
+/// every press and `revalidateIfStale` always has a refresh to run behind
+/// the cached answer it returns.
+QueryOptions<int> counterRead(ShowcaseApi api) => QueryOptions<int>(
+      queryKey: counterKey,
+      queryFn: (context) => api.counter(signal: context.signal),
+      staleTime: StaleTime.zero,
+    );
+
+/// The same read declared static. `StaleTime.static` is never stale, so a
+/// cached entry is handed straight back and no request is made — not even the
+/// background one `revalidateIfStale` would otherwise start.
+QueryOptions<int> counterStaticRead(ShowcaseApi api) => QueryOptions<int>(
+      queryKey: counterKey,
+      queryFn: (context) => api.counter(signal: context.signal),
+      staleTime: StaleTime.static,
+    );
+
 class PrefetchingScreen extends StatefulWidget {
   const PrefetchingScreen({super.key});
 
@@ -88,6 +128,13 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
   /// sees its entry land with `observers=0`.
   int? _watched;
 
+  /// What the last imperative read was and what it handed back, plus how
+  /// often the server's counter has been moved behind the cache's back.
+  String _lastRead = 'none';
+  int? _returned;
+  bool _readFailed = false;
+  int _increments = 0;
+
   void _prefetch(int id) {
     final api = ShowcaseScope.apiOf(context);
     // The future is the prefetch's only handle, and nobody wants it: a
@@ -102,6 +149,135 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
       });
 
   void _back() => setState(() => _selected = null);
+
+  Future<void> _read(
+    String label, {
+    required bool revalidateIfStale,
+    required bool neverStale,
+  }) async {
+    final api = ShowcaseScope.apiOf(context);
+    final client = QueryClientProvider.of(context);
+    final options = neverStale ? counterStaticRead(api) : counterRead(api);
+    setState(() {
+      _lastRead = label;
+      _returned = null;
+      _readFailed = false;
+    });
+    try {
+      final value =
+          await client.query(options, revalidateIfStale: revalidateIfStale);
+      if (mounted) {
+        setState(() => _returned = value);
+      }
+    } on Object {
+      // The plain call fails whenever its fetch does; with
+      // `revalidateIfStale` only an empty cache can fail. Either way the
+      // card says so rather than leaving an error to the zone.
+      if (mounted) {
+        setState(() => _readFailed = true);
+      }
+    }
+  }
+
+  /// Moves the counter on the server and leaves the cache alone, so the
+  /// cached value is provably out of date and a read's answer says which of
+  /// the two it is.
+  Future<void> _incrementOnServer() async {
+    final api = ShowcaseScope.apiOf(context);
+    try {
+      await api.increment();
+      if (mounted) {
+        setState(() => _increments += 1);
+      }
+    } on Object {
+      // A refused increment is not this card's subject; the reads are.
+    }
+  }
+
+  /// The three calls side by side, with what came back and whether a request
+  /// was made. `cached` and `requests` are read on every cache event, the way
+  /// the strips are: the background refresh has no observer to announce it.
+  Widget _readsCard() => SectionCard(
+        title: 'Imperative reads',
+        child: Semantics(
+          container: true,
+          explicitChildNodes: true,
+          label: 'reads',
+          child: _OnCacheEvent(
+            builder: (context) {
+              final client = QueryClientProvider.of(context);
+              final cached = client.getQueryData<int>(counterKey);
+              final requests =
+                  ShowcaseScope.of(context).stats.fetchesOf(counterKey);
+              return Column(
+                key: const ValueKey<String>('reads'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: <Widget>[
+                      FilledButton(
+                        onPressed: () => _read(
+                          'await',
+                          revalidateIfStale: false,
+                          neverStale: false,
+                        ),
+                        child: const Text('Read (await)'),
+                      ),
+                      FilledButton.tonal(
+                        onPressed: () => _read(
+                          'revalidate',
+                          revalidateIfStale: true,
+                          neverStale: false,
+                        ),
+                        child: const Text('Read (revalidateIfStale)'),
+                      ),
+                      OutlinedButton(
+                        onPressed: () => _read(
+                          'static',
+                          revalidateIfStale: true,
+                          neverStale: true,
+                        ),
+                        child: const Text('Read (static)'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _incrementOnServer,
+                        child: const Text('Increment on the server'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 2,
+                    children: <Widget>[
+                      for (final fact in <String>[
+                        'read=$_lastRead',
+                        if (_readFailed)
+                          'returned=failed'
+                        else
+                          'returned=${_returned ?? '–'}',
+                        'cached=${cached ?? '–'}',
+                        'requests=$requests',
+                        'increments=$_increments',
+                      ])
+                        Text(
+                          fact,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +313,8 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
             queryKey: ShowcaseKeys.post(watched),
             label: 'post-$watched',
           ),
+        _readsCard(),
+        QueryDebugStrip(queryKey: counterKey, label: 'counter'),
       ],
     );
   }

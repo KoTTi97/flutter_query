@@ -80,6 +80,17 @@ class _QueryBuilderState<TData> extends _ControllerBuilderState<
     QueryBuilder<TData>, QueryController<TData, TData>> {
   QueryResult<TData>? _built;
 
+  /// What [observedStateOf] said when [_built] was recorded — the same
+  /// value for every controller but an infinite query's, which carries
+  /// its paging flags beside the result.
+  Object? _builtState;
+
+  /// Records what this build shows, both halves of it.
+  QueryResult<TData> _record() {
+    _builtState = observedStateOf(controller);
+    return _built = controller.value;
+  }
+
   @override
   QueryClient? get explicitClient => widget.client;
 
@@ -97,11 +108,11 @@ class _QueryBuilderState<TData> extends _ControllerBuilderState<
   void applyOptions() => controller.setOptions(widget.options);
 
   @override
-  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
+  bool shouldRebuild() =>
+      _shouldRebuild(widget.buildWhen, _built, _builtState, controller);
 
   @override
-  Widget build(BuildContext context) =>
-      widget.builder(context, _built = controller.value);
+  Widget build(BuildContext context) => widget.builder(context, _record());
 }
 
 /// Whether a builder with [buildWhen] should rebuild for the controller's
@@ -115,14 +126,22 @@ class _QueryBuilderState<TData> extends _ControllerBuilderState<
 bool _shouldRebuild<T>(
   BuildWhen<T>? buildWhen,
   T? built,
+  Object? builtState,
   ValueListenable<T> controller,
 ) {
   if (built == null) {
     return true;
   }
+  if (observedStateOf(controller) == builtState) {
+    return false;
+  }
   final current = controller.value;
   if (current == built) {
-    return false;
+    // Only the half that lives beside the result moved — the paging flags of
+    // an infinite query. There is nothing for [buildWhen] to compare, and the
+    // builder is showing the stale half right now (third review,
+    // 2026-09-10).
+    return true;
   }
   return buildWhen == null || buildWhen(built, current);
 }
@@ -164,6 +183,17 @@ class _QuerySelectBuilderState<TQueryData, TData>
         QueryController<TQueryData, TData>> {
   QueryResult<TData>? _built;
 
+  /// What [observedStateOf] said when [_built] was recorded — the same
+  /// value for every controller but an infinite query's, which carries
+  /// its paging flags beside the result.
+  Object? _builtState;
+
+  /// Records what this build shows, both halves of it.
+  QueryResult<TData> _record() {
+    _builtState = observedStateOf(controller);
+    return _built = controller.value;
+  }
+
   @override
   QueryClient? get explicitClient => widget.client;
 
@@ -183,11 +213,11 @@ class _QuerySelectBuilderState<TQueryData, TData>
   void applyOptions() => controller.setOptions(widget.options);
 
   @override
-  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
+  bool shouldRebuild() =>
+      _shouldRebuild(widget.buildWhen, _built, _builtState, controller);
 
   @override
-  Widget build(BuildContext context) =>
-      widget.builder(context, _built = controller.value);
+  Widget build(BuildContext context) => widget.builder(context, _record());
 }
 
 /// Builds from an infinite query, handing the builder the controller so it can
@@ -275,12 +305,24 @@ class _InfiniteQueryBuilderState<TPageData, TPageParam, TData>
 
   QueryResult<TData>? _built;
 
+  /// What [observedStateOf] said when [_built] was recorded — the same
+  /// value for every controller but an infinite query's, which carries
+  /// its paging flags beside the result.
+  Object? _builtState;
+
+  /// Records what this build shows, both halves of it.
+  QueryResult<TData> _record() {
+    _builtState = observedStateOf(controller);
+    return _built = controller.value;
+  }
+
   @override
-  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
+  bool shouldRebuild() =>
+      _shouldRebuild(widget.buildWhen, _built, _builtState, controller);
 
   @override
   Widget build(BuildContext context) {
-    _built = controller.value;
+    _record();
     return widget.builder(context, controller);
   }
 }
@@ -369,12 +411,24 @@ class _MutationBuilderState<TData, TVariables, TOnMutateResult>
 
   MutationResult<TData, TVariables>? _built;
 
+  /// What [observedStateOf] said when [_built] was recorded — the same
+  /// value for every controller but an infinite query's, which carries
+  /// its paging flags beside the result.
+  Object? _builtState;
+
+  /// Records what this build shows, both halves of it.
+  MutationResult<TData, TVariables> _record() {
+    _builtState = observedStateOf(controller);
+    return _built = controller.value;
+  }
+
   @override
-  bool shouldRebuild() => _shouldRebuild(widget.buildWhen, _built, controller);
+  bool shouldRebuild() =>
+      _shouldRebuild(widget.buildWhen, _built, _builtState, controller);
 
   @override
   Widget build(BuildContext context) {
-    _built = controller.value;
+    _record();
     return widget.builder(context, controller);
   }
 }

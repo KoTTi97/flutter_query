@@ -367,7 +367,9 @@ class QueryClient {
 
     _unsubscribeFocus = focusManager.subscribe((focused) {
       if (focused) {
-        _resumeThen(queryCache.onFocus).ignore();
+        // Capture before awaiting mutations: later focus events may change it.
+        final refetch = focusManager.shouldRefetchOnFocus;
+        _resumeThen(() => queryCache.onFocus(refetchQueries: refetch)).ignore();
       }
     });
 
@@ -394,6 +396,13 @@ class QueryClient {
 
   /// Stops listening. Balanced with [mount].
   void unmount() {
+    if (_mountCount == 0) {
+      // Never below zero. An unmount without a matching mount used to leave
+      // the count at -1, and the next `mount()` then took it to 0 and
+      // subscribed to nothing: focus and reconnect refetching off for the
+      // life of the client, silently (eighth review, 2026-09-10).
+      return;
+    }
     _mountCount--;
     if (_mountCount != 0) {
       return;
@@ -429,6 +438,12 @@ class QueryClient {
     final query = queryCache.get<TQueryData>(queryKey);
     return query != null && query.state.hasData ? query.state.data : null;
   }
+
+  /// The cached infinite data under [queryKey], or `null` if absent.
+  /// Throws [QueryDataTypeError] when the entry has another data type.
+  InfiniteData<TPageData, TPageParam>?
+      getInfiniteQueryData<TPageData, TPageParam>(QueryKey queryKey) =>
+          getQueryData<InfiniteData<TPageData, TPageParam>>(queryKey);
 
   /// The full state of the query under [queryKey] — status, fetch status,
   /// timestamps and counters, not just the data — or `null` if there is none.
@@ -542,6 +557,10 @@ class QueryClient {
   /// fetch — upstream's default too. [silent] is *not* on by default: a silent
   /// cancel means "a new fetch is taking over", which is not what an explicit
   /// cancel is.
+  ///
+  /// [silent] cancels without dispatching an error. A silently cancelled
+  /// fetch that nothing replaces is put back to `idle` rather than left
+  /// `fetching` forever — see [Query.cancel].
   Future<void> cancelQueries({
     QueryFilters filters = const QueryFilters(),
     bool revert = true,
@@ -678,7 +697,17 @@ class QueryClient {
   ///   `staleTime: StaleTime.static`;
   /// - to reshape the result, `await` it and map it — Dart needs no `select`
   ///   here.
-  Future<TQueryData> query<TQueryData>(QueryOptions<TQueryData> options) {
+  /// With [revalidateIfStale], existing data is returned immediately while a
+  /// stale query refreshes in the background. Missing data still awaits the
+  /// fetch. Background errors update the cache and its callbacks as usual.
+  ///
+  /// That last point changes when this call throws: with [revalidateIfStale]
+  /// the future fails only when nothing is cached at all. A query holding
+  /// stale data completes with that data even when it is in an error state and
+  /// even when the background refresh fails too — the error reaches the state
+  /// and the cache callbacks, not this caller.
+  Future<TQueryData> query<TQueryData>(QueryOptions<TQueryData> options,
+      {bool revalidateIfStale = false}) {
     // Resolved once: the scan over the registered defaults runs per call.
     final defaults = _queryDefaultsFor(options.queryKey);
     final defaulted = _defaultQueryOptionsWith<TQueryData>(
@@ -687,6 +716,9 @@ class QueryClient {
       defaults,
     );
     final query = queryCache.build<TQueryData>(this, defaulted);
+    // Capture before fetching: a synchronous fetcher may replace the data.
+    final cachedData = query.state.data;
+    final returnCached = revalidateIfStale && query.state.hasData;
 
     if (query.isStaleByTime(defaulted.staleTime)) {
       // Upstream's imperative-path rule — a caller who configured nothing
@@ -695,12 +727,17 @@ class QueryClient {
       // call: an observer's `retry: times(3)` query refetched with a single
       // attempt after one `client.query` (fifth review, 2026-09-09).
       final retryConfigured = options.retry ?? defaults.retry;
-      return query.fetch(
+      final fetch = query.fetch(
         options: defaulted,
         fetchOptions: FetchOptions<TQueryData>(
           retry: retryConfigured == null ? RetryPolicy.never : null,
         ),
       );
+      if (returnCached) {
+        fetch.ignore();
+        return Future<TQueryData>.value(cachedData as TQueryData);
+      }
+      return fetch;
     }
     return Future<TQueryData>.value(query.state.data as TQueryData);
   }
@@ -809,6 +846,11 @@ class QueryClient {
     QueryKey queryKey,
     QueryDefaults defaults,
   ) {
+    if (options.initialDataUpdatedAt != null &&
+        options.initialDataUpdatedAtCompute != null) {
+      throw ArgumentError(
+          'Specify initialDataUpdatedAt or initialDataUpdatedAtCompute, not both.');
+    }
     return DefaultedQueryOptions<TQueryData>(
       queryKey: queryKey,
       queryFn: options.queryFn ?? _adoptQueryFn<TQueryData>(defaults),
@@ -822,6 +864,7 @@ class QueryClient {
           options.networkMode ?? defaults.networkMode ?? NetworkMode.online,
       initialData: options.initialData,
       initialDataUpdatedAt: options.initialDataUpdatedAt,
+      initialDataUpdatedAtCompute: options.initialDataUpdatedAtCompute,
       structuralSharing: options.structuralSharing ??
           _adoptStructuralSharing<TQueryData>(defaults),
       meta: options.meta ?? defaults.meta,
@@ -937,6 +980,7 @@ class QueryClient {
       networkMode: base.networkMode,
       initialData: base.initialData,
       initialDataUpdatedAt: base.initialDataUpdatedAt,
+      initialDataUpdatedAtCompute: base.initialDataUpdatedAtCompute,
       structuralSharing: base.structuralSharing,
       meta: base.meta,
       behavior: base.behavior,
@@ -998,7 +1042,13 @@ class QueryClient {
   /// Resolves infinite-query options into the observer options a
   /// `Query<InfiniteData<…>>` runs on. The paging behaviour is the options'
   /// own ([InfiniteQueryOptions.behavior]); this only adds the observer half.
-  @internal
+  ///
+  /// Public because it is the only legal input to
+  /// `InfiniteQueryObserver.setOptions` and `InfiniteQueryController.setOptions`
+  /// — plain observer options are refused there — and a documented path that
+  /// nothing outside the package may take is not a path (seventh review,
+  /// 2026-09-10). [InfiniteQueryObserver.setInfiniteOptions] is the shorter
+  /// way to the same thing.
   QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>
       infiniteObserverOptions<TPageData, TPageParam, TData>(
     InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
@@ -1015,6 +1065,7 @@ class QueryClient {
             networkMode: options.networkMode,
             initialData: options.initialData,
             initialDataUpdatedAt: options.initialDataUpdatedAt,
+            initialDataUpdatedAtCompute: options.initialDataUpdatedAtCompute,
             structuralSharing: options.structuralSharing,
             meta: options.meta,
             select: options.select,
@@ -1037,11 +1088,14 @@ class QueryClient {
   ///
   /// A typed convenience: an [InfiniteQueryOptions] carries its paging
   /// behaviour, so [query] itself pages when handed one.
+  /// [revalidateIfStale] returns cached pages while stale data refreshes.
   Future<InfiniteData<TPageData, TPageParam>>
       infiniteQuery<TPageData, TPageParam>(
-    InfiniteQueryOptions<TPageData, TPageParam> options,
-  ) =>
-          query<InfiniteData<TPageData, TPageParam>>(options);
+    InfiniteQueryOptions<TPageData, TPageParam> options, {
+    bool revalidateIfStale = false,
+  }) =>
+          query<InfiniteData<TPageData, TPageParam>>(options,
+              revalidateIfStale: revalidateIfStale);
 
   /// A one-off observer for [options]. The caller owns its lifetime.
   QueryObserver<TQueryData, TData> observe<TQueryData, TData>(
