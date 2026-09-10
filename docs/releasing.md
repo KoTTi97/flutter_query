@@ -2,6 +2,20 @@
 
 Two packages go to pub.dev, in a fixed order, from a tag each.
 
+**[`scripts/release.sh`](../scripts/release.sh) walks the whole procedure.** It
+is this document as a path rather than as prose: it refuses to start unless the
+tree is releasable, signs the CLI in, publishes the core and then the binding in
+order, waits for pub.dev in between, opens both admin pages for the
+automated-publishing switch, and tags without firing the publish workflow. It is
+resumable — a version already on pub.dev is skipped, not retried.
+
+```bash
+./scripts/release.sh
+```
+
+The rest of this file is what it does and why, which is what you need when a
+step has to be done by hand.
+
 ## Order
 
 1. **`query_kit` first.** The binding depends on it by version, and
@@ -40,6 +54,16 @@ publish step and nothing is published. The first publish of a new package
 cannot be automated at all: it has to be `dart pub publish` by hand from the
 package directory (which also creates the package), after which automated
 publishing can be switched on.
+
+**The bootstrap release costs one contortion.** Its versions are published by
+hand, so pushing their tags afterwards would start `publish.yml`, which would
+try to publish the same version again and fail — two red runs on the very first
+release. No ordering avoids it: before the pub.dev switch is on the run fails
+for want of authorization, after it for the duplicate version. So the wizard
+disables the workflow, pushes the tags, and enables it again, verifying the
+state on both sides and re-enabling from a trap if it exits in between. The tags
+land, no run fires, and the automated path is exercised for real from the next
+version on.
 
 Manual fallback, in order:
 
