@@ -1,4 +1,4 @@
-/// Every feature of `tanstack_query_flutter` as its own screen.
+/// Every feature of `query_kit_flutter` as its own screen.
 ///
 /// Run the backend first:
 ///
@@ -18,7 +18,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import 'routes.dart';
 import 'shared/api.dart';

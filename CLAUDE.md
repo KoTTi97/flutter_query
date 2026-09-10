@@ -9,15 +9,15 @@ work is first-class here, not an add-on.
 
 | Phase | State |
 |---|---|
-| **`packages/tanstack_query_core/`** — the pure-Dart core | **done, seven times reviewed.** 549 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
-| **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, six times reviewed.** 84 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter, and `lib/testing.dart` for the widget tests a user writes |
+| **`packages/query_kit/`** — the pure-Dart core | **done, seven times reviewed.** 549 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
+| **`packages/query_kit_flutter/`** — the Flutter binding | **done, six times reviewed.** 84 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter, and `lib/testing.dart` for the widget tests a user writes |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25).** 26 screens, 199 widget tests against a dio fake of the backend and 146 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
 | **`examples/sensor_demo/`** — the react-demo port, **legacy** | **done, kept as is.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
 reason — is
-[`packages/tanstack_query_core/test/PORTING_NOTES.md`](packages/tanstack_query_core/test/PORTING_NOTES.md),
+[`packages/query_kit/test/PORTING_NOTES.md`](packages/query_kit/test/PORTING_NOTES.md),
 and it is the first thing to read before touching a ported suite. Nine
 external reviews (2026-09-08, five on 2026-09-09 and three on 2026-09-10)
 found some 85 bugs between
@@ -31,11 +31,11 @@ reproductions did not exercise the code they claimed to, and four claims of
 unreproduced report is worth writing down too.
 
 ```bash
-cd packages/tanstack_query_core && dart test
+cd packages/query_kit && dart test
 ```
 
 ```bash
-cd packages/tanstack_query_flutter && flutter test
+cd packages/query_kit_flutter && flutter test
 ```
 
 ```bash
@@ -74,7 +74,7 @@ harness `showcaseTest` in `test/harness.dart`.
 tree comes down, *before* any `tearDown` runs. So a widget test ends with
 `await tester.pumpWidget(const SizedBox()); client.clear();`. The binding ships
 that as `queryWidgetTest` in
-`packages/tanstack_query_flutter/lib/testing.dart` — a user's first widget test
+`packages/query_kit_flutter/lib/testing.dart` — a user's first widget test
 fails without it, so it is API, not a snippet — and the examples wrap their own
 (`showcaseTest` in `examples/showcase/test/harness.dart`). And
 `pumpAndSettle` only pumps while a frame is scheduled: a fake backend's latency
@@ -148,8 +148,8 @@ by `/domain-modeling` when the first term or decision is resolved. See
 
 | Path | What it is | In git? |
 |---|---|---|
-| `packages/tanstack_query_core/` | The pure-Dart core. | yes |
-| `packages/tanstack_query_flutter/` | The Flutter binding. | yes |
+| `packages/query_kit/` | The pure-Dart core. | yes |
+| `packages/query_kit_flutter/` | The Flutter binding. | yes |
 | `examples/showcase/` | Every feature as a screen, its dummy backend (`server/`), its widget and end-to-end tests. | yes |
 | `examples/sensor_demo/` | The react-demo port, and the MVP acceptance suite. Legacy, kept as is. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |

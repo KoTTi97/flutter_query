@@ -10,7 +10,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import 'models.dart';
 

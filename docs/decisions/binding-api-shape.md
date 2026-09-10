@@ -270,11 +270,11 @@ what makes `ValueListenable` exposure possible in the first place.
 
 On top of that, my recommendation:
 
-1. **`tanstack_query_flutter` ships D + C + A**, no dependencies beyond Flutter.
+1. **`query_kit_flutter` ships D + C + A**, no dependencies beyond Flutter.
    `context.query(...)` is the default the docs teach, `QueryBuilder` stays for
    people who want an explicit widget, controllers are documented for anyone
    integrating with bloc/riverpod/provider.
-2. **`tanstack_query_flutter_hooks`** — ~200 lines, opt-in, for teams already on
+2. **`query_kit_flutter_hooks`** — ~200 lines, opt-in, for teams already on
    hooks.
 3. **Signals need no package from us at all**, only a paragraph in the README
    showing `valueListenableToSignal`. If it turns out people want more, a

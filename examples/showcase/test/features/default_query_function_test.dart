@@ -3,8 +3,8 @@ library;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:showcase/features/default_query_function/default_query_function_screen.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import '../harness.dart';
 

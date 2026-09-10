@@ -8,7 +8,7 @@
 /// screens — there is no cross-cache patching to keep in sync.
 library;
 
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import 'api.dart';
 import 'models.dart';

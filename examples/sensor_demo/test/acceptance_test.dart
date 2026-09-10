@@ -15,11 +15,11 @@ library;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:sensor_demo/main.dart';
 import 'package:sensor_demo/src/api.dart';
 import 'package:sensor_demo/src/models.dart';
 import 'package:sensor_demo/src/queries.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import 'fake_gateway.dart';
 

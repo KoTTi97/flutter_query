@@ -1,4 +1,4 @@
-/// The react-demo sensor manager, on `tanstack_query_flutter`.
+/// The react-demo sensor manager, on `query_kit_flutter`.
 ///
 /// Run the gateway first:
 ///
@@ -14,7 +14,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import 'src/api.dart';
 import 'src/app_state.dart';

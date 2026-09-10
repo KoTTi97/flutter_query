@@ -20,16 +20,16 @@ jobs:
       - run: flutter pub get
       - name: core tests
         run: dart test
-        working-directory: packages/tanstack_query_core
+        working-directory: packages/query_kit
       # The port serves the web as a first-class target, and two reviews found
       # bugs only a JavaScript runtime shows (32-bit timers, int/double being
       # one type); the whole core suite runs compiled to JS as well.
       - name: core tests, compiled to JavaScript
         run: dart test --platform chrome
-        working-directory: packages/tanstack_query_core
+        working-directory: packages/query_kit
       - name: binding tests
         run: flutter test
-        working-directory: packages/tanstack_query_flutter
+        working-directory: packages/query_kit_flutter
       - name: demo tests
         run: flutter test
         working-directory: examples/sensor_demo
@@ -41,20 +41,20 @@ jobs:
       # warning fails the job without any extra flag.
       - name: core publish dry-run
         run: dart pub publish --dry-run
-        working-directory: packages/tanstack_query_core
+        working-directory: packages/query_kit
       - name: binding publish dry-run
         run: dart pub publish --dry-run
-        working-directory: packages/tanstack_query_flutter
+        working-directory: packages/query_kit_flutter
       - name: analyzer
         run: dart analyze --fatal-infos packages examples/sensor_demo examples/showcase
       # `dart doc` reports unresolved doc references and broken links as
       # warnings; the API reference is the first page a pub.dev reader opens.
       - name: core docs
         run: dart doc --validate-links
-        working-directory: packages/tanstack_query_core
+        working-directory: packages/query_kit
       - name: binding docs
         run: dart doc --validate-links
-        working-directory: packages/tanstack_query_flutter
+        working-directory: packages/query_kit_flutter
       - name: formatter
         run: dart format --set-exit-if-changed --output=none packages examples/sensor_demo/lib examples/sensor_demo/test examples/showcase/lib examples/showcase/test
       - name: demo web build
@@ -78,10 +78,10 @@ jobs:
       - run: flutter pub get
       - name: core tests
         run: dart test
-        working-directory: packages/tanstack_query_core
+        working-directory: packages/query_kit
       - name: binding tests
         run: flutter test
-        working-directory: packages/tanstack_query_flutter
+        working-directory: packages/query_kit_flutter
       - name: demo tests
         run: flutter test
         working-directory: examples/sensor_demo

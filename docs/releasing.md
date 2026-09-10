@@ -4,9 +4,9 @@ Two packages go to pub.dev, in a fixed order, from a tag each.
 
 ## Order
 
-1. **`tanstack_query_core` first.** The binding depends on it by version, and
+1. **`query_kit` first.** The binding depends on it by version, and
    pub.dev will not accept a package whose dependency it cannot resolve.
-2. **`tanstack_query_flutter` second**, once the core version is visible on
+2. **`query_kit_flutter` second**, once the core version is visible on
    pub.dev (a minute or two after publishing).
 
 The examples (`examples/showcase`, `examples/sensor_demo`) are never published
@@ -15,7 +15,7 @@ The examples (`examples/showcase`, `examples/sensor_demo`) are never published
 ## Before tagging
 
 - Both `pubspec.yaml` files carry the release version (no `-dev`), and the
-  binding's `tanstack_query_core` constraint names it (`^0.1.0`).
+  binding's `query_kit` constraint names it (`^0.1.0`).
 - Both `CHANGELOG.md` files have a heading for exactly that version; pub
   validates it.
 - CI is green on `main`: it runs the tests, the analyzer, the formatter,
@@ -27,8 +27,8 @@ The examples (`examples/showcase`, `examples/sensor_demo`) are never published
 One tag per package, named after the package and the version:
 
 ```
-tanstack_query_core-v0.1.0
-tanstack_query_flutter-v0.1.0
+query_kit-v0.1.0
+query_kit_flutter-v0.1.0
 ```
 
 Pushing a tag runs [`.github/workflows/publish.yml`](../.github/workflows/publish.yml),
@@ -44,17 +44,35 @@ publishing can be switched on.
 Manual fallback, in order:
 
 ```bash
-cd packages/tanstack_query_core && dart pub publish
+cd packages/query_kit && dart pub publish
 ```
 
 ```bash
-cd packages/tanstack_query_flutter && dart pub publish
+cd packages/query_kit_flutter && dart pub publish
 ```
 
 ## Naming
 
-The `tanstack_*` names are the maintainer's call and are permanent once
-published (pub.dev names cannot be freed). The research behind the choice and
-the fallback names (`query_kit`, `query_kit_flutter`) are in
-[`docs/research/package-naming-and-affiliation.md`](research/package-naming-and-affiliation.md);
-the moment to change one's mind is before the first `dart pub publish`.
+**`query_kit` and `query_kit_flutter` are a codename, not the decision.** A
+name on pub.dev is permanent — the policy has no way to free one — so the
+choice is deliberately left until the moment before the first
+`dart pub publish`, and everything else is made ready around a placeholder.
+The candidates, which names are still free, what the MIT licence obliges and
+what TanStack has and has not said about ports are in
+[`docs/research/package-naming-and-affiliation.md`](research/package-naming-and-affiliation.md).
+
+Changing it is one command, and it is the same command that produced the
+current names, so the path is already exercised:
+
+```bash
+dart run tool/rename_packages.dart --core <core> --flutter <core>_flutter
+```
+
+It rewrites the pubspecs, every import, every path that carries the name and
+every mention in prose, moves the two package directories and their library
+entrypoints, and drops the stale `.dart_tool` so the first `pub get` after it
+is honest. It deliberately leaves
+`docs/research/package-naming-and-affiliation.md` alone: the names in that
+table are a record of what pub.dev held on 2026-09-08, not references to this
+package. Run the full gate afterwards — the names reach the tests, the
+examples, both workflows and the website.

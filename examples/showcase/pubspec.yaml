@@ -1,6 +1,6 @@
 name: showcase
 description: >-
-  Every feature of tanstack_query_flutter as its own screen, each with widget
+  Every feature of query_kit_flutter as its own screen, each with widget
   tests and an end-to-end suite, against the showcase backend in server/.
 version: 0.1.0-dev
 publish_to: none
@@ -15,7 +15,7 @@ dependencies:
   dio: ^5.7.0
   flutter:
     sdk: flutter
-  tanstack_query_flutter: ^0.1.0-dev
+  query_kit_flutter: ^0.1.0-dev
 
 dev_dependencies:
   clock: ^1.1.1

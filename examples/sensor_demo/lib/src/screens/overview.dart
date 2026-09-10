@@ -11,7 +11,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../api.dart';
 import '../app_state.dart';

@@ -3,9 +3,9 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:showcase/features/cache_inspector/cache_inspector_screen.dart';
 import 'package:showcase/shared/models.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import '../harness.dart';
 

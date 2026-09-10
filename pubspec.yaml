@@ -1,12 +1,12 @@
-name: _tanstack_query_workspace
+name: _query_kit_workspace
 publish_to: none
 
 environment:
   sdk: ^3.6.0
 
 workspace:
-  - packages/tanstack_query_core
-  - packages/tanstack_query_flutter
-  - packages/tanstack_query_flutter/example
+  - packages/query_kit
+  - packages/query_kit_flutter
+  - packages/query_kit_flutter/example
   - examples/sensor_demo
   - examples/showcase

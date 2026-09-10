@@ -1,6 +1,6 @@
 # The showcase
 
-Every feature of `tanstack_query_flutter` as its own screen, against a dummy
+Every feature of `query_kit_flutter` as its own screen, against a dummy
 backend built for the purpose, each screen with widget tests and a Playwright
 end-to-end suite. The app is the catalogue; the tests are the proof.
 
@@ -63,7 +63,7 @@ example it mirrors, and how it is proven. Its widget tests are
 
 Not here, because the port does not have them: hydration and persisters,
 `useQueries`, `streamedQuery`, SSR. The reasons are in the core's
-[PORTING_NOTES](https://github.com/KoTTi97/flutter_query/blob/main/packages/tanstack_query_core/test/PORTING_NOTES.md).
+[PORTING_NOTES](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
 
 No screen presents one of the four call styles as the default; across the
 catalogue each is used in its turn.

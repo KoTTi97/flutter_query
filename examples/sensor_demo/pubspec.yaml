@@ -1,6 +1,6 @@
 name: sensor_demo
 description: >-
-  The react-demo sensor manager, rebuilt on tanstack_query_flutter. Same
+  The react-demo sensor manager, rebuilt on query_kit_flutter. Same
   gateway, same cache policy, same scripted failures — so the two clients can be
   compared side by side.
 version: 0.1.0-dev
@@ -16,7 +16,7 @@ dependencies:
   dio: ^5.7.0
   flutter:
     sdk: flutter
-  tanstack_query_flutter: ^0.1.0-dev
+  query_kit_flutter: ^0.1.0-dev
 
 dev_dependencies:
   flutter_test:

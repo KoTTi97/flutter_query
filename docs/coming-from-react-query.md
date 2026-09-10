@@ -3,7 +3,7 @@
 The behaviour is upstream's — the tests say so — but the surface is Dart's.
 This page maps the JavaScript names to the ones here. The source of truth for
 every deliberate difference is the divergence table at the end of
-[`PORTING_NOTES.md`](../packages/tanstack_query_core/test/PORTING_NOTES.md);
+[`PORTING_NOTES.md`](../packages/query_kit/test/PORTING_NOTES.md);
 each row there names the ticket that decided it.
 
 Two rules shape most of the table:
@@ -142,5 +142,5 @@ file — each starts with what it shows and how it is proven:
 Persistence and hydration, `useQueries`' `combine` step, `streamedQuery`,
 Suspense, SSR and
 devtools are out of the first release; the READMEs carry the feature matrix,
-and [`PORTING_NOTES.md`](../packages/tanstack_query_core/test/PORTING_NOTES.md)
+and [`PORTING_NOTES.md`](../packages/query_kit/test/PORTING_NOTES.md)
 records the reason for each.

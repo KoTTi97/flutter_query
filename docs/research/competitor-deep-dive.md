@@ -34,7 +34,7 @@
 
 | | ours (`tanstack_query_*`) | jezsung `flutter_query` | `cached_query` | `fquery` | `flutter_requery` |
 |---|---|---|---|---|---|
-| Live core | `packages/tanstack_query_core`, pure Dart, 9.5k lines | `lib/src/core` inside the Flutter package, ~5.9k lines (`packages/query_core` 0.2.1 is a dead 2023 design) | `packages/cached_query`, pure Dart, ~4.2k lines | `fquery_core`, ~2k lines | one file |
+| Live core | `packages/query_kit`, pure Dart, 9.5k lines | `lib/src/core` inside the Flutter package, ~5.9k lines (`packages/query_core` 0.2.1 is a dead 2023 design) | `packages/cached_query`, pure Dart, ~4.2k lines | `fquery_core`, ~2k lines | one file |
 | Flutter layer | 1.9k lines; controller, builder, mixin, context extension | hooks only (`flutter_hooks` hard dep) | ~960 lines; `QueryBuilder`/`Listener`/`Consumer`, `MutationBuilder`/`Listener`/`Consumer` (bloc-family shape) | hooks **and** builders over one observer (`flutter_hooks` hard dep) | one `Query` widget over `StreamBuilder` |
 | Runtime deps | core: `clock`, `meta`; binding: `flutter` | `clock`, `collection`, `flutter_hooks`, `meta` | core: `rxdart`, `meta`; Flutter: `connectivity_plus`; storage: `sqflite` | `collection`, `clock`, `freezed_annotation`, **`freezed` as a runtime dep**, `flutter_hooks` | none |
 | Code generation | none | none (hand-written `==`) | none in the library (freezed + riverpod in the DevTools extension) | freezed, parts committed | none |

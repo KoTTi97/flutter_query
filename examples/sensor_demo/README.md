@@ -1,6 +1,6 @@
 # sensor_demo
 
-The React demo's sensor manager, rebuilt on `tanstack_query_flutter` — same
+The React demo's sensor manager, rebuilt on `query_kit_flutter` — same
 gateway, same cache policy, same scripted failures, so the two clients can be
 put side by side.
 

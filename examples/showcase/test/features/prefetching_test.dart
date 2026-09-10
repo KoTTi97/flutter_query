@@ -8,10 +8,10 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:showcase/features/prefetching/prefetching_screen.dart';
 import 'package:showcase/shared/api.dart';
 import 'package:showcase/shared/theme.dart';
-import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import '../harness.dart';
 
