@@ -153,9 +153,20 @@ class _ProjectListState extends State<_ProjectList> {
     super.dispose();
   }
 
+  /// Where the scroll was when the last page was asked for, so that resting
+  /// at the end does not ask again.
+  double? _askedAt;
+
   /// The same guard as upstream's effect: near the end, a page to fetch, and
-  /// none in flight. A page that lands makes the list longer, so the next
-  /// one waits for the next scroll rather than cascading.
+  /// none in flight — and the view has moved since the last time we asked.
+  ///
+  /// The listener hears every scroll notification, and a list whose content
+  /// grew sends some too. Without the last clause a page landing while the
+  /// view still sat at the bottom asked for the next one straight away,
+  /// because the notification can arrive before the new rows are laid out and
+  /// `extentAfter` still reads as the end. How many pages that produced
+  /// depended on how fast the machine was — two here, three on CI. "Waits for
+  /// the next scroll" is now what the code says, not just the comment.
   void _onScroll() {
     final projects = _projects;
     if (projects == null || !_scroll.hasClients) {
@@ -166,8 +177,10 @@ class _ProjectListState extends State<_ProjectList> {
       return;
     }
     if (position.extentAfter < loadMoreThreshold &&
+        position.pixels != _askedAt &&
         projects.hasNextPage &&
         !projects.isFetchingNextPage) {
+      _askedAt = position.pixels;
       projects.fetchNextPage().ignore();
     }
   }
