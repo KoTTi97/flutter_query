@@ -63,7 +63,7 @@ cd examples/sensor_demo && flutter test
 ```
 
 ```bash
-dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test tool
+dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib tool
 ```
 
 CI runs the same gates plus `dart doc`, both publish dry-runs, a web build of
@@ -95,6 +95,9 @@ semantics.
   holds for anything built on top.
 - **The documentation names no default call style.** The four ways to read a
   query are presented as equal alternatives.
+- **A Dart sample on the website appears in `examples/doc_snippets/` too**,
+  under a comment naming its page, so the analyzer sees it. A sample nothing
+  compiles is a sample that rots.
 - Comments explain *why*, not what.
 
 ## Where the plan lives

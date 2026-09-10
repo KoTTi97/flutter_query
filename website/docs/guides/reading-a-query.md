@@ -25,7 +25,7 @@ class SensorScreen extends StatelessWidget {
     return switch (sensor) {
       QueryPending() => const CircularProgressIndicator(),
       QuerySuccess(:final data) => SensorCard(data),
-      QueryError(:final error) => ErrorBanner(error),
+      QueryError(:final error, :final staleData) => ErrorBanner(error, staleData),
     };
   }
 }
@@ -75,7 +75,7 @@ class _SensorScreenState extends State<SensorScreen> with QueryMixin {
   @override
   Widget build(BuildContext context) {
     final sensor = watchQuery(sensorQuery(widget.id));
-    final rename = watchMutation(renameSensor());
+    final rename = watchMutation(renameSensor(widget.id));
     // …
   }
 }

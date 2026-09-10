@@ -11,7 +11,7 @@ is that the function is `pageFn` rather than `queryFn`, and it receives a typed
 page context.
 
 ```dart
-InfiniteQueryOptions<List<Post>, int>(
+InfiniteQueryObserverOptions<List<Post>, int, InfiniteData<List<Post>, int>>(
   queryKey: QueryKey(<Object?>['feed']),
   pageFn: (context) => api.feed(cursor: context.pageParam),
   initialPageParam: 0,
@@ -19,6 +19,14 @@ InfiniteQueryOptions<List<Post>, int>(
       page.isEmpty ? null : pageParam + page.length,
 )
 ```
+
+:::note Two options types, as with plain queries
+`InfiniteQueryObserverOptions<TPageData, TPageParam, TData>` is what a
+*reader* takes — the third argument is `select`'s output, and its default is
+the whole `InfiniteData`. `InfiniteQueryOptions<TPageData, TPageParam>` is the
+two-argument form `QueryClient.query` takes, where there is no observer and so
+no `select`.
+:::
 
 - **`initialPageParam`** is where the first page starts.
 - **`getNextPageParam`** returns where the next page starts, or `null` when
@@ -41,9 +49,9 @@ a query pages or not.
 final feed = context.infiniteQuery(feedQuery());
 // or watchInfiniteQuery(...), InfiniteQueryBuilder(...), InfiniteQueryController
 
-final pages = feed.value.dataOrNull?.pages ?? const <List<Post>>[];
+final posts = feed.value.dataOrNull?.flatten<Post>() ?? const <Post>[];
 if (feed.hasNextPage && !feed.isFetchingNextPage) {
-  feed.fetchNextPage();
+  feed.fetchNextPage().ignore();
 }
 ```
 
@@ -63,7 +71,7 @@ length and in the same order: `pages[i]` was fetched with `pageParams[i]`.
 For the common case where a page is itself a list:
 
 ```dart
-final posts = feed.value.dataOrNull?.flatten<Post>() ?? const <Post>[];
+final pages = feed.value.dataOrNull?.pages ?? const <List<Post>>[];
 ```
 
 Pages are structurally shared **page by page**, so a refetch that returns an
@@ -87,8 +95,8 @@ Remember where the last request was made and require the view to have moved:
 ```dart
 double? _askedAt;
 
-void _onScroll() {
-  final position = _controller.position;
+void onScroll() {
+  final position = scrollController.position;
   if (position.extentAfter < 400 &&
       position.pixels != _askedAt &&
       feed.hasNextPage &&

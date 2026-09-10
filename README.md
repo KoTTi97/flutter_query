@@ -27,6 +27,7 @@ the fidelity work.
 | [`examples/showcase/`](examples/showcase) | Every feature of the library as its own screen — 26 of them, on a dummy backend built for it, each with widget tests and Playwright end-to-end tests in a real browser. The catalogue is its README. |
 | [`examples/sensor_demo/`](examples/sensor_demo) | The legacy example: a sensor manager against a deliberately slow gateway with scripted failures, and an acceptance test per row of its feature checklist. |
 | [`website/`](website) | The documentation site — Docusaurus, built in CI, deployed nowhere yet. `npm ci && npm start`. |
+| [`examples/doc_snippets/`](examples/doc_snippets) | Every Dart sample on that site, as code the analyzer sees, so a sample that stops compiling fails the build. |
 | [`tool/`](tool) | `rename_packages.dart`, which is what makes the codename safe. |
 
 Upstream is pinned at `50680b98c`; the `query/` checkout it needs is a nested,

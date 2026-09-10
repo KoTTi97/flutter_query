@@ -77,7 +77,7 @@ genuinely different jobs.)
 ```dart
 final saving = MutationStateController<int>(
   client,
-  filters: MutationFilters(status: MutationStatus.pending),
+  filters: const MutationFilters(status: MutationStatus.pending),
   select: (mutation) => 1,
 );
 // saving.value.length is "how many writes are in flight"

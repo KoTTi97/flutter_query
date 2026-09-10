@@ -20,10 +20,10 @@ A `select` runs at the observer. A fetch that brings back data whose
 rebuilds.
 
 ```dart
-QueryObserverOptions<Sensors, int>(
+QueryObserverOptions<List<Sensor>, int>(
   queryKey: sensorsKey,
-  queryFn: fetchSensors,
-  select: (sensors) => sensors.connectedCount,
+  queryFn: (context) => api.listSensors(signal: context.signal),
+  select: (sensors) => sensors.where((s) => s.connected).length,
 )
 ```
 
@@ -50,7 +50,10 @@ Give such a model `==`, or select a list or a scalar. Dart **records** already
 have value equality, which makes them the easy pick:
 
 ```dart
-select: (data) => (connected: data.connected, total: data.total),
+select: (data) => (
+  connected: data.where((s) => s.connected).length,
+  total: data.length,
+),
 ```
 
 ## `buildWhen`

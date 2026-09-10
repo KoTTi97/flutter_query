@@ -21,9 +21,12 @@ of building it in CI.
 - **The package name is a codename.** `docusaurus.config.ts` names it once at
   the top, and `tool/rename_packages.dart` rewrites everything else, this
   directory included. Do not work around it.
-- **Every code sample must be real.** Signatures were checked against the
-  source when these pages were written; when you change one, check it again.
-  The site is not in the analyzer's path, so nothing else will.
+- **Every Dart sample appears in `examples/doc_snippets/`**, compiled and
+  analyzed at `--fatal-infos` in CI, under a comment naming the page it is on.
+  A sample and its twin are kept identical; that is the only reason to trust
+  either. The exceptions are the samples that need a third-party package
+  (`dio`, `connectivity_plus`, `signals_flutter`) — neither published package
+  may depend on one, so those stay prose-only.
 - **Numbers are measured, not remembered.** The test counts on the landing
   page and in `docs/project/fidelity.md` come from actual runs. If you cannot
   re-measure one, do not restate it.

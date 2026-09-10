@@ -46,7 +46,7 @@ jobs:
         run: dart pub publish --dry-run
         working-directory: packages/query_kit_flutter
       - name: analyzer
-        run: dart analyze --fatal-infos packages examples/sensor_demo examples/showcase tool
+        run: dart analyze --fatal-infos packages examples/sensor_demo examples/showcase examples/doc_snippets tool
       # `dart doc` reports unresolved doc references and broken links as
       # warnings; the API reference is the first page a pub.dev reader opens.
       - name: core docs
@@ -56,7 +56,7 @@ jobs:
         run: dart doc --validate-links
         working-directory: packages/query_kit_flutter
       - name: formatter
-        run: dart format --set-exit-if-changed --output=none packages examples/sensor_demo/lib examples/sensor_demo/test examples/showcase/lib examples/showcase/test tool
+        run: dart format --set-exit-if-changed --output=none packages examples/sensor_demo/lib examples/sensor_demo/test examples/showcase/lib examples/showcase/test examples/doc_snippets/lib tool
       - name: demo web build
         run: flutter build web --no-pub
         working-directory: examples/sensor_demo

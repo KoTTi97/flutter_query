@@ -51,7 +51,7 @@ Per-call callbacks ride along, and run *after* the options' own:
 ```dart
 add.mutate(
   'New sensor',
-  callbacks: MutateCallbacks(
+  callbacks: MutateCallbacks<void, String, void>(
     onSuccess: (data, vars, _) => Navigator.of(context).pop(),
   ),
 );
@@ -75,7 +75,10 @@ MutationOptions<Sensor, String, Sensor?>(
   onMutate: (name) async {
     await client.cancelQueries(filters: QueryFilters(queryKey: sensorKey(id)));
     final previous = client.getQueryData<Sensor>(sensorKey(id));
-    client.updateQueryData<Sensor>(sensorKey(id), (s) => s?.copyWith(name: name));
+    client.updateQueryData<Sensor>(
+      sensorKey(id),
+      (sensor) => sensor?.copyWith(name: name),
+    );
     return previous;                       // the rollback handle
   },
   onError: (error, stack, name, previous) {
@@ -138,7 +141,7 @@ started:
 
 ```dart
 MutationOptions.simple(
-  mutationFn: api.rename,
+  mutationFn: (String name) => api.rename(id, name),
   scope: const MutationScope('sensor-writes'),
 )
 ```
