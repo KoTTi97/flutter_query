@@ -1,9 +1,11 @@
 # React + TanStack Query reference demo
 
-A throwaway MVP that demonstrates the DX/UX target of
-`doc/sensor-domain-riverpod-rewrite-plan.md`, now also the live demo behind the
-"Die Gegenprobe" slide of `../server-state-deck.html`. Not part of the app, not
-built. The UI is in German; the code and this document are not.
+The reference the Flutter port had to match: a small sensor manager written
+the way TanStack Query is meant to be written, against the gateway in
+`../server`. Every cache behaviour the port claims — dedup across observers,
+optimistic writes with rollback, polling that stops, invalidation of one key —
+is visible here first, in the library itself, so the Dart side has something to
+be wrong against. The UI is in German; the code and this document are not.
 
 ## Run
 
@@ -49,8 +51,8 @@ npm run check      # biome lint + format + import sorting, with fixes
 tRPC used to sit where `src/api.ts` now is. Replacing it costs the checked
 contract — client types are now a copy by convention (`shared/types.ts`, hand
 `api` functions, a `sensorKeys` key factory) — but it makes the demo's shape
-identical to what the Flutter client will build against the same gateway, which
-is the point of this repo now. The layering survives the swap: **api.ts types
+identical to what the Flutter client builds against the same gateway, which is
+the point of keeping it here. The layering survives the swap: **api.ts types
 the call, axios carries it, TanStack Query decides whether it happens at all.**
 
 ### shadcn needs React 19
@@ -179,29 +181,28 @@ still one fetch. That is the property the current ViewModel wiring cannot offer.
 the value a write is trying to reach; `matterForwarding` stays the confirmed
 one. Without that split there is nowhere to put the optimistic value except the
 confirmed field, and every poll during the ~3 s confirmation window overwrites
-it — the switch visibly flickers off→on→off→on. The same applies to the Flutter
-plan's accepted-pending path.
+it — the switch visibly flickers off→on→off→on. `examples/sensor_demo` carries
+the same split for the same reason.
 
 **Optimistic state must not start the poll.** Setting `pending` in `onMutate`
 begins polling before the write has reached the gateway, so the first poll reads
 pre-write state. The optimistic patch sets the target only; the *accepted*
 response is what starts the poll.
 
-## Where the Flutter plan must diverge
+## Why per-entity queries are safe here
 
 This demo uses per-entity queries plus invalidation, which is the idiomatic
-TanStack approach and the nicest DX. The Riverpod plan deliberately cannot copy
-it: there, `sensorProvider(id)` is a pure selector over the list and invalidation
-on query providers is banned, because a per-entity provider that can fetch means
-15 rows can produce 15 gateway requests, and the ESB64 hangs under that.
+TanStack approach and the nicest DX. What makes it safe is the seeding above:
+because every list response re-stamps all the per-sensor entries fresh, no row
+ever fetches on mount and no row goes stale in isolation. Drop the seeding and
+fifteen visible rows can produce fifteen requests the moment they mount —
+which is exactly the failure a hand-rolled cache walks into, and the reason
+`examples/showcase`'s `parallel-queries` screen puts a request counter on
+screen.
 
-What makes the pattern safe *here* and not there is the seeding above, which
-stops rows fetching on mount at all — no row ever gets stale in isolation,
-because every list response re-stamps all of them fresh. (An earlier version of
-this demo also had tRPC's request batching as a second safety net, collapsing a
-simultaneous fan-out into one HTTP request. That went away with tRPC: the
-gateway is now plain HTTP, same as the ESB64, so the seeding is load-bearing —
-and the plan's patch-don't-invalidate rule stands unchanged.)
+(An earlier version of this demo also had tRPC's request batching as a second
+safety net, collapsing a simultaneous fan-out into one HTTP request. That went
+away with tRPC: the gateway is now plain HTTP, so the seeding is load-bearing.)
 
 Open the TanStack devtools (bottom-right) to watch cache entries go
 fresh → stale and see exactly which queries fetch.
@@ -209,12 +210,14 @@ fresh → stale and see exactly which queries fetch.
 ## The point
 
 `src/queries.ts` is ~230 lines including its comments, and contains the entire
-caching, invalidation, optimistic-update, rollback and polling policy.
-That is the surface the Riverpod slice has to reimplement — the plan's
-`_core/query/` plus the consistency protocol — because Riverpod has no query
-cache of its own.
+caching, invalidation, optimistic-update, rollback and polling policy. That is
+the surface a port has to reproduce, and
+[`examples/sensor_demo/lib/src/queries.dart`](../../examples/sensor_demo/lib/src/queries.dart)
+is the file it became — the same policy, key for key, which is what makes the
+two comparable at all.
 
-Note the deliberate divergences from web defaults in `src/main.tsx`:
-`refetchOnWindowFocus` and `refetchOnReconnect` are off. The ESB64 cannot take a
-request storm, which is why the plan bans refetch-on-mount/focus and requires
-patch-don't-invalidate.
+Note the deliberate divergence from web defaults in `src/main.tsx`:
+`refetchOnWindowFocus` and `refetchOnReconnect` are off, because the gateway
+this demo was written against was a small embedded device that could not take a
+request storm. The Dart demo keeps the same setting for the same reason —
+`RefetchOn.never` on both.

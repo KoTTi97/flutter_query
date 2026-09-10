@@ -40,7 +40,7 @@ export default function AppHeader() {
       <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-6">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-primary">◈</span>
-          <span className="font-semibold tracking-tight">Eltako Connect</span>
+          <span className="font-semibold tracking-tight">Sensor-Gateway</span>
         </div>
 
         <div className="flex items-center gap-2">
