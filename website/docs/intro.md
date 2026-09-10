@@ -17,11 +17,24 @@ with a Flutter binding on top.
   builder widgets, a `State` mixin and `context.query(...)`. No dependency
   beyond Flutter itself.
 
-:::info An independent community port
-Not affiliated with, endorsed by, or a product of TanStack. Ported under
-upstream's MIT licence, which each package keeps in `LICENSE-TANSTACK`.
+:::danger Read this first
+This is a **port** of TanStack Query, published with gratitude under upstream's
+MIT licence — and it is **not affiliated with, endorsed by, or connected in any
+way to** Tanner Linsley, the TanStack team, or the TanStack organisation.
+Problems with this package belong in
+[this repository's issues](https://github.com/KoTTi97/flutter_query/issues),
+never theirs.
 
-`query_kit` is a **codename**. A name on pub.dev is permanent, so the published
+It is also an **AI-written project**: effectively all of the code, tests and
+documentation here were written by AI agents, with a human in the loop only
+rarely.
+
+Both of those deserve more than a line — [credits, and what this is
+not](project/credits.md).
+:::
+
+:::info The name is a codename
+`query_kit` is a placeholder. A name on pub.dev is permanent, so the published
 name is chosen right before the first publish; changing it is
 [one command](project/releasing.md).
 :::

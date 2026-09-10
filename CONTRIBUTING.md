@@ -1,8 +1,18 @@
 # Contributing
 
-Issues and pull requests are welcome. The repository has one unusual rule and
-a few ordinary ones; the unusual one is first because everything else follows
-from it.
+Issues and pull requests are welcome.
+
+Two things to know before you start. **This is a port of [TanStack
+Query](https://tanstack.com/query)**, published with thanks under upstream's
+MIT licence and *not affiliated with, endorsed by, or connected to* Tanner
+Linsley, the TanStack team or the TanStack organisation — so anything that is
+wrong here is wrong here, and does not belong in their tracker. And **this
+repository was written by AI agents**, with a human in the loop only rarely;
+the rules below are what stands in for a human reviewer, which is why they are
+stricter than they would otherwise need to be.
+
+The repository has one unusual rule and a few ordinary ones; the unusual one is
+first because everything else follows from it.
 
 ## The unusual rule: fidelity is proven, not asserted
 

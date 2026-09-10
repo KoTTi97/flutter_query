@@ -5,8 +5,28 @@ A Dart port of [TanStack Query](https://github.com/TanStack/query)'s
 retries, cancellation, mutations and infinite queries — with **no Flutter
 dependency**. The Flutter binding lives in a separate package.
 
-> An independent community port. Not affiliated with, endorsed by, or a product
-> of TanStack. Ported under upstream's MIT licence, kept in `LICENSE-TANSTACK`.
+> ### Where this comes from, and what it is not
+>
+> **A port of [TanStack Query](https://tanstack.com/query)**, not a library
+> inspired by it in passing: the behaviour is upstream's, and upstream's own
+> test suite is ported case for case and run against this code.
+>
+> **Thank you to Tanner Linsley and everyone who has built and maintained
+> TanStack Query.** This exists for one reason — we used it, we loved it, and
+> we wanted the same thing in Flutter. Every good idea here is theirs. Ported
+> under their MIT licence, kept in `LICENSE-TANSTACK`.
+>
+> **It is not theirs.** Not affiliated with, endorsed by, reviewed by, or
+> connected in any way to Tanner Linsley, the TanStack team, or the TanStack
+> organisation. **Please do not take problems with this package to them** —
+> they belong in
+> [this repository's issues](https://github.com/KoTTi97/flutter_query/issues).
+>
+> **This is an AI-written project.** Effectively all of the code, tests and
+> documentation were written by AI agents, with a human in the loop only
+> rarely. What stands in for human review is adversarial: upstream's suite,
+> nine external deep-dive reviews, and a rule that no reported finding is
+> acted on before it has been reproduced. Judge it on that.
 
 ## What "port" means here
 

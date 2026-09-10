@@ -38,7 +38,12 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Project',
-      items: ['project/fidelity', 'project/examples', 'project/releasing'],
+      items: [
+        'project/credits',
+        'project/fidelity',
+        'project/examples',
+        'project/releasing',
+      ],
     },
   ],
 }

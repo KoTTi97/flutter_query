@@ -47,6 +47,16 @@ const config: Config = {
 
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
+    // Always on, not dismissible: two things about this project should reach
+    // a reader before anything else does.
+    announcementBar: {
+      id: 'unaffiliated-and-ai-written',
+      content:
+        'A community <b>port of TanStack Query</b>, published with thanks — <b>not affiliated with or endorsed by TanStack</b>, and <b>written by AI</b>. <a href="/flutter_query/docs/project/credits">What that means</a>.',
+      backgroundColor: '#0b6bcb',
+      textColor: '#ffffff',
+      isCloseable: false,
+    },
     navbar: {
       title: 'query_kit',
       logo: { alt: '', src: 'img/logo.svg', width: 26, height: 26 },
@@ -54,6 +64,7 @@ const config: Config = {
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
         { to: '/docs/reference/coming-from-react-query', position: 'left', label: 'From React Query' },
         { to: '/docs/project/fidelity', position: 'left', label: 'Fidelity' },
+        { to: '/docs/project/credits', position: 'left', label: 'Credits' },
         {
           href: 'https://github.com/KoTTi97/flutter_query',
           position: 'right',
@@ -77,6 +88,7 @@ const config: Config = {
         {
           title: 'Project',
           items: [
+            { label: 'Credits, and what this is not', to: '/docs/project/credits' },
             { label: 'How fidelity is proven', to: '/docs/project/fidelity' },
             { label: 'Examples', to: '/docs/project/examples' },
             { label: 'Contributing', href: 'https://github.com/KoTTi97/flutter_query/blob/main/CONTRIBUTING.md' },
@@ -92,7 +104,7 @@ const config: Config = {
         },
       ],
       copyright:
-        'MIT. An independent community port — not affiliated with, endorsed by, or a product of TanStack.',
+        'A port of TanStack Query, published with thanks under its MIT licence. Not affiliated with, endorsed by, or connected to Tanner Linsley, the TanStack team or the TanStack organisation. Written by AI.',
     },
     prism: {
       theme: prismThemes.github,

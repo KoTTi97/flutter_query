@@ -15,8 +15,38 @@ timing, garbage collection, optimistic rollback — behave the way people who kn
 the library expect. Several existing Dart packages cover the idea; none has done
 the fidelity work.
 
-> An independent community port. Not affiliated with, endorsed by, or a product
-> of TanStack.
+## Where this comes from, and what it is not
+
+**This is a port of [TanStack Query](https://tanstack.com/query)** — not a
+library that was inspired by it in passing. The behaviour is upstream's, the
+architecture is upstream's, and upstream's own test suite is ported case for
+case and run against this code. That is the entire point of the project.
+
+**Thank you to Tanner Linsley and to everyone who has built, maintained and
+supported TanStack Query.** This repository exists for one reason: we used
+TanStack Query, we loved it, and we wanted the same thing in Flutter. Every
+good idea in here is theirs. It is published under their MIT licence, whose
+notice each package keeps in `LICENSE-TANSTACK`.
+
+**It is not theirs, though.** This project is *not affiliated with, endorsed
+by, reviewed by, or connected in any way to* Tanner Linsley, the TanStack team,
+or the TanStack organisation. They have not seen it and are not responsible for
+it. **Please do not take problems with this package to them** — bugs, questions
+and complaints belong in
+[this repository's issues](https://github.com/KoTTi97/flutter_query/issues).
+
+**And: this is an AI-written project.** Effectively all of the code, the tests
+and the documentation here were written by AI agents, working from a plan the
+agents also wrote. A human set the destination and ruled on a small number of
+questions — the binding's API shape, and that neither published package may
+require a third-party dependency — and then deliberately stayed out of the
+loop; the standing rule in [CLAUDE.md](CLAUDE.md) is that every decision ticket
+is settled by the agent, with the options and the reasoning recorded so the
+call can be reopened from the record alone. What stands in for human review is
+adversarial: upstream's test suite, nine external deep-dive reviews, and a
+rule that no reported finding is acted on until it has been reproduced.
+
+Judge it on that basis. The evidence is all in the repository.
 
 ## What is here
 

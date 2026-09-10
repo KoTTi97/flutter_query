@@ -92,7 +92,9 @@ export default function Home(): ReactNode {
       <header className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroText}>
-            <p className={styles.eyebrow}>An independent community port</p>
+            <p className={styles.eyebrow}>
+              A port of TanStack Query · unaffiliated · written by AI
+            </p>
             <h1 className={styles.title}>
               TanStack Query for Dart and&nbsp;Flutter
             </h1>
@@ -137,14 +139,35 @@ export default function Home(): ReactNode {
         </section>
 
         <section className={styles.closing}>
-          <h2>Not affiliated with TanStack</h2>
+          <h2>Credits, and what this is not</h2>
           <p>
-            This is an independent community port — not affiliated with,
-            endorsed by, or a product of TanStack. It is published under
-            upstream's MIT licence, whose notice each package carries in{' '}
-            <code>LICENSE-TANSTACK</code>. The package name here is a{' '}
-            <Link to="/docs/project/releasing">codename</Link>: a name on
-            pub.dev is permanent, so it is the last decision, not the first.
+            <strong>Thank you to Tanner Linsley and to everyone who has built
+            and maintained TanStack Query.</strong> This exists for one reason:
+            we used it, we loved it, and we wanted the same thing in Flutter.
+            Every good idea here is theirs, and it is published under their MIT
+            licence, whose notice each package carries in{' '}
+            <code>LICENSE-TANSTACK</code>.
+          </p>
+          <p>
+            <strong>It is not theirs.</strong> Not affiliated with, endorsed
+            by, reviewed by, or connected in any way to Tanner Linsley, the
+            TanStack team, or the TanStack organisation. Please do not take
+            problems with this package to them —{' '}
+            <a href="https://github.com/KoTTi97/flutter_query/issues">
+              they belong here
+            </a>
+            .
+          </p>
+          <p>
+            <strong>And this is an AI-written project.</strong> Effectively all
+            of the code, the tests and this page were written by AI agents,
+            with a human in the loop only rarely. What stands in for human
+            review is adversarial: upstream's own test suite, nine external
+            deep-dive reviews, and a rule that no reported finding is acted on
+            before it has been reproduced.
+          </p>
+          <p>
+            <Link to="/docs/project/credits">The whole of it →</Link>
           </p>
         </section>
       </main>
