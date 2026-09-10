@@ -1,8 +1,8 @@
 name: sensor_demo
 description: >-
-  The react-demo sensor manager, rebuilt on query_kit_flutter. Same
-  gateway, same cache policy, same scripted failures — so the two clients can be
-  compared side by side.
+  A sensor manager on query_kit_flutter, against a deliberately slow express
+  gateway with scripted failures: optimistic writes, rollback, polling that
+  stops, and one cache entry read by two screens.
 version: 0.1.0-dev
 publish_to: none
 

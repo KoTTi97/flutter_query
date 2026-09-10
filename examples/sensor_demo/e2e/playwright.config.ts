@@ -21,7 +21,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'node server.ts',
-      cwd: '../../../react-demo/server',
+      cwd: '../server',
       url: 'http://localhost:5174/api/sensors',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

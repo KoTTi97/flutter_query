@@ -1,9 +1,10 @@
-/// The react-demo sensor manager, on `query_kit_flutter`.
+/// A sensor manager on `query_kit_flutter`, against the express gateway in
+/// `server/`.
 ///
 /// Run the gateway first:
 ///
 /// ```bash
-/// cd react-demo/server && npm install && npm run dev
+/// cd examples/sensor_demo/server && npm install && npm run dev
 /// ```
 ///
 /// ```bash

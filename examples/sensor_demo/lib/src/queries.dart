@@ -1,6 +1,8 @@
-/// The whole cache policy of this demo lives in this file — the Dart twin of
-/// `react-demo/react/src/queries.ts`. Note how small it is compared to the
-/// manual reload wiring it replaces.
+/// The whole cache policy of this demo lives in this file. It began as a
+/// line-for-line translation of the React client this app was built to match
+/// (`queries.ts`, ~230 lines including comments); that client has since been
+/// removed from the repository, and the policy it defined is what remains.
+/// Note how small it is compared to the manual reload wiring it replaces.
 ///
 /// Shape: the list query owns *which* sensors exist, and a per-sensor query
 /// owns *what each one is*. Both the overview rows and the detail screen read

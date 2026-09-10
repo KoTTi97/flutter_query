@@ -12,7 +12,7 @@ work is first-class here, not an add-on.
 | **`packages/query_kit/`** — the pure-Dart core | **done, seven times reviewed.** 549 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
 | **`packages/query_kit_flutter/`** — the Flutter binding | **done, six times reviewed.** 84 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter, and `lib/testing.dart` for the widget tests a user writes |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25).** 26 screens, 199 widget tests against a dio fake of the backend and 146 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
-| **`examples/sensor_demo/`** — the react-demo port, **legacy** | **done, kept as is.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
+| **`examples/sensor_demo/`** — the acceptance demo, **legacy** | **done, kept as is.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
@@ -93,7 +93,7 @@ What the map settles:
 
 - **Destination:** a pure-Dart core (core set plus infinite queries and
   `placeholderData`) with upstream tests ported case-for-case, a Flutter
-  binding, and the `react-demo` sensor app reproduced on it.
+  binding, and a sensor app reproduced on it from a React original.
 - **Standing rule:** closeness to upstream is a tiebreaker, not a goal. The best
   Flutter-world result wins; diverge wherever a Dart/Flutter idiom is better and
   record why. Every divergence so far is in PORTING_NOTES.md's table.
@@ -151,17 +151,10 @@ by `/domain-modeling` when the first term or decision is resolved. See
 | `packages/query_kit/` | The pure-Dart core. | yes |
 | `packages/query_kit_flutter/` | The Flutter binding. | yes |
 | `examples/showcase/` | Every feature as a screen, its dummy backend (`server/`), its widget and end-to-end tests. | yes |
-| `examples/sensor_demo/` | The react-demo port, and the MVP acceptance suite. Legacy, kept as is. | yes |
+| `examples/sensor_demo/` | The acceptance demo, its dummy gateway (`server/`) and the acceptance suite. Legacy, kept as is. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |
 | `docs/research/` | Research findings behind the map's tickets. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |
-| `react-demo/` | The React sensor demo + the shared express gateway. Defines the MVP bar for the port. | yes — vendored (its own `.git` was removed); only `node_modules` is ignored |
-
-`react-demo/` is tracked here, so a fresh checkout has the demo, the express
-gateway under `react-demo/server/`, and the cache policy the Flutter app has to
-reproduce (`react-demo/react/src/queries.ts` + `api.ts`). It originally lived in
-its own repo (`KoTTi97/tanstack-query-demo`, branch `development`); that remote
-is no longer the source of truth for this copy.
 
 `query/` is a separate git checkout that this repo ignores. It is *required* to
 work on the port — every ported test names its upstream source file — so if it
@@ -178,10 +171,10 @@ otherwise:
 git -C query checkout 50680b98c
 ```
 
-To run the demo gateway (port 5174), which the port targets:
+To run the legacy demo's gateway (port 5174):
 
 ```bash
-cd react-demo/server && npm install && npm run dev
+cd examples/sensor_demo/server && npm install && npm run dev
 ```
 
 ## The previous attempt (deleted, in history)

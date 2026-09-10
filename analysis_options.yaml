@@ -7,7 +7,6 @@ analyzer:
     strict-raw-types: true
   exclude:
     - query/**
-    - react-demo/**
 
 linter:
   rules:

@@ -2,15 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "react-demo",
+      "name": "sensor-gateway",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "react-demo/react",
+        "examples/sensor_demo/server",
         "run",
         "dev"
       ],
-      "port": 5173
+      "port": 5174
     },
     {
       "name": "showcase-server",

@@ -102,7 +102,7 @@ jobs:
       matrix:
         include:
           - app: sensor_demo
-            server: react-demo/server
+            server: examples/sensor_demo/server
             build: --dart-define=E2E=true
           - app: showcase
             server: examples/showcase/server

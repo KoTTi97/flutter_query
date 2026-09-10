@@ -2,10 +2,10 @@
 /// checklist, against the fake gateway
 /// (https://github.com/KoTTi97/flutter_query/issues/24).
 ///
-/// The rows are the behaviours `react-demo/react/README.md` lists under "What
-/// each part demonstrates", itemised the way the original port design did
-/// (`git show 69c71d4:flutter-port/DESIGN.md`, §3 "Feature checklist"). The
-/// cases after them are regressions found by review, not checklist rows.
+/// The rows are the feature checklist in this example's README, itemised the
+/// way the original port design did (`git show 69c71d4:flutter-port/DESIGN.md`,
+/// §3 "Feature checklist"). The cases after them are regressions found by
+/// review, not checklist rows.
 ///
 /// These run the *real* app — its screens, its `SensorApi`, its cache policy —
 /// with only the transport replaced. Pointing the same app at the express

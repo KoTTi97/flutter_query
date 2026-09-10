@@ -1,5 +1,5 @@
 /// The wire contract, typed by hand — the client's copy of the route table in
-/// `react-demo/server/server.ts`.
+/// `server/server.ts`.
 ///
 /// The key factory is the other half of what tRPC gives the React app: every
 /// query key in this app is minted here, so "which keys exist" has one answer

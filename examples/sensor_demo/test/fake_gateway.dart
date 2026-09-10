@@ -1,4 +1,4 @@
-/// An in-memory stand-in for `react-demo/server/server.ts`, wired into dio as
+/// An in-memory stand-in for `server/server.ts`, wired into dio as
 /// an [HttpClientAdapter].
 ///
 /// The tests drive the *real* `SensorApi` — its URLs, its JSON, its error

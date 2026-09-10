@@ -1,22 +1,25 @@
 # sensor_demo
 
-The React demo's sensor manager, rebuilt on `query_kit_flutter` — same
-gateway, same cache policy, same scripted failures, so the two clients can be
-put side by side.
+A sensor manager on `query_kit_flutter`, against the deliberately slow express
+gateway in [`server/`](server): optimistic writes, rollback, a poll that stops
+when the device confirms, and one cache entry read by two screens.
 
-> **The legacy example.** This app was the port's acceptance bar: one screen
-> pair, one cache policy, the React demo's behaviours reproduced. It stays as
-> it is. The example that shows *every* feature, each with widget tests and
-> end-to-end tests, is [`examples/showcase/`](../showcase); start there.
+> **The legacy example.** This app was the port's acceptance bar. It was built
+> to match a React client written with TanStack Query itself, feature for
+> feature, so that "does the port behave the same?" had an answer you could
+> click through; that client has since been removed and only its gateway
+> remains. The app stays as it is. The example that shows *every* feature,
+> each with widget tests and end-to-end tests, is
+> [`examples/showcase/`](../showcase); start there.
 
 ## Running it
 
-Start the gateway the React demo uses (port 5174). It runs its TypeScript
-straight through Node's type stripping, so it needs **Node 23.6 or later**
-(`.nvmrc` says 24, which is what CI uses):
+Start the gateway (port 5174). It runs its TypeScript straight through Node's
+type stripping, so it needs **Node 23.6 or later** (`.nvmrc` says 24, which is
+what CI uses):
 
 ```bash
-cd ../../react-demo/server && npm install && npm run dev
+cd server && npm install && npm run dev
 ```
 
 Then run the app. **iOS and web are generated** — for macOS or Android, run
@@ -29,9 +32,8 @@ flutter run                          # iOS: pick the simulator when asked
 
 On the **web** the app talks to the gateway across origins, which works because
 the gateway answers with `Access-Control-Allow-Origin: *` and allows the
-`x-demo-client` header the client sends. (The React demo avoids the question
-entirely by proxying `/api` through Vite; a Flutter web build has no such proxy,
-so it goes direct.)
+`x-demo-client` header the client sends. A Flutter web build has no dev-server
+proxy to hide behind, so it goes direct.
 
 On the **simulator**, `localhost` is your Mac, so the default gateway URL just
 works.
@@ -58,11 +60,10 @@ second delete** fails. Both rollbacks are demonstrable on demand.
 ## What to look at
 
 The whole cache policy is [`lib/src/queries.dart`](lib/src/queries.dart) — one
-file, and worth comparing line for line with
-`react-demo/react/src/queries.ts`. It opens with the client-wide defaults,
-`demoDefaultOptions`, the twin of `main.tsx`'s `defaultOptions`: no refetch on
-focus or reconnect and one retry, because the gateway cannot take a request
-storm. The shape the rest sets up:
+file. It opens with the client-wide defaults, `demoDefaultOptions`: no refetch
+on focus or reconnect and one retry, because the gateway this was written
+against was a small embedded device that could not take a request storm. The
+shape the rest sets up:
 
 - the **list** query owns *which* sensors exist; a **per-sensor** query owns
   *what each one is*, and the list's query function seeds every per-sensor entry
@@ -73,6 +74,22 @@ storm. The shape the rest sets up:
   list uses: two widgets, two shapes, one request;
 - the Matter switch writes its requested value to a separate field, so the
   confirmation poll cannot stomp it, and stops polling when the device confirms.
+
+## The feature checklist
+
+One widget test per row (`test/acceptance_test.dart`), and every row is
+something you can do in the running app:
+
+| Try this | What it shows |
+|---|---|
+| Open a sensor | Renders instantly — the row and the detail share one cache entry, already populated |
+| Rename, then go back to the overview immediately | The row already shows the new name; the wire shows the write plus one `GET /api/sensors/:id` and **no list refetch** |
+| Rename to `fail` | The optimistic name reverts and the error is shown (`onMutate` snapshot, `onError` rollback) |
+| Toggle Matter forwarding | Flips optimistically, shows "wird bestätigt…", polls until the device confirms ~3 s later, then stops — and holds one value throughout |
+| Type in the search box | One request per pause, not per keystroke |
+| Add a sensor | Invalidates the list — membership is a list concern |
+| Delete a sensor | The row disappears immediately and is restored with an error banner; deleting again succeeds |
+| Open the header badge | Same cache entry, different widget, different shape, zero extra requests |
 
 ## The four call styles, one per screen
 
@@ -100,7 +117,7 @@ flutter test
 Fifteen widget tests — one per row of the MVP feature checklist, plus a
 regression found by review — running the real app, with its own client
 defaults, against [`test/fake_gateway.dart`](test/fake_gateway.dart) — an
-in-memory stand-in for `react-demo/server/server.ts` wired in as a dio
+in-memory stand-in for [`server/server.ts`](server/server.ts) wired in as a dio
 `HttpClientAdapter`. Only the transport is replaced: the app's own `SensorApi`,
 its JSON, its error handling and its cancellation are all exercised. Pointing
 the same app at the express gateway is then a smoke test rather than a leap of
