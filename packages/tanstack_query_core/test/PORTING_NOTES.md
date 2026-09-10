@@ -1486,8 +1486,17 @@ reproduced before anything changed; the regressions are `E1`–`E5` in
    be cheap and free of side effects, and that the number is not one to rely
    on.
 
-**A throwing cache-wide `onSuccess` turns a successful fetch into an error**
-was reported and is *not* changed. It is faithful to upstream — `query.ts`
+**Two more that are not changed.** The mutation's notification loop was read
+as missing the isolation `Query._dispatch` has. It is not missing anything a
+test can show: a throwing listener there is already isolated below the loop,
+the cache event still fires and the observer's own state is still correct
+(`E6` pins all three). The query isolates its observers because recomputing a
+*query* result runs user code — `StaleTime.dynamic`, `Enabled.when`,
+`PlaceholderData.compute` — and a mutation result runs none, so the asymmetry
+is the reason, not an oversight.
+
+And **a throwing cache-wide `onSuccess` turns a successful fetch into an error**
+is *not* changed. It is faithful to upstream — `query.ts`
 runs the cache callback inside the same `try`, so a throw there becomes the
 fetch's failure — and the data stays cached, so the next read is correct. It
 is a real sharp edge in an otherwise complete user-code isolation policy, but

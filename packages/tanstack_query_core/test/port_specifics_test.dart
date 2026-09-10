@@ -2162,6 +2162,36 @@ void eighthReview() {
     observer.destroy();
     client.clear();
   });
+
+  testFakeAsyncGuarded(
+      'E6 a throwing mutation listener leaves the dispatch intact',
+      (time, errors) async {
+    final events = <MutationCacheEvent>[];
+    final client = testClient();
+    client.mutationCache.subscribe(events.add);
+    final observer = MutationObserver<String, int, void>(
+      client,
+      MutationOptions<String, int, void>(mutationFn: (v) async => 'v$v'),
+    );
+    // The eighth review read the mutation's bare notification loop as the
+    // query's missing isolation and expected a throw here to skip the rest
+    // of the dispatch. It does not: the listener's error is already isolated
+    // below the loop. Pinned so the guarantee stays, and so the asymmetry
+    // with `Query._dispatch` is not "fixed" without a reason — the query
+    // isolates because recomputing *its* result runs user code
+    // (`StaleTime.dynamic`, `Enabled.when`, `PlaceholderData.compute`); a
+    // mutation result runs none.
+    observer.subscribe((_) => throw StateError('a listener of mine threw'));
+
+    observer.mutate(1);
+    await time.advance(const Duration(milliseconds: 10));
+
+    expect(events, isNotEmpty);
+    expect(observer.currentResult.dataOrNull, 'v1');
+    expect(errors.whereType<StateError>(), isNotEmpty);
+    observer.destroy();
+    client.clear();
+  });
 }
 
 /// Two subscriptions passing a tear-off of one method on one object.

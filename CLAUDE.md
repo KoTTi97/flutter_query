@@ -9,24 +9,26 @@ work is first-class here, not an add-on.
 
 | Phase | State |
 |---|---|
-| **`packages/tanstack_query_core/`** — the pure-Dart core | **done, six times reviewed.** 541 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
-| **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, four times reviewed.** 72 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter |
-| **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25).** 26 screens, 182 widget tests against a dio fake of the backend and 143 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
+| **`packages/tanstack_query_core/`** — the pure-Dart core | **done, seven times reviewed.** 549 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
+| **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, six times reviewed.** 84 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter, and `lib/testing.dart` for the widget tests a user writes |
+| **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25).** 26 screens, 199 widget tests against a dio fake of the backend and 143 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
 | **`examples/sensor_demo/`** — the react-demo port, **legacy** | **done, kept as is.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
 reason — is
 [`packages/tanstack_query_core/test/PORTING_NOTES.md`](packages/tanstack_query_core/test/PORTING_NOTES.md),
-and it is the first thing to read before touching a ported suite. Six
-external reviews (2026-09-08 and five on 2026-09-09) found some 70 bugs between
+and it is the first thing to read before touching a ported suite. Nine
+external reviews (2026-09-08, five on 2026-09-09 and three on 2026-09-10)
+found some 85 bugs between
 them, none caught by a ported case; their regressions live in
 `port_specifics_test.dart` and `port_lifecycle_test.dart` (core) and
 `review_regressions_test.dart` (binding),
 and the notes' "Regressions found by review" section says what each one was. **A review's finding is verified by
 reproducing it before anything is changed** — two of the second review's own
-reproductions did not exercise the code they claimed to, and the notes record
-why.
+reproductions did not exercise the code they claimed to, and four claims of
+2026-09-10 could not be reproduced at all; the notes record why, because an
+unreproduced report is worth writing down too.
 
 ```bash
 cd packages/tanstack_query_core && dart test
