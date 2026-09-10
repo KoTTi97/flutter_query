@@ -110,7 +110,7 @@ jobs:
       - name: build
         run: npm run build
         working-directory: website
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: website
           path: website/build
@@ -165,7 +165,7 @@ jobs:
       - name: end-to-end tests
         run: npx playwright test
         working-directory: examples/${{ matrix.app }}/e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report-${{ matrix.app }}
