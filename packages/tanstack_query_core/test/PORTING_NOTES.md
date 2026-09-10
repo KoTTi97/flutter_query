@@ -1460,6 +1460,103 @@ with the reviews.
    placeholderData, options)`. Regression: `showcaseFindings()` in
    `port_specifics_test.dart`.
 
+### Sixth and seventh reviews (2026-09-10, of `56950db`)
+
+Two reviews of the Flutter binding arrived together, one a summary and one
+with ten numbered findings. Every claim was reproduced against `HEAD` before
+anything changed; three did not hold, and what disproved them is recorded with
+the rest. The regressions are the six behavioural ones, in
+`tanstack_query_flutter/test/review_regressions_test.dart` under `R01`–`R07`.
+
+1. **A `QueryMixin` State never noticed an overridden `queryClient`
+   changing.** The client was resolved once in `didChangeDependencies`, which
+   Flutter does not call for a plain widget update — and the documented
+   override is `QueryClient get queryClient => widget.client`. Switching that
+   widget field from one client to another left every controller, query and
+   mutation on the old one: reproduced with two clients holding different data
+   under one key, where the State kept showing the first client's after the
+   second arrived. Per-tenant or per-user clients would keep operating in the
+   context the app had just left. Fixed by reconciling at the start of every
+   read (`_reconcileClient` from `_startEpoch`) rather than in a lifecycle
+   callback, which also releases what the old client owned before the new
+   reads are recorded.
+
+2. **The same lazy lookup fixed a second finding**: mixing `QueryMixin` into a
+   `State` threw `No QueryClientProvider found` even when the build read no
+   query at all, because `didChangeDependencies` resolved the client eagerly.
+   Only a read needs a provider now.
+
+3. **A direction switch on an infinite query never reached the widget.** All
+   three implicit reading styles, and the builders, skip a notification whose
+   `QueryResult` equals the one last built — sound for a plain query, where the
+   result is the whole of what a reader sees. An infinite query keeps its
+   paging state on the controller: `fetchPreviousPage()` replacing an
+   in-flight `fetchNextPage()` leaves the pages, the status and the fetch
+   status untouched, so the widget went on showing `isFetchingNextPage`. The
+   controller itself was right — the core notified, the binding discarded it.
+   Fixed by naming what a reader can see: `ObservedState.observedState`, the
+   result for a plain controller and `(result, the six paging flags)` for an
+   infinite one, compared everywhere the result used to be. When only the
+   paging half moved there is nothing for `buildWhen` to compare, so that case
+   rebuilds without asking it.
+
+4. **A `GlobalKey` subtree that moved lost its `context.mutation`.**
+   `removeDependent` disposed the reader's controllers on the spot, but
+   Flutter also calls it when an element is merely *deactivated*, and a
+   deactivated element can be reactivated elsewhere in the same frame — which
+   is what moving a `GlobalKey` subtree is. A widget that had started a
+   mutation and never left the tree stopped observing it: the result never
+   arrived. Fixed by making deactivation provisional — the reader is marked,
+   a read clears the mark, and the post-frame sweep releases only what did not
+   come back.
+
+5. **Two providers on one client restored the notification scheduler in the
+   wrong order.** Each provider saved whatever scheduler it found and put it
+   back on dispose, which is only correct for lifetimes that nest. Siblings —
+   or an old and a new provider overlapping for a frame — left the adapter
+   uninstalled while a provider was still running, and installed after the
+   last one had gone. Fixed by counting the installation per `NotifyManager`:
+   the first provider saves the original, the last restores it.
+
+6. **A connectivity stream that was taken away still drove the next client.**
+   The last value the stream reported outlived it and was copied onto every
+   client that arrived afterwards, so a client with no connectivity source at
+   all could be pinned offline with nothing able to put it back — queries and
+   mutations paused for good. Fixed by binding the remembered value to the
+   stream that produced it: dropped when the stream is replaced, and carried
+   across a client switch only while that same stream is still running.
+
+7. **A `Stream` has no current value, and nothing filled the gap.** A provider
+   given `onlineStatus` believed the default — online — until the first event,
+   so an app launched in airplane mode fetched once against a network that was
+   not there, and the README pushed the fix (`checkConnectivity()`) into user
+   code where it is forgotten. Added `QueryClientProvider.initialOnlineStatus`,
+   applied at mount and on a client switch.
+
+**Not reproduced, and why.** These three were reported and are recorded
+because the record is what makes a decision reopenable:
+
+- *"A client passed via `client:` is never mounted, so no focus refetch, no
+  reconnect, no paused mutations."* It is mounted:
+  `_QueryClientProviderState.initState` calls `_mountClient`, which calls
+  `client.mount()`, at the reviewed commit as much as at `HEAD`. A probe
+  driving a focus round-trip on a `client:`-passed client refetched, 1 → 2.
+- *"Duplicate-read detection confuses frames with builds, so the bootstrap
+  build throws `read two mutations … in one build`."* The mechanism is real —
+  the epoch advances once per frame, not once per build — but four attempts
+  found no legal Flutter path that builds one element twice inside a frame
+  without deactivating it first (which resets the reader anyway): cache
+  notifications are deferred past the frame by the provider's own scheduler,
+  and Flutter's own assertion forbids the artificial route. Left alone rather
+  than changed on an unreproduced report.
+- *"A reentrant `addListener` leaves an observer subscribed."* The window is
+  real in the code — `_unsubscribe` is assigned only after `subscribe()`
+  returns — but `QueryObserver.subscribe` does not notify synchronously, so no
+  public path reaches it; the reproduction offered turned out to add the same
+  listener repeatedly (a `ChangeNotifier` permits duplicates) and remove it
+  once. The two-line guard was kept as hardening, not as a fix for an observed
+  defect, and it changes no behaviour the suites can see.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported

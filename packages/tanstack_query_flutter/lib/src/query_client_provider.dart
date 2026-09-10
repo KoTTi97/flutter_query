@@ -43,12 +43,14 @@ class QueryClientProvider extends StatefulWidget {
     required QueryClient Function() create,
     required Widget child,
     Stream<bool>? onlineStatus,
+    bool? initialOnlineStatus,
     bool observeAppLifecycle = true,
   }) =>
       _OwnedQueryClientProvider(
         key: key,
         create: create,
         onlineStatus: onlineStatus,
+        initialOnlineStatus: initialOnlineStatus,
         observeAppLifecycle: observeAppLifecycle,
         child: child,
       );
@@ -61,6 +63,7 @@ class QueryClientProvider extends StatefulWidget {
     required this.client,
     required this.child,
     this.onlineStatus,
+    this.initialOnlineStatus,
     this.observeAppLifecycle = true,
   });
 
@@ -77,6 +80,17 @@ class QueryClientProvider extends StatefulWidget {
   /// Optional connectivity signal. `true` means "assume the network is
   /// reachable".
   final Stream<bool>? onlineStatus;
+
+  /// What to assume until [onlineStatus] says otherwise.
+  ///
+  /// A `Stream` has no current value, so a provider that only listens starts
+  /// out believing the default — online — however long the first event takes.
+  /// An app launched in airplane mode then fetches once against a network
+  /// that is not there. Most connectivity packages answer that question
+  /// directly (`connectivity_plus`'s `checkConnectivity()`); pass the answer
+  /// here and the client starts from it. `null` keeps the client's own
+  /// starting value (third review, 2026-09-10).
+  final bool? initialOnlineStatus;
 
   /// Whether to map the app's lifecycle onto the client's focus state.
   final bool observeAppLifecycle;
@@ -126,12 +140,14 @@ class _OwnedQueryClientProvider extends StatefulWidget {
     required this.create,
     required this.child,
     required this.onlineStatus,
+    required this.initialOnlineStatus,
     required this.observeAppLifecycle,
   });
 
   final QueryClient Function() create;
   final Widget child;
   final Stream<bool>? onlineStatus;
+  final bool? initialOnlineStatus;
   final bool observeAppLifecycle;
 
   @override
@@ -152,6 +168,7 @@ class _OwnedQueryClientProviderState extends State<_OwnedQueryClientProvider> {
   Widget build(BuildContext context) => QueryClientProvider(
         client: _client,
         onlineStatus: widget.onlineStatus,
+        initialOnlineStatus: widget.initialOnlineStatus,
         observeAppLifecycle: widget.observeAppLifecycle,
         child: widget.child,
       );
@@ -167,7 +184,6 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   AppLifecycleListener? _lifecycle;
   StreamSubscription<bool>? _onlineSubscription;
   bool? _lastOnline;
-  ScheduleFunction? _previousScheduler;
 
   @override
   void initState() {
@@ -176,24 +192,17 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     if (widget.observeAppLifecycle) {
       _observeLifecycle(widget.client);
     }
+    _applyInitialOnlineStatus(widget.client);
     _follow(widget.onlineStatus);
   }
 
   void _mountClient(QueryClient client) {
-    // Kept so it can be put back: a scheduler that outlived the provider that
-    // set it would keep deferring notifications to a frame that is never
-    // coming.
-    _previousScheduler = client.notifyManager.scheduler;
-    client.notifyManager.setScheduler(_scheduleNotification);
+    _installScheduler(client.notifyManager);
     client.mount();
   }
 
   void _unmountClient(QueryClient client) {
-    final previous = _previousScheduler;
-    if (previous != null) {
-      client.notifyManager.setScheduler(previous);
-      _previousScheduler = null;
-    }
+    _restoreScheduler(client.notifyManager);
     client.unmount();
   }
 
@@ -226,6 +235,10 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// (fourth review, 2026-09-09).
   void _follow(Stream<bool>? onlineStatus) {
     _onlineSubscription?.cancel();
+    // What the old stream last said dies with it. Carrying it to a client
+    // that arrives later would pin that client offline with nothing left to
+    // put it back online (third review, 2026-09-10).
+    _lastOnline = null;
     _onlineSubscription = onlineStatus?.listen(
       _onOnline,
       // A stream error is the stream's problem, not the app's: reported the
@@ -242,6 +255,14 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     );
   }
 
+  /// The starting assumption, before [_follow]'s stream has said anything.
+  void _applyInitialOnlineStatus(QueryClient client) {
+    final initial = widget.initialOnlineStatus;
+    if (initial != null) {
+      client.onlineManager.setOnline(initial);
+    }
+  }
+
   void _onOnline(bool online) {
     _lastOnline = online;
     widget.client.onlineManager.setOnline(online);
@@ -255,6 +276,46 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
         AppLifecycleState.detached =>
           false,
       };
+
+  /// How many providers have installed the Flutter scheduler on one
+  /// [NotifyManager], and what was there before the first of them.
+  ///
+  /// One client can be under two providers at once — siblings, or an old and
+  /// a new one overlapping for a frame — and their lifetimes need not nest.
+  /// A per-provider save/restore then puts the original back while a provider
+  /// is still running (notifications stop reaching the frame) and leaves the
+  /// adapter installed after the last one is gone (notifications are deferred
+  /// to a frame that is never coming). Counting per manager makes the
+  /// installation what it actually is: shared (third review, 2026-09-10).
+  static final Map<NotifyManager, ({ScheduleFunction original, int count})>
+      _schedulerInstallations =
+      <NotifyManager, ({ScheduleFunction original, int count})>{};
+
+  static void _installScheduler(NotifyManager manager) {
+    final installed = _schedulerInstallations[manager];
+    if (installed == null) {
+      _schedulerInstallations[manager] =
+          (original: manager.scheduler, count: 1);
+      manager.setScheduler(_scheduleNotification);
+      return;
+    }
+    _schedulerInstallations[manager] =
+        (original: installed.original, count: installed.count + 1);
+  }
+
+  static void _restoreScheduler(NotifyManager manager) {
+    final installed = _schedulerInstallations[manager];
+    if (installed == null) {
+      return;
+    }
+    if (installed.count > 1) {
+      _schedulerInstallations[manager] =
+          (original: installed.original, count: installed.count - 1);
+      return;
+    }
+    _schedulerInstallations.remove(manager);
+    manager.setScheduler(installed.original);
+  }
 
   /// Runs [callback] now when that is safe, and after this frame when it is
   /// not. Called for every batch of cache notifications.
@@ -299,10 +360,14 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       _stopObservingLifecycle();
       _unmountClient(oldWidget.client);
       _mountClient(widget.client);
-      // The stream will not repeat itself for the newcomer: it starts from
-      // what the stream last said, as the old client did.
+      _applyInitialOnlineStatus(widget.client);
+      // The stream will not repeat itself for the newcomer, so it starts from
+      // what the stream last said — but only while it is *the same* stream
+      // still running. A connectivity source that has been taken away speaks
+      // for nobody, and a value it left behind would pin a later client
+      // offline with nothing able to put it back (third review, 2026-09-10).
       final lastOnline = _lastOnline;
-      if (lastOnline != null) {
+      if (lastOnline != null && oldWidget.onlineStatus == widget.onlineStatus) {
         widget.client.onlineManager.setOnline(lastOnline);
       }
     }

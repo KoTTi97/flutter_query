@@ -16,6 +16,26 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:tanstack_query_core/tanstack_query_core.dart';
 
+/// A controller whose readers have to compare more than its `value`.
+///
+/// A `QueryResult` is the whole of what a plain query shows, so every reading
+/// style skips a notification carrying the result it already built. An
+/// infinite query keeps its paging state on the controller instead — a fetch
+/// that switches direction leaves the result untouched — and that comparison
+/// would swallow a change the widget is showing. A controller says here what
+/// "everything its readers can see" means for it (third review, 2026-09-10).
+abstract interface class ObservedState {
+  /// The whole observable state, as one value with value equality.
+  Object? get observedState;
+}
+
+/// [ObservedState.observedState] where [controller] has one, its `value`
+/// otherwise.
+Object? observedStateOf(ValueListenable<Object?> controller) =>
+    controller is ObservedState
+        ? (controller as ObservedState).observedState
+        : controller.value;
+
 /// One query, as a [ValueListenable].
 ///
 /// ```dart
@@ -28,7 +48,7 @@ import 'package:tanstack_query_core/tanstack_query_core.dart';
 /// to *it*, so a controller nobody watches costs nothing but the observer's own
 /// cache entry.
 class QueryController<TQueryData, TData> extends ChangeNotifier
-    implements ValueListenable<QueryResult<TData>> {
+    implements ValueListenable<QueryResult<TData>>, ObservedState {
   /// Creates the observer for [options] on [client]. Nothing is fetched until
   /// the first listener arrives — until then [value] is the optimistic result.
   /// Call [dispose] when done; it destroys the observer.
@@ -66,12 +86,20 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   void Function()? _unsubscribe;
   bool _disposed = false;
 
+  /// Set while the first subscription is being made, so a listener added from
+  /// inside that subscription's own notification does not make a second one.
+  bool _subscribing = false;
+
   /// The observer underneath, for the operations the controller does not
   /// mirror (`refetch`, `currentQuery`).
   QueryObserver<TQueryData, TData> get observer => _observer;
 
   /// Whether [dispose] has run.
   bool get isDisposed => _disposed;
+
+  /// A plain query shows its result and nothing else.
+  @override
+  Object? get observedState => value;
 
   /// The current result.
   ///
@@ -115,12 +143,24 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    if (_unsubscribe != null || _disposed) {
+    // `_subscribing` closes the window `_unsubscribe` alone leaves open: the
+    // subscribe below can notify synchronously, a listener called there may
+    // add another one, and that nested call would still see no handle and
+    // subscribe a second time — one of the two handles then overwritten and
+    // lost, leaving an observer attached for good (third review,
+    // 2026-09-10).
+    if (_unsubscribe != null || _disposed || _subscribing) {
       return;
     }
-    final unsubscribe = _observer.subscribe(
-      client.notifyManager.batchCalls<QueryResult<TData>>((_) => _notify()),
-    );
+    _subscribing = true;
+    final void Function() unsubscribe;
+    try {
+      unsubscribe = _observer.subscribe(
+        client.notifyManager.batchCalls<QueryResult<TData>>((_) => _notify()),
+      );
+    } finally {
+      _subscribing = false;
+    }
     // Subscribing can notify on the spot, and a listener may leave inside its
     // first notification. The handle is only kept while someone still wants
     // it; otherwise the observer would stay attached with nobody to tell.
@@ -202,6 +242,20 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
         ? super.optimisticValue
         : infiniteObserver.getOptimisticInfiniteResult(options);
   }
+
+  /// The result *and* the paging flags a builder can show. Two fetches in
+  /// opposite directions leave the result equal, so without the flags the
+  /// reading styles would filter the change out.
+  @override
+  Object? get observedState => (
+        value,
+        infiniteObserver.isFetchingNextPage,
+        infiniteObserver.isFetchingPreviousPage,
+        infiniteObserver.isFetchNextPageError,
+        infiniteObserver.isFetchPreviousPageError,
+        infiniteObserver.hasNextPage,
+        infiniteObserver.hasPreviousPage,
+      );
 
   /// Replaces the options, paging half included. See
   /// [QueryController.setOptions] on why this does not notify.
@@ -298,6 +352,10 @@ class MutationController<TData, TVariables, TOnMutateResult>
   void Function()? _unsubscribe;
   bool _disposed = false;
 
+  /// See [QueryController] on the same field: one subscription, even when a
+  /// listener added from inside the first notification races it.
+  bool _subscribing = false;
+
   /// The observer underneath, for what the controller does not mirror — the
   /// defaulted `options` it runs with, for one.
   MutationObserver<TData, TVariables, TOnMutateResult> get observer =>
@@ -336,13 +394,20 @@ class MutationController<TData, TVariables, TOnMutateResult>
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    if (_unsubscribe != null || _disposed) {
+    // Reentrancy, exactly as in [QueryController.addListener]; see there.
+    if (_unsubscribe != null || _disposed || _subscribing) {
       return;
     }
-    final unsubscribe = _observer.subscribe(
-      client.notifyManager
-          .batchCalls<MutationResult<TData, TVariables>>((_) => _notify()),
-    );
+    _subscribing = true;
+    final void Function() unsubscribe;
+    try {
+      unsubscribe = _observer.subscribe(
+        client.notifyManager
+            .batchCalls<MutationResult<TData, TVariables>>((_) => _notify()),
+      );
+    } finally {
+      _subscribing = false;
+    }
     if (!hasListeners || _disposed) {
       unsubscribe();
     } else {

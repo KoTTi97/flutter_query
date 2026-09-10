@@ -39,10 +39,16 @@ class _WatchEntry {
   final VoidCallback rebuild;
   Object? built;
 
-  T read<T>() => (built = controller.value) as T;
+  /// See `_Entry.builtState` in `query_context.dart`.
+  Object? builtState;
+
+  T read<T>() {
+    builtState = observedStateOf(controller);
+    return (built = controller.value) as T;
+  }
 
   void _onChanged() {
-    if (controller.value != built) {
+    if (observedStateOf(controller) != builtState) {
       rebuild();
     }
   }
@@ -228,6 +234,9 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// The first read of a build: what earlier builds held becomes provisional,
   /// and whatever this build does not read again is released after the frame.
   Set<Object> _startEpoch() {
+    // Before anything is recorded: a client switch releases what the old one
+    // owned, and empties both sets on the way out.
+    _reconcileClient();
     if (!_sweepScheduled) {
       _sweepScheduled = true;
       _pending = <Object>{..._pending, ..._current};
@@ -249,25 +258,34 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     _pending = <Object>{};
   }
 
+  /// The client this State's reads run on, as [_reconcileClient] last left it.
   QueryClient get _currentClient => _client ??= queryClient;
 
-  void _rebuild() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Reading the client here is what subscribes the State to the provider.
-    // When it hands out a different client, everything held belongs to the
-    // old one; `build` recreates it on the new one.
+  /// Looks the client up again and releases everything held when it changed.
+  ///
+  /// Run at the start of every read rather than once: [queryClient] is
+  /// overridable, and the usual override — `widget.client` — changes on a
+  /// plain widget update, which is not a dependency change and so never
+  /// reached `didChangeDependencies`. Everything held belongs to the client
+  /// it was created on, so a switch releases all of it and this build's reads
+  /// recreate it on the new one (third review, 2026-09-10).
+  ///
+  /// Looking the client up lazily is also what lets a `State` mix this in
+  /// without a provider above it: only a read needs one, and a `build` that
+  /// reads nothing no longer throws for a client it never wanted (second
+  /// review, 2026-09-10).
+  void _reconcileClient() {
     final client = queryClient;
     if (_client != null && _client != client) {
       _disposeAll();
     }
     _client = client;
+  }
+
+  void _rebuild() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _disposeAll() {

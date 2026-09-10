@@ -1,6 +1,7 @@
 /// Regressions found by the second, third and fourth external reviews
-/// (2026-09-09), each pinned by the case that reproduced it. Binding-only; the
-/// core's are in `tanstack_query_core/test/port_specifics_test.dart`.
+/// (2026-09-09) and by the fifth and sixth (2026-09-10), each pinned by the
+/// case that reproduced it. Binding-only; the core's are in
+/// `tanstack_query_core/test/port_specifics_test.dart`.
 library;
 
 import 'dart:async';
@@ -121,6 +122,239 @@ void main() {
       }
     }
   }
+
+  // ---- fifth and sixth reviews (2026-09-10) --------------------------------
+
+  group('R01 an overridden queryClient that changes with the widget', () {
+    testWidgets('the mixin follows it across a plain widget update',
+        (tester) async {
+      final a = QueryClient()..setQueryData<String>(key, 'from A');
+      final b = QueryClient()..setQueryData<String>(key, 'from B');
+      await withClient(tester, <QueryClient>[a, b], () async {
+        await tester.pumpWidget(app(a, _R01Override(a)));
+        await tester.pumpAndSettle();
+        expect(find.text('from A'), findsOneWidget);
+
+        // Only `widget.client` changes: not a dependency change, so
+        // `didChangeDependencies` never runs and the client is reconciled at
+        // the next read instead.
+        await tester.pumpWidget(app(a, _R01Override(b)));
+        await tester.pumpAndSettle();
+        expect(find.text('from B'), findsOneWidget);
+        expect(
+          b.queryCache
+              .find(filters: QueryFilters(queryKey: key))!
+              .observersCount,
+          1,
+        );
+        expect(
+          a.queryCache
+              .find(filters: QueryFilters(queryKey: key))!
+              .observersCount,
+          0,
+        );
+      });
+    });
+
+    testWidgets('a State that reads nothing needs no provider', (tester) async {
+      await tester.pumpWidget(const _R01Bare());
+      expect(tester.takeException(), isNull);
+      expect(find.text('nothing read'), findsOneWidget);
+    });
+  });
+
+  group('R02 an infinite query switching direction', () {
+    testWidgets('the builder sees it, though the result is unchanged',
+        (tester) async {
+      final client = QueryClient();
+      final gates = <int, Completer<String>>{};
+      InfiniteQueryController<String, int, InfiniteData<String, int>>? ctl;
+      String? shown;
+      await withClient(tester, <QueryClient>[client], () async {
+        await tester.pumpWidget(app(
+          client,
+          InfiniteQueryBuilder<String, int, InfiniteData<String, int>>(
+            options: InfiniteQueryObserverOptions(
+              queryKey: key,
+              pageFn: (context) =>
+                  (gates[context.pageParam] ??= Completer<String>()).future,
+              initialPageParam: 0,
+              getNextPageParam: (_, __, last, ___) => last + 1,
+              getPreviousPageParam: (_, __, first, ___) => first - 1,
+            ),
+            builder: (_, q) {
+              ctl = q;
+              shown = 'next=${q.isFetchingNextPage} '
+                  'prev=${q.isFetchingPreviousPage}';
+              return Text(shown!);
+            },
+          ),
+        ));
+        await tester.pump();
+        gates[0]!.complete('page 0');
+        await tester.pumpAndSettle();
+
+        unawaited(ctl!.fetchNextPage());
+        await tester.pump();
+        expect(shown, 'next=true prev=false');
+
+        // The pages held do not change, so the `QueryResult` does not either:
+        // the direction lives on the controller, and comparing results alone
+        // left the widget showing the old one.
+        unawaited(ctl!.fetchPreviousPage());
+        await tester.pump();
+        expect(shown, 'next=false prev=true');
+
+        for (final gate in gates.values) {
+          if (!gate.isCompleted) {
+            gate.complete('page');
+          }
+        }
+        await tester.pumpAndSettle();
+      });
+    });
+  });
+
+  group('R04 a GlobalKey subtree that moves', () {
+    testWidgets('keeps the running mutation the widget started',
+        (tester) async {
+      final client = QueryClient();
+      final gate = Completer<int>();
+      final globalKey = GlobalKey();
+      Widget tree({required bool right}) => app(
+            client,
+            Row(children: <Widget>[
+              Expanded(
+                child: right
+                    ? const SizedBox()
+                    : _R04Box(key: globalKey, gate: gate),
+              ),
+              Expanded(
+                child: right
+                    ? _R04Box(key: globalKey, gate: gate)
+                    : const SizedBox(),
+              ),
+            ]),
+          );
+      await withClient(tester, <QueryClient>[client], () async {
+        await tester.pumpWidget(tree(right: false));
+        await tester.tap(find.text('go'));
+        await tester.pump();
+        expect(find.text('pending=true data=null'), findsOneWidget);
+
+        // Flutter deactivates the element and reactivates it in the same
+        // frame. Treating `removeDependent` as the end of the reader threw
+        // the observation away and the answer never arrived.
+        await tester.pumpWidget(tree(right: true));
+        await tester.pump();
+        expect(find.text('pending=true data=null'), findsOneWidget);
+
+        gate.complete(7);
+        await tester.pumpAndSettle();
+        expect(find.text('pending=false data=7'), findsOneWidget);
+      });
+    });
+  });
+
+  group('R06 two providers on one client', () {
+    testWidgets('the scheduler survives the first of them leaving',
+        (tester) async {
+      final client = QueryClient();
+      final original = client.notifyManager.scheduler;
+      Widget both({required bool first, required bool second}) =>
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Column(children: <Widget>[
+              if (first)
+                QueryClientProvider(
+                  client: client,
+                  observeAppLifecycle: false,
+                  child: const SizedBox(),
+                )
+              else
+                const SizedBox(),
+              if (second)
+                QueryClientProvider(
+                  client: client,
+                  observeAppLifecycle: false,
+                  child: const SizedBox(),
+                )
+              else
+                const SizedBox(),
+            ]),
+          );
+      await withClient(tester, <QueryClient>[client], () async {
+        await tester.pumpWidget(both(first: true, second: true));
+        expect(client.notifyManager.scheduler, isNot(original));
+
+        // Lifetimes that overlap without nesting: a per-provider save and
+        // restore put the original back while the second was still running.
+        await tester.pumpWidget(both(first: false, second: true));
+        expect(client.notifyManager.scheduler, isNot(original));
+
+        await tester.pumpWidget(both(first: false, second: false));
+        expect(client.notifyManager.scheduler, same(original));
+      });
+    });
+  });
+
+  group('R07 a connectivity stream that is taken away', () {
+    testWidgets('does not pin a later client offline', (tester) async {
+      final first = QueryClient();
+      final second = QueryClient();
+      final online = StreamController<bool>.broadcast();
+      await withClient(tester, <QueryClient>[first, second], () async {
+        await tester.pumpWidget(QueryClientProvider(
+          client: first,
+          observeAppLifecycle: false,
+          onlineStatus: online.stream,
+          child: const SizedBox(),
+        ));
+        online.add(false);
+        await tester.pump();
+        expect(first.onlineManager.isOnline(), isFalse);
+
+        await tester.pumpWidget(QueryClientProvider(
+          client: first,
+          observeAppLifecycle: false,
+          child: const SizedBox(),
+        ));
+        await tester.pump();
+
+        // Nothing is listening any more, so nothing could put a client back
+        // online: what the old stream last said must not follow the new one.
+        await tester.pumpWidget(QueryClientProvider(
+          client: second,
+          observeAppLifecycle: false,
+          child: const SizedBox(),
+        ));
+        await tester.pump();
+        expect(second.onlineManager.isOnline(), isTrue);
+        await online.close();
+      });
+    });
+
+    testWidgets('initialOnlineStatus answers what a Stream cannot',
+        (tester) async {
+      final client = QueryClient();
+      final online = StreamController<bool>.broadcast();
+      await withClient(tester, <QueryClient>[client], () async {
+        await tester.pumpWidget(QueryClientProvider(
+          client: client,
+          observeAppLifecycle: false,
+          onlineStatus: online.stream,
+          initialOnlineStatus: false,
+          child: const SizedBox(),
+        ));
+        // Before the stream has said anything at all.
+        expect(client.onlineManager.isOnline(), isFalse);
+        online.add(true);
+        await tester.pump();
+        expect(client.onlineManager.isOnline(), isTrue);
+        await online.close();
+      });
+    });
+  });
 
   group('F01 notifications go through the scheduler', () {
     testWidgets('late initialData in a sibling never notifies during build',
@@ -1234,5 +1468,62 @@ class _R3MixinByIdState extends State<_R3MixinById> with QueryMixin {
       queryFn: (_) => widget.fetch(widget.id),
     ));
     return Text(sensor.dataOrNull ?? 'none');
+  }
+}
+
+/// A `State` that reads a query from an explicitly overridden client.
+class _R01Override extends StatefulWidget {
+  const _R01Override(this.client);
+
+  final QueryClient client;
+
+  @override
+  State<_R01Override> createState() => _R01OverrideState();
+}
+
+class _R01OverrideState extends State<_R01Override> with QueryMixin {
+  @override
+  QueryClient get queryClient => widget.client;
+
+  @override
+  Widget build(BuildContext context) {
+    final result = watchQuery(QueryObserverOptions<String, String>(
+      queryKey: key,
+      queryFn: (_) async => 'fetched',
+      staleTime: StaleTime.infinite,
+    ));
+    return Text(result.dataOrNull ?? 'none');
+  }
+}
+
+/// A `State` that mixes the mixin in and never reads anything.
+class _R01Bare extends StatefulWidget {
+  const _R01Bare();
+
+  @override
+  State<_R01Bare> createState() => _R01BareState();
+}
+
+class _R01BareState extends State<_R01Bare> with QueryMixin {
+  @override
+  Widget build(BuildContext context) =>
+      const Text('nothing read', textDirection: TextDirection.ltr);
+}
+
+/// Runs a mutation from `context.mutation` and shows its state.
+class _R04Box extends StatelessWidget {
+  const _R04Box({super.key, required this.gate});
+
+  final Completer<int> gate;
+
+  @override
+  Widget build(BuildContext context) {
+    final run = context.mutation<int, int, void>(
+      MutationOptions<int, int, void>(mutationFn: (_) => gate.future),
+    );
+    return Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+      Text('pending=${run.value.isPending} data=${run.value.dataOrNull}'),
+      TextButton(onPressed: () => run.mutate(7), child: const Text('go')),
+    ]);
   }
 }
