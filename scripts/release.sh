@@ -304,7 +304,7 @@ case "$ci" in
   completed*)
     fail "ci on ${head_sha:0:7} is '${ci#completed }' — green on main is a release precondition." ;;
   *)
-    fail "ci on ${head_sha:0:7} is still '$ci' — wait for it to finish." ;;
+    fail "ci on ${head_sha:0:7} is still '${ci%% *}' — wait for it to finish." ;;
 esac
 
 printf '\n'
