@@ -1,0 +1,22 @@
+name: doc_snippets
+description: >-
+  Every Dart sample on the documentation site, as code the analyzer sees. Not
+  an app and not published: its job is to fail when a sample stops compiling.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.27.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  query_kit: ^0.1.0
+  query_kit_flutter: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

@@ -1,0 +1,38 @@
+# The published packages have no third-party dependencies, so there is nothing
+# to update there. What does age is the tooling: the actions this workflow
+# runs, the two example backends, the two Playwright suites and the
+# documentation site.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directories:
+      - /examples/showcase/server
+      - /examples/showcase/e2e
+      - /examples/task_manager/server
+      - /examples/task_manager/e2e
+    schedule:
+      interval: monthly
+    groups:
+      dev-tooling:
+        patterns: ['*']
+  # The site is its own entry only because of the hold below; everything else
+  # about it is the same.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: monthly
+    groups:
+      dev-tooling:
+        patterns: ['*']
+    # TypeScript 7 removed `baseUrl`, and `@docusaurus/tsconfig` (3.10.2, the
+    # newest there is) still sets it. An inherited compiler option cannot be
+    # unset, so `npm run typecheck` fails outright on TS 7 — the four example
+    # projects are on it already and fine, this is Docusaurus's tsconfig, not
+    # ours. Lift the hold once it ships without `baseUrl`.
+    ignore:
+      - dependency-name: typescript
+        versions: ['>=7']
