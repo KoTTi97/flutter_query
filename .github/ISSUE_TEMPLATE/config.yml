@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question about how to use it
+    url: https://github.com/KoTTi97/flutter_query/discussions
+    about: Usage questions, "is this the right pattern?", and anything that is not a defect.
+  - name: Behaviour that differs from TanStack Query
+    url: https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md
+    about: Check the porting notes first — every deliberate divergence and every omission is listed there with its reason.
+  - name: Security vulnerability
+    url: https://github.com/KoTTi97/flutter_query/security/advisories/new
+    about: Report privately, not as a public issue.

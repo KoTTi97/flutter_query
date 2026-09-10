@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.0-dev
+## 0.1.0
+
+First release.
 
 - The Flutter binding for `query_kit`: `QueryClientProvider`,
   listenable controllers (`QueryController`, `InfiniteQueryController`,

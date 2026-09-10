@@ -3,7 +3,7 @@ description: >-
   Dart port of TanStack Query's query-core: caching, refetching, staleness
   and mutations, no Flutter needed. Independent community port, not affiliated
   with or endorsed by TanStack.
-version: 0.1.0-dev
+version: 0.1.0
 repository: https://github.com/KoTTi97/flutter_query
 issue_tracker: https://github.com/KoTTi97/flutter_query/issues
 topics:

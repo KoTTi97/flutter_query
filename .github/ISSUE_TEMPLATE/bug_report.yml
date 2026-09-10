@@ -1,0 +1,57 @@
+name: Bug report
+description: Something behaves differently from what the documentation or TanStack Query says.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every report is reproduced before anything is changed, so the
+        reproduction is the part that matters most. A failing test against the
+        package beats a description of one.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which package, and which version.
+      placeholder: query_kit_flutter 0.1.0, Flutter 3.35.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If TanStack Query does something different, say which version and link the docs or the source.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: >-
+        A test or a `main()` that shows it. Time goes through `package:clock`
+        in this codebase, so a `fake_async` test is usually the shortest way to
+        show anything involving staleness, gc or retries.
+      render: dart
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before opening
+      options:
+        - label: >-
+            I checked
+            [PORTING_NOTES.md](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md)
+            and this is not one of the recorded divergences or omissions.
+          required: true

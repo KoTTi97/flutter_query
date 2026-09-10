@@ -1,12 +1,14 @@
 # Changelog
 
-## 0.1.0-dev
+## 0.1.0
+
+First release.
 
 - A pure-Dart port of TanStack Query's `query-core` at upstream `50680b98c`:
   queries, mutations, infinite queries, their observers, the client and both
   caches. No Flutter dependency.
 - Upstream's own test suite ported case for case (549 tests, run on the VM and
-  compiled to JavaScript, regressions from seven external reviews and from the
+  compiled to JavaScript, regressions from nine external reviews and from the
   showcase included); every omission and every deliberate divergence is
   recorded in `test/PORTING_NOTES.md`.
 - Dart-shaped API: sealed `QueryResult`, a `QueryKey` value type, sealed
