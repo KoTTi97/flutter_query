@@ -1,0 +1,19 @@
+{
+  "name": "showcase-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "cd .. && flutter build web --dart-define=E2E=true --pwa-strategy=none --no-web-resources-cdn",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.5.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=23.6"
+  }
+}

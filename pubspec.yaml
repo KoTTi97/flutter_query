@@ -1,0 +1,13 @@
+name: _query_kit_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+workspace:
+  - packages/query_kit
+  - packages/query_kit_flutter
+  - packages/query_kit_flutter/example
+  - examples/doc_snippets
+  - examples/sensor_demo
+  - examples/showcase

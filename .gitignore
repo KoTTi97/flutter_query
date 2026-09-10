@@ -1,0 +1,21 @@
+/query/
+node_modules
+.DS_Store
+
+.dart_tool/
+build/
+.packages
+pubspec_overrides.yaml
+
+# dart doc output
+**/doc/api/
+
+# competitor checkouts read by docs/research/competitor-deep-dive.md
+/reference-projects/
+
+# the documentation site's generated cache (its `build/` is covered above)
+/website/.docusaurus/
+
+# scratch worktrees the agent tooling creates
+/.claude/worktrees/
+

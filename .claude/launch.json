@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sensor-gateway",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "examples/sensor_demo/server",
+        "run",
+        "dev"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "showcase-server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "examples/showcase/server",
+        "start"
+      ],
+      "port": 5175
+    },
+    {
+      "name": "showcase-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "examples/showcase/e2e/serve.mjs",
+        "examples/showcase/build/web"
+      ],
+      "port": 8124
+    }
+  ]
+}

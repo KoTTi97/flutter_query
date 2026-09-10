@@ -1,0 +1,30 @@
+name: showcase
+description: >-
+  Every feature of query_kit_flutter as its own screen, each with widget
+  tests and an end-to-end suite, against the showcase backend in server/.
+version: 0.1.0-dev
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.27.0"
+
+resolution: workspace
+
+dependencies:
+  dio: ^5.7.0
+  flutter:
+    sdk: flutter
+  query_kit_flutter: ^0.1.0-dev
+
+dev_dependencies:
+  clock: ^1.1.1
+  flutter_test:
+    sdk: flutter
+  lints: '>=5.1.1 <7.0.0'
+
+flutter:
+  # Bundles the Material icon font. Without it every Icon renders as a tofu box
+  # — the pubspec here was hand-written, and `flutter create` does not add this
+  # to an existing one.
+  uses-material-design: true

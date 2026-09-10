@@ -1,0 +1,714 @@
+{
+  "posts": [
+    {
+      "id": 1,
+      "title": "Window contact: setup guide",
+      "body": "Step by step: how the window contact is added to the gateway, named and assigned to a room. Post 1 of 30."
+    },
+    {
+      "id": 2,
+      "title": "Motion sensor: setup guide",
+      "body": "Step by step: how the motion sensor is added to the gateway, named and assigned to a room. Post 2 of 30."
+    },
+    {
+      "id": 3,
+      "title": "Thermostat: setup guide",
+      "body": "Step by step: how the thermostat is added to the gateway, named and assigned to a room. Post 3 of 30."
+    },
+    {
+      "id": 4,
+      "title": "Smoke detector: setup guide",
+      "body": "Step by step: how the smoke detector is added to the gateway, named and assigned to a room. Post 4 of 30."
+    },
+    {
+      "id": 5,
+      "title": "Door sensor: setup guide",
+      "body": "Step by step: how the door sensor is added to the gateway, named and assigned to a room. Post 5 of 30."
+    },
+    {
+      "id": 6,
+      "title": "Light switch: setup guide",
+      "body": "Step by step: how the light switch is added to the gateway, named and assigned to a room. Post 6 of 30."
+    },
+    {
+      "id": 7,
+      "title": "Roller shutter: setup guide",
+      "body": "Step by step: how the roller shutter is added to the gateway, named and assigned to a room. Post 7 of 30."
+    },
+    {
+      "id": 8,
+      "title": "Radiator valve: setup guide",
+      "body": "Step by step: how the radiator valve is added to the gateway, named and assigned to a room. Post 8 of 30."
+    },
+    {
+      "id": 9,
+      "title": "Smart plug: setup guide",
+      "body": "Step by step: how the smart plug is added to the gateway, named and assigned to a room. Post 9 of 30."
+    },
+    {
+      "id": 10,
+      "title": "Weather station: setup guide",
+      "body": "Step by step: how the weather station is added to the gateway, named and assigned to a room. Post 10 of 30."
+    },
+    {
+      "id": 11,
+      "title": "Garden irrigation: setup guide",
+      "body": "Step by step: how the garden irrigation is added to the gateway, named and assigned to a room. Post 11 of 30."
+    },
+    {
+      "id": 12,
+      "title": "Garage door: setup guide",
+      "body": "Step by step: how the garage door is added to the gateway, named and assigned to a room. Post 12 of 30."
+    },
+    {
+      "id": 13,
+      "title": "Doorbell: setup guide",
+      "body": "Step by step: how the doorbell is added to the gateway, named and assigned to a room. Post 13 of 30."
+    },
+    {
+      "id": 14,
+      "title": "Camera: setup guide",
+      "body": "Step by step: how the camera is added to the gateway, named and assigned to a room. Post 14 of 30."
+    },
+    {
+      "id": 15,
+      "title": "Air quality sensor: setup guide",
+      "body": "Step by step: how the air quality sensor is added to the gateway, named and assigned to a room. Post 15 of 30."
+    },
+    {
+      "id": 16,
+      "title": "Water leak sensor: setup guide",
+      "body": "Step by step: how the water leak sensor is added to the gateway, named and assigned to a room. Post 16 of 30."
+    },
+    {
+      "id": 17,
+      "title": "Dimmer: setup guide",
+      "body": "Step by step: how the dimmer is added to the gateway, named and assigned to a room. Post 17 of 30."
+    },
+    {
+      "id": 18,
+      "title": "Venetian blind: setup guide",
+      "body": "Step by step: how the venetian blind is added to the gateway, named and assigned to a room. Post 18 of 30."
+    },
+    {
+      "id": 19,
+      "title": "Presence detector: setup guide",
+      "body": "Step by step: how the presence detector is added to the gateway, named and assigned to a room. Post 19 of 30."
+    },
+    {
+      "id": 20,
+      "title": "Humidity sensor: setup guide",
+      "body": "Step by step: how the humidity sensor is added to the gateway, named and assigned to a room. Post 20 of 30."
+    },
+    {
+      "id": 21,
+      "title": "Brightness sensor: setup guide",
+      "body": "Step by step: how the brightness sensor is added to the gateway, named and assigned to a room. Post 21 of 30."
+    },
+    {
+      "id": 22,
+      "title": "Underfloor heating: setup guide",
+      "body": "Step by step: how the underfloor heating is added to the gateway, named and assigned to a room. Post 22 of 30."
+    },
+    {
+      "id": 23,
+      "title": "Ventilation: setup guide",
+      "body": "Step by step: how the ventilation is added to the gateway, named and assigned to a room. Post 23 of 30."
+    },
+    {
+      "id": 24,
+      "title": "Door lock: setup guide",
+      "body": "Step by step: how the door lock is added to the gateway, named and assigned to a room. Post 24 of 30."
+    },
+    {
+      "id": 25,
+      "title": "Alarm siren: setup guide",
+      "body": "Step by step: how the alarm siren is added to the gateway, named and assigned to a room. Post 25 of 30."
+    },
+    {
+      "id": 26,
+      "title": "Energy meter: setup guide",
+      "body": "Step by step: how the energy meter is added to the gateway, named and assigned to a room. Post 26 of 30."
+    },
+    {
+      "id": 27,
+      "title": "Wallbox: setup guide",
+      "body": "Step by step: how the wallbox is added to the gateway, named and assigned to a room. Post 27 of 30."
+    },
+    {
+      "id": 28,
+      "title": "Pump: setup guide",
+      "body": "Step by step: how the pump is added to the gateway, named and assigned to a room. Post 28 of 30."
+    },
+    {
+      "id": 29,
+      "title": "Awning: setup guide",
+      "body": "Step by step: how the awning is added to the gateway, named and assigned to a room. Post 29 of 30."
+    },
+    {
+      "id": 30,
+      "title": "Pond filter: setup guide",
+      "body": "Step by step: how the pond filter is added to the gateway, named and assigned to a room. Post 30 of 30."
+    }
+  ],
+  "comments": [
+    {
+      "id": 11,
+      "postId": 1,
+      "author": "Anna",
+      "text": "Anna on \"Window contact: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 12,
+      "postId": 1,
+      "author": "Ben",
+      "text": "Ben on \"Window contact: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 13,
+      "postId": 1,
+      "author": "Clara",
+      "text": "Clara on \"Window contact: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 21,
+      "postId": 2,
+      "author": "Anna",
+      "text": "Anna on \"Motion sensor: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 22,
+      "postId": 2,
+      "author": "Ben",
+      "text": "Ben on \"Motion sensor: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 23,
+      "postId": 2,
+      "author": "Clara",
+      "text": "Clara on \"Motion sensor: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 31,
+      "postId": 3,
+      "author": "Anna",
+      "text": "Anna on \"Thermostat: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 32,
+      "postId": 3,
+      "author": "Ben",
+      "text": "Ben on \"Thermostat: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 33,
+      "postId": 3,
+      "author": "Clara",
+      "text": "Clara on \"Thermostat: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 41,
+      "postId": 4,
+      "author": "Anna",
+      "text": "Anna on \"Smoke detector: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 42,
+      "postId": 4,
+      "author": "Ben",
+      "text": "Ben on \"Smoke detector: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 43,
+      "postId": 4,
+      "author": "Clara",
+      "text": "Clara on \"Smoke detector: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 51,
+      "postId": 5,
+      "author": "Anna",
+      "text": "Anna on \"Door sensor: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 52,
+      "postId": 5,
+      "author": "Ben",
+      "text": "Ben on \"Door sensor: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 53,
+      "postId": 5,
+      "author": "Clara",
+      "text": "Clara on \"Door sensor: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 61,
+      "postId": 6,
+      "author": "Anna",
+      "text": "Anna on \"Light switch: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 62,
+      "postId": 6,
+      "author": "Ben",
+      "text": "Ben on \"Light switch: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 63,
+      "postId": 6,
+      "author": "Clara",
+      "text": "Clara on \"Light switch: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 71,
+      "postId": 7,
+      "author": "Anna",
+      "text": "Anna on \"Roller shutter: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 72,
+      "postId": 7,
+      "author": "Ben",
+      "text": "Ben on \"Roller shutter: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 73,
+      "postId": 7,
+      "author": "Clara",
+      "text": "Clara on \"Roller shutter: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 81,
+      "postId": 8,
+      "author": "Anna",
+      "text": "Anna on \"Radiator valve: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 82,
+      "postId": 8,
+      "author": "Ben",
+      "text": "Ben on \"Radiator valve: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 83,
+      "postId": 8,
+      "author": "Clara",
+      "text": "Clara on \"Radiator valve: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 91,
+      "postId": 9,
+      "author": "Anna",
+      "text": "Anna on \"Smart plug: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 92,
+      "postId": 9,
+      "author": "Ben",
+      "text": "Ben on \"Smart plug: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 93,
+      "postId": 9,
+      "author": "Clara",
+      "text": "Clara on \"Smart plug: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 101,
+      "postId": 10,
+      "author": "Anna",
+      "text": "Anna on \"Weather station: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 102,
+      "postId": 10,
+      "author": "Ben",
+      "text": "Ben on \"Weather station: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 103,
+      "postId": 10,
+      "author": "Clara",
+      "text": "Clara on \"Weather station: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 111,
+      "postId": 11,
+      "author": "Anna",
+      "text": "Anna on \"Garden irrigation: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 112,
+      "postId": 11,
+      "author": "Ben",
+      "text": "Ben on \"Garden irrigation: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 113,
+      "postId": 11,
+      "author": "Clara",
+      "text": "Clara on \"Garden irrigation: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 121,
+      "postId": 12,
+      "author": "Anna",
+      "text": "Anna on \"Garage door: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 122,
+      "postId": 12,
+      "author": "Ben",
+      "text": "Ben on \"Garage door: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 123,
+      "postId": 12,
+      "author": "Clara",
+      "text": "Clara on \"Garage door: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 131,
+      "postId": 13,
+      "author": "Anna",
+      "text": "Anna on \"Doorbell: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 132,
+      "postId": 13,
+      "author": "Ben",
+      "text": "Ben on \"Doorbell: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 133,
+      "postId": 13,
+      "author": "Clara",
+      "text": "Clara on \"Doorbell: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 141,
+      "postId": 14,
+      "author": "Anna",
+      "text": "Anna on \"Camera: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 142,
+      "postId": 14,
+      "author": "Ben",
+      "text": "Ben on \"Camera: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 143,
+      "postId": 14,
+      "author": "Clara",
+      "text": "Clara on \"Camera: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 151,
+      "postId": 15,
+      "author": "Anna",
+      "text": "Anna on \"Air quality sensor: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 152,
+      "postId": 15,
+      "author": "Ben",
+      "text": "Ben on \"Air quality sensor: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 153,
+      "postId": 15,
+      "author": "Clara",
+      "text": "Clara on \"Air quality sensor: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 161,
+      "postId": 16,
+      "author": "Anna",
+      "text": "Anna on \"Water leak sensor: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 162,
+      "postId": 16,
+      "author": "Ben",
+      "text": "Ben on \"Water leak sensor: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 163,
+      "postId": 16,
+      "author": "Clara",
+      "text": "Clara on \"Water leak sensor: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 171,
+      "postId": 17,
+      "author": "Anna",
+      "text": "Anna on \"Dimmer: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 172,
+      "postId": 17,
+      "author": "Ben",
+      "text": "Ben on \"Dimmer: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 173,
+      "postId": 17,
+      "author": "Clara",
+      "text": "Clara on \"Dimmer: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 181,
+      "postId": 18,
+      "author": "Anna",
+      "text": "Anna on \"Venetian blind: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 182,
+      "postId": 18,
+      "author": "Ben",
+      "text": "Ben on \"Venetian blind: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 183,
+      "postId": 18,
+      "author": "Clara",
+      "text": "Clara on \"Venetian blind: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 191,
+      "postId": 19,
+      "author": "Anna",
+      "text": "Anna on \"Presence detector: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 192,
+      "postId": 19,
+      "author": "Ben",
+      "text": "Ben on \"Presence detector: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 193,
+      "postId": 19,
+      "author": "Clara",
+      "text": "Clara on \"Presence detector: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 201,
+      "postId": 20,
+      "author": "Anna",
+      "text": "Anna on \"Humidity sensor: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 202,
+      "postId": 20,
+      "author": "Ben",
+      "text": "Ben on \"Humidity sensor: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 203,
+      "postId": 20,
+      "author": "Clara",
+      "text": "Clara on \"Humidity sensor: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 211,
+      "postId": 21,
+      "author": "Anna",
+      "text": "Anna on \"Brightness sensor: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 212,
+      "postId": 21,
+      "author": "Ben",
+      "text": "Ben on \"Brightness sensor: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 213,
+      "postId": 21,
+      "author": "Clara",
+      "text": "Clara on \"Brightness sensor: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 221,
+      "postId": 22,
+      "author": "Anna",
+      "text": "Anna on \"Underfloor heating: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 222,
+      "postId": 22,
+      "author": "Ben",
+      "text": "Ben on \"Underfloor heating: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 223,
+      "postId": 22,
+      "author": "Clara",
+      "text": "Clara on \"Underfloor heating: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 231,
+      "postId": 23,
+      "author": "Anna",
+      "text": "Anna on \"Ventilation: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 232,
+      "postId": 23,
+      "author": "Ben",
+      "text": "Ben on \"Ventilation: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 233,
+      "postId": 23,
+      "author": "Clara",
+      "text": "Clara on \"Ventilation: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 241,
+      "postId": 24,
+      "author": "Anna",
+      "text": "Anna on \"Door lock: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 242,
+      "postId": 24,
+      "author": "Ben",
+      "text": "Ben on \"Door lock: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 243,
+      "postId": 24,
+      "author": "Clara",
+      "text": "Clara on \"Door lock: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 251,
+      "postId": 25,
+      "author": "Anna",
+      "text": "Anna on \"Alarm siren: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 252,
+      "postId": 25,
+      "author": "Ben",
+      "text": "Ben on \"Alarm siren: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 253,
+      "postId": 25,
+      "author": "Clara",
+      "text": "Clara on \"Alarm siren: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 261,
+      "postId": 26,
+      "author": "Anna",
+      "text": "Anna on \"Energy meter: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 262,
+      "postId": 26,
+      "author": "Ben",
+      "text": "Ben on \"Energy meter: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 263,
+      "postId": 26,
+      "author": "Clara",
+      "text": "Clara on \"Energy meter: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 271,
+      "postId": 27,
+      "author": "Anna",
+      "text": "Anna on \"Wallbox: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 272,
+      "postId": 27,
+      "author": "Ben",
+      "text": "Ben on \"Wallbox: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 273,
+      "postId": 27,
+      "author": "Clara",
+      "text": "Clara on \"Wallbox: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 281,
+      "postId": 28,
+      "author": "Anna",
+      "text": "Anna on \"Pump: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 282,
+      "postId": 28,
+      "author": "Ben",
+      "text": "Ben on \"Pump: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 283,
+      "postId": 28,
+      "author": "Clara",
+      "text": "Clara on \"Pump: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 291,
+      "postId": 29,
+      "author": "Anna",
+      "text": "Anna on \"Awning: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 292,
+      "postId": 29,
+      "author": "Ben",
+      "text": "Ben on \"Awning: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 293,
+      "postId": 29,
+      "author": "Clara",
+      "text": "Clara on \"Awning: setup guide\": Needs a gateway restart."
+    },
+    {
+      "id": 301,
+      "postId": 30,
+      "author": "Anna",
+      "text": "Anna on \"Pond filter: setup guide\": Worked on the first try."
+    },
+    {
+      "id": 302,
+      "postId": 30,
+      "author": "Ben",
+      "text": "Ben on \"Pond filter: setup guide\": Connected on the second attempt."
+    },
+    {
+      "id": 303,
+      "postId": 30,
+      "author": "Clara",
+      "text": "Clara on \"Pond filter: setup guide\": Needs a gateway restart."
+    }
+  ],
+  "todos": [
+    {
+      "id": 1,
+      "text": "Update the gateway firmware",
+      "done": false
+    },
+    {
+      "id": 2,
+      "text": "Rename the sensors in the hallway",
+      "done": true
+    },
+    {
+      "id": 3,
+      "text": "Replace the battery in the window contact",
+      "done": false
+    }
+  ],
+  "projectCount": 100
+}

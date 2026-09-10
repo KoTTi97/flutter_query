@@ -1,0 +1,47 @@
+name: Feature request
+description: Something the library should do and does not.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things shape what gets built here, and knowing them saves everyone
+        time:
+
+        - **Closeness to upstream is a tiebreaker, not a goal.** The best
+          Flutter-world answer wins; where a Dart idiom is better, the port
+          diverges and records why.
+        - **Neither published package may require a third-party package.**
+          Integrations with other state-management libraries belong in
+          separate opt-in packages.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and where does the library stop you? Concrete beats abstract.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: A sketch of the API, if you have one in mind.
+    validations:
+      required: true
+
+  - type: input
+    id: upstream
+    attributes:
+      label: Upstream counterpart
+      description: >-
+        If TanStack Query has this, name it — and check whether it is in the
+        "deliberately not here" table in the README, which says why.
+      placeholder: e.g. `useQueries`, `dehydrate`, `streamedQuery`
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do today
+      description: The workaround, if there is one. How bad is it?
