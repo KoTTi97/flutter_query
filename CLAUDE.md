@@ -11,7 +11,7 @@ work is first-class here, not an add-on.
 |---|---|
 | **`packages/tanstack_query_core/`** — the pure-Dart core | **done, seven times reviewed.** 549 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
 | **`packages/tanstack_query_flutter/`** — the Flutter binding | **done, six times reviewed.** 84 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter, and `lib/testing.dart` for the widget tests a user writes |
-| **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25).** 26 screens, 199 widget tests against a dio fake of the backend and 143 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
+| **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25).** 26 screens, 199 widget tests against a dio fake of the backend and 146 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
 | **`examples/sensor_demo/`** — the react-demo port, **legacy** | **done, kept as is.** 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against the real gateway; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
