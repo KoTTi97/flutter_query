@@ -1,9 +1,15 @@
 /// Upstream's `pagination` example: page-numbered projects, one cache entry
 /// per page, read with `context.query` under an `id:` so the observer follows
-/// the key from page to page. `PlaceholderData.compute((previous, _) =>
-/// previous)` — upstream's `keepPreviousData` — keeps the last page's rows on
-/// screen while the next loads, and `isPlaceholderData` says when that is
-/// what is showing. `Next page` is disabled while a placeholder is on screen,
+/// the key from page to page. `const PlaceholderData.keepPrevious()` —
+/// upstream's `keepPreviousData` — keeps the last page's rows on screen while
+/// the next loads, and `isPlaceholderData` says when that is what is showing.
+/// It does what `.compute((previous, _) => previous)` does, a previous `null`
+/// meaning "no placeholder" included, and being `const` it is canonicalised:
+/// every build of this screen passes the identical value, so the options
+/// compare equal and the observer's placeholder memoisation holds. A fresh
+/// inline closure never compares equal to the last one, and cannot.
+///
+/// `Next page` is disabled while a placeholder is on screen,
 /// as upstream disables it, so nobody skips past a page they have not seen;
 /// and while the current page has real data and `hasMore`, the next page is
 /// prefetched with `client.query(...).ignore()`, so the usual `Next page`
@@ -50,7 +56,8 @@ const StaleTime projectsPageStaleTime =
     StaleTime.duration(Duration(seconds: 5));
 
 /// The screen's read. The placeholder is the previous page's data, whatever
-/// it was, so the rows never blank out between pages.
+/// it was, so the rows never blank out between pages — and it is the `const`
+/// variant, so a rebuild hands the observer a value equal to the last one.
 QueryObserverOptions<ProjectPage, ProjectPage> projectsPageQuery(
   ShowcaseApi api,
   int page,
@@ -59,7 +66,7 @@ QueryObserverOptions<ProjectPage, ProjectPage> projectsPageQuery(
       queryKey: projectsPageKey(page),
       queryFn: (context) => api.projectsPage(page, signal: context.signal),
       staleTime: projectsPageStaleTime,
-      placeholderData: PlaceholderData.compute((previous, _) => previous),
+      placeholderData: const PlaceholderData<ProjectPage>.keepPrevious(),
     );
 
 /// The prefetch's options: the cache-layer kind, since nothing observes it.

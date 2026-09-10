@@ -1,10 +1,10 @@
 import type { Page } from '@playwright/test'
 import { expect, fact, holdRequest, test } from './fixtures'
 
-// Three cards and their strips are taller than the default viewport, and the
+// Four cards and their strips are taller than the default viewport, and the
 // scaffold's list only builds — and the semantics tree only carries — what is
-// in view.
-test.use({ viewport: { width: 1280, height: 1800 } })
+// in view. Card D sits at the bottom, hence the extra height.
+test.use({ viewport: { width: 1280, height: 2600 } })
 
 /// The `detail <card>` group: each card's title and facts, kept apart because
 /// two cards show `isPlaceholderData=false` at once.
@@ -121,4 +121,93 @@ test('a switched key fetches the new post and settles on it', async ({ page, ope
   await expect(fact(page, 'post-6', 'fetches=1')).toBeVisible()
   expect(await scenario.count('GET', /^\/api\/posts\/6$/)).toBe(1)
   expect(await scenario.count('GET', /^\/api\/posts\/5$/)).toBe(1)
+})
+
+// Card D's mode button: `off` until a test picks one, so nothing on this
+// screen seeds post 8 or post 9 by itself.
+const pickMode = (page: Page, label: string) =>
+  page
+    .getByRole('group', { name: 'lazy-seed mode', exact: true })
+    .getByRole('radio', { name: label, exact: true })
+    .click()
+
+test('a lazily computed timestamp of null dates the seed now, and nothing fetches', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await open('/initial-and-placeholder')
+  await expect(page.getByText('posts=30', { exact: true })).toBeVisible()
+
+  await pickMode(page, 'fresh')
+
+  await expect(detail(page, 'D', 'Seed · fresh timestamp')).toBeVisible()
+  await expect(detail(page, 'D', 'mode=fresh')).toBeVisible()
+  await expect(detail(page, 'D', 'computeCalls=1')).toBeVisible()
+  await expect(detail(page, 'D', 'refetched=false')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'status=success')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'fetchStatus=idle')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'isStale=false')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'fetches=0')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/posts\/8$/)).toBe(0)
+
+  // Every rebuild re-applies the options, and the entry holds data: the
+  // callback is never consulted a second time.
+  await page.getByRole('button', { name: 'Rebuild card D', exact: true }).click()
+  await page.getByRole('button', { name: 'Rebuild card D', exact: true }).click()
+  await expect(detail(page, 'D', 'computeCalls=1')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/posts\/8$/)).toBe(0)
+})
+
+test('a backdated computed timestamp is stale at once and refetches on mount', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await open('/initial-and-placeholder')
+  await expect(page.getByText('posts=30', { exact: true })).toBeVisible()
+
+  const hold = holdRequest(page, '**/api/posts/9*')
+  await pickMode(page, 'backdated')
+
+  // The seed is on screen, and stale, while the request is provably held.
+  await expect(detail(page, 'D', 'Seed · backdated timestamp')).toBeVisible()
+  await expect(detail(page, 'D', 'computeCalls=1')).toBeVisible()
+  await expect(detail(page, 'D', 'refetched=false')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'status=success')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'isStale=true')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'fetchStatus=fetching')).toBeVisible()
+  await hold.release()
+
+  await expect(detail(page, 'D', 'Smart plug: setup guide')).toBeVisible()
+  await expect(detail(page, 'D', 'refetched=true')).toBeVisible()
+  await expect(detail(page, 'D', 'computeCalls=1')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'fetches=1')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/posts\/9$/)).toBe(1)
+})
+
+test('a mode whose entry already holds data consults the callback no second time', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await open('/initial-and-placeholder')
+  await expect(page.getByText('posts=30', { exact: true })).toBeVisible()
+
+  await pickMode(page, 'fresh')
+  await expect(detail(page, 'D', 'computeCalls=1')).toBeVisible()
+
+  await pickMode(page, 'backdated')
+  await expect(detail(page, 'D', 'mode=backdated')).toBeVisible()
+  await expect(detail(page, 'D', 'refetched=true')).toBeVisible()
+  await expect(detail(page, 'D', 'computeCalls=1')).toBeVisible()
+
+  // Post 8's entry outlived its observer and still holds its seed, so this is
+  // a mount without a seeding.
+  await pickMode(page, 'fresh')
+  await expect(detail(page, 'D', 'Seed · fresh timestamp')).toBeVisible()
+  await expect(detail(page, 'D', 'computeCalls=1')).toBeVisible()
+  await expect(fact(page, 'lazy-seed', 'fetches=0')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/posts\/8$/)).toBe(0)
+  expect(await scenario.count('GET', /^\/api\/posts\/9$/)).toBe(1)
 })

@@ -1,6 +1,7 @@
 // The `pagination` screen in a real browser: one cache entry per page, the
-// previous page kept on screen as a placeholder while the next loads, the
-// next page prefetched as soon as the current one has data.
+// previous page kept on screen as a placeholder — `const
+// PlaceholderData.keepPrevious()` — while the next loads, the next page
+// prefetched as soon as the current one has data.
 import type { Page } from '@playwright/test'
 
 import { expect, fact, holdRequest, test, type Scenario } from './fixtures'
@@ -88,6 +89,10 @@ test('a page whose prefetch has not answered shows the previous page as a placeh
   await expect(nextButton(page)).toHaveAttribute('aria-disabled', 'true')
   await expect(fact(page, 'page-2', 'status=pending')).toBeVisible()
   await expect(fact(page, 'page-2', 'observers=1')).toBeVisible()
+  // The placeholder belongs to the reader, never to the cache: page 2's own
+  // entry holds nothing while page 1's rows stand in for it.
+  await expect(fact(page, 'page-2', 'updates=0')).toBeVisible()
+  await expect(fact(page, 'page-2', 'dataUpdatedAt=–')).toBeVisible()
   await hold.release()
 
   await expect(page.getByText('Project 20', { exact: true })).toBeVisible()

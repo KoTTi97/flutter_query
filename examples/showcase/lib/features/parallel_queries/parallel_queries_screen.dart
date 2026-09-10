@@ -1,8 +1,9 @@
 /// Parallel queries: three independent queries in one widget, and the global
 /// fetching count. Port-specific — the upstream docs page
 /// `guides/parallel-queries.md` says a fixed number of queries needs nothing
-/// more than writing them side by side, and the port has no `useQueries` for
-/// the dynamic case, so this screen is the stand-in.
+/// more than writing them side by side, which is exactly this screen. When the
+/// number is *not* fixed, `query-collections` is the screen: it uses
+/// `QueriesBuilder` over a list that changes at runtime.
 ///
 /// Each post has a `QueryController` of its own, created in `initState`,
 /// disposed in `dispose`, and read through a `ListenableBuilder`; the toolbar

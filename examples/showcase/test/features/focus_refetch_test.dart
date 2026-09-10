@@ -59,6 +59,60 @@ void useTallWindow(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// The app leaving the foreground and coming back the only way Flutter allows
+/// it: `paused` is never reached from `resumed` in one step, and never left in
+/// one either.
+///
+/// This is entry C's focus source, and the threshold's: the nested
+/// `QueryClientProvider` maps each state onto its own client's focus manager.
+Future<void> backgroundAndReturn(WidgetTester tester) async {
+  for (final state in const <AppLifecycleState>[
+    AppLifecycleState.inactive,
+    AppLifecycleState.hidden,
+    AppLifecycleState.paused,
+  ]) {
+    tester.binding.handleAppLifecycleStateChanged(state);
+  }
+  await tester.pumpAndSettle();
+  for (final state in const <AppLifecycleState>[
+    AppLifecycleState.hidden,
+    AppLifecycleState.inactive,
+    AppLifecycleState.resumed,
+  ]) {
+    tester.binding.handleAppLifecycleStateChanged(state);
+  }
+  await tester.pumpAndSettle();
+}
+
+/// A notification shade or an incoming call: `inactive` maps to *focused*, so
+/// focus never drops and no focus event is raised at all.
+Future<void> inactiveBlip(WidgetTester tester) async {
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pumpAndSettle();
+}
+
+/// The screen with entry C in view, on a client built with [threshold]
+/// (`none` or `long`), its query fetched once.
+///
+/// Picking a threshold builds a new client, so the fetch count starts again
+/// with it — which is what makes the two sides comparable.
+Future<void> openThreshold(
+  WidgetTester tester,
+  Harness h,
+  String threshold,
+) async {
+  tester.view.physicalSize = const Size(1000, 3000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await h.open(tester, '/focus-refetch');
+  if (threshold != 'none') {
+    await pick(tester, 'min-background', threshold);
+  }
+  expect(facts('reader-c', 'focused=true'), findsOneWidget);
+  expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+}
+
 /// The screen as it opens: both entries fetched once, thirty seconds of stale
 /// time, so the data is fresh.
 Future<void> openFresh(WidgetTester tester, Harness h) async {
@@ -214,5 +268,80 @@ void main() {
     h.client.focusManager.setFocused(true);
     await tester.pumpAndSettle();
     expect(h.requests('GET', '/api/time'), 2);
+  });
+
+  // Entry C: `AppFocusManager(refetchMinBackgroundDuration:)`. The threshold
+  // is measured with `package:clock`, which under a widget test is *real*
+  // time and not pumped time — so `long` is an hour and every absence staged
+  // below is short by construction, and `none` is the other side. Nothing
+  // here waits for a threshold to pass.
+  group('minimum background duration', () {
+    showcaseTest(
+        'long: a full absence and return raises the event and refetches '
+        'nothing', (tester, h) async {
+      await openThreshold(tester, h, 'long');
+
+      await backgroundAndReturn(tester);
+
+      // The event did reach the manager — focus came back — and it carried
+      // "no new refetches", because the absence was far under the hour.
+      expect(facts('reader-c', 'focused=true'), findsOneWidget);
+      expect(facts('reader-c', 'shouldRefetchOnFocus=false'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+    });
+
+    showcaseTest('none: the same absence and return does refetch',
+        (tester, h) async {
+      await openThreshold(tester, h, 'none');
+
+      await backgroundAndReturn(tester);
+
+      expect(facts('reader-c', 'focused=true'), findsOneWidget);
+      expect(facts('reader-c', 'shouldRefetchOnFocus=true'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=2'), findsOneWidget);
+    });
+
+    showcaseTest('an inactive blip changes nothing under either threshold',
+        (tester, h) async {
+      await openThreshold(tester, h, 'none');
+
+      await inactiveBlip(tester);
+
+      // `inactive` is focused, so focus never dropped: no event, nothing
+      // suppressed, nothing refetched.
+      expect(facts('reader-c', 'focused=true'), findsOneWidget);
+      expect(facts('reader-c', 'shouldRefetchOnFocus=true'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+
+      await pick(tester, 'min-background', 'long');
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+
+      await inactiveBlip(tester);
+
+      expect(facts('reader-c', 'focused=true'), findsOneWidget);
+      expect(facts('reader-c', 'shouldRefetchOnFocus=true'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+    });
+
+    showcaseTest('the threshold knob swaps the client entry C runs on',
+        (tester, h) async {
+      await openThreshold(tester, h, 'none');
+      await backgroundAndReturn(tester);
+      expect(facts('reader-c', 'fetches=2'), findsOneWidget);
+
+      // A manager takes its threshold at construction, so a new threshold is
+      // a new manager, a new client and a new cache — the count starts again.
+      await pick(tester, 'min-background', 'long');
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+
+      await backgroundAndReturn(tester);
+      expect(facts('reader-c', 'shouldRefetchOnFocus=false'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+
+      await pick(tester, 'min-background', 'none');
+      await backgroundAndReturn(tester);
+      expect(facts('reader-c', 'shouldRefetchOnFocus=true'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=2'), findsOneWidget);
+    });
   });
 }

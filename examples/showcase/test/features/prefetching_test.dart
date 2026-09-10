@@ -1,8 +1,9 @@
 /// The `prefetching` screen against the fake backend.
 ///
-/// The screen is read whole — the list card and both debug strips — and the
-/// default 800×600 test view cuts the second strip off, so every test starts
-/// by making the view taller. A finder skips what is scrolled out of sight.
+/// The screen is read whole — the list card, both debug strips, the
+/// imperative-read card and its own strip — and the default 800×600 test view
+/// cuts everything below the first strip off, so every test starts by making
+/// the view taller. A finder skips what is scrolled out of sight.
 library;
 
 import 'package:flutter/material.dart';
@@ -27,6 +28,37 @@ Query<Object?>? entryOf(Harness h, int id) => h.client.queryCache
 void tall(WidgetTester tester) {
   tester.view.physicalSize = Size(800, 900) * tester.view.devicePixelRatio;
   addTearDown(tester.view.resetPhysicalSize);
+}
+
+/// A view tall enough to reach the imperative-read card and the counter strip
+/// under it: 800×1300 logical.
+void taller(WidgetTester tester) {
+  tester.view.physicalSize = Size(800, 1300) * tester.view.devicePixelRatio;
+  addTearDown(tester.view.resetPhysicalSize);
+}
+
+/// One fact of the imperative-read card, by its exact text.
+Finder readFact(String text) => find.descendant(
+      of: find.byKey(const ValueKey<String>('reads')),
+      matching: find.text(text),
+    );
+
+/// Puts a value in the counter's cache entry, and moves the server's counter
+/// past it: from here a read's answer says whether it came from the cache
+/// (`0`) or from the backend (`1`).
+Future<void> seedThenMoveTheServer(WidgetTester tester, Harness h) async {
+  await tester.tap(find.text('Read (await)'));
+  await tester.pumpAndSettle();
+  expect(readFact('returned=0'), findsOneWidget);
+  expect(readFact('cached=0'), findsOneWidget);
+  expect(h.requests('GET', '/api/counter'), 1);
+
+  await tester.tap(find.text('Increment on the server'));
+  await tester.pumpAndSettle();
+  expect(readFact('increments=1'), findsOneWidget);
+  // The increment went nowhere near the cache: it still holds the old value.
+  expect(readFact('cached=0'), findsOneWidget);
+  expect(h.requests('GET', '/api/counter'), 1);
 }
 
 void main() {
@@ -164,5 +196,87 @@ void main() {
     expect(h.requests('GET', '/api/posts/4'), 2);
     expect(h.fact('post-4', 'status=success'), findsOneWidget);
     expect(h.fact('post-4', 'failures=0'), findsOneWidget);
+  });
+
+  showcaseTest(
+      'revalidateIfStale returns the cached value on the frame of the tap, '
+      'and the refresh lands behind it', (tester, h) async {
+    taller(tester);
+    await h.open(tester, '/prefetching');
+    await seedThenMoveTheServer(tester, h);
+
+    // Any fetch this read starts takes this long, so a value on the very next
+    // frame can only have come from the cache.
+    h.backend.latency = const Duration(milliseconds: 200);
+    await tester.tap(find.text('Read (revalidateIfStale)'));
+    await tester.pump();
+
+    expect(readFact('read=revalidate'), findsOneWidget);
+    expect(readFact('returned=0'), findsOneWidget);
+    expect(readFact('cached=0'), findsOneWidget);
+    expect(h.fact('counter', 'fetchStatus=fetching'), findsOneWidget);
+    expect(h.fact('counter', 'updates=1'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+
+    // The refresh ran behind the answer: the cache holds the server's value,
+    // and what the call returned is still the old one.
+    expect(readFact('cached=1'), findsOneWidget);
+    expect(readFact('returned=0'), findsOneWidget);
+    expect(readFact('requests=2'), findsOneWidget);
+    expect(h.fact('counter', 'fetchStatus=idle'), findsOneWidget);
+    expect(h.fact('counter', 'updates=2'), findsOneWidget);
+    expect(h.requests('GET', '/api/counter'), 2);
+  });
+
+  showcaseTest('the plain read awaits the fetch and returns the new value',
+      (tester, h) async {
+    taller(tester);
+    await h.open(tester, '/prefetching');
+    await seedThenMoveTheServer(tester, h);
+
+    h.backend.latency = const Duration(milliseconds: 200);
+    await tester.tap(find.text('Read (await)'));
+    await tester.pump();
+
+    // Nothing has come back: this call waits for its fetch.
+    expect(readFact('read=await'), findsOneWidget);
+    expect(readFact('returned=–'), findsOneWidget);
+    expect(readFact('cached=0'), findsOneWidget);
+    expect(h.fact('counter', 'fetchStatus=fetching'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+
+    expect(readFact('returned=1'), findsOneWidget);
+    expect(readFact('cached=1'), findsOneWidget);
+    expect(readFact('requests=2'), findsOneWidget);
+    expect(h.requests('GET', '/api/counter'), 2);
+  });
+
+  showcaseTest('a static read hands back the cached value and makes no request',
+      (tester, h) async {
+    taller(tester);
+    await h.open(tester, '/prefetching');
+    await seedThenMoveTheServer(tester, h);
+
+    h.backend.latency = const Duration(milliseconds: 200);
+    await tester.tap(find.text('Read (static)'));
+    await tester.pump();
+
+    expect(readFact('read=static'), findsOneWidget);
+    expect(readFact('returned=0'), findsOneWidget);
+    expect(h.fact('counter', 'fetchStatus=idle'), findsOneWidget);
+
+    // A static entry is never stale, so `revalidateIfStale` has nothing to
+    // revalidate: no background fetch is started, then or later.
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(readFact('returned=0'), findsOneWidget);
+    expect(readFact('cached=0'), findsOneWidget);
+    expect(readFact('requests=1'), findsOneWidget);
+    expect(h.fact('counter', 'updates=1'), findsOneWidget);
+    expect(h.requests('GET', '/api/counter'), 1);
   });
 }

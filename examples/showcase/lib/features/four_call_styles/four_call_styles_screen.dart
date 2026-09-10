@@ -16,13 +16,31 @@
 /// count can sit one ahead. From there the five move together: a refetch is
 /// two builds everywhere, the fetch starting and the data landing.
 ///
+/// The sixth card reads nothing at all. `QueryListener` is the other half of
+/// the story — the four styles answer "what does this query show", the
+/// listener answers "what should happen when it changes" — and it is the only
+/// thing here that adds no observer: it borrows card 4's controller and never
+/// disposes it. Three things it does are visible on the card. Nothing is
+/// delivered on mount, so its first call is the first fetch landing, the
+/// transition after it. Its `listenWhen` accepts a change of the posts
+/// themselves and refuses a refetch that returns the same ones, however far
+/// `dataUpdatedAt` and `fetchStatus` have moved. And a refused transition
+/// still advances what the next comparison starts from, which is why the line
+/// logged for a change during a refetch starts at the fetching state the
+/// refusal saw and not at the state before the refetch. The child is handed
+/// back unchanged: `child-builds` is still 1 after every button on the screen
+/// has been pressed.
+///
 /// Proofs (widget tests in `test/features/four_call_styles_test.dart`,
 /// end-to-end in `e2e/tests/four_call_styles.spec.ts`): five readers make one
 /// `GET /api/posts` and the strip says `observers=5`; a refetch through the
 /// controller updates all five; either mutation button increments the counter
 /// and the invalidation refetches it; leaving the screen releases all five
-/// observers, the hand-rolled one included; and the hand-rolled observer sees
-/// the same result as the binding's readers after a refetch.
+/// observers, the hand-rolled one included; the hand-rolled observer sees the
+/// same result as the binding's readers after a refetch; and the listener
+/// says nothing on mount, one thing per change of the data, nothing at all
+/// for a refetch that changes none of it, while its child builds once and
+/// never again.
 library;
 
 import 'package:flutter/material.dart';
@@ -112,6 +130,10 @@ class _FourCallStylesScreenState extends State<FourCallStylesScreen> {
   final _Builds _controllerBuilds = _Builds();
   final _Builds _observerBuilds = _Builds();
 
+  /// The listener's child counts its builds like a card, and for the opposite
+  /// reason: this one is supposed to stay at 1.
+  final _Builds _listenerChildBuilds = _Builds();
+
   @override
   void initState() {
     super.initState();
@@ -184,6 +206,11 @@ class _FourCallStylesScreenState extends State<FourCallStylesScreen> {
             builds: _controllerBuilds,
           ),
           _ObserverCard(builds: _observerBuilds),
+          _ListenerCard(
+            controller: _controller,
+            client: _client,
+            childBuilds: _listenerChildBuilds,
+          ),
           _MutationCard(api: _api, client: _client),
           QueryDebugStrip(queryKey: counterKey, label: 'counter'),
         ],
@@ -436,7 +463,220 @@ class _ReaderCard extends StatelessWidget {
   }
 }
 
-/// 6. The same mutation through two of the styles, side by side, with the
+/// 6. `QueryListener` — not a sixth way of reading the query, but the answer
+/// to the other question: what should *happen* when it changes.
+///
+/// It borrows card 4's controller. Borrowing is the whole contract: the
+/// listener never disposes it, adds no observer of its own — the strip still
+/// says `observers=5` — and hands its child straight back, so no notification
+/// it receives rebuilds anything below it.
+class _ListenerCard extends StatefulWidget {
+  const _ListenerCard({
+    required this.controller,
+    required this.client,
+    required this.childBuilds,
+  });
+
+  final QueryController<List<Post>, List<Post>> controller;
+  final QueryClient client;
+  final _Builds childBuilds;
+
+  @override
+  State<_ListenerCard> createState() => _ListenerCardState();
+}
+
+class _ListenerCardState extends State<_ListenerCard> {
+  /// The accepted transitions, oldest first, the last [_logLength] of them.
+  final List<String> _log = <String>[];
+
+  int _calls = 0;
+  int _skips = 0;
+  String _last = 'none';
+
+  /// Where the transition currently being judged came from, written by
+  /// [_dataChanged] for [_record] — the callback is handed the new result
+  /// only, and the pair is what makes the line readable.
+  String _from = 'none';
+
+  static const int _logLength = 4;
+
+  /// The listener's child, built once and kept.
+  ///
+  /// Every rebuild of this card hands `QueryListener` the same widget
+  /// *instance*, so the element is reused and this subtree never builds
+  /// again. That is what makes `child-builds` a proof rather than a
+  /// coincidence: the counter would move if anything rebuilt it, and the card
+  /// around it rebuilds on every call and every refusal below.
+  late final Widget _child = _ListenerChild(builds: widget.childBuilds);
+
+  /// A result as one word: the status, what the query is doing, and how much
+  /// data there is. `fetchStatus` is in it on purpose — it is what shows that
+  /// a refused transition still moved the comparison forward.
+  static String _shape(QueryResult<List<Post>> result) {
+    final data = result.dataOrNull;
+    return '${result.status.name}/${result.fetchStatus.name}:'
+        '${data == null ? 'none' : data.length}';
+  }
+
+  /// What this screen means by "the data changed": the posts, compared post
+  /// by post. `dataUpdatedAt` moves every time a fetch lands and
+  /// `fetchStatus` every time one starts; neither is a change of data, and a
+  /// refetch that returns the same 30 posts is refused here.
+  ///
+  /// Every transition passes through this, accepted or not, which is why
+  /// [_from] is written for all of them.
+  bool _dataChanged(
+    QueryResult<List<Post>> previous,
+    QueryResult<List<Post>> next,
+  ) {
+    _from = _shape(previous);
+    if (!_samePosts(previous.dataOrNull, next.dataOrNull)) {
+      return true;
+    }
+    setState(() => _skips++);
+    return false;
+  }
+
+  static bool _samePosts(List<Post>? previous, List<Post>? next) {
+    if (previous == null || next == null) {
+      return previous == null && next == null;
+    }
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (var i = 0; i < previous.length; i++) {
+      if (previous[i] != next[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// The side effect. A `setState` from here is safe — so would a `SnackBar`
+  /// or a route push be — because the callback is delivered off the build
+  /// phase even when the result changed while the tree was building.
+  void _record(BuildContext context, QueryResult<List<Post>> next) {
+    setState(() {
+      _calls++;
+      _last = '$_from->${_shape(next)}';
+      _log.add('#$_calls $_last');
+      if (_log.length > _logLength) {
+        _log.removeAt(0);
+      }
+    });
+  }
+
+  /// A change of the data with nothing fetched for it: `/posts` is read-only,
+  /// and a cache write is a change of data like any other. Refetch up top
+  /// puts the dropped post back.
+  void _drop() {
+    widget.client.updateQueryData<List<Post>>(
+      ShowcaseKeys.posts,
+      (previous) =>
+          previous == null || previous.isEmpty ? null : previous.sublist(1),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => SectionCard(
+        title: '6. QueryListener, a side effect',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              'Not a sixth way of reading the query: a way of reacting to '
+              'it. The listener borrows the controller card 4 holds — it '
+              'never disposes it, and it adds no observer, so the strip '
+              'above still says observers=5 — and returns its child '
+              'unchanged, which is why child-builds below stays at 1 however '
+              'often the query changes.',
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Nothing is delivered on mount, so the first call is the first '
+              'fetch landing. listenWhen accepts a change of the posts and '
+              'refuses everything else, and a refused transition still '
+              'advances what the next comparison starts from — which is why '
+              'a change during a fetch is logged from the fetching state.',
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'QueryListener(controller: …, listenWhen: …, listener: …, '
+              'child: …)',
+              style: _mono,
+            ),
+            const SizedBox(height: 12),
+            _Toolbar(
+              children: <Widget>[
+                _Action(label: 'Drop a post', onPressed: _drop),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Drop a post writes the cache directly, so the data genuinely '
+              'changes and the listener has something to say. Refetch and '
+              'Invalidate up top return the same 30 posts, and it says '
+              'nothing about either.',
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              container: true,
+              explicitChildNodes: true,
+              label: 'listener',
+              child: Column(
+                key: const ValueKey<String>('listener-facts'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: <Widget>[
+                      Text('listener-calls=$_calls', style: _mono),
+                      Text('listener-skips=$_skips', style: _mono),
+                      Text('last=$_last', style: _mono),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  for (final line in _log) Text(line, style: _mono),
+                  const SizedBox(height: 8),
+                  QueryListener<List<Post>, List<Post>>(
+                    controller: widget.controller,
+                    listenWhen: _dataChanged,
+                    listener: _record,
+                    child: _child,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+/// The listener's child: handed back unchanged, and rebuilt by nothing the
+/// controller does.
+class _ListenerChild extends StatelessWidget {
+  const _ListenerChild({required this.builds});
+
+  final _Builds builds;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('child-builds=${builds.next()}', style: _mono),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'The child of the listener. It built once, on mount, and no '
+              'transition above has touched it since.',
+            ),
+          ),
+        ],
+      );
+}
+
+/// 7. The same mutation through two of the styles, side by side, with the
 /// counter it invalidates read through a third.
 class _MutationCard extends StatelessWidget {
   const _MutationCard({required this.api, required this.client});
@@ -446,7 +686,7 @@ class _MutationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SectionCard(
-        title: '6. One mutation, two styles',
+        title: '7. One mutation, two styles',
         trailing: QueryBuilder<int>(
           options: counterQuery(api),
           builder: (context, counter) => Text(

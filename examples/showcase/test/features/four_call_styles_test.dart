@@ -6,10 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../harness.dart';
 
-/// Six cards and two strips: taller than the default test window, and a
+/// Seven cards and two strips: taller than the default test window, and a
 /// lazily built list would not have the lower ones.
 void tall(WidgetTester tester) {
-  tester.view.physicalSize = const Size(900, 2600);
+  tester.view.physicalSize = const Size(900, 3600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 }
@@ -28,6 +28,13 @@ const List<String> readers = <String>[
 /// here can be found by text alone.
 Finder readerFact(String name, String text) => find.descendant(
       of: find.byKey(ValueKey<String>('reader-$name')),
+      matching: find.text(text),
+    );
+
+/// One fact of the listener card, by its exact text. `child-builds=1` is in
+/// the same group, said by the child the listener hands back.
+Finder listenerFact(String text) => find.descendant(
+      of: find.byKey(const ValueKey<String>('listener-facts')),
       matching: find.text(text),
     );
 
@@ -241,5 +248,146 @@ void main() {
     await tester.pumpAndSettle();
     expectEveryReader('status=success');
     expectEveryReader('posts=30');
+  });
+
+  showcaseTest(
+      'the listener says nothing on mount, and the first fetch landing '
+      'is its one call', (tester, h) async {
+    tall(tester);
+    h.backend.latency = const Duration(milliseconds: 200);
+    await h.open(tester, '/four-call-styles', settle: false);
+
+    // Mounted with the fetch already in flight, and told nothing about it:
+    // the current result is a snapshot, not a transition.
+    expect(listenerFact('listener-calls=0'), findsOneWidget);
+    expect(listenerFact('listener-skips=0'), findsOneWidget);
+    expect(listenerFact('last=none'), findsOneWidget);
+    expect(listenerFact('child-builds=1'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+
+    // The baseline every test below counts from: the data arriving is the
+    // first transition after mount, and it changed the posts.
+    expect(listenerFact('listener-calls=1'), findsOneWidget);
+    expect(listenerFact('listener-skips=0'), findsOneWidget);
+    expect(
+      listenerFact('last=pending/fetching:none->success/idle:30'),
+      findsOneWidget,
+    );
+    expect(
+      listenerFact('#1 pending/fetching:none->success/idle:30'),
+      findsOneWidget,
+    );
+    // It borrowed a controller that already existed: no sixth observer.
+    expect(h.fact('posts', 'observers=5'), findsOneWidget);
+    expect(listenerFact('child-builds=1'), findsOneWidget);
+  });
+
+  showcaseTest('a refetch that returns the same posts is refused by listenWhen',
+      (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/four-call-styles');
+    expect(listenerFact('listener-calls=1'), findsOneWidget);
+    final before = buildsOfAll(tester);
+
+    h.backend.latency = const Duration(milliseconds: 200);
+    await tester.tap(button('Refetch'));
+    await tester.pump();
+
+    // The fetch starting is a transition — every reader rebuilt for it — and
+    // listenWhen refused it, because the posts are the same 30.
+    expect(buildsOf(tester, 'context'), before['context']! + 1);
+    expect(listenerFact('listener-calls=1'), findsOneWidget);
+    expect(listenerFact('listener-skips=1'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+
+    // And the landing is refused too: dataUpdatedAt moved, the data did not.
+    expect(listenerFact('listener-calls=1'), findsOneWidget);
+    expect(listenerFact('listener-skips=2'), findsOneWidget);
+    expect(
+      listenerFact('last=pending/fetching:none->success/idle:30'),
+      findsOneWidget,
+    );
+    // Two refusals and two rebuilds of the card around it, and the child it
+    // was handed did not build again.
+    expect(listenerFact('child-builds=1'), findsOneWidget);
+    for (final name in readers) {
+      expect(buildsOf(tester, name), before[name]! + 2, reason: 'reader $name');
+    }
+  });
+
+  showcaseTest('a change of the data raises exactly one call',
+      (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/four-call-styles');
+    expect(listenerFact('listener-calls=1'), findsOneWidget);
+
+    await tester.tap(button('Drop a post'));
+    await tester.pumpAndSettle();
+
+    expectEveryReader('posts=29');
+    expect(listenerFact('listener-calls=2'), findsOneWidget);
+    expect(listenerFact('listener-skips=0'), findsOneWidget);
+    expect(
+      listenerFact('last=success/idle:30->success/idle:29'),
+      findsOneWidget,
+    );
+    expect(
+      listenerFact('#2 success/idle:30->success/idle:29'),
+      findsOneWidget,
+    );
+    // Nothing was fetched for it: a cache write is a change of data too.
+    expect(h.requests('GET', '/api/posts'), 1);
+
+    // The refetch that puts the post back is one call again, and the line it
+    // logs starts at the fetching state the refusal before it saw — the
+    // refused transition advanced the comparison, it did not discard it.
+    h.backend.latency = const Duration(milliseconds: 200);
+    await tester.tap(button('Refetch'));
+    await tester.pump();
+    expect(listenerFact('listener-calls=2'), findsOneWidget);
+    expect(listenerFact('listener-skips=1'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+
+    expect(listenerFact('listener-calls=3'), findsOneWidget);
+    expect(listenerFact('listener-skips=1'), findsOneWidget);
+    expect(
+      listenerFact('#3 success/fetching:29->success/idle:30'),
+      findsOneWidget,
+    );
+    expectEveryReader('posts=30');
+  });
+
+  showcaseTest('the child never rebuilds from a controller event',
+      (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/four-call-styles');
+    expect(listenerFact('child-builds=1'), findsOneWidget);
+    final before = buildsOfAll(tester);
+
+    // Everything on the screen that moves the query: a refetch through the
+    // controller, an invalidation through the client, and a cache write.
+    await tester.tap(button('Refetch'));
+    await tester.pumpAndSettle();
+    await tester.tap(button('Invalidate'));
+    await tester.pumpAndSettle();
+    await tester.tap(button('Drop a post'));
+    await tester.pumpAndSettle();
+
+    // The events provably flowed — the readers rebuilt for every one of them
+    // and the listener both refused and accepted transitions.
+    for (final name in readers) {
+      expect(buildsOf(tester, name), greaterThan(before[name]!),
+          reason: 'reader $name');
+    }
+    expect(listenerFact('listener-calls=2'), findsOneWidget);
+    expect(listenerFact('listener-skips=4'), findsOneWidget);
+    // And the child of the listener stayed where it was.
+    expect(listenerFact('child-builds=1'), findsOneWidget);
   });
 }

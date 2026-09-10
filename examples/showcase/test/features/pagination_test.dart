@@ -3,6 +3,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:showcase/features/pagination/pagination_screen.dart';
+import 'package:tanstack_query_flutter/tanstack_query_flutter.dart';
 
 import '../harness.dart';
 
@@ -21,6 +23,10 @@ final Finder previousButton =
 
 bool enabled(WidgetTester tester, Finder button) =>
     tester.widget<ButtonStyleButton>(button).enabled;
+
+/// The cache entry for [page], or null when the cache has none.
+Query<Object?>? entryOf(Harness h, int page) => h.client.queryCache
+    .find(filters: QueryFilters(queryKey: projectsPageKey(page)));
 
 /// A view tall enough for the toolbar card, both strips and the rows:
 /// 800×1000 logical.
@@ -189,5 +195,49 @@ void main() {
     expect(pageRequests(h, 10), 0);
     // Every page fetched exactly once: nine of them by the prefetch.
     expect(h.requests('GET', '/api/projects'), 10);
+  });
+
+  showcaseTest("the placeholder is never written to the new page's cache entry",
+      (tester, h) async {
+    tall(tester);
+    h.backend.latency = const Duration(milliseconds: 300);
+    await h.open(tester, '/pagination', settle: false);
+
+    // Page 0 answers; its frame starts the prefetch of page 1, and the strips
+    // catch up a frame later.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Project 0'), findsOneWidget);
+    expect(h.fact('page-1', 'fetchStatus=fetching'), findsOneWidget);
+
+    await tester.tap(nextButton);
+    await tester.pump();
+
+    // Page 0's rows stand in for page 1 …
+    expect(find.text('page=1'), findsOneWidget);
+    expect(find.text('isPlaceholderData=true'), findsOneWidget);
+    expect(find.text('Project 0'), findsOneWidget);
+    // … and page 1's own entry holds nothing at all: a placeholder is the
+    // reader's, never the cache's, `keepPrevious` included.
+    expect(h.fact('page-1', 'status=pending'), findsOneWidget);
+    expect(h.fact('page-1', 'updates=0'), findsOneWidget);
+    expect(h.fact('page-1', 'dataUpdatedAt=–'), findsOneWidget);
+    expect(entryOf(h, 1)!.state.data, isNull);
+    // Nor did the placeholder touch the page it was borrowed from — page 0
+    // has no strip of its own from here, so it is read off the entry.
+    expect(entryOf(h, 0)!.state.dataUpdateCount, 1);
+
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    expect(find.text('isPlaceholderData=false'), findsOneWidget);
+    expect(h.fact('page-1', 'updates=1'), findsOneWidget);
+    expect(entryOf(h, 1)!.state.data, isNotNull);
+    expect(pageRequests(h, 1), 1);
+
+    // Let the prefetch of page 2 land, so no timer outlives the test.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(h.fact('page-2', 'status=success'), findsOneWidget);
   });
 }

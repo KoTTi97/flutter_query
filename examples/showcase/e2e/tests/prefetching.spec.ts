@@ -105,3 +105,89 @@ test('a refused prefetch leaves the row unmarked and the post opens normally aft
   await expect(fact(page, 'post-4', 'failures=0')).toBeVisible()
   expect(await scenario.count('GET', /^\/api\/posts\/4$/)).toBe(2)
 })
+
+// The imperative-read card and its own strip sit below everything else, and
+// only what is on screen is in the semantics tree, so these tests get a taller
+// window of their own.
+test.describe('imperative reads', () => {
+  test.use({ viewport: { width: 1280, height: 1400 } })
+
+  /// The imperative-read card: a semantics group of its own, so `returned=0`
+  /// cannot be confused with a fact of a debug strip.
+  const reads = (page: Page) => page.getByRole('group', { name: 'reads', exact: true })
+  const readFact = (page: Page, text: string) => reads(page).getByText(text, { exact: true })
+
+  /// Puts a value in the counter's cache entry and moves the server's counter
+  /// past it: from here a read's answer says whether it came from the cache
+  /// (`0`) or from the backend (`1`).
+  async function seedThenMoveTheServer(page: Page) {
+    await page.getByRole('button', { name: 'Read (await)', exact: true }).click()
+    await expect(readFact(page, 'returned=0')).toBeVisible()
+    await expect(readFact(page, 'cached=0')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Increment on the server', exact: true }).click()
+    await expect(readFact(page, 'increments=1')).toBeVisible()
+    // The increment went nowhere near the cache: it still holds the old value.
+    await expect(readFact(page, 'cached=0')).toBeVisible()
+  }
+
+  test('revalidateIfStale returns the cached value at once and refreshes behind it', async ({ page, open, scenario }) => {
+    await scenario.config({ latency: 0 })
+    await open('/prefetching')
+    await expect(fact(page, 'posts', 'status=success')).toBeVisible()
+    await seedThenMoveTheServer(page)
+
+    // The refresh is held in the browser: a value that shows while the hold
+    // has caught it and not let it go came from the cache.
+    const hold = holdRequest(page, '**/api/counter')
+    await page.getByRole('button', { name: 'Read (revalidateIfStale)', exact: true }).click()
+
+    await expect(readFact(page, 'read=revalidate')).toBeVisible()
+    await expect(readFact(page, 'returned=0')).toBeVisible()
+    await expect(readFact(page, 'cached=0')).toBeVisible()
+    await expect(fact(page, 'counter', 'fetchStatus=fetching')).toBeVisible()
+    await hold.release()
+
+    // The refresh landed behind the answer: the cache holds the server's
+    // value, and what the call returned is still the old one.
+    await expect(readFact(page, 'cached=1')).toBeVisible()
+    await expect(readFact(page, 'returned=0')).toBeVisible()
+    await expect(readFact(page, 'requests=2')).toBeVisible()
+    await expect(fact(page, 'counter', 'fetchStatus=idle')).toBeVisible()
+    expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(2)
+  })
+
+  test('the plain read awaits the fetch and returns the new value', async ({ page, open, scenario }) => {
+    await scenario.config({ latency: 0 })
+    await open('/prefetching')
+    await expect(fact(page, 'posts', 'status=success')).toBeVisible()
+    await seedThenMoveTheServer(page)
+
+    await page.getByRole('button', { name: 'Read (await)', exact: true }).click()
+
+    await expect(readFact(page, 'returned=1')).toBeVisible()
+    await expect(readFact(page, 'cached=1')).toBeVisible()
+    await expect(readFact(page, 'requests=2')).toBeVisible()
+    expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(2)
+  })
+
+  test('a static read hands back the cached value and makes no request', async ({ page, open, scenario }) => {
+    await scenario.config({ latency: 0 })
+    await open('/prefetching')
+    await expect(fact(page, 'posts', 'status=success')).toBeVisible()
+    await seedThenMoveTheServer(page)
+
+    await page.getByRole('button', { name: 'Read (static)', exact: true }).click()
+
+    await expect(readFact(page, 'read=static')).toBeVisible()
+    await expect(readFact(page, 'returned=0')).toBeVisible()
+    // Nothing to wait for on a read that fetches nothing: sample after a
+    // pause a fetch would have needed, and the counts still say one.
+    await page.waitForTimeout(500)
+    await expect(readFact(page, 'cached=0')).toBeVisible()
+    await expect(readFact(page, 'requests=1')).toBeVisible()
+    await expect(fact(page, 'counter', 'fetchStatus=idle')).toBeVisible()
+    await expect(fact(page, 'counter', 'updates=1')).toBeVisible()
+    expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(1)
+  })
+})
