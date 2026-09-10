@@ -555,13 +555,17 @@ class Query<TQueryData> extends Removable {
   /// `refetchOnWindowFocus` asks for it refetches, and a paused fetch is given
   /// the chance to resume. Called by the cache's `onFocus`; not for user code.
   @internal
-  void onFocus() {
-    for (final observer in _observers) {
-      if (observer.shouldFetchOnWindowFocus()) {
-        observer.refetchOnEvent();
-        break;
+  void onFocus({bool refetchQueries = true}) {
+    if (refetchQueries) {
+      for (final observer in _observers) {
+        if (observer.shouldFetchOnWindowFocus()) {
+          observer.refetchOnEvent();
+          break;
+        }
       }
     }
+    // Outside the guard on purpose: a short absence suppresses *new* fetches,
+    // never the continuation of one that is already paused.
     _retryer?.continueFetch().ignore();
   }
 
@@ -944,8 +948,11 @@ class Query<TQueryData> extends Removable {
     return QueryState<TQueryData>(
       hasData: hasData,
       data: seed?.data,
-      dataUpdatedAt:
-          hasData ? (options.initialDataUpdatedAt ?? clock.now()) : null,
+      dataUpdatedAt: hasData
+          ? (options.initialDataUpdatedAt ??
+              options.initialDataUpdatedAtCompute?.call() ??
+              clock.now())
+          : null,
       status: hasData ? QueryStatus.success : QueryStatus.pending,
     );
   }

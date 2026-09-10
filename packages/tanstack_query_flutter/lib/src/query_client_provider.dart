@@ -35,6 +35,24 @@ import 'query_context.dart';
 ///    package is a dependency — see the README for the `connectivity_plus`
 ///    snippet.
 class QueryClientProvider extends StatefulWidget {
+  /// Creates and owns a client for this widget's lifetime. Rebuilding with a
+  /// different [create] callback keeps the client; change [key] to replace it.
+  /// The owned client is cleared after its provider unmounts.
+  static Widget create({
+    Key? key,
+    required QueryClient Function() create,
+    required Widget child,
+    Stream<bool>? onlineStatus,
+    bool observeAppLifecycle = true,
+  }) =>
+      _OwnedQueryClientProvider(
+        key: key,
+        create: create,
+        onlineStatus: onlineStatus,
+        observeAppLifecycle: observeAppLifecycle,
+        child: child,
+      );
+
   /// Provides [client] to [child] and wires it to Flutter for as long as this
   /// widget is mounted — the three things the class doc lists. A different
   /// [client] on a later build unmounts the old one and mounts the new.
@@ -100,6 +118,49 @@ class QueryClientProvider extends StatefulWidget {
 
   @override
   State<QueryClientProvider> createState() => _QueryClientProviderState();
+}
+
+class _OwnedQueryClientProvider extends StatefulWidget {
+  const _OwnedQueryClientProvider({
+    super.key,
+    required this.create,
+    required this.child,
+    required this.onlineStatus,
+    required this.observeAppLifecycle,
+  });
+
+  final QueryClient Function() create;
+  final Widget child;
+  final Stream<bool>? onlineStatus;
+  final bool observeAppLifecycle;
+
+  @override
+  State<_OwnedQueryClientProvider> createState() =>
+      _OwnedQueryClientProviderState();
+}
+
+class _OwnedQueryClientProviderState extends State<_OwnedQueryClientProvider> {
+  late final QueryClient _client;
+
+  @override
+  void initState() {
+    super.initState();
+    _client = widget.create();
+  }
+
+  @override
+  Widget build(BuildContext context) => QueryClientProvider(
+        client: _client,
+        onlineStatus: widget.onlineStatus,
+        observeAppLifecycle: widget.observeAppLifecycle,
+        child: widget.child,
+      );
+
+  @override
+  void dispose() {
+    _client.clear();
+    super.dispose();
+  }
 }
 
 class _QueryClientProviderState extends State<QueryClientProvider> {

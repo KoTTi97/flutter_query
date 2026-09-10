@@ -19,8 +19,12 @@ library;
 
 export 'package:tanstack_query_core/tanstack_query_core.dart';
 
+export 'src/mutation_state_controller.dart';
+export 'src/queries_builder.dart';
+export 'src/queries_controller.dart';
 export 'src/query_builder.dart';
 export 'src/query_client_provider.dart';
 export 'src/query_context.dart' hide QueryScope, QueryScopeElement;
 export 'src/query_controller.dart';
+export 'src/query_listener.dart';
 export 'src/query_mixin.dart';

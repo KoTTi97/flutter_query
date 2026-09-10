@@ -25,10 +25,11 @@ is a bug in this file.
 | `onlineManager.test.tsx` | `online_manager_test.dart` | 6 / 11 | done |
 | `removable.test.tsx` | `removable_test.dart` | 11 / 12 | done |
 | `retryer.test.tsx` | `retryer_test.dart` | 13 / 13 | done |
-| `query.test.tsx` | `query_test.dart` | 43 / 51 | done |
+| `query.test.tsx` | `query_test.dart` | 44 / 51 | done |
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
 | `queryObserver.test.tsx` | `query_observer_test.dart` | 62 / 75 | done |
-| `queryClient.test.tsx` | `query_client_test.dart` | 104 / 156 | done |
+| `queryClient.test.tsx` | `query_client_test.dart` | 106 / 156 | done |
+| `queriesObserver.test.tsx` | `queries_observer_test.dart` | 12 / 22 | applicable cases done; combine/suspense/property tracking excluded |
 | `mutation.test.tsx` | `mutation_test.dart` | 28 / 28 | done |
 | `mutationCache.test.tsx` | `mutation_cache_test.dart` | 16 / 16 | done |
 | `mutationObserver.test.tsx` | `mutation_observer_test.dart` | 16 / 16 | done |
@@ -40,11 +41,55 @@ Suites not ported at all, each for one recorded reason:
 `hydration.test.tsx` (hydration is out of v1 scope, #17),
 `timeoutManager.test.tsx` (the module is not ported, #9),
 `environmentManager.test.tsx` (no SSR),
-`queriesObserver.test.tsx` (`useQueries` is fog, not v1),
 `streamedQuery.test.tsx` (experimental upstream; the Dart `Stream` mapping is
 fog).
 
 ## Omissions and adaptations, by suite
+
+### `queriesObserver.test.tsx`
+
+- **ported/adapted (12):** the first eleven cases and `should subscribe to
+  new observers when a query is added while subscribed`. The list is
+  homogeneous; `currentResult` and `observers` are Dart getters, and queries
+  are available through each observer's `currentQuery`.
+- **adapted:** duplicate keys retain distinct observers by occurrence while
+  sharing a cache entry. All occurrences report their actual fetching state;
+  the upstream test's transient idle duplicate is not reproduced. The case
+  asserts final data, independent observers and a single fetch per key.
+- **omitted (10):** the eight cases between `should update combined result
+  when queries are added with stable combine reference` and `should return
+  cached combined result when nothing has changed` concerning combine,
+  suspense and fallback results; plus `should return observer result directly
+  when notifyOnChangeProps is set` and `should track properties on all
+  observers when trackResult is called`. These APIs are outside the adopted
+  homogeneous collection surface.
+
+### Functional additions from the competitor analysis
+
+The accepted implementation plan is
+[`functional-improvements.md`](../../../docs/plans/functional-improvements.md).
+`functional_improvements_test.dart` covers Dart-specific revalidation,
+nullable data, typed infinite reads, const keep-previous placeholders,
+cache-wide mutation selection, lazy seed timestamps and focus thresholds.
+The binding's same-named suite covers owned providers, borrowed-controller
+listeners, mutation-state controllers and query collections.
+
+- A focus threshold defaults to zero. Short absences suppress only new focus
+  refetches; paused work still resumes. The threshold decision is captured
+  before awaiting paused mutations, so another focus event cannot alter it.
+- Mutation selection uses structural sharing over an immutable outer list.
+  It subscribes to the cache only while observed and retains concurrent runs
+  sharing a mutation key.
+- Both collection observers isolate throwing listeners, matching the existing
+  observers. Query collection subscriptions are guarded while their initial
+  synchronous notification runs, so a reentrant `setQueries` cannot install
+  an extra listener and lose its unsubscribe handle. Both regressions were
+  reproduced before fixing and are in `functional_improvements_test.dart`.
+- `initialDataUpdatedAtCompute` is optional and evaluated only for actual
+  seeding. `copyWith` supplying one timestamp form replaces the previous
+  alternative. Supplying both is rejected during option defaulting.
+- `PlaceholderData.keepPrevious()` deliberately keeps `.compute`'s existing
+  nullable-data semantics: a previous null means no placeholder.
 
 ### `notifyManager.test.tsx`
 
@@ -172,11 +217,11 @@ immediately after unsubscribe, both times — is unchanged.
   `persister` option belongs to upstream's experimental persister package and
   is not part of the v1 surface
   ([#15](https://github.com/KoTTi97/flutter_query/issues/15)).
-- **omitted — option not ported (1):** `constructor should call
-  initialDataUpdatedAt if defined as a function`. `initialDataUpdatedAt` is a
-  plain `DateTime?` here: the callback form exists upstream to defer work, and
-  the expensive half — producing the data — is already deferred by
-  `InitialData.compute`.
+- **adapted:** `constructor should call initialDataUpdatedAt if defined as a
+  function` uses the additive `initialDataUpdatedAtCompute` callback. The
+  existing `DateTime?` field remains supported. Providing both is rejected
+  when options are defaulted, preserving const option constructors. The
+  callback runs only when seed data exists; null falls back to `clock.now()`.
 - **adapted:** `should work with initialDataUpdatedAt set to zero` → `... set to
   the epoch`. The case guards a JS falsy-zero hazard; `DateTime` has no such
   hazard, so it asserts the epoch survives as a timestamp.
@@ -278,18 +323,18 @@ upstream's shape: one `select` step over "query data or placeholder", and
 
 ### `queryClient.test.tsx`
 
-104 ported and 36 omitted (the 25 infinite cases were deferred until
+106 ported and 34 omitted (the 25 infinite cases were deferred until
 [#16](https://github.com/KoTTi97/flutter_query/issues/16) and are ported now —
 see the infinite section below).
 
-- **omitted — deprecated upstream API (17):** the whole `fetchQuery` (9),
-  `ensureQueryData` (5) and `prefetchQuery` (3) blocks. Upstream deprecated all
+- **omitted — deprecated upstream API (16):** `fetchQuery` (9),
+  `ensureQueryData` (4) and `prefetchQuery` (3) cases. Upstream deprecated all
   three at this pin in favour of `queryClient.query`, and pairs each block with
   a modern equivalent — `query with static staleTime`, `query`, `query used for
   prefetching` — which *are* ported
-  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The one case with
-  no modern counterpart is `ensureQueryData`'s `revalidateIfStale`, an option
-  that went away with the method.
+  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The ordinary and
+  infinite `revalidateIfStale` cases are now adapted to named parameters on
+  `query` and `infiniteQuery`, retaining their upstream test names.
 - **omitted — option not ported (3):** the three `defaultQueryOptions` cases,
   all about `persister` defaulting `networkMode` to `offlineFirst`.
 - **omitted — hashKey identity (1):** `setQueryData > should use default
@@ -1431,14 +1476,15 @@ suite does not have to go looking:
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | module-level managers | instances the `QueryClient` owns — the `NotifyManager` too since the third review (`NotifyManager.shared` opts back in) | [#19](https://github.com/KoTTi97/flutter_query/issues/19), review 2026-09-09 |
 | `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |
-| `persister`, `initialDataUpdatedAt` as a function | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
+| `persister` | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
+| `initialDataUpdatedAt` as a function | additive `initialDataUpdatedAtCompute`, exclusive with the existing timestamp value | functional improvements plan |
 | `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` — and a *subtype* is a mismatch: one key, one exact type | [#7](https://github.com/KoTTi97/flutter_query/issues/7), fourth review 2026-09-09 |
 | `MutationCache.remove` leaves the mutation's gc timer running | the timer is cancelled, so a removed mutation cannot ask to be removed again | [#22](https://github.com/KoTTi97/flutter_query/issues/22) |
 | a cancelled retry can still flip its query from `idle` to `paused` after its delay | the retryer checks `isResolved` after the delay | review, 2026-09-08 |
 | a removed query or mutation re-arms its own gc timer from the fetch's `finally` | removal marks it, and a marked one schedules nothing | [#24](https://github.com/KoTTi97/flutter_query/issues/24) |
-| `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
+| `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static`, stale-while-revalidate is `revalidateIfStale: true` | [#17](https://github.com/KoTTi97/flutter_query/issues/17), functional improvements plan |
 | `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | a `select` that threw keeps reporting its error after `select` is removed | the error goes with the selector; the raw data is reported | review, 2026-09-09 |
 | a retained placeholder keeps its old selection after `select` changed | the new `select` runs over the placeholder | review, 2026-09-09 |
@@ -1470,3 +1516,9 @@ suite does not have to go looking:
 | `hasNextPage` and friends are fields of the infinite result, compared with it | getters on `InfiniteQueryObserver` (#16); `shouldNotify` compares the direction flags at every notification and re-asks `hasNextPage`/`hasPreviousPage` only when the paging functions changed | #16, fifth review, 2026-09-09 |
 | observer `TData` defaults to the query's type; nothing checks a mismatch | a `QueryObserver` with no `select` whose `TQueryData` is not a `TData` is refused with `ArgumentError` at construction, `setOptions` and `getOptimisticResult` | fifth review, 2026-09-09 |
 | an observer's `onQueryUpdate` throwing inside a dispatch propagates into the fetch | isolated per observer and reported to the zone, like the cache listeners; the query keeps its state | fifth review, 2026-09-09 (59) |
+| `useQueries` with a heterogeneous tuple and a `combine` step | a homogeneous `QueriesObserver` (`QueriesController`/`QueriesBuilder` in the binding); mixed data types need a `select`, and there is no `combine` — map the returned list | functional improvements plan, `competitor-deep-dive.md` §6 #13 |
+| `useMutationState` reads the cache through a React hook | `MutationStateObserver` (`MutationStateController` in the binding): `MutationFilters` plus a required `select`, structural sharing over the outer list, subscribed only while observed | functional improvements plan, `competitor-deep-dive.md` §6 #9 |
+| no minimum background duration before a focus refetch — every foreground event refetches | `AppFocusManager(refetchMinBackgroundDuration:)`, default `Duration.zero` (upstream's behaviour); a shorter absence suppresses **new** focus refetches only, paused work still resumes | functional improvements plan, `competitor-deep-dive.md` §6 #3 |
+| `keepPreviousData` / `placeholderData: (prev) => prev` | `const PlaceholderData.keepPrevious()` — identical to `.compute((previous, _) => previous)` including its "a previous `null` means no placeholder" rule, but `const`, so it survives the observer's placeholder memoisation | functional improvements plan, `competitor-deep-dive.md` §6 #4 |
+| the binding: a provider always borrows its client | `QueryClientProvider.create` owns the client it builds and `clear()`s it once, after the inner provider unmounted; the `client:` form still borrows and never clears | functional improvements plan, `competitor-deep-dive.md` §6 #7 |
+| the binding: side effects need a builder that also rebuilds | `QueryListener` / `InfiniteQueryListener` / `MutationListener` borrow a controller, deliver each accepted transition off the build phase and never rebuild their `child`; a rejected `listenWhen` still advances the comparison state | functional improvements plan, `competitor-deep-dive.md` §6 #8 |

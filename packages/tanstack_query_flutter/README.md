@@ -138,6 +138,55 @@ final add = context.mutation(MutationOptions.simple(
 ));
 ```
 
+## Side effects, and lists of queries
+
+Two widgets sit beside the four styles rather than among them, because neither
+is a way of *reading* a query.
+
+`QueryListener`, `InfiniteQueryListener` and `MutationListener` run a callback
+on a controller they **borrow** — the owner still disposes it — and never
+rebuild their `child`. Nothing fires on mount, only later transitions, and
+callbacks are delivered off the build phase, so navigating or showing a
+snackbar from one is safe:
+
+```dart
+QueryListener<Sensor, Sensor>(
+  controller: sensor,
+  listenWhen: (previous, next) => previous.errorOrNull != next.errorOrNull,
+  listener: (context, result) => ScaffoldMessenger.of(context)
+      .showSnackBar(const SnackBar(content: Text('Sensor unreachable'))),
+  child: const SensorTile(),
+)
+```
+
+A rejected `listenWhen` still advances the comparison state, so the next
+callback sees the transition it actually followed.
+
+`QueriesBuilder` observes a list of queries that may change length or order.
+Observers are reused by key and occurrence, so reordering starts no requests,
+and duplicate keys share one cache entry while keeping their own options:
+
+```dart
+QueriesBuilder<Sensor, String>(
+  queries: [
+    for (final id in visibleIds)
+      QueryObserverOptions<Sensor, String>(
+        queryKey: QueryKey(<Object?>['sensors', id]),
+        queryFn: (context) => api.getSensor(id, signal: context.signal),
+        select: (sensor) => sensor.name,
+      ),
+  ],
+  builder: (context, results) => Column(children: [
+    for (final result in results) Text(result.dataOrNull ?? '…'),
+  ]),
+)
+```
+
+Each query fails and settles on its own; one error does not disturb its
+neighbours. `MutationStateController` is the matching read over the mutation
+cache — every mutation matching a filter, through a `select` — for a "saving…"
+badge that no single widget owns.
+
 ## What rebuilds, and when
 
 The rule is upstream's: **a widget rebuilds whenever its result changes**, and
@@ -192,6 +241,18 @@ a provider change, `read` finds it without subscribing (for handlers), and
 The provider does not dispose the client: a `QueryClient` outlives the tree, so
 `client.clear()` (and `unmount()`) is yours to call — at the end of a widget
 test, on a sign-out, before a hot restart swaps the app.
+
+`QueryClientProvider.create` is the other half of that trade: it builds the
+client itself and `clear()`s it once the tree comes down, which is what an app
+with a single root client usually wants. A rebuild with a different callback
+keeps the client; give the widget a new `key` to replace it.
+
+```dart
+QueryClientProvider.create(
+  create: QueryClient.new,
+  child: const MyApp(),
+);
+```
 
 That does three things while it is mounted:
 

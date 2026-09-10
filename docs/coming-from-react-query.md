@@ -38,6 +38,10 @@ alternatives — there is no recommended default, pick per situation:
 | JS | Here |
 |---|---|
 | `fetchQuery`, `prefetchQuery`, `ensureQueryData` | one `QueryClient.query(options)`; prefetch is `client.query(…).ignore()`, "only if nothing is cached" is `staleTime: StaleTime.static` |
+| `ensureQueryData({ revalidateIfStale: true })` | `client.query(options, revalidateIfStale: true)` — cached data now, refresh behind it |
+| `useQueries({ queries })` | `QueriesObserver` / `QueriesBuilder`, homogeneous: one data type per collection, `select` when the selected type differs. No `combine` — map the list |
+| `useMutationState({ filters, select })` | `MutationStateObserver` / `MutationStateController` |
+| `getQueryData<InfiniteData<…>>(key)` | `getInfiniteQueryData<TPage, TParam>(key)` |
 | `fetchQuery({ select })` | none — `await` the future and map it |
 | `setQueryData(key, value)` | `setQueryData(key, value)` |
 | `setQueryData(key, updaterFn)` | `updateQueryData(key, (previous) => …)`; returning `null` leaves the cache untouched |
@@ -79,8 +83,10 @@ alternatives — there is no recommended default, pick per situation:
 | `networkMode: 'online'` | `NetworkMode.online` (also `always`, `offlineFirst`) |
 | `initialData: value` | `InitialData.value(value)` |
 | `initialData: () => value \| undefined` | `InitialData.compute(() => …)`; returning `null` means "none", while `InitialData.value(null)` is a value of `null` |
-| `initialDataUpdatedAt: number \| () => number` | `initialDataUpdatedAt: DateTime?` — the function form is not ported |
+| `initialDataUpdatedAt: number` | `initialDataUpdatedAt: DateTime?` |
+| `initialDataUpdatedAt: () => number` | `initialDataUpdatedAtCompute: () => DateTime?` — evaluated only when data is actually seeded; `null` means now. Give one form or the other, never both |
 | `placeholderData: value` / `(previous) => …` | `PlaceholderData.value(…)` / `PlaceholderData.compute(…)` |
+| `placeholderData: keepPreviousData` | `const PlaceholderData.keepPrevious()` |
 | `select: (data) => …` | `select: (data) => …` — the observer's second type parameter |
 | `notifyOnChangeProps` | gone: `select` narrows what is reported, and the builders take `buildWhen` |
 | `throwOnError` | gone: errors are the `QueryError` case of the sealed result |
@@ -128,10 +134,13 @@ file — each starts with what it shows and how it is proven:
 | retries, cancellation | `retry`, `cancellation` |
 | `refetchInterval`, focus, online | `auto-refetching`, `focus-refetch`, `offline` |
 | cache callbacks, `meta` | `global-callbacks` |
+| a list of queries (`useQueries`) | `query-collections` |
+| cache-wide mutation state (`useMutationState`) | `mutation-state` |
 
 ## Not here at all
 
-Persistence and hydration, `useQueries`, `streamedQuery`, Suspense, SSR and
+Persistence and hydration, `useQueries`' `combine` step, `streamedQuery`,
+Suspense, SSR and
 devtools are out of the first release; the READMEs carry the feature matrix,
 and [`PORTING_NOTES.md`](../packages/tanstack_query_core/test/PORTING_NOTES.md)
 records the reason for each.

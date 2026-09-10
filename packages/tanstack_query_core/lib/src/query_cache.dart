@@ -307,10 +307,11 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   void notifyObserverResultsUpdated(Query<Object?> query) =>
       notify(QueryObserverResultsUpdated(query));
 
-  /// Every query reacts to the app coming back to the foreground.
-  void onFocus() {
+  /// Every query reacts to the app coming back to the foreground. Setting
+  /// [refetchQueries] to false still allows paused requests to continue.
+  void onFocus({bool refetchQueries = true}) {
     for (final query in queries) {
-      query.onFocus();
+      query.onFocus(refetchQueries: refetchQueries);
     }
   }
 
