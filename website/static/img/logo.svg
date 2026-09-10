@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="query_kit">
   <!-- Three cached entries, the newest in front: what the library actually is.
-       An explicit fill, because an <img>-referenced SVG inherits no colour. -->
-  <rect x="3" y="4" width="20" height="10" rx="3" fill="#61b0f7" opacity=".45"/>
-  <rect x="6" y="11" width="20" height="10" rx="3" fill="#2a91f5" opacity=".75"/>
-  <rect x="9" y="18" width="20" height="10" rx="3" fill="#0b6bcb"/>
+       Explicit fills, because an <img>-referenced SVG inherits no colour, and
+       three flat blues rather than one blue at three opacities, so the mark
+       holds up at 26px on either background. -->
+  <rect x="4" y="4.5" width="20" height="8" rx="2.5" fill="#a8cdf4"/>
+  <rect x="6" y="11.5" width="20" height="8" rx="2.5" fill="#4b9bea"/>
+  <rect x="8" y="18.5" width="20" height="8" rx="2.5" fill="#0b6bcb"/>
 </svg>

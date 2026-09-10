@@ -13,12 +13,13 @@ const sample = `class TaskScreen extends StatelessWidget {
     return switch (task) {
       QueryPending() => const CircularProgressIndicator(),
       QuerySuccess(:final data) => TaskCard(data),
-      QueryError(:final error, :final staleData) => ErrorBanner(error, staleData),
+      QueryError(:final error, :final staleData) =>
+        ErrorBanner(error, staleData),
     };
   }
 }`
 
-const numbers = [
+const figures = [
   { value: '549', label: 'core tests, on the VM and compiled to JavaScript' },
   { value: '84', label: 'widget tests in the binding' },
   { value: '370', label: 'tests across the two example apps' },
@@ -103,72 +104,94 @@ export default function Home(): ReactNode {
               and upstream's own test suite ported alongside it, so the subtle
               things behave the way people who know the library expect.
             </p>
-            <div className={styles.buttons}>
-              <Link className="button button--primary button--lg" to="/docs/getting-started/first-query">
+            <div className={styles.actions}>
+              <Link
+                className="button button--primary button--lg"
+                to="/docs/getting-started/first-query"
+              >
                 Your first query
               </Link>
-              <Link className="button button--secondary button--lg" to="/docs/">
-                What this is
+              <Link className={styles.textAction} to="/docs/">
+                What this is <span aria-hidden="true">→</span>
               </Link>
             </div>
           </div>
           <div className={styles.heroCode}>
-            <CodeBlock language="dart">{sample}</CodeBlock>
+            <CodeBlock language="dart" title="task_screen.dart">
+              {sample}
+            </CodeBlock>
           </div>
         </div>
       </header>
 
       <main>
-        <section className={styles.numbers}>
-          {numbers.map((entry) => (
-            <div key={entry.label} className={styles.number}>
-              <span className={styles.numberValue}>{entry.value}</span>
-              <span className={styles.numberLabel}>{entry.label}</span>
-            </div>
-          ))}
+        <section className={styles.section}>
+          <h2 className={styles.sectionLabel}>Checkable, not claimed</h2>
+          <dl className={styles.figures}>
+            {figures.map((figure) => (
+              <div key={figure.label} className={styles.figure}>
+                <dt className={styles.figureValue}>{figure.value}</dt>
+                <dd className={styles.figureLabel}>{figure.label}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
-        <section className={styles.points}>
-          {points.map((point) => (
-            <article key={point.title} className={styles.point}>
-              <h2>{point.title}</h2>
-              <p>{point.body}</p>
-              <Link to={point.to}>{point.cta} →</Link>
-            </article>
-          ))}
+        <section className={styles.section}>
+          <h2 className={styles.sectionLabel}>What it is, in four points</h2>
+          <div className={styles.points}>
+            {points.map((point, index) => (
+              <article key={point.title} className={styles.point}>
+                <span className={styles.pointIndex}>
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className={styles.pointTitle}>{point.title}</h3>
+                <p className={styles.pointBody}>{point.body}</p>
+                <Link className={styles.textAction} to={point.to}>
+                  {point.cta} <span aria-hidden="true">→</span>
+                </Link>
+              </article>
+            ))}
+          </div>
         </section>
 
-        <section className={styles.closing}>
-          <h2>Credits, and what this is not</h2>
-          <p>
-            <strong>Thank you to Tanner Linsley and to everyone who has built
-            and maintained TanStack Query.</strong> This exists for one reason:
-            we used it, we loved it, and we wanted the same thing in Flutter.
-            Every good idea here is theirs, and it is published under their MIT
-            licence, whose notice each package carries in{' '}
-            <code>LICENSE-TANSTACK</code>.
-          </p>
-          <p>
-            <strong>It is not theirs.</strong> Not affiliated with, endorsed
-            by, reviewed by, or connected in any way to Tanner Linsley, the
-            TanStack team, or the TanStack organisation. Please do not take
-            problems with this package to them —{' '}
-            <a href="https://github.com/KoTTi97/flutter_query/issues">
-              they belong here
-            </a>
-            .
-          </p>
-          <p>
-            <strong>And this is an AI-written project.</strong> Effectively all
-            of the code, the tests and this page were written by AI agents,
-            with a human in the loop only rarely. What stands in for human
-            review is adversarial: upstream's own test suite, nine external
-            deep-dive reviews, and a rule that no reported finding is acted on
-            before it has been reproduced.
-          </p>
-          <p>
-            <Link to="/docs/project/credits">The whole of it →</Link>
-          </p>
+        <section className={styles.section}>
+          <h2 className={styles.sectionLabel}>Credits, and what this is not</h2>
+          <div className={styles.colophon}>
+            <p>
+              <strong>
+                Thank you to Tanner Linsley and to everyone who has built and
+                maintained TanStack Query.
+              </strong>{' '}
+              This exists for one reason: we used it, we loved it, and we wanted
+              the same thing in Flutter. Every good idea here is theirs, and it
+              is published under their MIT licence, whose notice each package
+              carries in <code>LICENSE-TANSTACK</code>.
+            </p>
+            <p>
+              <strong>It is not theirs.</strong> Not affiliated with, endorsed
+              by, reviewed by, or connected in any way to Tanner Linsley, the
+              TanStack team, or the TanStack organisation. Please do not take
+              problems with this package to them —{' '}
+              <a href="https://github.com/KoTTi97/flutter_query/issues">
+                they belong here
+              </a>
+              .
+            </p>
+            <p>
+              <strong>And this is an AI-written project.</strong> Effectively
+              all of the code, the tests and this page were written by AI
+              agents, with a human in the loop only rarely. What stands in for
+              human review is adversarial: upstream's own test suite, nine
+              external deep-dive reviews, and a rule that no reported finding is
+              acted on before it has been reproduced.
+            </p>
+            <p>
+              <Link className={styles.textAction} to="/docs/project/credits">
+                The whole of it <span aria-hidden="true">→</span>
+              </Link>
+            </p>
+          </div>
         </section>
       </main>
     </Layout>

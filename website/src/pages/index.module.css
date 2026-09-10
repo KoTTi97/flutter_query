@@ -1,136 +1,278 @@
+/* The page is set like a document: one measure, hairline rules doing the
+   separating, monospace for labels and figures. No cards, no glow. */
+
 .hero {
-  padding: 4rem 1rem 3.5rem;
-  background:
-    radial-gradient(120% 100% at 15% 0%, var(--qk-hero-glow) 0%, transparent 60%),
-    var(--qk-hero-bg);
-  border-bottom: 1px solid var(--ifm-toc-border-color);
+  padding: 4.5rem 1.5rem 4rem;
+  background: var(--qk-surface);
+  border-bottom: 1px solid var(--qk-rule);
 }
 
 .heroInner {
-  max-width: 1180px;
+  max-width: 1140px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-  gap: 3rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+  gap: 3.5rem;
   align-items: center;
 }
 
 .eyebrow {
-  margin: 0 0 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0 0 1.4rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--ifm-color-primary);
+  color: var(--qk-muted);
+}
+
+.eyebrow::before {
+  content: '';
+  width: 1.75rem;
+  height: 1px;
+  background: var(--qk-accent);
+  flex: none;
 }
 
 .title {
-  font-size: clamp(2.1rem, 4.4vw, 3.2rem);
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  margin: 0 0 1rem;
+  font-size: clamp(2.15rem, 4.2vw, 3.05rem);
+  line-height: 1.08;
+  letter-spacing: -0.033em;
+  font-weight: 600;
+  margin: 0 0 1.15rem;
+  text-wrap: balance;
 }
 
 .subtitle {
-  font-size: 1.125rem;
-  line-height: 1.6;
+  font-size: 1.05rem;
+  line-height: 1.65;
   color: var(--qk-muted);
-  margin: 0 0 2rem;
-  max-width: 34rem;
+  margin: 0 0 2.25rem;
+  max-width: 33rem;
 }
 
-.buttons {
+.actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 1.75rem;
 }
 
-/* The sample is decoration as much as documentation: let it keep its own
+/* The one link style used everywhere on this page: a text link with an arrow
+   that steps forward on hover. */
+.textAction {
+  font-size: 0.94rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.textAction span {
+  display: inline-block;
+  transition: transform 140ms ease;
+}
+
+.textAction:hover {
+  text-decoration: none;
+}
+
+.textAction:hover span {
+  transform: translateX(3px);
+}
+
+/* The sample is documentation as much as decoration: let it keep its own
    scrollbar rather than widening the page on a narrow screen. */
 .heroCode > div {
   margin-bottom: 0;
-  box-shadow: 0 18px 45px -25px rgb(0 0 0 / 55%);
 }
 
-.numbers {
-  max-width: 1180px;
-  margin: 3rem auto 0;
-  padding: 0 1rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: 1.5rem;
+.section {
+  max-width: 1140px;
+  margin: 4.5rem auto 0;
+  padding: 0 1.5rem;
 }
 
-.number {
+.sectionLabel {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 1.25rem 1.4rem;
-  border: 1px solid var(--ifm-toc-border-color);
-  border-radius: var(--ifm-global-radius);
-  background: var(--qk-surface);
-}
-
-.numberValue {
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--ifm-color-primary);
-}
-
-.numberLabel {
-  font-size: 0.875rem;
-  line-height: 1.4;
+  align-items: center;
+  gap: 1.1rem;
+  margin: 0 0 1.75rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
   color: var(--qk-muted);
 }
+
+.sectionLabel::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--qk-rule);
+}
+
+/* --- The figures -------------------------------------------------------- */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--qk-rule-strong);
+  border-bottom: 1px solid var(--qk-rule-strong);
+}
+
+.figure {
+  padding: 1.6rem 1.5rem 1.7rem;
+  border-left: 1px solid var(--qk-rule);
+}
+
+.figure:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+
+.figureValue {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 2.35rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  color: var(--qk-ink);
+}
+
+.figureLabel {
+  margin: 0.7rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--qk-muted);
+  max-width: 15rem;
+}
+
+/* --- The four points ---------------------------------------------------- */
 
 .points {
-  max-width: 1180px;
-  margin: 3.5rem auto 0;
-  padding: 0 1rem;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  gap: 2rem 2.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 3.5rem;
+  row-gap: 2.75rem;
 }
 
-.point h2 {
-  font-size: 1.25rem;
-  margin-bottom: 0.6rem;
+.point {
+  position: relative;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--qk-rule);
 }
 
-.point p {
+.pointIndex {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--qk-accent);
+}
+
+.pointTitle {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  margin: 0.5rem 0 0.55rem;
+}
+
+.pointBody {
   color: var(--qk-muted);
-  line-height: 1.65;
-  margin-bottom: 0.6rem;
+  font-size: 0.96rem;
+  line-height: 1.68;
+  margin: 0 0 0.85rem;
+  max-width: 34rem;
 }
 
-.closing {
-  max-width: 46rem;
-  margin: 4rem auto;
-  padding: 0 1rem 1rem;
-  text-align: center;
+.pointBody code {
+  color: var(--qk-ink);
 }
 
-.closing h2 {
-  font-size: 1.1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+/* --- The colophon ------------------------------------------------------- */
+
+.colophon {
+  max-width: 42rem;
+  padding-left: 1.4rem;
+  border-left: 2px solid var(--qk-accent);
+}
+
+.colophon p {
   color: var(--qk-muted);
+  font-size: 0.96rem;
+  line-height: 1.72;
 }
 
-.closing p {
-  color: var(--qk-muted);
-  line-height: 1.7;
+.colophon strong {
+  color: var(--qk-ink);
+  font-weight: 600;
+}
+
+.colophon p:last-child {
+  margin-bottom: 0;
+}
+
+/* The last section is the last thing on the page; give it room before the
+   footer. */
+.section:last-of-type {
+  margin-bottom: 5.5rem;
 }
 
 @media (max-width: 996px) {
-  .heroInner {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2rem;
+  .hero {
+    padding: 3rem 1.25rem 2.75rem;
   }
 
-  .hero {
-    padding-top: 2.5rem;
+  .heroInner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.25rem;
+  }
+
+  .section {
+    margin-top: 3.25rem;
+    padding: 0 1.25rem;
+  }
+
+  .figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .figure:nth-child(3) {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .figure:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--qk-rule);
+  }
+
+  .points {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2.25rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .figure {
+    padding-left: 0;
+    border-left: none;
+    border-bottom: 1px solid var(--qk-rule);
+  }
+
+  .figure:last-child {
+    border-bottom: none;
+  }
+
+  .figureLabel {
+    max-width: none;
   }
 }

@@ -30,6 +30,20 @@
         "examples/showcase/build/web"
       ],
       "port": 8124
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "website",
+        "run",
+        "start",
+        "--",
+        "--port",
+        "3111"
+      ],
+      "port": 3111
     }
   ]
 }

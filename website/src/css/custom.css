@@ -1,9 +1,29 @@
 /**
- * Dart blue as the primary, because the audience is a Dart audience and the
+ * The look is meant to read as a technical document, not a product page:
+ * warm paper, ink, hairline rules, one accent, and monospace for anything
+ * that is a label or a measurement. Boxes and drop shadows are used sparingly
+ * — the grid does the separating.
+ *
+ * Dart blue is the accent, because the audience is a Dart audience and the
  * palette should not pretend to be TanStack's.
+ *
+ * Colours are declared once as `--qk-*` tokens and mapped onto Infima's
+ * `--ifm-*` variables below, so a theme change is a change in one place.
  */
 
 :root {
+  /* Ink on warm paper. The neutrals are warm on purpose: a blue-grey page
+     under a blue accent is the tone every framework site already has. */
+  --qk-paper: #fdfcfa;
+  --qk-surface: #ffffff;
+  --qk-sunken: #f4f2ed;
+  --qk-rule: #e4e0d8;
+  --qk-rule-strong: #cfc9be;
+  --qk-ink: #15171b;
+  --qk-muted: #5b6069;
+  --qk-accent: #0b6bcb;
+  --qk-accent-soft: rgb(11 107 203 / 9%);
+
   --ifm-color-primary: #0b6bcb;
   --ifm-color-primary-dark: #0a60b7;
   --ifm-color-primary-darker: #095bad;
@@ -12,51 +32,521 @@
   --ifm-color-primary-lighter: #0d7be9;
   --ifm-color-primary-lightest: #2a91f5;
 
-  --ifm-code-font-size: 92%;
-  --ifm-font-family-monospace: ui-monospace, SFMono-Regular, 'SF Mono', Menlo,
-    Consolas, 'Liberation Mono', monospace;
-  --docusaurus-highlighted-code-line-bg: rgb(0 0 0 / 8%);
+  --ifm-font-family-base: 'IBM Plex Sans', system-ui, -apple-system,
+    'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace: 'IBM Plex Mono', ui-monospace, SFMono-Regular,
+    'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --ifm-code-font-size: 88%;
+  --ifm-font-size-base: 16px;
+  --ifm-line-height-base: 1.7;
+  --ifm-heading-font-weight: 600;
+  --ifm-h1-font-size: 2.25rem;
+  --ifm-h2-font-size: 1.5rem;
+  --ifm-h3-font-size: 1.15rem;
+  --ifm-global-radius: 6px;
+  --ifm-global-shadow-lw: 0 1px 2px rgb(21 23 27 / 6%);
 
-  --qk-hero-bg: #f7f9fc;
-  --qk-hero-glow: rgb(11 107 203 / 12%);
-  --qk-surface: #ffffff;
-  --qk-muted: #4a5568;
+  --docusaurus-highlighted-code-line-bg: rgb(11 107 203 / 10%);
+
+  --ifm-background-color: var(--qk-paper);
+  --ifm-background-surface-color: var(--qk-surface);
+  --ifm-font-color-base: var(--qk-ink);
+  --ifm-heading-color: var(--qk-ink);
+  --ifm-toc-border-color: var(--qk-rule);
+  --ifm-hr-border-color: var(--qk-rule);
+  --ifm-table-border-color: var(--qk-rule);
+  --ifm-table-head-background: transparent;
+  --ifm-table-stripe-background: transparent;
+  --ifm-navbar-background-color: rgb(253 252 250 / 82%);
+  --ifm-navbar-shadow: none;
+  --ifm-blockquote-color: var(--qk-muted);
+  --ifm-blockquote-border-color: var(--qk-rule-strong);
+  --ifm-menu-color-background-active: transparent;
+  --ifm-menu-color-background-hover: transparent;
+  --ifm-breadcrumb-item-background-active: transparent;
+  --ifm-code-background: var(--qk-accent-soft);
+  --ifm-footer-background-color: #15171b;
+  --ifm-footer-color: #a9a49b;
+  --ifm-footer-link-color: #d6d2ca;
+  --ifm-footer-title-color: #ffffff;
 }
 
 [data-theme='dark'] {
-  --ifm-color-primary: #61b0f7;
-  --ifm-color-primary-dark: #429ff5;
-  --ifm-color-primary-darker: #3396f4;
-  --ifm-color-primary-darkest: #0b7ce8;
-  --ifm-color-primary-light: #80c1f9;
-  --ifm-color-primary-lighter: #8fc8fa;
-  --ifm-color-primary-lightest: #bcddfc;
+  --qk-paper: #121316;
+  --qk-surface: #17191d;
+  --qk-sunken: #1b1d21;
+  --qk-rule: #2a2c32;
+  --qk-rule-strong: #3c3f47;
+  --qk-ink: #eceae6;
+  --qk-muted: #9a9ea6;
+  --qk-accent: #6fb2f5;
+  --qk-accent-soft: rgb(111 178 245 / 12%);
 
-  --docusaurus-highlighted-code-line-bg: rgb(255 255 255 / 10%);
+  --ifm-color-primary: #6fb2f5;
+  --ifm-color-primary-dark: #4c9ff3;
+  --ifm-color-primary-darker: #3a96f2;
+  --ifm-color-primary-darkest: #0f7ce7;
+  --ifm-color-primary-light: #92c5f7;
+  --ifm-color-primary-lighter: #a4cef9;
+  --ifm-color-primary-lightest: #d0e6fc;
 
-  --qk-hero-bg: #16181d;
-  --qk-hero-glow: rgb(97 176 247 / 14%);
-  --qk-surface: #1c1e24;
-  --qk-muted: #a5adba;
+  --docusaurus-highlighted-code-line-bg: rgb(111 178 245 / 14%);
+
+  --ifm-navbar-background-color: rgb(18 19 22 / 80%);
+  --ifm-footer-background-color: #0d0e10;
+  --ifm-footer-color: #85888f;
+  --ifm-footer-link-color: #b9bcc2;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgb(11 107 203 / 18%);
+}
+
+[data-theme='dark'] ::selection {
+  background: rgb(111 178 245 / 24%);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.015em;
+}
+
+/* --- Announcement bar ---------------------------------------------------
+   Ink rather than a coloured banner: it is a disclaimer, and a bright blue
+   strip reads as marketing. Its colours live here rather than in the config,
+   because the config sets them as an inline style that dark mode could not
+   then override. */
+
+.theme-announcement-bar {
+  background: #15171b;
+  color: #d6d2ca;
+  border-bottom: 1px solid var(--qk-rule);
+  font-size: 0.8125rem;
+  letter-spacing: -0.005em;
+}
+
+[data-theme='dark'] .theme-announcement-bar {
+  background: #0d0e10;
+}
+
+.theme-announcement-bar b {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.theme-announcement-bar a {
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgb(255 255 255 / 40%);
+}
+
+.theme-announcement-bar a:hover {
+  text-decoration-color: #ffffff;
+}
+
+/* --- Navbar ------------------------------------------------------------- */
+
+.navbar {
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+  border-bottom: 1px solid var(--qk-rule);
+}
+
+.navbar__title {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.navbar__link {
+  font-size: 0.9rem;
+  font-weight: 450;
+}
+
+.navbar__link--active {
+  font-weight: 550;
+}
+
+/* --- Sidebar and table of contents -------------------------------------- */
+
+.menu {
+  padding: 1.25rem 0.9rem !important;
+  font-size: 0.875rem;
+}
+
+.menu__link {
+  border-radius: 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid transparent;
+  color: var(--qk-muted);
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.menu__link:hover {
+  color: var(--qk-ink);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  color: var(--ifm-color-primary);
+  border-left-color: var(--ifm-color-primary);
+  font-weight: 550;
+}
+
+.menu__list .menu__list {
+  padding-left: 0.35rem;
+  border-left: 1px solid var(--qk-rule);
+  margin-left: 0.4rem;
+}
+
+.menu__list-item-collapsible > .menu__link--sublist {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--qk-muted);
+  border-left-color: transparent;
+}
+
+.menu__list-item-collapsible:hover {
+  background: transparent;
+}
+
+.table-of-contents {
+  font-size: 0.8rem;
+  border-left: 1px solid var(--qk-rule);
+}
+
+.table-of-contents__link {
+  color: var(--qk-muted);
+}
+
+.table-of-contents__link--active {
+  font-weight: 550;
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  font-weight: 550;
+}
+
+/* --- Markdown content --------------------------------------------------- */
+
+.markdown a:not(.card):not(.button) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(11 107 203 / 35%);
+}
+
+[data-theme='dark'] .markdown a:not(.card):not(.button) {
+  text-decoration-color: rgb(111 178 245 / 35%);
+}
+
+.markdown a:not(.card):not(.button):hover {
+  text-decoration-color: currentColor;
+}
+
+.markdown h1 {
+  letter-spacing: -0.025em;
+}
+
+.markdown > h2 {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--qk-rule);
+}
+
+.markdown > h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* A measure, not a column width: prose stops at ~68 characters while code
+   blocks and tables keep the full width they need. */
+.markdown > p,
+.markdown > ul,
+.markdown > ol,
+.markdown > blockquote,
+.markdown > .theme-admonition {
+  max-width: 68ch;
+}
+
+/* A heading that is entirely an identifier — `context.query(...)` — should
+   read as a heading, not as a chip the width of the line. */
+.markdown h1 code,
+.markdown h2 code,
+.markdown h3 code,
+.markdown h4 code,
+.table-of-contents code,
+.menu code,
+.breadcrumbs code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.94em;
+  color: inherit;
+}
+
+.markdown blockquote {
+  border-left-width: 2px;
+  padding: 0.1rem 0 0.1rem 1.15rem;
+  background: transparent;
+  font-style: normal;
+}
+
+.markdown li + li {
+  margin-top: 0.3rem;
 }
 
 /* Wide tables are the norm here — the name maps and the feature matrix — so
-   let them scroll inside themselves rather than stretching the page. */
+   let them scroll inside themselves rather than stretching the page. Rules
+   only where a rule is doing work: under the head, between the rows. */
 .markdown table {
   display: block;
   overflow-x: auto;
   max-width: 100%;
+  border: none;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.markdown table thead tr,
+.markdown table tr {
+  border: none;
+  background: transparent;
+}
+
+.markdown table th {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--qk-muted);
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--qk-rule-strong);
+  padding: 0.4rem 1.1rem 0.5rem 0;
+}
+
+.markdown table td {
+  border: none;
+  border-bottom: 1px solid var(--qk-rule);
+  padding: 0.65rem 1.1rem 0.65rem 0;
+  vertical-align: top;
+}
+
+.markdown table tbody tr:last-child td {
+  border-bottom: 1px solid var(--qk-rule-strong);
+}
+
+/* --- Code --------------------------------------------------------------- */
+
+.theme-code-block {
+  border: 1px solid var(--qk-rule);
+  border-radius: var(--ifm-global-radius);
+  box-shadow: none !important;
+}
+
+/* The prism theme's own background is set inline on the <pre>, so both it and
+   the container variable have to be replaced for the block to be one colour
+   with its title bar. */
+[data-theme='light'] .theme-code-block {
+  --prism-background-color: #faf9f6 !important;
+}
+
+[data-theme='light'] .theme-code-block pre {
+  background-color: #faf9f6 !important;
+}
+
+[data-theme='dark'] .theme-code-block {
+  --prism-background-color: #0b0e14 !important;
+  border-color: var(--qk-rule);
+}
+
+[data-theme='dark'] .theme-code-block pre {
+  background-color: #0b0e14 !important;
+}
+
+.theme-code-block div[class^='codeBlockTitle'] {
+  background: transparent;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  font-weight: 450;
+  color: var(--qk-muted);
+  border-bottom: 1px solid var(--qk-rule);
+}
+
+code {
+  border: none;
+  border-radius: 4px;
+  padding: 0.1rem 0.34rem;
+  font-weight: 450;
+}
+
+a code {
+  color: inherit;
+}
+
+/* --- Admonitions --------------------------------------------------------
+   A left rule and a monospace label, so a callout reads as a margin note
+   rather than as a coloured box. */
+
+.theme-admonition {
+  border: none;
+  border-left: 2px solid;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0.1rem 0 0.1rem 1.15rem;
+  margin-bottom: 1.6rem;
+}
+
+.theme-admonition div[class*='admonitionHeading'] {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.45rem;
+}
+
+.theme-admonition div[class*='admonitionHeading'] span[class*='admonitionIcon'] svg {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.theme-admonition div[class*='admonitionContent'] > :last-child {
+  margin-bottom: 0;
+}
+
+/* --- Pagination --------------------------------------------------------- */
+
+.pagination-nav__link {
+  border-radius: var(--ifm-global-radius);
+  border-color: var(--qk-rule);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--qk-rule-strong);
+  background: var(--qk-sunken);
+}
+
+.pagination-nav__sublabel {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card {
+  border: 1px solid var(--qk-rule);
+  border-radius: var(--ifm-global-radius);
+  box-shadow: none;
+}
+
+/* --- Footer ------------------------------------------------------------- */
+
+.footer--dark {
+  --ifm-footer-background-color: #15171b;
+}
+
+[data-theme='dark'] .footer--dark {
+  --ifm-footer-background-color: #0d0e10;
+}
+
+.footer {
+  --ifm-footer-link-hover-color: #ffffff;
+  border-top: 1px solid var(--qk-rule);
+  font-size: 0.875rem;
+}
+
+.footer__title {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 55%);
+}
+
+.footer__copyright {
+  max-width: 60rem;
+  margin: 0 auto;
+  font-size: 0.775rem;
+  line-height: 1.65;
+  color: rgb(255 255 255 / 42%);
+}
+
+/* --- Buttons ------------------------------------------------------------ */
+
+.button {
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  border-radius: var(--ifm-global-radius);
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
+}
+
+.button--primary {
+  --ifm-button-color: #ffffff;
+  background: var(--qk-ink);
+  border-color: var(--qk-ink);
+}
+
+.button--primary:hover {
+  background: #000000;
+  border-color: #000000;
+}
+
+[data-theme='dark'] .button--primary {
+  --ifm-button-color: #121316;
+  background: var(--qk-ink);
+  border-color: var(--qk-ink);
+}
+
+[data-theme='dark'] .button--primary:hover {
+  background: #ffffff;
+  border-color: #ffffff;
 }
 
 .header-github-link::before {
   content: '';
   display: flex;
-  width: 24px;
-  height: 24px;
-  background: no-repeat center/24px 24px
+  width: 22px;
+  height: 22px;
+  background: no-repeat center/22px 22px
     url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.3v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3'/%3E%3C/svg%3E");
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+.header-github-link:hover::before {
+  opacity: 1;
 }
 
 [data-theme='dark'] .header-github-link::before {
   filter: invert(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

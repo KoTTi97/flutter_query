@@ -2,10 +2,6 @@ import type * as Preset from '@docusaurus/preset-classic'
 import type { Config } from '@docusaurus/types'
 import { themes as prismThemes } from 'prism-react-renderer'
 
-// `query_kit` is a codename — the published name is decided right before the
-// first `dart pub publish`, because a pub.dev name is permanent, and
-// `tool/rename_packages.dart` rewrites it here along with everywhere else.
-//
 // Nothing is deployed yet. The url/baseUrl below are the GitHub Pages
 // coordinates the repository would use, so that `onBrokenLinks: 'throw'` has
 // something real to check against rather than a placeholder.
@@ -26,6 +22,27 @@ const config: Config = {
   markdown: { hooks: { onBrokenMarkdownLinks: 'throw' } },
 
   future: { v4: true, faster: true },
+
+  // IBM Plex Sans and Plex Mono. `custom.css` falls back to the system stack,
+  // so a blocked or slow font request costs the face and nothing else — and
+  // the build never reaches for the network, only the rendered page does.
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossorigin: 'anonymous',
+      },
+    },
+  ],
+  stylesheets: [
+    'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap',
+  ],
 
   i18n: { defaultLocale: 'en', locales: ['en'] },
 
@@ -48,13 +65,13 @@ const config: Config = {
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
     // Always on, not dismissible: two things about this project should reach
-    // a reader before anything else does.
+    // a reader before anything else does. Its colours are in `custom.css`,
+    // because `backgroundColor` here lands as an inline style that no
+    // stylesheet — and so no dark-mode rule — can override.
     announcementBar: {
       id: 'unaffiliated-and-ai-written',
       content:
         'A community <b>port of TanStack Query</b>, published with thanks — <b>not affiliated with or endorsed by TanStack</b>, and <b>written by AI</b>. <a href="/flutter_query/docs/project/credits">What that means</a>.',
-      backgroundColor: '#0b6bcb',
-      textColor: '#ffffff',
       isCloseable: false,
     },
     navbar: {
@@ -108,7 +125,9 @@ const config: Config = {
     },
     prism: {
       theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      // oneDark over dracula: dracula's pinks and purples are louder than
+      // anything else on the page.
+      darkTheme: prismThemes.oneDark,
       additionalLanguages: ['dart', 'bash', 'yaml', 'json'],
     },
   } satisfies Preset.ThemeConfig,
