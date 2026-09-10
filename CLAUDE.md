@@ -47,13 +47,17 @@ cd examples/showcase && flutter test
 ```
 
 ```bash
-dart analyze --fatal-infos packages examples && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test
+dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test tool
+```
+
+```bash
+cd website && npm ci && npm run build
 ```
 
 That is the per-module gate: tests, analyzer, formatter, and a PORTING_NOTES
 entry, all in the same commit. `.github/workflows/ci.yml` runs the same gates
-plus `dart doc`, both publish dry-runs and a web build of the demo on every
-push; a `floors` job runs the four test suites on Flutter 3.27.4 (the declared
+plus `dart doc`, both publish dry-runs, a web build of the demo and the
+documentation site on every push; a `floors` job runs the four test suites on Flutter 3.27.4 (the declared
 floor — it caught three dependency pins and a `foundation` export that current
 stable hides); and an `e2e` matrix job runs each example's Playwright
 end-to-end suite (the real web build in Chromium against the real express
@@ -152,6 +156,8 @@ by `/domain-modeling` when the first term or decision is resolved. See
 | `packages/query_kit_flutter/` | The Flutter binding. | yes |
 | `examples/showcase/` | Every feature as a screen, its dummy backend (`server/`), its widget and end-to-end tests. | yes |
 | `examples/sensor_demo/` | The acceptance demo, its dummy gateway (`server/`) and the acceptance suite. Legacy, kept as is. | yes |
+| `website/` | The documentation site (Docusaurus). Built in CI, deployed nowhere. | yes — its `build/` and `.docusaurus/` are ignored |
+| `tool/` | `rename_packages.dart`: the package names are a codename, and this is the swap. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |
 | `docs/research/` | Research findings behind the map's tickets. | yes |
 | `query/` | Upstream TanStack Query, the reference implementation and the source of the ported tests. | **no** — nested clone, gitignored |

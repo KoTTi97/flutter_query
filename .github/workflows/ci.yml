@@ -46,7 +46,7 @@ jobs:
         run: dart pub publish --dry-run
         working-directory: packages/query_kit_flutter
       - name: analyzer
-        run: dart analyze --fatal-infos packages examples/sensor_demo examples/showcase
+        run: dart analyze --fatal-infos packages examples/sensor_demo examples/showcase tool
       # `dart doc` reports unresolved doc references and broken links as
       # warnings; the API reference is the first page a pub.dev reader opens.
       - name: core docs
@@ -56,7 +56,7 @@ jobs:
         run: dart doc --validate-links
         working-directory: packages/query_kit_flutter
       - name: formatter
-        run: dart format --set-exit-if-changed --output=none packages examples/sensor_demo/lib examples/sensor_demo/test examples/showcase/lib examples/showcase/test
+        run: dart format --set-exit-if-changed --output=none packages examples/sensor_demo/lib examples/sensor_demo/test examples/showcase/lib examples/showcase/test tool
       - name: demo web build
         run: flutter build web --no-pub
         working-directory: examples/sensor_demo
@@ -89,9 +89,36 @@ jobs:
         run: flutter test
         working-directory: examples/showcase
 
+  # The documentation site. Nothing is deployed — this job exists because
+  # `onBrokenLinks: 'throw'` turns a link to a page that does not exist into a
+  # failed build, which is the only thing that keeps a docs site honest as the
+  # prose moves around.
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+        working-directory: website
+      - name: typecheck
+        run: npm run typecheck
+        working-directory: website
+      - name: build
+        run: npm run build
+        working-directory: website
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: website/build
+          retention-days: 7
+
   # The end-to-end suites: each app's real web build in a real Chromium
   # against its real express backend, driven by Playwright. The legacy demo
-  # (examples/sensor_demo/e2e) runs against the React demo's gateway; the
+  # (examples/sensor_demo/e2e) runs against its own express gateway; the
   # showcase (examples/showcase/e2e) against its own scenario-isolated
   # backend, and that leg also runs the backend contract test against the
   # real server, which is what proves the widget tests' fake mirrors it.

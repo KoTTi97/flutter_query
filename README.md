@@ -3,6 +3,11 @@
 A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
 `query-core`, with a Flutter binding on top.
 
+> **The package name is a codename.** `query_kit` and `query_kit_flutter` are
+> placeholders: a name on pub.dev is permanent, so the real one is chosen right
+> before the first `dart pub publish`. Changing it is one command —
+> [`docs/releasing.md`](docs/releasing.md).
+
 The bet is fidelity: rather than reimplementing the *idea* of TanStack Query,
 this ports the behavioral core and then ports upstream's test suite against it,
 so the subtle things — request dedup across observers, revert-on-cancel, stale
@@ -19,11 +24,25 @@ the fidelity work.
 |---|---|
 | [`packages/query_kit/`](packages/query_kit) | The pure-Dart core: queries, mutations, infinite queries, observers, client and caches. No Flutter dependency. Every applicable upstream suite ported case-for-case; the audit is [PORTING_NOTES.md](packages/query_kit/test/PORTING_NOTES.md). |
 | [`packages/query_kit_flutter/`](packages/query_kit_flutter) | The Flutter binding: `QueryClientProvider`, listenable controllers, builder widgets, a `State` mixin and `context.query(...)`. Four equal call styles, no dependency beyond Flutter. |
-| [`examples/showcase/`](examples/showcase) | Every feature of the library as its own screen — 24 of them, on a dummy backend built for it, each with widget tests and Playwright end-to-end tests in a real browser. The catalogue is its README. |
+| [`examples/showcase/`](examples/showcase) | Every feature of the library as its own screen — 26 of them, on a dummy backend built for it, each with widget tests and Playwright end-to-end tests in a real browser. The catalogue is its README. |
 | [`examples/sensor_demo/`](examples/sensor_demo) | The legacy example: a sensor manager against a deliberately slow gateway with scripted failures, and an acceptance test per row of its feature checklist. |
+| [`website/`](website) | The documentation site — Docusaurus, built in CI, deployed nowhere yet. `npm ci && npm start`. |
+| [`tool/`](tool) | `rename_packages.dart`, which is what makes the codename safe. |
 
 Upstream is pinned at `50680b98c`; the `query/` checkout it needs is a nested,
 gitignored clone (see [CLAUDE.md](CLAUDE.md) for the clone command).
+
+## Documentation
+
+The site under [`website/`](website) is the long form: getting started, a guide
+per topic, the JavaScript-to-Dart name map, the feature matrix and how the
+fidelity claim is checked. It is not deployed anywhere yet — run it locally:
+
+```bash
+cd website && npm ci && npm start
+```
+
+The two package READMEs are the short form, and are what pub.dev will show.
 
 ## Quick start
 
@@ -92,6 +111,13 @@ the maintainer kept for himself — the binding's API shape — is written up in
 The rule that shaped everything: **closeness to upstream is a tiebreaker, not a
 goal.** Where a Dart or Flutter idiom is better, the port diverges and writes
 down why; the table of divergences is at the end of PORTING_NOTES.md.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) leads with the rule that is actually unusual
+here — a failing ported test means the port is wrong until shown otherwise —
+and then the gate. Security reports go through
+[SECURITY.md](SECURITY.md), never a public issue.
 
 ## Licence
 
