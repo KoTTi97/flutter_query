@@ -11,3 +11,10 @@ pubspec_overrides.yaml
 
 # dart doc output
 **/doc/api/
+
+# competitor checkouts read by docs/research/competitor-deep-dive.md
+/reference-projects/
+
+# scratch worktrees the agent tooling creates
+/.claude/worktrees/
+
