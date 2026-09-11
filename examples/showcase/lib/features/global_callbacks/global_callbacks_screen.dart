@@ -35,10 +35,10 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -131,11 +131,11 @@ class GlobalCallbacksScreen extends StatefulWidget {
   State<GlobalCallbacksScreen> createState() => _GlobalCallbacksScreenState();
 }
 
-class _GlobalCallbacksScreenState extends State<GlobalCallbacksScreen> {
+class _GlobalCallbacksScreenState extends State<GlobalCallbacksScreen>
+    with PhaseSafeRebuild<GlobalCallbacksScreen> {
   final List<String> _log = <String>[];
   bool _missingWanted = false;
   bool _metaWanted = false;
-  bool _rebuildScheduled = false;
 
   /// The screen's own client, built with both caches configured. The app's
   /// client cannot be given callbacks after the fact — they are constructor
@@ -171,14 +171,14 @@ class _GlobalCallbacksScreenState extends State<GlobalCallbacksScreen> {
           event is QueryRemoved ||
           event is QueryObserverAdded ||
           event is QueryObserverRemoved) {
-        _rebuild();
+        scheduleRebuild();
       }
     });
     _unsubscribeMutations = _client.mutationCache.subscribe((event) {
       if (event is MutationUpdated ||
           event is MutationAdded ||
           event is MutationRemoved) {
-        _rebuild();
+        scheduleRebuild();
       }
     });
   }
@@ -282,30 +282,7 @@ class _GlobalCallbacksScreenState extends State<GlobalCallbacksScreen> {
 
   void _append(String line) {
     _log.add(line);
-    _rebuild();
-  }
-
-  /// The callbacks and the cache events arrive from wherever the change
-  /// happened — a resolved future, a microtask, a sibling's build. Inside a
-  /// frame's build phase a rebuild has to wait for the frame to end;
-  /// anywhere else it can go straight in.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
+    scheduleRebuild();
   }
 
   @override

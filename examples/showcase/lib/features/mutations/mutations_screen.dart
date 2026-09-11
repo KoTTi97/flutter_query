@@ -23,10 +23,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -153,20 +154,18 @@ class _AwayView extends StatelessWidget {
               'its option callbacks, and still invalidates the counter.',
             ),
             const SizedBox(height: 8),
-            const Text('view=away', style: _mono),
+            const Text('view=away', style: monoStyle),
             const SizedBox(height: 8),
             const _IsMutatingCount(),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerLeft,
-              child: _Action(label: 'Back to reader', onPressed: onBack),
+              child: ActionButton(label: 'Back to reader', onPressed: onBack),
             ),
           ],
         ),
       );
 }
-
-const TextStyle _mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
 
 /// Cards A to D. Unmounted whole by `Fire and leave`, which is the point of
 /// card D.
@@ -311,7 +310,7 @@ class _ReaderState extends State<_Reader> with QueryMixin {
       children: <Widget>[
         SectionCard(
           title: 'A. One mutation, both ways to fire it',
-          trailing: Text(counterText, style: _mono),
+          trailing: Text(counterText, style: monoStyle),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -324,26 +323,26 @@ class _ReaderState extends State<_Reader> with QueryMixin {
                 'RetryPolicy.never, the default for mutations.',
               ),
               const SizedBox(height: 12),
-              _Toolbar(
+              Toolbar(
                 children: <Widget>[
-                  _Action(
+                  ActionButton(
                     label: 'Increment (mutate)',
                     filled: true,
                     onPressed: () => increment.mutate(_nextRequest()),
                   ),
-                  _Action(
+                  ActionButton(
                     label: 'Increment (mutateAsync)',
                     filled: true,
                     onPressed: () => _incrementAsync(increment),
                   ),
-                  _Action(label: 'Reset', onPressed: increment.reset),
+                  ActionButton(label: 'Reset', onPressed: increment.reset),
                 ],
               ),
               const SizedBox(height: 8),
               _Facts(facts, label: 'increment'),
               if (_asyncResult != null) ...<Widget>[
                 const SizedBox(height: 8),
-                Text(_asyncResult!, style: _mono),
+                Text(_asyncResult!, style: monoStyle),
               ],
               CheckboxListTile(
                 dense: true,
@@ -374,9 +373,9 @@ class _ReaderState extends State<_Reader> with QueryMixin {
                 'the result is in, and only while this widget still listens.',
               ),
               const SizedBox(height: 12),
-              _Toolbar(
+              Toolbar(
                 children: <Widget>[
-                  _Action(
+                  ActionButton(
                     label: 'Run with callbacks',
                     filled: true,
                     onPressed: () => _runWithCallbacks(logging),
@@ -401,9 +400,9 @@ class _ReaderState extends State<_Reader> with QueryMixin {
                 'backend.',
               ),
               const SizedBox(height: 12),
-              _Toolbar(
+              Toolbar(
                 children: <Widget>[
-                  _Action(
+                  ActionButton(
                     label: 'Run two scoped',
                     filled: true,
                     onPressed: () {
@@ -411,7 +410,7 @@ class _ReaderState extends State<_Reader> with QueryMixin {
                       _second.mutate((by: 1, fail: null));
                     },
                   ),
-                  _Action(
+                  ActionButton(
                     label: 'Run two unscoped',
                     filled: true,
                     onPressed: () {
@@ -450,9 +449,9 @@ class _ReaderState extends State<_Reader> with QueryMixin {
                 'when the reader comes back.',
               ),
               const SizedBox(height: 12),
-              _Toolbar(
+              Toolbar(
                 children: <Widget>[
-                  _Action(
+                  ActionButton(
                     label: 'Fire and leave',
                     filled: true,
                     onPressed: () {
@@ -468,44 +467,6 @@ class _ReaderState extends State<_Reader> with QueryMixin {
       ],
     );
   }
-}
-
-/// A row of buttons, each its own semantics node.
-class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        child: Wrap(spacing: 8, runSpacing: 8, children: children),
-      );
-}
-
-/// A button named by its label — the accessible name a test clicks by. The
-/// tooltip is for hovering humans and stays out of the semantics tree, so
-/// the name is the label and nothing else.
-class _Action extends StatelessWidget {
-  const _Action({
-    required this.label,
-    required this.onPressed,
-    this.filled = false,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: filled
-            ? FilledButton.tonal(onPressed: onPressed, child: Text(label))
-            : OutlinedButton(onPressed: onPressed, child: Text(label)),
-      );
 }
 
 /// `key=value` texts, one node each, in a group a test can address — the
@@ -530,7 +491,7 @@ class _Facts extends StatelessWidget {
           spacing: 12,
           runSpacing: 4,
           children: <Widget>[
-            for (final fact in facts) Text(fact, style: _mono),
+            for (final fact in facts) Text(fact, style: monoStyle),
           ],
         ),
       );
@@ -557,9 +518,9 @@ class _LogPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               if (lines.isEmpty)
-                const Text('log=empty', style: _mono)
+                const Text('log=empty', style: monoStyle)
               else
-                for (final line in lines) Text(line, style: _mono),
+                for (final line in lines) Text(line, style: monoStyle),
             ],
           ),
         ),
@@ -580,41 +541,22 @@ class _IsMutatingCount extends StatefulWidget {
   State<_IsMutatingCount> createState() => _IsMutatingCountState();
 }
 
-class _IsMutatingCountState extends State<_IsMutatingCount> {
+class _IsMutatingCountState extends State<_IsMutatingCount>
+    with PhaseSafeRebuild<_IsMutatingCount> {
   late final QueryClient _client;
   late final void Function() _unsubscribe;
-  bool _rebuildScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _client = QueryClientProvider.read(context);
-    _unsubscribe = _client.mutationCache.subscribe((_) => _rebuild());
+    _unsubscribe = _client.mutationCache.subscribe((_) => scheduleRebuild());
   }
 
   @override
   void dispose() {
     _unsubscribe();
     super.dispose();
-  }
-
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
   }
 
   @override
@@ -626,7 +568,7 @@ class _IsMutatingCountState extends State<_IsMutatingCount> {
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const SizedBox(width: 8),
-          Text('isMutating=${_client.isMutating()}', style: _mono),
+          Text('isMutating=${_client.isMutating()}', style: monoStyle),
         ],
       );
 }

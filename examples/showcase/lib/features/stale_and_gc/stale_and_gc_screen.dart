@@ -31,6 +31,7 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -159,53 +160,6 @@ class _StaleAndGcScreenState extends State<StaleAndGcScreen> {
     });
   }
 
-  static String _clock(DateTime at) {
-    final local = at.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
-  }
-
-  /// One knob: its name, and a segmented button in a named semantics group,
-  /// so a test can pick the "5 s" of one knob apart from the other's.
-  Widget _knob<T extends Object>(
-    BuildContext context, {
-    required String name,
-    required String semanticsKey,
-    required List<(String, T)> choices,
-    required T selected,
-    required ValueChanged<T> onChanged,
-  }) =>
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(name, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 4),
-          // Scrolls sideways rather than overflowing on a narrow phone.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Semantics(
-              container: true,
-              explicitChildNodes: true,
-              label: semanticsKey,
-              child: SegmentedButton<T>(
-                key: ValueKey<String>(semanticsKey),
-                showSelectedIcon: false,
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                segments: <ButtonSegment<T>>[
-                  for (final (label, value) in choices)
-                    ButtonSegment<T>(value: value, label: Text(label)),
-                ],
-                selected: <T>{selected},
-                onSelectionChanged: (selection) => onChanged(selection.single),
-              ),
-            ),
-          ),
-        ],
-      );
-
   @override
   Widget build(BuildContext context) {
     final reader = _reader;
@@ -280,7 +234,7 @@ class _StaleAndGcScreenState extends State<StaleAndGcScreen> {
                             children: <Widget>[
                               Expanded(
                                 child: Text(
-                                  'Server clock ${_clock(data.now)}',
+                                  'Server clock ${hhmmss(data.now)}',
                                   style:
                                       Theme.of(context).textTheme.titleMedium,
                                 ),
@@ -293,7 +247,7 @@ class _StaleAndGcScreenState extends State<StaleAndGcScreen> {
                   },
                 ),
               const Divider(height: 24),
-              _knob<StaleTime>(
+              knob<StaleTime>(
                 context,
                 name: 'Stale time',
                 semanticsKey: 'stale-time',
@@ -312,7 +266,7 @@ class _StaleAndGcScreenState extends State<StaleAndGcScreen> {
                 style: small,
               ),
               const SizedBox(height: 8),
-              _knob<GcTime>(
+              knob<GcTime>(
                 context,
                 name: 'GC time',
                 semanticsKey: 'gc-time',

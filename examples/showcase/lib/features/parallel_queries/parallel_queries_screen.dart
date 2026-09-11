@@ -21,10 +21,10 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
 import '../../shared/cache_stats.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
@@ -248,47 +248,27 @@ class _FetchingCount extends StatefulWidget {
   State<_FetchingCount> createState() => _FetchingCountState();
 }
 
-class _FetchingCountState extends State<_FetchingCount> {
-  bool _rebuildScheduled = false;
-
+class _FetchingCountState extends State<_FetchingCount>
+    with PhaseSafeRebuild<_FetchingCount> {
   @override
   void initState() {
     super.initState();
-    widget.stats.addListener(_rebuild);
+    widget.stats.addListener(scheduleRebuild);
   }
 
   @override
   void didUpdateWidget(_FetchingCount oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stats != widget.stats) {
-      oldWidget.stats.removeListener(_rebuild);
-      widget.stats.addListener(_rebuild);
+      oldWidget.stats.removeListener(scheduleRebuild);
+      widget.stats.addListener(scheduleRebuild);
     }
   }
 
   @override
   void dispose() {
-    widget.stats.removeListener(_rebuild);
+    widget.stats.removeListener(scheduleRebuild);
     super.dispose();
-  }
-
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
   }
 
   @override

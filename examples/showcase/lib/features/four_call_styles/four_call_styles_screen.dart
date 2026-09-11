@@ -73,6 +73,7 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -85,8 +86,6 @@ const Feature fourCallStylesFeature = Feature(
   title: 'Four call styles',
   summary: 'The same query through context, builder, mixin and controller.',
 );
-
-const TextStyle _mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
 
 /// The one query all five readers share.
 ///
@@ -238,14 +237,14 @@ class _FourCallStylesScreenState extends State<FourCallStylesScreen> {
                   'destroyed in dispose. That is what the other four wrap.',
                 ),
                 const SizedBox(height: 12),
-                _Toolbar(
+                Toolbar(
                   children: <Widget>[
-                    _Action(
+                    ActionButton(
                       label: 'Refetch',
                       filled: true,
                       onPressed: () => _controller.refetch().ignore(),
                     ),
-                    _Action(label: 'Invalidate', onPressed: _invalidate),
+                    ActionButton(label: 'Invalidate', onPressed: _invalidate),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -495,7 +494,7 @@ class _ReaderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(code, style: _mono),
+          Text(code, style: monoStyle),
           const SizedBox(height: 8),
           Text(note),
           const SizedBox(height: 8),
@@ -508,10 +507,10 @@ class _ReaderCard extends StatelessWidget {
               spacing: 12,
               runSpacing: 4,
               children: <Widget>[
-                Text(posts, style: _mono),
-                Text('status=${result.status.name}', style: _mono),
-                Text('fetching=${result.isFetching}', style: _mono),
-                Text('builds=$builds', style: _mono),
+                Text(posts, style: monoStyle),
+                Text('status=${result.status.name}', style: monoStyle),
+                Text('fetching=${result.isFetching}', style: monoStyle),
+                Text('builds=$builds', style: monoStyle),
               ],
             ),
           ),
@@ -677,14 +676,14 @@ class _ListenerCardState extends State<_ListenerCard> {
             const Text(
               'QueryListener(controller: …, listenWhen: …, listener: …, '
               'child: …)',
-              style: _mono,
+              style: monoStyle,
             ),
             const SizedBox(height: 12),
-            _Toolbar(
+            Toolbar(
               children: <Widget>[
-                _Action(label: 'Drop a post', onPressed: _drop),
-                _Action(label: 'Drop two posts', onPressed: _dropTwo),
-                _Action(
+                ActionButton(label: 'Drop a post', onPressed: _drop),
+                ActionButton(label: 'Drop two posts', onPressed: _dropTwo),
+                ActionButton(
                   label: 'Drop two posts, batched',
                   onPressed: _dropTwoBatched,
                 ),
@@ -715,13 +714,13 @@ class _ListenerCardState extends State<_ListenerCard> {
                     spacing: 12,
                     runSpacing: 4,
                     children: <Widget>[
-                      Text('listener-calls=$_calls', style: _mono),
-                      Text('listener-skips=$_skips', style: _mono),
-                      Text('last=$_last', style: _mono),
+                      Text('listener-calls=$_calls', style: monoStyle),
+                      Text('listener-skips=$_skips', style: monoStyle),
+                      Text('last=$_last', style: monoStyle),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  for (final line in _log) Text(line, style: _mono),
+                  for (final line in _log) Text(line, style: monoStyle),
                   const SizedBox(height: 8),
                   QueryListener<List<Post>, List<Post>>(
                     controller: widget.controller,
@@ -748,7 +747,7 @@ class _ListenerChild extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('child-builds=${builds.next()}', style: _mono),
+          Text('child-builds=${builds.next()}', style: monoStyle),
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
@@ -787,7 +786,7 @@ class _MutationCard extends StatelessWidget {
               QueryError(staleData: final data!) =>
                 'counter=$data',
             },
-            style: _mono,
+            style: monoStyle,
           ),
         ),
         child: Column(
@@ -935,11 +934,11 @@ class _MutationPanel extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(code, style: _mono),
+          Text(code, style: monoStyle),
           const SizedBox(height: 8),
-          _Toolbar(
+          Toolbar(
             children: <Widget>[
-              _Action(label: label, filled: true, onPressed: onPressed),
+              ActionButton(label: label, filled: true, onPressed: onPressed),
             ],
           ),
           const SizedBox(height: 8),
@@ -952,12 +951,12 @@ class _MutationPanel extends StatelessWidget {
               spacing: 12,
               runSpacing: 4,
               children: <Widget>[
-                Text('status=${result.status.name}', style: _mono),
+                Text('status=${result.status.name}', style: monoStyle),
                 if (result case MutationSuccess(:final data))
-                  Text('data=$data', style: _mono),
+                  Text('data=$data', style: monoStyle),
                 if (result case MutationError(:final error))
-                  Text('error=$error', style: _mono),
-                for (final fact in extraFacts) Text(fact, style: _mono),
+                  Text('error=$error', style: monoStyle),
+                for (final fact in extraFacts) Text(fact, style: monoStyle),
               ],
             ),
           ),
@@ -1023,7 +1022,7 @@ class _InfiniteRow extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(code, style: _mono),
+          Text(code, style: monoStyle),
           const SizedBox(height: 4),
           Semantics(
             container: true,
@@ -1035,9 +1034,9 @@ class _InfiniteRow extends StatelessWidget {
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
-                Text('pages=${_pagesOf(result)}', style: _mono),
-                Text('status=${result.status.name}', style: _mono),
-                for (final fact in extraFacts) Text(fact, style: _mono),
+                Text('pages=${_pagesOf(result)}', style: monoStyle),
+                Text('status=${result.status.name}', style: monoStyle),
+                for (final fact in extraFacts) Text(fact, style: monoStyle),
                 ...trailing,
               ],
             ),
@@ -1114,7 +1113,7 @@ class _InfiniteMixinReaderState extends State<_InfiniteMixinReader>
           'infinite-last=$_last',
         ],
         trailing: <Widget>[
-          _Action(
+          ActionButton(
             label: 'Load next',
             filled: true,
             onPressed: projects.hasNextPage && !projects.isFetchingNextPage
@@ -1174,42 +1173,4 @@ class _InfiniteObserverReaderState extends State<_InfiniteObserverReader> {
       result: _observer.currentResult,
     );
   }
-}
-
-/// A row of buttons, each its own semantics node.
-class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        child: Wrap(spacing: 8, runSpacing: 8, children: children),
-      );
-}
-
-/// A button named by its label — the accessible name a test clicks by. The
-/// tooltip is for hovering humans and stays out of the semantics tree, so the
-/// name is the label and nothing else.
-class _Action extends StatelessWidget {
-  const _Action({
-    required this.label,
-    required this.onPressed,
-    this.filled = false,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: filled
-            ? FilledButton.tonal(onPressed: onPressed, child: Text(label))
-            : OutlinedButton(onPressed: onPressed, child: Text(label)),
-      );
 }

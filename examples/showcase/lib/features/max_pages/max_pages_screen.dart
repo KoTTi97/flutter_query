@@ -31,6 +31,7 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -280,12 +281,6 @@ class _Rows extends StatelessWidget {
 
   final List<Project> rows;
 
-  static String _clock(DateTime at) {
-    final local = at.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -309,7 +304,7 @@ class _Rows extends StatelessWidget {
                     children: <Widget>[
                       Expanded(child: Text(project.name)),
                       Text(
-                        'fetched ${_clock(project.fetchedAt)}',
+                        'fetched ${hhmmss(project.fetchedAt)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],

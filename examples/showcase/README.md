@@ -32,6 +32,18 @@ Each feature lives in `lib/features/<id>/`, imports only the package and
 example it mirrors, and how it is proven. Its widget tests are
 `test/features/<id>_test.dart`, its end-to-end tests `e2e/tests/<id>.spec.ts`.
 
+**`lib/shared/` is the deliberate exception to "self-contained".** Self-
+contained means a feature never reaches into another feature's directory, not
+that it re-types the app's own furniture: the backend client (`api.dart`), the
+models, the scope, the theme and `SectionCard`/`Pill`/`Notice`, the debug
+strip, `CacheListener` and its `PhaseSafeRebuild` mixin (`cache_listener.dart`),
+and the `Toolbar`/`ActionButton`/`knob` controls with the `monoStyle` and
+`hhmmss` formats (`controls.dart`). The rule for adding to it: **the third copy
+moves.** Two screens that happen to look alike stay two screens — the fourth
+knob is a `Wrap` cell rather than a row of a stretched `Column`, so it composes
+`knobButton` itself and says why in its dartdoc, which is the shape to copy
+when a shared thing nearly fits.
+
 | Feature | Shows | Upstream example |
 |---|---|---|
 | `simple` | one query read in build, its states, a refetch with `isFetching` | `simple` |
@@ -179,6 +191,11 @@ Rules that cost someone a debugging session, in the order they bite:
   closure is never equal, and `QueryObserverOptionsUpdated` then fires once
   per build — a screen that rebuilds on it feeds itself. The same holds for
   the mutation cache. `ShowcaseScope.of(context).stats` already filters.
+- **An event does not know which scheduler phase it arrives in**, and inside a
+  frame's build phase `setState` is not allowed. Never write that dance out
+  again: mix in `PhaseSafeRebuild` and call `scheduleRebuild()`, or — when the
+  whole subtree just follows the cache — wrap it in `CacheListener`, which does
+  the subscription too. Twelve screens had written their own before C55.
 - **A read whose key the screen switches needs an `id:`** — with one, the
   observer follows the key (and `PlaceholderData.compute` gets the previous
   data); without one, a new key is a new read.

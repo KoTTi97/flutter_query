@@ -36,6 +36,7 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -220,47 +221,6 @@ class _RetryScreenState extends State<RetryScreen> {
     }
   }
 
-  /// One knob: its name, and a segmented button in a named semantics group,
-  /// so a test can pick this knob's `2` apart from another's.
-  Widget _knob<T extends Object>(
-    BuildContext context, {
-    required String name,
-    required String semanticsKey,
-    required List<(String, T)> choices,
-    required T selected,
-    required ValueChanged<T> onChanged,
-  }) =>
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(name, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 4),
-          // Scrolls sideways rather than overflowing on a narrow phone.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Semantics(
-              container: true,
-              explicitChildNodes: true,
-              label: semanticsKey,
-              child: SegmentedButton<T>(
-                key: ValueKey<String>(semanticsKey),
-                showSelectedIcon: false,
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                segments: <ButtonSegment<T>>[
-                  for (final (label, value) in choices)
-                    ButtonSegment<T>(value: value, label: Text(label)),
-                ],
-                selected: <T>{selected},
-                onSelectionChanged: (selection) => onChanged(selection.single),
-              ),
-            ),
-          ),
-        ],
-      );
-
   @override
   Widget build(BuildContext context) {
     final reader = _reader;
@@ -309,7 +269,7 @@ class _RetryScreenState extends State<RetryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _knob<RetryPolicy>(
+              knob<RetryPolicy>(
                 context,
                 name: 'Retry',
                 semanticsKey: 'retry',
@@ -330,7 +290,7 @@ class _RetryScreenState extends State<RetryScreen> {
                 style: small,
               ),
               const SizedBox(height: 8),
-              _knob<RetryDelay>(
+              knob<RetryDelay>(
                 context,
                 name: 'Delay',
                 semanticsKey: 'delay',
@@ -372,7 +332,7 @@ class _RetryScreenState extends State<RetryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _knob<int>(
+              knob<int>(
                 context,
                 name: 'Fail the next',
                 semanticsKey: 'fail-next',
@@ -381,7 +341,7 @@ class _RetryScreenState extends State<RetryScreen> {
                 onChanged: (value) => setState(() => _failNext = value),
               ),
               const SizedBox(height: 8),
-              _knob<int>(
+              knob<int>(
                 context,
                 name: 'Status',
                 semanticsKey: 'status',

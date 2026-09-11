@@ -54,6 +54,7 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -284,6 +285,10 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
 
   /// One knob: its name, and a segmented button in a named semantics group,
   /// so a test can pick the `0` of one knob apart from the others'.
+  /// Not the shared [knob]: these four sit in a `Wrap`, so each one has to
+  /// shrink-wrap and cannot carry the shared one's sideways scroller, which
+  /// would be unbounded in a `Wrap` cell. The knob itself is [knobButton],
+  /// the same widget in both.
   Widget _knob<T extends Object>(
     BuildContext context, {
     required String name,
@@ -298,24 +303,11 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
         children: <Widget>[
           Text(name, style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: semanticsKey,
-            child: SegmentedButton<T>(
-              key: ValueKey<String>(semanticsKey),
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              segments: <ButtonSegment<T>>[
-                for (final (label, value) in choices)
-                  ButtonSegment<T>(value: value, label: Text(label)),
-              ],
-              selected: <T>{selected},
-              onSelectionChanged: (selection) => onChanged(selection.single),
-            ),
+          knobButton<T>(
+            semanticsKey: semanticsKey,
+            choices: choices,
+            selected: selected,
+            onChanged: onChanged,
           ),
         ],
       );

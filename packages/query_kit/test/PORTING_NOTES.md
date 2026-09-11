@@ -2556,6 +2556,65 @@ core's rule and moved the teardown; the rest moved documentation or the
 release tooling. C47–C59, the structural findings, are out of this map's
 scope and the seed of the next one.
 
+## Structural work after the ninth review (C47–C59)
+
+The thirteen structural findings of the 2026-09-10 reviews are worked off by
+[map #49](https://github.com/KoTTi97/flutter_query/issues/49), one ticket at a
+time, and this is where each landing ticket writes its row: **what moved, what
+it replaced, and what proves the behaviour did not change.** None of these
+findings is a bug — they are duplicates, unused seams and surfaces whose
+sameness is unargued — so the entry to look for is not a regression test but
+the suite that was already covering the code and stayed green *unrewritten*.
+Where a ticket re-measured the finding and the numbers had drifted, the row
+says what was actually counted; where the right answer turned out to be "two
+things that merely look alike", the row says that too, because a refusal to
+extract is a resolution and the next reader should not re-open it.
+
+### C55 — the showcase's copied cache listener ([#50](https://github.com/KoTTi97/flutter_query/issues/50))
+
+**Measured**, not taken from §8: the phase-aware rebuild is **12 sites in 11
+files**, of which **11 are md5-identical** 18-line `_rebuild()` bodies (10
+feature screens plus `lib/shared/debug_strip.dart`; `focus_refetch` has two)
+and one is `cancellation`'s `_bumpDuringAnyPhase`, the same dance without the
+coalescing flag. Two of the eleven are not just an identical method but an
+identical *widget*: `_OnCacheEvent`, copied whole between `basic` and
+`prefetching`. Beside them: `_Toolbar` ×4 (all identical, §8 said ×3),
+`_Action` ×6 (four identical, §8 said ×5, plus two variants), `_knob<T>` ×4
+(three identical + one variant, exactly as §8 said), `_mono` ×5 (four at
+`fontSize: 13`, one at 12) and `_clock` ×5 (three identical, two nullable
+variants whose null word differs and is asserted on).
+
+**What moved.** Two new modules under `examples/showcase/lib/shared/`:
+
+- `cache_listener.dart` — `mixin PhaseSafeRebuild<T> on State<T>` with
+  `scheduleRebuild()`, now the single copy of the dance for all twelve sites;
+  and `CacheListener`, the builder widget that adds the `CacheStats`
+  subscription, replacing both copies of `_OnCacheEvent`. `QueryDebugStrip` —
+  which both test layers read — went onto it and became a `StatelessWidget`
+  wrapping a `CacheListener`.
+- `controls.dart` — `Toolbar`, `ActionButton` (the four identical copies, with
+  `filled` and `dense` reproducing the two variants exactly), `knobButton` and
+  `knob`, `monoStyle`/`monoStyleSmall`, and `hhmmss`.
+
+**What was deliberately left.** `playground`'s knob: its four knobs are cells
+of a `Wrap`, so it must shrink-wrap and cannot carry the shared `knob`'s
+sideways scroller, which would be unbounded there. It composes the identical
+part, `knobButton`, and its dartdoc says why — the flag that would have made
+one function serve both layouts is the shared abstraction that fits neither
+caller. The two nullable clock formatters keep their own null word (`never`,
+`–`) over the shared `hhmmss`, because a test asserts on each.
+
+**What proves the behaviour did not change.** The showcase's 217 widget tests
+and 163 Playwright end-to-end specs, both green and **both untouched** — the
+commit changes no file under `test/` or `e2e/`. That is the point of running
+the end-to-end leg here rather than reasoning about it: the extraction moves
+`Semantics` containers, `Tooltip(excludeFromSemantics:)` and `SegmentedButton`
+keys, which is exactly the tree the browser suite reads. Net −892/+238 lines
+across sixteen feature screens, plus ~250 lines of shared module.
+`examples/showcase/README.md` gained the rule the move implies: `lib/shared/`
+is the deliberate exception to "one self-contained directory per feature", and
+the third copy moves.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported

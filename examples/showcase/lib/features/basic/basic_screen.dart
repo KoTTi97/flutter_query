@@ -17,11 +17,10 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
-import '../../shared/cache_stats.dart';
+import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -132,7 +131,7 @@ class _PostList extends StatelessWidget {
             // Whether a row's post is cached is not part of this query's
             // result: it is read straight from the cache, so the rows are
             // rebuilt on the cache's own events.
-            _OnCacheEvent(
+            CacheListener(
               builder: (context) => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
@@ -264,62 +263,4 @@ class _PostDetail extends StatelessWidget {
       },
     );
   }
-}
-
-/// Rebuilds its subtree on every event of the query cache.
-///
-/// [CacheStats] fires from wherever the event came — a build that started a
-/// fetch, a widget going away, a gc timer. The same rule as the debug strip:
-/// inside a frame's build phase the rebuild waits for the frame to end,
-/// anywhere else it goes straight in.
-class _OnCacheEvent extends StatefulWidget {
-  const _OnCacheEvent({required this.builder});
-
-  final WidgetBuilder builder;
-
-  @override
-  State<_OnCacheEvent> createState() => _OnCacheEventState();
-}
-
-class _OnCacheEventState extends State<_OnCacheEvent> {
-  CacheStats? _stats;
-  bool _rebuildScheduled = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final stats = ShowcaseScope.of(context).stats;
-    if (stats != _stats) {
-      _stats?.removeListener(_rebuild);
-      _stats = stats..addListener(_rebuild);
-    }
-  }
-
-  @override
-  void dispose() {
-    _stats?.removeListener(_rebuild);
-    super.dispose();
-  }
-
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.builder(context);
 }

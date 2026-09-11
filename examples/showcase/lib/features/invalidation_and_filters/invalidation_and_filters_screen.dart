@@ -29,10 +29,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -98,7 +99,8 @@ class InvalidationAndFiltersScreen extends StatefulWidget {
 }
 
 class _InvalidationAndFiltersScreenState
-    extends State<InvalidationAndFiltersScreen> {
+    extends State<InvalidationAndFiltersScreen>
+    with PhaseSafeRebuild<InvalidationAndFiltersScreen> {
   static const Duration _slowDelay = Duration(seconds: 2);
 
   late final ShowcaseApi _api;
@@ -115,7 +117,6 @@ class _InvalidationAndFiltersScreenState
   bool _failPost2Next = false;
 
   int? _matched;
-  bool _rebuildScheduled = false;
 
   @override
   void initState() {
@@ -166,34 +167,12 @@ class _InvalidationAndFiltersScreenState
       return;
     }
     _failPost2Next = false;
-    _rebuild();
+    scheduleRebuild();
     await _api.configureScenario(
       failNext: const <FailNext>[
         FailNext(method: 'GET', path: '/api/posts/2', status: 500),
       ],
     );
-  }
-
-  /// A fetch can start from anywhere — a tap, an invalidation, a sibling's
-  /// first build. Inside a frame's build phase a rebuild has to wait for the
-  /// frame to end; anywhere else it can go straight in.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
   }
 
   // --- invalidateQueries ---------------------------------------------------
@@ -312,32 +291,76 @@ class _InvalidationAndFiltersScreenState
                 _Group(
                   name: 'invalidateQueries',
                   children: <Widget>[
-                    _Action('Invalidate posts prefix', _invalidatePrefix),
-                    _Action('Invalidate posts exactly', _invalidateExactly),
-                    _Action('Invalidate inactive too', _invalidateInactiveToo),
-                    _Action('Predicate: errored', _invalidateErrored),
+                    ActionButton(
+                      label: 'Invalidate posts prefix',
+                      onPressed: _invalidatePrefix,
+                      dense: true,
+                    ),
+                    ActionButton(
+                      label: 'Invalidate posts exactly',
+                      onPressed: _invalidateExactly,
+                      dense: true,
+                    ),
+                    ActionButton(
+                      label: 'Invalidate inactive too',
+                      onPressed: _invalidateInactiveToo,
+                      dense: true,
+                    ),
+                    ActionButton(
+                      label: 'Predicate: errored',
+                      onPressed: _invalidateErrored,
+                      dense: true,
+                    ),
                   ],
                 ),
                 _Group(
                   name: 'refetchQueries · resetQueries · removeQueries',
                   children: <Widget>[
-                    _Action('Refetch stale only', _refetchStale),
-                    _Action('Reset post 1', _resetPost1),
-                    _Action('Remove post 2', _removePost2),
-                    _Action('Re-attach post 2', _reattachPost2),
+                    ActionButton(
+                      label: 'Refetch stale only',
+                      onPressed: _refetchStale,
+                      dense: true,
+                    ),
+                    ActionButton(
+                      label: 'Reset post 1',
+                      onPressed: _resetPost1,
+                      dense: true,
+                    ),
+                    ActionButton(
+                      label: 'Remove post 2',
+                      onPressed: _removePost2,
+                      dense: true,
+                    ),
+                    ActionButton(
+                      label: 'Re-attach post 2',
+                      onPressed: _reattachPost2,
+                      dense: true,
+                    ),
                   ],
                 ),
                 _Group(
                   name: 'cancelQueries',
                   children: <Widget>[
-                    _Action('Refetch posts slowly', _refetchPostsSlowly),
-                    _Action('Cancel posts', _cancelPosts),
+                    ActionButton(
+                      label: 'Refetch posts slowly',
+                      onPressed: _refetchPostsSlowly,
+                      dense: true,
+                    ),
+                    ActionButton(
+                      label: 'Cancel posts',
+                      onPressed: _cancelPosts,
+                      dense: true,
+                    ),
                   ],
                 ),
                 _Group(
                   name: 'getQueriesData · updateQueriesData',
                   children: <Widget>[
-                    _Action('Uppercase all post titles', _uppercaseTitles),
+                    ActionButton(
+                      label: 'Uppercase all post titles',
+                      onPressed: _uppercaseTitles,
+                      dense: true,
+                    ),
                     Text(
                       'matched=${_matched ?? '–'}',
                       style: const TextStyle(fontFamily: 'monospace'),
@@ -353,7 +376,11 @@ class _InvalidationAndFiltersScreenState
                   onChanged: (value) =>
                       setState(() => _failPost2Next = value ?? false),
                 ),
-                _Action('Refetch post 2', _refetchPost2),
+                ActionButton(
+                  label: 'Refetch post 2',
+                  onPressed: _refetchPost2,
+                  dense: true,
+                ),
               ],
             ),
           ),
@@ -454,29 +481,6 @@ class _Group extends StatelessWidget {
               children: children,
             ),
           ],
-        ),
-      );
-}
-
-/// A button named by its label: the visible text is its accessible name, and
-/// the tooltip stays out of the semantics so it cannot become a second one.
-class _Action extends StatelessWidget {
-  const _Action(this.label, this.onPressed);
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: OutlinedButton(
-          onPressed: onPressed,
-          style: const ButtonStyle(
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(label),
         ),
       );
 }

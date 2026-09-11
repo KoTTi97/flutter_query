@@ -49,11 +49,10 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
-import '../../shared/cache_stats.dart';
+import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -199,7 +198,7 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
           container: true,
           explicitChildNodes: true,
           label: 'infinite prefetch',
-          child: _OnCacheEvent(
+          child: CacheListener(
             builder: (context) {
               final cached = QueryClientProvider.of(context)
                   .getInfiniteQueryData<ProjectSlice, int>(projectsPrefetchKey);
@@ -299,7 +298,7 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
           container: true,
           explicitChildNodes: true,
           label: 'reads',
-          child: _OnCacheEvent(
+          child: CacheListener(
             builder: (context) {
               final client = QueryClientProvider.of(context);
               final cached = client.getQueryData<int>(counterKey);
@@ -450,7 +449,7 @@ class _PostList extends StatelessWidget {
               Notice('$error', error: true),
             QuerySuccess(:final data) ||
             QueryError(staleData: final data!) =>
-              _OnCacheEvent(
+              CacheListener(
                 builder: (context) {
                   final client = QueryClientProvider.of(context);
                   // Bounded and scrolling on its own, so the debug strips
@@ -590,62 +589,4 @@ class _PostDetail extends StatelessWidget {
           },
         ),
       );
-}
-
-/// Rebuilds its subtree on every event of the query cache, the way the debug
-/// strip does: the `prefetched` pills read the cache, and nothing else tells
-/// the list that a prefetch landed — the prefetch has no observer.
-class _OnCacheEvent extends StatefulWidget {
-  const _OnCacheEvent({required this.builder});
-
-  final WidgetBuilder builder;
-
-  @override
-  State<_OnCacheEvent> createState() => _OnCacheEventState();
-}
-
-class _OnCacheEventState extends State<_OnCacheEvent> {
-  CacheStats? _stats;
-  bool _rebuildScheduled = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final stats = ShowcaseScope.of(context).stats;
-    if (stats != _stats) {
-      _stats?.removeListener(_rebuild);
-      _stats = stats..addListener(_rebuild);
-    }
-  }
-
-  @override
-  void dispose() {
-    _stats?.removeListener(_rebuild);
-    super.dispose();
-  }
-
-  /// An event raised inside a frame's build phase — a sibling builder's first
-  /// fetch — cannot mark this widget dirty there; it waits for the frame to
-  /// end. Any other time the rebuild goes straight in.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.builder(context);
 }

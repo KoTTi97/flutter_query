@@ -33,6 +33,7 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -152,7 +153,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                 QueryError(staleData: final data!) =>
                   'counter=$data',
               },
-              style: _mono,
+              style: monoStyle,
             ),
           ),
           child: Column(
@@ -167,11 +168,13 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                 'the key, the type asked for and the type held.',
               ),
               const SizedBox(height: 12),
-              _Toolbar(
+              Toolbar(
                 children: <Widget>[
-                  _Action(label: 'Read as int', onPressed: _readAsInt),
-                  _Action(label: 'Read as String', onPressed: _readAsString),
-                  _Action(label: 'Write a String', onPressed: _writeString),
+                  ActionButton(label: 'Read as int', onPressed: _readAsInt),
+                  ActionButton(
+                      label: 'Read as String', onPressed: _readAsString),
+                  ActionButton(
+                      label: 'Write a String', onPressed: _writeString),
                 ],
               ),
               const SizedBox(height: 8),
@@ -199,8 +202,6 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     );
   }
 }
-
-const TextStyle _mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
 
 /// The error's name by an `is` check, not `runtimeType`: a web build
 /// minifies type names, and the fact is read as an exact text.
@@ -238,14 +239,14 @@ class _NoFunctionCard extends StatelessWidget {
           'runs it.',
         ),
         const SizedBox(height: 12),
-        _Toolbar(
+        Toolbar(
           children: <Widget>[
-            _Action(
+            ActionButton(
               label: 'Mutate without a function',
               filled: true,
               onPressed: () => mutation.mutate(1),
             ),
-            _Action(
+            ActionButton(
               label: 'Register a default mutationFn',
               onPressed: defaultRegistered ? null : onRegisterDefault,
             ),
@@ -271,42 +272,6 @@ class _NoFunctionCard extends StatelessWidget {
   }
 }
 
-/// A row of buttons, each its own semantics node.
-class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        child: Wrap(spacing: 8, runSpacing: 8, children: children),
-      );
-}
-
-/// A button named by its label; the tooltip stays out of the semantics tree.
-class _Action extends StatelessWidget {
-  const _Action({
-    required this.label,
-    required this.onPressed,
-    this.filled = false,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: filled
-            ? FilledButton.tonal(onPressed: onPressed, child: Text(label))
-            : OutlinedButton(onPressed: onPressed, child: Text(label)),
-      );
-}
-
 /// `key=value` texts, one node each, in a group a test can address — the
 /// strip says `status=success` about the query, these about the calls.
 class _Facts extends StatelessWidget {
@@ -327,7 +292,7 @@ class _Facts extends StatelessWidget {
           spacing: 12,
           runSpacing: 4,
           children: <Widget>[
-            for (final fact in facts) Text(fact, style: _mono),
+            for (final fact in facts) Text(fact, style: monoStyle),
           ],
         ),
       );

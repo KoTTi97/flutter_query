@@ -80,10 +80,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -198,7 +199,8 @@ class FocusRefetchScreen extends StatefulWidget {
   State<FocusRefetchScreen> createState() => _FocusRefetchScreenState();
 }
 
-class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
+class _FocusRefetchScreenState extends State<FocusRefetchScreen>
+    with PhaseSafeRebuild<FocusRefetchScreen> {
   static const List<(String, RefetchOn)> _onFocusChoices =
       <(String, RefetchOn)>[
     ('never', RefetchOn.never),
@@ -267,7 +269,6 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
 
   QueryController<ServerTime, ServerTime>? _readerA;
   void Function()? _unsubscribeFocus;
-  bool _rebuildScheduled = false;
 
   @override
   void didChangeDependencies() {
@@ -280,7 +281,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
       // The switch shows what the focus manager holds, not what this screen
       // last set: a test that calls `setFocused` straight on the client, or a
       // real lifecycle transition, moves it too.
-      _unsubscribeFocus = _client.focusManager.subscribe((_) => _rebuild());
+      _unsubscribeFocus =
+          _client.focusManager.subscribe((_) => scheduleRebuild());
     }
   }
 
@@ -305,28 +307,6 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
           refetchMinBackgroundDuration: minBackground,
         )..setFocused(true),
       );
-
-  /// A focus event arrives from wherever the platform raised it, which can be
-  /// inside a frame's build phase; a `setState` there has to wait for the
-  /// frame to end.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
-  }
 
   QueryObserverOptions<ServerTime> get _optionsA => focusTimeQuery(
         _api,
@@ -360,53 +340,6 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
     _client.focusManager.setFocused(focused);
   }
 
-  static String _clock(DateTime at) {
-    final local = at.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
-  }
-
-  /// One knob: its name, and a segmented button in a named semantics group, so
-  /// a test can pick one button's `never` apart from another's.
-  Widget _knob<T extends Object>(
-    BuildContext context, {
-    required String name,
-    required String semanticsKey,
-    required List<(String, T)> choices,
-    required T selected,
-    required ValueChanged<T> onChanged,
-  }) =>
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(name, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 4),
-          // Scrolls sideways rather than overflowing on a narrow phone.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Semantics(
-              container: true,
-              explicitChildNodes: true,
-              label: semanticsKey,
-              child: SegmentedButton<T>(
-                key: ValueKey<String>(semanticsKey),
-                showSelectedIcon: false,
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                segments: <ButtonSegment<T>>[
-                  for (final (label, value) in choices)
-                    ButtonSegment<T>(value: value, label: Text(label)),
-                ],
-                selected: <T>{selected},
-                onSelectionChanged: (selection) => onChanged(selection.single),
-              ),
-            ),
-          ),
-        ],
-      );
-
   Widget _reading(
     BuildContext context, {
     required String group,
@@ -431,7 +364,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    'Server clock ${_clock(data.now)}',
+                    'Server clock ${hhmmss(data.now)}',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -482,7 +415,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                 ],
               ),
               const Divider(height: 24),
-              _knob<StaleTime>(
+              knob<StaleTime>(
                 context,
                 name: 'Stale time',
                 semanticsKey: 'stale-time',
@@ -518,7 +451,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                   ),
                 ),
               const Divider(height: 24),
-              _knob<RefetchOn>(
+              knob<RefetchOn>(
                 context,
                 name: 'On focus',
                 semanticsKey: 'on-focus-a',
@@ -582,7 +515,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                   ),
                 ),
               const Divider(height: 24),
-              _knob<RefetchOn>(
+              knob<RefetchOn>(
                 context,
                 name: 'On focus',
                 semanticsKey: 'on-focus-b',
@@ -594,7 +527,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                 },
               ),
               const SizedBox(height: 8),
-              _knob<RefetchOn>(
+              knob<RefetchOn>(
                 context,
                 name: 'On mount',
                 semanticsKey: 'on-mount-b',
@@ -636,7 +569,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                 style: small,
               ),
               const SizedBox(height: 12),
-              _knob<Duration>(
+              knob<Duration>(
                 context,
                 name: 'Min background',
                 semanticsKey: 'min-background',
@@ -645,7 +578,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                 onChanged: (value) => setState(() => _minBackground = value),
               ),
               const SizedBox(height: 12),
-              _knob<InactiveRule>(
+              knob<InactiveRule>(
                 context,
                 name: 'Inactive is',
                 semanticsKey: 'inactive-is',
@@ -665,7 +598,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                 style: small,
               ),
               const SizedBox(height: 12),
-              _knob<bool>(
+              knob<bool>(
                 context,
                 name: 'Initial online status',
                 semanticsKey: 'initial-online',
@@ -737,13 +670,13 @@ class _ThresholdEntry extends StatefulWidget {
   State<_ThresholdEntry> createState() => _ThresholdEntryState();
 }
 
-class _ThresholdEntryState extends State<_ThresholdEntry> {
+class _ThresholdEntryState extends State<_ThresholdEntry>
+    with PhaseSafeRebuild<_ThresholdEntry> {
   QueryClient? _client;
   void Function()? _unsubscribeFocus;
   void Function()? _unsubscribeOnline;
   void Function()? _unsubscribeCache;
   int _fetches = 0;
-  bool _rebuildScheduled = false;
 
   @override
   void didChangeDependencies() {
@@ -757,8 +690,9 @@ class _ThresholdEntryState extends State<_ThresholdEntry> {
     // A new client is a new cache: the count starts again with it, which is
     // what makes the knob's two sides comparable.
     _fetches = 0;
-    _unsubscribeFocus = client.focusManager.subscribe((_) => _rebuild());
-    _unsubscribeOnline = client.onlineManager.subscribe((_) => _rebuild());
+    _unsubscribeFocus = client.focusManager.subscribe((_) => scheduleRebuild());
+    _unsubscribeOnline =
+        client.onlineManager.subscribe((_) => scheduleRebuild());
     _unsubscribeCache = client.queryCache.subscribe(_onCacheEvent);
   }
 
@@ -787,28 +721,7 @@ class _ThresholdEntryState extends State<_ThresholdEntry> {
     if (event.action is QueryFetchAction) {
       _fetches++;
     }
-    _rebuild();
-  }
-
-  /// A focus or cache event arrives from wherever it was raised, which can be
-  /// inside a frame's build phase; a `setState` there has to wait.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
+    scheduleRebuild();
   }
 
   @override

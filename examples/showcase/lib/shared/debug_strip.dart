@@ -7,18 +7,20 @@
 /// stale, or how many observers hold it.
 ///
 /// Event-driven, never ticking: it rebuilds on the cache's own events (through
-/// [CacheStats], which has listened since the app started), and a text that
-/// changed every second would churn the semantics tree for nothing.
+/// [CacheListener], which is built on [CacheStats] and has listened since the
+/// app started), and a text that changed every second would churn the
+/// semantics tree for nothing.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'cache_listener.dart';
 import 'cache_stats.dart';
+import 'controls.dart';
 import 'scope.dart';
 
-class QueryDebugStrip extends StatefulWidget {
+class QueryDebugStrip extends StatelessWidget {
   const QueryDebugStrip({
     super.key,
     required this.queryKey,
@@ -32,66 +34,17 @@ class QueryDebugStrip extends StatefulWidget {
   /// widget key `debug-<label>`.
   final String label;
 
-  @override
-  State<QueryDebugStrip> createState() => _QueryDebugStripState();
-}
-
-class _QueryDebugStripState extends State<QueryDebugStrip> {
-  CacheStats? _stats;
-  bool _rebuildScheduled = false;
+  /// An entry that has never been fetched reads as an en dash rather than as a
+  /// blank, so a test can tell "no timestamp" from "no fact".
+  static String _clock(DateTime? at) => at == null ? '–' : hhmmss(at);
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final stats = ShowcaseScope.of(context).stats;
-    if (stats != _stats) {
-      _stats?.removeListener(_rebuild);
-      _stats = stats..addListener(_rebuild);
-    }
-  }
+  Widget build(BuildContext context) => CacheListener(builder: _buildFacts);
 
-  @override
-  void dispose() {
-    _stats?.removeListener(_rebuild);
-    super.dispose();
-  }
-
-  /// Cache events arrive from wherever the change happened — a sibling's
-  /// build, a microtask, a timer. Inside a frame's build phase a rebuild has
-  /// to wait for the frame to end; anywhere else it can go straight in.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
-  }
-
-  static String _clock(DateTime? at) {
-    if (at == null) {
-      return '–';
-    }
-    final local = at.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildFacts(BuildContext context) {
     final client = QueryClientProvider.of(context);
-    final query = client.queryCache
-        .find(filters: QueryFilters(queryKey: widget.queryKey));
+    final query =
+        client.queryCache.find(filters: QueryFilters(queryKey: queryKey));
     final scope = ShowcaseScope.of(context);
     final scenario = scope.api.scenario;
 
@@ -107,7 +60,7 @@ class _QueryDebugStripState extends State<QueryDebugStrip> {
         'failures=${query.state.fetchFailureCount}',
         'dataUpdatedAt=${_clock(query.state.dataUpdatedAt)}',
       ],
-      'fetches=${scope.stats.fetchesOf(widget.queryKey)}',
+      'fetches=${scope.stats.fetchesOf(queryKey)}',
       'scenario=$scenario',
     ];
 
@@ -115,9 +68,9 @@ class _QueryDebugStripState extends State<QueryDebugStrip> {
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      label: 'debug ${widget.label}',
+      label: 'debug $label',
       child: Container(
-        key: ValueKey<String>('debug-${widget.label}'),
+        key: ValueKey<String>('debug-$label'),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
@@ -128,7 +81,7 @@ class _QueryDebugStripState extends State<QueryDebugStrip> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'cache · ${widget.label} · ${widget.queryKey.debugString}',
+              'cache · $label · ${queryKey.debugString}',
               style: Theme.of(context).textTheme.labelSmall,
             ),
             const SizedBox(height: 4),
@@ -136,14 +89,7 @@ class _QueryDebugStripState extends State<QueryDebugStrip> {
               spacing: 12,
               runSpacing: 2,
               children: <Widget>[
-                for (final fact in facts)
-                  Text(
-                    fact,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                    ),
-                  ),
+                for (final fact in facts) Text(fact, style: monoStyleSmall),
               ],
             ),
           ],

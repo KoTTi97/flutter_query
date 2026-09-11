@@ -64,10 +64,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -130,7 +131,8 @@ class OfflineScreen extends StatefulWidget {
   State<OfflineScreen> createState() => _OfflineScreenState();
 }
 
-class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
+class _OfflineScreenState extends State<OfflineScreen>
+    with QueryMixin, PhaseSafeRebuild<OfflineScreen> {
   late final ShowcaseApi _api;
   late final QueryClient _client;
   late final void Function() _unsubscribeOnline;
@@ -139,7 +141,6 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
   final TextEditingController _text = TextEditingController();
   NetworkMode _mode = NetworkMode.online;
   RefetchOn _onReconnect = RefetchOn.ifStale;
-  bool _rebuildScheduled = false;
 
   @override
   void initState() {
@@ -151,7 +152,8 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
     // The online state is not part of any query's result, and a mutation the
     // observer no longer holds — the first of two paused writes — still
     // changes what `isMutating` answers.
-    _unsubscribeOnline = _client.onlineManager.subscribe((_) => _rebuild());
+    _unsubscribeOnline =
+        _client.onlineManager.subscribe((_) => scheduleRebuild());
     _unsubscribeMutations = _client.mutationCache.subscribe((event) {
       // State-changing events only. Every build re-applies the mutation's
       // options, whose callbacks are closures built in `build` and therefore
@@ -160,7 +162,7 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
       if (event is MutationUpdated ||
           event is MutationAdded ||
           event is MutationRemoved) {
-        _rebuild();
+        scheduleRebuild();
       }
     });
   }
@@ -171,27 +173,6 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
     _unsubscribeMutations();
     _text.dispose();
     super.dispose();
-  }
-
-  /// The debug strip's phase-aware rebuild: a cache event can arrive from
-  /// inside a frame's build phase, where `setState` is not allowed.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
   }
 
   void _submit(void Function(String text) mutate) {
@@ -302,14 +283,14 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
                 'every reconnect refetches them; never leaves them alone.',
               ),
               const SizedBox(height: 12),
-              _Toolbar(
+              Toolbar(
                 children: <Widget>[
-                  _Action(
+                  ActionButton(
                     label: 'Refetch',
                     filled: true,
                     onPressed: () => todos.refetch().ignore(),
                   ),
-                  _Action(
+                  ActionButton(
                     label: 'Resume paused mutations',
                     onPressed: () => _client.resumePausedMutations().ignore(),
                   ),
@@ -352,9 +333,9 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
                 onSubmitted: (_) => _submit(add.mutate),
               ),
               const SizedBox(height: 12),
-              _Toolbar(
+              Toolbar(
                 children: <Widget>[
-                  _Action(
+                  ActionButton(
                     label: 'Add todo',
                     filled: true,
                     onPressed: () => _submit(add.mutate),
@@ -420,8 +401,6 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
   }
 }
 
-const TextStyle _mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
-
 /// A segmented button in a named semantics group, so a test can pick this
 /// knob's `always` apart from another's.
 class _Knob<T extends Object> extends StatelessWidget {
@@ -452,44 +431,6 @@ class _Knob<T extends Object> extends StatelessWidget {
       );
 }
 
-/// A row of buttons, each its own semantics node — several in one row
-/// otherwise fold into the row's.
-class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        child: Wrap(spacing: 8, runSpacing: 8, children: children),
-      );
-}
-
-/// A button named by its label. The tooltip is for hovering humans and stays
-/// out of the semantics tree, so the accessible name is the label alone.
-class _Action extends StatelessWidget {
-  const _Action({
-    required this.label,
-    required this.onPressed,
-    this.filled = false,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: filled
-            ? FilledButton.tonal(onPressed: onPressed, child: Text(label))
-            : OutlinedButton(onPressed: onPressed, child: Text(label)),
-      );
-}
-
 /// `key=value` texts, one node each, inside a group a test can address — the
 /// strip below says what the cache holds, these say what the screen sees.
 class _Facts extends StatelessWidget {
@@ -510,7 +451,7 @@ class _Facts extends StatelessWidget {
           spacing: 12,
           runSpacing: 4,
           children: <Widget>[
-            for (final fact in facts) Text(fact, style: _mono),
+            for (final fact in facts) Text(fact, style: monoStyle),
           ],
         ),
       );

@@ -32,10 +32,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
+import '../../shared/controls.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -121,14 +122,14 @@ class CacheInspectorScreen extends StatefulWidget {
   State<CacheInspectorScreen> createState() => _CacheInspectorScreenState();
 }
 
-class _CacheInspectorScreenState extends State<CacheInspectorScreen> {
+class _CacheInspectorScreenState extends State<CacheInspectorScreen>
+    with PhaseSafeRebuild<CacheInspectorScreen> {
   /// The log keeps the last of these, newest last. A devtools log is a tail,
   /// not a transcript.
   static const int logLimit = 30;
 
   final List<String> _log = <String>[];
   bool _keepReaders = false;
-  bool _rebuildScheduled = false;
   bool _wired = false;
   int _todoSerial = 0;
 
@@ -233,30 +234,7 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen> {
     if (_log.length > logLimit) {
       _log.removeRange(0, _log.length - logLimit);
     }
-    _rebuild();
-  }
-
-  /// Cache events arrive from wherever the change happened — a resolved
-  /// future, a microtask, a sibling's build. Inside a frame's build phase a
-  /// rebuild has to wait for the frame to end; anywhere else it can go
-  /// straight in. Copied from `QueryDebugStrip`, which has the same problem.
-  void _rebuild() {
-    if (!mounted || _rebuildScheduled) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      _rebuildScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _rebuildScheduled = false;
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
+    scheduleRebuild();
   }
 
   // --- the traffic generators ------------------------------------------
@@ -338,19 +316,22 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen> {
                   spacing: 12,
                   runSpacing: 8,
                   children: <Widget>[
-                    _Action(
+                    ActionButton(
+                      filled: true,
                       label: 'Load posts',
                       onPressed: () => _load<List<Post>>(
                         inspectorPostsQuery(_api, staleTime: StaleTime.zero),
                       ),
                     ),
-                    _Action(
+                    ActionButton(
+                      filled: true,
                       label: 'Load todos',
                       onPressed: () => _load<List<Todo>>(
                         inspectorTodosQuery(_api, staleTime: StaleTime.zero),
                       ),
                     ),
-                    _Action(
+                    ActionButton(
+                      filled: true,
                       label: 'Load a missing post',
                       onPressed: () => _load<Post>(
                         inspectorMissingPostQuery(
@@ -359,7 +340,11 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen> {
                         ),
                       ),
                     ),
-                    _Action(label: 'Add a todo', onPressed: _addATodo),
+                    ActionButton(
+                      filled: true,
+                      label: 'Add a todo',
+                      onPressed: _addATodo,
+                    ),
                   ],
                 ),
               ),
@@ -465,7 +450,8 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen> {
                     if (_log.isEmpty)
                       const Text('Nothing yet.')
                     else
-                      for (final line in _log) Text(line, style: _mono),
+                      for (final line in _log)
+                        Text(line, style: monoStyleSmall),
                   ],
                 ),
               ),
@@ -477,36 +463,8 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen> {
   }
 }
 
-const TextStyle _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
-
 /// `null` reads as `never` rather than as a blank: a test asserts on it.
-String _clock(DateTime? at) {
-  if (at == null) {
-    return 'never';
-  }
-  final local = at.toLocal();
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
-}
-
-/// One of the traffic buttons. The visible label is the accessible name; the
-/// tooltip is for a pointer only, which is why it is excluded from semantics.
-class _Action extends StatelessWidget {
-  const _Action({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: FilledButton.tonal(
-          onPressed: onPressed,
-          child: Text(label),
-        ),
-      );
-}
+String _clock(DateTime? at) => at == null ? 'never' : hhmmss(at);
 
 /// A mounted reader: it holds an observer on its key and shows what the entry
 /// currently is. Nothing here drives the table — the table reads the cache.
@@ -525,7 +483,7 @@ class _Reader<T> extends StatelessWidget {
             QueryError(:final error) => 'error: $error',
             QuerySuccess(:final data) => describe(data),
           }}',
-          style: _mono,
+          style: monoStyleSmall,
         ),
       );
 }
@@ -578,7 +536,7 @@ class _EntryRow extends StatelessWidget {
               spacing: 12,
               runSpacing: 2,
               children: <Widget>[
-                for (final fact in facts) Text(fact, style: _mono),
+                for (final fact in facts) Text(fact, style: monoStyleSmall),
               ],
             ),
             const SizedBox(height: 4),
@@ -637,7 +595,7 @@ class _MutationRow extends StatelessWidget {
               spacing: 12,
               runSpacing: 2,
               children: <Widget>[
-                for (final fact in facts) Text(fact, style: _mono),
+                for (final fact in facts) Text(fact, style: monoStyleSmall),
               ],
             ),
           ],

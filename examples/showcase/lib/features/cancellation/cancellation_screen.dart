@@ -47,10 +47,10 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
@@ -85,7 +85,8 @@ class CancellationScreen extends StatefulWidget {
   State<CancellationScreen> createState() => _CancellationScreenState();
 }
 
-class _CancellationScreenState extends State<CancellationScreen> {
+class _CancellationScreenState extends State<CancellationScreen>
+    with PhaseSafeRebuild<CancellationScreen> {
   final TextEditingController _text = TextEditingController();
 
   late QueryClient _client;
@@ -123,20 +124,7 @@ class _CancellationScreenState extends State<CancellationScreen> {
   /// build — so the rebuild waits for the frame to end when there is one.
   void _bumpDuringAnyPhase(VoidCallback change) {
     change();
-    if (!mounted) {
-      return;
-    }
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks) {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
-      setState(() {});
-    }
+    scheduleRebuild();
   }
 
   // --- the slow query ------------------------------------------------------
