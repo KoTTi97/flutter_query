@@ -1033,10 +1033,21 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
   /// [QueryObserverOptionsBase.retryOnMount], with the default applied.
   final bool retryOnMount;
 
-  /// The cache-layer view of these options. Built on first read and kept:
-  /// the observer hands it to its query on every `setOptions` and every
-  /// fetch, and a fresh allocation each time was the only thing that
-  /// changed between them (fifth review, 2026-09-09).
+  /// The cache-layer view of these options — the fourteen fields a [Query]
+  /// runs on, and none of the observer's own.
+  ///
+  /// The narrowing is the point, not an accident of construction: a query is
+  /// shared by every observer of its key, and [Query.setOptions] compares
+  /// what it is handed by value. Passing the observer's full options would
+  /// make two observers that differ only in `select`, `refetchOnMount` or
+  /// their refetch triggers look like two different *query* configurations,
+  /// and the query they share would churn between them (read as dead weight
+  /// once, by the ninth review's C52 — it is a projection, and it is
+  /// load-bearing).
+  ///
+  /// Built on first read and kept: the observer hands it to its query on
+  /// every `setOptions` and every fetch, and a fresh allocation each time was
+  /// the only thing that changed between them (fifth review, 2026-09-09).
   late final DefaultedQueryOptions<TQueryData> queryOptions =
       DefaultedQueryOptions<TQueryData>(
     queryKey: queryKey,

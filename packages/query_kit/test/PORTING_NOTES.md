@@ -2701,3 +2701,37 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | the binding: side effects need a builder that also rebuilds | `QueryListener` / `InfiniteQueryListener` / `MutationListener` borrow a controller, deliver each accepted transition off the build phase and never rebuild their `child`; a rejected `listenWhen` still advances the comparison state | functional improvements plan, `competitor-deep-dive.md` §6 #8 |
 | `mutate(variables, { onSuccess, onError, onSettled })` on the result: per-call callbacks ride on the result's own `mutate` | `MutationResult.mutate` takes the variables only; per-call callbacks are `MutationObserver.mutate(variables, MutateCallbacks(…))` — `MutationController.mutate(variables, callbacks)` in the binding | ninth review, 2026-09-10 (C23.8) |
 | `mutate` on a forgotten `useMutation` observer re-attaches it to the new mutation, which is then never collected | the binding: `mutate`/`mutateAsync` on a disposed `MutationController` run the mutation through the cache without attaching anything — the options' callbacks run, the per-call ones are dropped as for any unlistened run, `value` stays idle, and the settled mutation is collected after its `gcTime` | ninth review, 2026-09-10 (C18) |
+
+### C52 — option-field transcription: explored, kept ([#62](https://github.com/KoTTi97/flutter_query/issues/62))
+
+**Measured**, and higher than §8 said: `refetchIntervalInBackground` is **42**
+lines in `lib/` (§8: 27), `initialDataUpdatedAtCompute` **52** (§8: 36),
+`staleTime` 77. The reason the numbers grew is a decision, not a regression —
+ADR-0001 split the observer options into a plain and a select shape over a
+sealed base, and mirrored it on the infinite side, which raised the class count
+the transcription multiplies against. One observer-level field costs ~40 lines
+across four files, in eight roles (the list is now in `CLAUDE.md`'s
+conventions, because the cost being *invisible* is the real problem: a missed
+`==` entry is a rebuild that never happens).
+
+**Kept.** Composition (`options.core.staleTime`) makes every read site in the
+core, the binding, both examples and every doc sample worse to shorten one
+declaration; dropping the option classes' `copyWith` would save ~390 of the
+2 100 lines of the two files and is used by nothing but tests, but `copyWith`
+on a value class is what a Flutter user reaches for and public API is not
+deleted to shorten a file nobody reads; a map-backed object loses `const`,
+`==` and the analyzer; code generation needs a package neither published
+package may require, and Dart's macros were cancelled. Nothing changed in
+`lib/` but one dartdoc.
+
+**The one construct §8 called waste is not waste.**
+`DefaultedQueryObserverOptions.queryOptions` does not "strip nine fields off
+again" — it is a **projection to the fourteen fields a `Query` runs on**, and
+it is load-bearing: `Query.setOptions` compares by value, so handing a query
+the observer's full options would make two observers differing only in
+`select` or their refetch triggers look like two different query
+configurations and churn the query they share. Its dartdoc now says so, because
+it has been read as dead weight once and will be again.
+
+**What proves nothing changed:** `dart test` 586, unchanged and unrewritten —
+the edit is one dartdoc.

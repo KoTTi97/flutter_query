@@ -240,6 +240,17 @@ semantics.
 - **`Defaulted*Options` are distinct types**, not a flag. Only `QueryClient` can
   produce them, so nothing downstream can be handed half-resolved options. They
   carry value equality, which is what tells a rebuild that nothing changed.
+- **An option field costs about forty lines, in eight places.** There is no
+  macro and no code-generation package (neither published package may require
+  one), so each field is written out per class and per role, and a missed one
+  is a silent bug — an option that does not survive a `copyWith`, or a rebuild
+  that never happens because `==` does not see it. Adding one means all of:
+  (1) the base's constructor parameter, (2) its field, (3) its `toString`
+  entry, (4) its `copyWith` parameter and (5) body, (6) the `super.` parameter
+  and `copyWith` of *each* subclass — plain and select, and again on the
+  infinite side, (7) the `Defaulted*` constructor, field, `==` and `hashCode`,
+  and (8) the client's defaulting. Explored and kept as the price of const
+  value classes ([#62](https://github.com/KoTTi97/flutter_query/issues/62)).
 - **When porting a test, port it — don't rewrite it.** Keep the upstream name so
   the two files diff against each other, and if the assertion has to change,
   record why in PORTING_NOTES.md. Port-only behaviour goes in `smoke_test.dart`,

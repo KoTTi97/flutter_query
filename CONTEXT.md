@@ -19,6 +19,8 @@ in the packages; decisions live in [`docs/adr/`](docs/adr/).
 - **Call style** — one of the four equal ways the Flutter binding reads a
   query: builder widget, controller, `State` mixin, `context` extension. Each
   has a plain and a select entry point.
-- **Teardown** — the three steps a widget test ends with so the client's
-  `gcTime` timers are gone before the test binding checks for pending timers.
-  A documented snippet, not an export (ADR-0002).
+- **Teardown** — the five steps a widget test ends with so the client's
+  `gcTime` timers are gone before the test binding checks for pending timers:
+  drop the tree, settle, `clear()`, one more `pump()` for what a dropped
+  mutation's callbacks write, `clear()` again (the last two since C11). A
+  documented snippet, not an export (ADR-0002).
