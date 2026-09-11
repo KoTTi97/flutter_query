@@ -496,7 +496,9 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// included, when `null` is a `TVariables`: a `void`-variables mutation is
   /// naturally restored with `hasVariables: false`, and was never continued
   /// (ninth review, 2026-09-10, C12). Only a non-nullable `TVariables` with no
-  /// variables at all is left alone — there is nothing to run it with. A
+  /// variables at all is left alone — there is nothing to run it with, and
+  /// `MutationCache.build(state:)` refuses such a state at the persistence
+  /// door, so it reaches here only on a mutation built by hand and `add`ed. A
   /// settled one has nothing to continue and must never run twice.
   Future<void> continueMutation() {
     final retryer = _retryer;

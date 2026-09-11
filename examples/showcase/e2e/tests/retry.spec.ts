@@ -61,8 +61,11 @@ test('2 times: the count climbs and the third attempt succeeds', async ({ page, 
   await expect(reader(page, 'failureCount=1')).toBeVisible()
   await expect(reader(page, 'failureReason=Scripted failure 503')).toBeVisible()
 
-  await expect(reader(page, 'status=success')).toBeVisible({ timeout: 20_000 })
-  await expect(reader(page, 'serial=2')).toBeVisible()
+  // The reader had data before the refetch, so `status` never left `success`
+  // and waiting on it gates nothing. The new serial is what says the third
+  // attempt landed — the same gate the `always` case uses.
+  await expect(reader(page, 'serial=2')).toBeVisible({ timeout: 20_000 })
+  await expect(reader(page, 'status=success')).toBeVisible()
   await expect(reader(page, 'failureCount=0')).toBeVisible()
   await expect(reader(page, 'failureReason=none')).toBeVisible()
   expect(await scenario.count('GET', timeRequests)).toBe(3)

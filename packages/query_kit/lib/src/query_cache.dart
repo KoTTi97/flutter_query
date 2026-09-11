@@ -112,15 +112,15 @@ final class QueryObserverResultsUpdated extends QueryCacheEvent {
 /// default that produced the value has no key to name: a sharing hook sees
 /// only the data, and a mutation function only its variables.
 final class QueryDataTypeError implements Exception {
-  /// Creates the error for a read of [queryKey] that [expected] one type and
-  /// found [actual].
+  /// Creates the error for a use of [queryKey] — a read or a write — that
+  /// [expected] one type and found [actual].
   const QueryDataTypeError(this.queryKey, this.expected, this.actual);
 
-  /// The key that was read, or `null` when the mismatch came from a keyless
-  /// default such as a `structuralSharing` hook.
+  /// The key that was read or written, or `null` when the mismatch came from
+  /// a keyless default such as a `structuralSharing` hook.
   final QueryKey? queryKey;
 
-  /// The data type the caller asked for.
+  /// The data type the caller asked for — read as, or written with.
   final Type expected;
 
   /// The data type the query (or the default's value) actually holds.
@@ -141,7 +141,7 @@ final class QueryDataTypeError implements Exception {
             'non-nullable one: name it, as in setQueryData<$actual>(key, '
             'value).'
         : '';
-    return 'Query $key holds $actual but was read as $expected. One key is '
+    return 'Query $key holds $actual but was used as $expected. One key is '
         'being used with two data types.$cure';
   }
 }

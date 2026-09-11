@@ -145,12 +145,35 @@ class MutationCache
   /// cache and returns it. Unlike a query, every call creates a new entry —
   /// mutations are never shared by key. [state] is the door a persistence
   /// layer restores an offline mutation through.
+  ///
+  /// A `pending` state must carry the variables to run with (`hasVariables`),
+  /// unless `null` is a `TVariables` and therefore a value of its own —
+  /// `continueMutation` has nothing to call the function with otherwise, so
+  /// the mutation would sit in the cache forever and
+  /// `resumePausedMutations` would report success having run nothing. One
+  /// without is refused with an [ArgumentError] in every build mode, as
+  /// `QueryCache.build` refuses a data-less `success` state (ninth review,
+  /// 2026-09-10, C8 and C12; the twin closed with the same door).
   Mutation<TData, TVariables, TOnMutateResult>
       build<TData, TVariables, TOnMutateResult>(
     QueryClient client,
     DefaultedMutationOptions<TData, TVariables, TOnMutateResult> options, {
     MutationState<TData, TVariables, TOnMutateResult>? state,
   }) {
+    if (state != null &&
+        state.status == MutationStatus.pending &&
+        !state.hasVariables &&
+        null is! TVariables) {
+      throw ArgumentError.value(
+        state,
+        'state',
+        'A MutationState restored through MutationCache.build with status == '
+            'pending must have hasVariables == true when TVariables '
+            '($TVariables) is not nullable: continuing it means running the '
+            'mutation function, and there is nothing to run it with. This is '
+            'the persistence door; check what was persisted',
+      );
+    }
     final mutation = Mutation<TData, TVariables, TOnMutateResult>(
       client: client,
       cache: this,

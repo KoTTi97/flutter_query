@@ -37,6 +37,15 @@ is a bug in this file.
 | `infiniteQueryObserver.test.tsx` | `infinite_query_observer_test.dart` | 6 / 7 | done |
 | `utils.test.tsx` | `utils_test.dart` | 47 / 78 | done |
 
+**What "Cases" counts:** upstream cases ported out of the upstream cases in
+that suite — nothing else. A ported file may also hold port-only cases (a Dart
+behaviour upstream has no case for, or an upstream case split in two because
+Dart separates what TypeScript ran in one body), and those count in neither
+column: `subscribable_test.dart`, for one, runs 11 cases for its 9 / 9 row. The
+rule about where port-only tests live holds for whole *files* with no upstream
+counterpart; a case that belongs beside its ported neighbours stays there,
+named so it reads as the addition it is.
+
 Suites not ported at all, each for one recorded reason:
 `hydration.test.tsx` (hydration is out of v1 scope, #17),
 `timeoutManager.test.tsx` (the module is not ported, #9),
@@ -1881,17 +1890,21 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   `Mutation.destroy`, and make the teardown that must leave nothing pending
   let the callbacks run and clear once more. (d): the only shape that is
   honest about what happens without inventing a second meaning for a
-  write. `tearDownQueryClient` in `query_kit_flutter/lib/testing.dart` now
-  pumps once after `clear()` and clears again (its dartdoc, the README and
-  the site's testing guide say why), which map #33's C45 already named as a
-  reason to deepen the helper (since C2, #42, the same two steps live in the
-  documented snippet and in the suite's harness; the export is gone). Regressions: `C11 / P6 the onError rollback
-  re-creates the query after clear(); a second clear once the callbacks ran
-  leaves nothing pending` (`port_lifecycle_test.dart`, the decided
-  behaviour) and, in the binding's `testing_helper_test.dart`, `C11 an
-  offline optimistic mutation left paused: its rollback runs after clear(),
-  and the teardown still leaves nothing pending` — red on the old helper
-  with `A Timer is still pending even after the widget tree was disposed`.
+  write. The teardown a widget test writes therefore pumps once after
+  `clear()` and clears again — the fourth and fifth of its five steps. That
+  teardown is a documented snippet, not an export: C2 (#42) removed
+  `lib/testing.dart` and ADR-0002 records why, so the five steps live in the
+  site's testing guide and the binding README, are compiled and run in
+  `examples/doc_snippets/test/teardown_snippet_test.dart`, and are
+  reimplemented by the binding's own harness (`test/harness.dart`,
+  `queryWidgetTest`) and by both examples (`showcaseTest`, `demoTest`).
+  Regressions: `C11 / P6 the onError rollback re-creates the query after
+  clear(); a second clear once the callbacks ran leaves nothing pending`
+  (`port_lifecycle_test.dart`, the decided behaviour) and, in the binding's
+  `harness_test.dart`, `C11 an offline optimistic mutation left paused: its
+  rollback runs after clear(), and the teardown still leaves nothing
+  pending` — red on a teardown that stops at the first `clear()`, with `A
+  Timer is still pending even after the widget tree was disposed`.
 
 - **C12 — a restored `pending` mutation with `hasVariables: false` was
   never continued** (deep-dive P7; #38). `continueMutation` ran a restored
@@ -1902,13 +1915,23 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   `execute(this.state.variables!)` regardless. Fixed by running when
   `hasVariables || null is TVariables`: `null` is a real value for a
   nullable or `void` `TVariables`. A non-nullable `TVariables` restored with
-  no variables at all is still left alone — there is nothing to run it with,
-  and the dartdoc says so; refusing it at `MutationCache.build(state:)` the
-  way C8 refuses a data-less success state is a persistence-door check for a
-  later ticket, not this one. Regressions, in `port_lifecycle_test.dart`:
+  no variables at all is still left alone by `continueMutation` — there is
+  nothing to run it with, and the dartdoc says so. **Follow-up, 2026-09-12:**
+  that state is now refused where it enters. `MutationCache.build(state:)`
+  throws an `ArgumentError` for a `pending` state with `hasVariables: false`
+  when `null is! TVariables`, the mutation twin of the door C8 put on
+  `QueryCache.build` — the alternative was what the map left: a mutation that
+  sits in the cache forever while `resumePausedMutations` reports success
+  having run nothing, with the loudest symptom arriving nowhere near the
+  restore that caused it. Nothing inside the port passes `state:` to
+  `MutationCache.build`; it is the persistence door and nothing else, so the
+  check costs a restore that was already broken and no working caller.
+  `continueMutation` keeps its own guard for a mutation built by hand and
+  `add`ed past the door. Regressions, in `port_lifecycle_test.dart`:
   `C12 / P7` — `P7 a restored pending mutation with hasVariables false and
   void variables is continued`, `P7 a restored pending mutation with
-  non-nullable variables and none restored is left alone`.
+  non-nullable variables and none restored is refused by the persistence
+  door` (the "is left alone" case, rewritten onto the door).
 
 - **C13 — `hasNextPage`/`hasPreviousPage` flipped without a notification when
   `select` collapsed the change** (release R5, deep-dive P1/P11; #38). The

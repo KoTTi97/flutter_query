@@ -962,26 +962,33 @@ void main() {
       client.clear();
     });
 
+    // The twin of C8's door: such a state can never be continued, so the
+    // cache refuses it where it enters rather than holding a mutation that
+    // does nothing and makes `resumePausedMutations` report success.
     testFakeAsync(
         'P7 a restored pending mutation with non-nullable variables and none '
-        'restored is left alone', (time) async {
+        'restored is refused by the persistence door', (time) async {
       final client = testClient();
       var calls = 0;
-      final mutation = client.mutationCache.build<String, int, void>(
-        client,
-        client.defaultMutationOptions<String, int, void>(
-          MutationOptions<String, int, void>(mutationFn: (_) => 'x${++calls}'),
+      expect(
+        () => client.mutationCache.build<String, int, void>(
+          client,
+          client.defaultMutationOptions<String, int, void>(
+            MutationOptions<String, int, void>(
+                mutationFn: (_) => 'x${++calls}'),
+          ),
+          state: MutationState<String, int, void>(
+            isPaused: true,
+            status: MutationStatus.pending,
+            submittedAt: time.now,
+          ),
         ),
-        state: MutationState<String, int, void>(
-          isPaused: true,
-          status: MutationStatus.pending,
-          submittedAt: time.now,
-        ),
+        throwsArgumentError,
       );
+      expect(client.mutationCache.mutations, isEmpty);
       await client.resumePausedMutations();
       await time.flushMicrotasks();
-      expect(calls, 0, reason: 'there is nothing to run it with');
-      expect(mutation.state.status, MutationStatus.pending);
+      expect(calls, 0);
       client.clear();
     });
   });

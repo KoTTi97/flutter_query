@@ -99,9 +99,15 @@ owns `gcTime` timers, so end with `client.clear()` to let the process exit.
 The port follows upstream's behaviour, not its type tricks. The differences that
 matter at the call site:
 
-- **Two type parameters, not five.** `Query<TQueryData>` at the cache layer,
-  `QueryObserver<TQueryData, TData>` where `select` needs a second. There is no
-  `TError` (errors are `Object` plus a `StackTrace`) and no `TQueryKey`.
+- **Two type parameters, not five — and one where there is no `select`.**
+  `Query<TQueryData>` at the cache layer; on the options, `select` is what
+  asks for a second slot, so the two shapes are separate types:
+  `QueryObserverOptions<TData>` without one (the data type is the query's,
+  read off `queryFn`) and `QuerySelectOptions<TQueryData, TData>` with
+  `select` required ([ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md);
+  `InfiniteQueryObserverOptions` / `InfiniteQuerySelectOptions` mirror it).
+  There is no `TError` (errors are `Object` plus a `StackTrace`) and no
+  `TQueryKey`.
 - **`QueryKey` is a value type**, deep-frozen with structural equality — not a
   hashed string. `queryKeyHashFn` is gone; the hash string survives as
   `debugString`.
