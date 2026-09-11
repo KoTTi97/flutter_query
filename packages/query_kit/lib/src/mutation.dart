@@ -478,23 +478,41 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// Releases a paused mutation, completing when it settles — or rejecting
   /// with the error it settled on, as upstream's `continue()` does. The cache's
   /// `resumePaused` is the caller that swallows it; a direct caller who does
-  /// not want the error `.ignore()`s the future. "Settles" is the state: the
-  /// success and settled callbacks have been awaited by then, but an `async`
-  /// one that the run did not await may still be running.
+  /// not want the error `.ignore()`s the future.
+  ///
+  /// "Settles" is the run: the future is [execute]'s own, so the success (or
+  /// error) and settled callbacks have run and the state has moved on when it
+  /// completes — what `resumePausedMutations` promises, and what a mounted
+  /// client's reconnect refetch relies on to run *after* an `onSuccess` cache
+  /// write. It used to be the retryer's transport future, which completes
+  /// before the first callback is called (ninth review, 2026-09-10, C10).
   ///
   /// A mutation restored from persistence is `pending` with no retryer at all;
   /// continuing it means running it, which is how an offline mutation survives
-  /// a restart. A settled one has nothing to continue and must never run twice.
+  /// a restart. It runs with the variables it was restored with — `null`
+  /// included, when `null` is a `TVariables`: a `void`-variables mutation is
+  /// naturally restored with `hasVariables: false`, and was never continued
+  /// (ninth review, 2026-09-10, C12). Only a non-nullable `TVariables` with no
+  /// variables at all is left alone — there is nothing to run it with. A
+  /// settled one has nothing to continue and must never run twice.
   Future<void> continueMutation() {
     final retryer = _retryer;
     if (retryer != null) {
-      return retryer.continueFetch().then((_) {});
+      // Release the pause; the run's own future says when it has settled.
+      retryer.continueFetch().ignore();
+      return _execution?.then<void>((_) {}) ?? Future<void>.value();
     }
-    if (_state.status == MutationStatus.pending && _state.hasVariables) {
+    if (_state.status == MutationStatus.pending &&
+        (_state.hasVariables || null is TVariables)) {
       return execute(_state.variables as TVariables).then((_) {});
     }
     return Future<void>.value();
   }
+
+  // The future of the run in flight — `execute`'s, which settles after the
+  // callbacks — for `continueMutation` to hand on. Set alongside `_retryer`
+  // and cleared with it.
+  Future<TData>? _execution;
 
   /// Whether the network lets [continueMutation] get anywhere right now — the
   /// rule the cache's `resumePaused` applies before awaiting a paused
@@ -532,7 +550,12 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     // leaves the retryer running — `RetryPolicy.always` would keep hitting
     // the server after `clear()`, and its backoff timer would outlive the
     // cache. The in-flight attempt still settles; a backoff in progress is
-    // cut short and the mutation fails with the error it last saw.
+    // cut short and the mutation fails with the error it last saw; a paused
+    // one fails with a `CancelledError` on the spot. Failing means the error
+    // callbacks run, a few microtasks after the removal — so a `clear()`
+    // that drops an offline-paused optimistic mutation is followed by its
+    // `onError` rollback, writing into the cache `clear()` just emptied
+    // (ninth review, 2026-09-10, C11; see `QueryClient.clear`).
     _retryer?.cancelRetry(immediately: true);
   }
 
@@ -556,8 +579,17 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     }
   }
 
-  /// Runs the mutation function once, with everything around it.
-  Future<TData> execute(TVariables variables) async {
+  /// Runs the mutation function once, with everything around it. Completes
+  /// after the callbacks have run and the settled state is dispatched.
+  Future<TData> execute(TVariables variables) {
+    // `_run` builds the retryer before its first `await`, so by the time it
+    // hands its future back the run is already the current one.
+    final run = _run(variables);
+    _execution = run;
+    return run;
+  }
+
+  Future<TData> _run(TVariables variables) async {
     // The scope is fixed for this run; see `schedulingScope`.
     _runScope = _options.scope;
     _hasRunScope = true;
@@ -725,6 +757,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       _cache.onMutationSettled(_erased);
       if (identical(_retryer, retryer)) {
         _retryer = null;
+        _execution = null;
       }
       // Only when nobody is watching: `optionalRemove` leaves a pending
       // mutation alone (re-arming there would spin on `gcTime: 0`), so a

@@ -456,7 +456,12 @@ class Query<TQueryData> extends Removable {
   /// itself. Upstream leaves it `fetching` with nothing running and no way
   /// out — reachable from one public call,
   /// `QueryClient.cancelQueries(silent: true)` — and a query wedged that way
-  /// never loads again (eighth review, 2026-09-10).
+  /// never loads again (eighth review, 2026-09-10). Not on a query the cache
+  /// has dropped, though: its `destroy` cancels silently too, and the reset
+  /// dispatched a `QueryUpdated` *after* the cache's `QueryRemoved`, handing
+  /// an observer still attached a result from outside the cache (ninth
+  /// review, 2026-09-10, C9). Upstream dispatches nothing after a silent
+  /// cancel; a removed query dispatches nothing here either.
   Future<void> cancel({bool revert = false, bool silent = false}) async {
     final cancelled = _retryer;
     final pending = cancelled?.future;
@@ -475,7 +480,10 @@ class Query<TQueryData> extends Removable {
     // retryer here means the handoff happened and it owns the status.
     final successor = _retryer;
     final replaced = successor != null && !identical(successor, cancelled);
-    if (silent && !replaced && _state.fetchStatus != FetchStatus.idle) {
+    if (silent &&
+        !replaced &&
+        !_removed &&
+        _state.fetchStatus != FetchStatus.idle) {
       setState(_state.copyWith(fetchStatus: FetchStatus.idle));
     }
   }

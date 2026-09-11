@@ -161,19 +161,28 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   ///
   /// [state] is the door a persistence layer restores through; it is used
   /// only when the query is created here. A `success` state must carry data
-  /// (`hasData`), or the first result built from it would fail on a cast.
+  /// (`hasData`), or the first result built from it would fail on a cast;
+  /// one without is refused with an [ArgumentError] in every build mode, as
+  /// `Query.setState` refuses it. An `assert` let a release build accept the
+  /// state and fail in the next observer's constructor with `type 'Null' is
+  /// not a subtype of type 'int'` (ninth review, 2026-09-10, C8).
   Query<TQueryData> build<TQueryData>(
     QueryClient client,
     DefaultedQueryOptions<TQueryData> options, {
     QueryState<TQueryData>? state,
   }) {
-    assert(
-      state == null || state.status != QueryStatus.success || state.hasData,
-      'A QueryState restored through QueryCache.build with status == success '
-      'must have hasData == true: a success state is one that holds data. '
-      'This is the persistence door; check what was persisted for '
-      '${options.queryKey}.',
-    );
+    if (state != null &&
+        state.status == QueryStatus.success &&
+        !state.hasData) {
+      throw ArgumentError.value(
+        state,
+        'state',
+        'A QueryState restored through QueryCache.build with status == '
+            'success must have hasData == true: a success state is one that '
+            'holds data. This is the persistence door; check what was '
+            'persisted for ${options.queryKey}',
+      );
+    }
     final existing = get<TQueryData>(options.queryKey);
     if (existing != null) {
       return existing;

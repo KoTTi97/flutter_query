@@ -757,9 +757,11 @@ class QueryClient {
   ///
   /// [mount]'s listeners await this before the queries react, so every
   /// paused mutation — scope queues included — settles before a focus or
-  /// reconnect refetch runs. The returned future completes when the
-  /// mutations' *states* have settled; an `async` `onSuccess` or `onSettled`
-  /// callback may still be running after it does.
+  /// reconnect refetch runs. The returned future completes when the resumed
+  /// runs have settled: their success (or error) and settled callbacks have
+  /// run and their states say so — so an `onSuccess` that writes to the cache
+  /// has written before the reconnect refetch reads (ninth review,
+  /// 2026-09-10, C10).
   Future<void> resumePausedMutations() => mutationCache.resumePaused();
 
   /// Empties both caches, cancelling in-flight fetches and every `gcTime`
@@ -771,6 +773,18 @@ class QueryClient {
   /// particular — rebuilds its query on its next interaction and keeps
   /// fetching. Destroy the observers first (the Flutter binding's controllers
   /// do that in `dispose`, so a torn-down tree leaves none), then clear.
+  ///
+  /// A pending mutation dropped here fails — with a `CancelledError` if it
+  /// was paused, with its own outcome if a request was in flight — and its
+  /// error or success callbacks run a few microtasks *after* this returns.
+  /// A callback that writes to the cache, an optimistic update's `onError`
+  /// rollback above all, then re-creates the query it names, gc timer
+  /// included: `clear()` empties the caches, it does not seal them, and a
+  /// write after it is a write like any other. Upstream never runs those
+  /// callbacks because it abandons a paused mutation for good; here the
+  /// caller of `mutateAsync` is told. A teardown that must leave nothing
+  /// pending lets the callbacks run and clears once more — the Flutter
+  /// binding's `tearDownQueryClient` does (ninth review, 2026-09-10, C11).
   void clear() {
     queryCache.clear();
     mutationCache.clear();
@@ -880,15 +894,26 @@ class QueryClient {
   // erased function itself, the memo lives exactly as long as the default
   // does; the wrappers close over nothing else, so they are shared across
   // clients and keys.
-  static final Expando<Map<Type, Function>> _adapted =
-      Expando<Map<Type, Function>>('adapted defaults');
+  //
+  // One memo per adapted default. A single memo keyed on (function, data
+  // type) served the query wrapper and the mutation wrapper of one function
+  // from the same slot, and the same function registered as both defaults
+  // handed the mutation side a `(QueryFunctionContext) => …` — a `_TypeError`
+  // in the `MutationObserver` constructor (ninth review, 2026-09-10, C7).
+  static final Expando<Map<Type, Function>> _adaptedQueryFns =
+      Expando<Map<Type, Function>>('adapted default queryFn');
+  static final Expando<Map<Type, Function>> _adaptedMutationFns =
+      Expando<Map<Type, Function>>('adapted default mutationFn');
+  static final Expando<Map<Type, Function>> _adaptedSharing =
+      Expando<Map<Type, Function>>('adapted default structuralSharing');
 
   static TWrapper _memoised<TWrapper extends Function>(
+    Expando<Map<Type, Function>> memo,
     Function erased,
     Type dataType,
     TWrapper Function() build,
   ) {
-    final byType = _adapted[erased] ??= <Type, Function>{};
+    final byType = memo[erased] ??= <Type, Function>{};
     final existing = byType[dataType];
     if (existing != null) {
       return existing as TWrapper;
@@ -907,7 +932,8 @@ class QueryClient {
     if (queryFn == null) {
       return null;
     }
-    return _memoised<QueryFn<TQueryData>>(queryFn, TQueryData, () {
+    return _memoised<QueryFn<TQueryData>>(_adaptedQueryFns, queryFn, TQueryData,
+        () {
       return (context) {
         final result = queryFn(context);
         return result is Future<Object?>
@@ -925,7 +951,8 @@ class QueryClient {
     if (sharing == null) {
       return null;
     }
-    return _memoised<StructuralSharing<TQueryData>>(sharing, TQueryData, () {
+    return _memoised<StructuralSharing<TQueryData>>(
+        _adaptedSharing, sharing, TQueryData, () {
       return (previous, next) => _asData<TQueryData>(sharing(previous, next));
     });
   }
@@ -940,7 +967,8 @@ class QueryClient {
     if (mutationFn == null) {
       return null;
     }
-    return _memoised<MutationFn<TData, Object?>>(mutationFn, TData, () {
+    return _memoised<MutationFn<TData, Object?>>(
+        _adaptedMutationFns, mutationFn, TData, () {
       return (variables) {
         final result = mutationFn(variables);
         return result is Future<Object?>

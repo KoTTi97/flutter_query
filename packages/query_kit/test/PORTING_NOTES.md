@@ -1039,8 +1039,9 @@ Their tests are the `A<n> …` cases at the end of `fourthReview()` in
   are re-applied every build and the observer compares resolved values.
 - **A8 — done.** The core README states the rule — one key, one exact type,
   related types included — and `website/docs/reference/coming-from-react-query.md` has a row.
-- **A10 — done.** `QueryCache.build(state: …)` asserts that a `success` state
-  carries data, naming the persistence door in the message.
+- **A10 — done.** `QueryCache.build(state: …)` refuses a `success` state that
+  carries no data, naming the persistence door in the message — an `assert`
+  until the ninth review (C8) made it an `ArgumentError` in every build mode.
 - **A11 — done.** An infinite refetch whose first held page param is `null`
   starts from `initialPageParam`, as upstream's
   `oldPageParams[0] ?? options.initialPageParam`; `initialPageParam`'s doc
@@ -1746,6 +1747,210 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   RetryPolicy.always`, `C5 / P5c (R7) removed from MutationAdded while
   offline, mutateAsync still settles`.
 
+- **C6 — an observer's unsubscribe handle was not idempotent** (release R2,
+  deep-dive F2 ×2 / P1; #38). `QueryObserver.subscribe` and
+  `MutationObserver.subscribe` returned a closure that removed the listener
+  and ran the last-listener teardown on *every* call. Called twice — a
+  `dispose` after a manual unsubscribe, say — the second call took *another*
+  registration of the same listener (`List.remove` finds the first `==`
+  entry, and a tear-off is `==` to itself) and, with the list now empty, ran
+  `destroy()` / `removeObserver` under a subscriber still present: no more
+  notifications, and the gc timer armed. `Subscribable`, `QueriesObserver`
+  and `MutationStateObserver` already guarded with a `removed` flag. Probes:
+  F2 ×2, P1, R2 ×2 — `hasListeners` `false` with one registration left,
+  `0` notifications where `1` was expected. Fixed with the same `removed`
+  flag in both observers. Upstream's closure deletes from a `Set`, where a
+  second delete finds nothing, so idempotence is upstream's behaviour
+  regained, not a divergence. Regressions: `C6 / F2 (R2) a QueryObserver
+  unsubscribe handle called twice does not remove another registration of
+  the same listener`, `C6 / P1 (R2) a MutationObserver unsubscribe handle
+  called twice removes nothing the second time`.
+
+- **C7 — the adapted default wrappers of one function collided** (release
+  R6, deep-dive F4 / P4a; #38). `QueryClient._memoised` kept one `Expando`
+  keyed on the erased function, then on the data type — and the query
+  wrapper and the mutation wrapper of the *same* function went into the same
+  slot. A function registered as both `QueryDefaults.queryFn` and
+  `MutationDefaults.mutationFn` (a stub, a logger, a fake backend) handed the
+  mutation side a `(QueryFunctionContext) => FutureOr<int>`: `_TypeError` in
+  the `MutationObserver` constructor when the query side was resolved
+  first, and the other way round the query called the mutation wrapper
+  (which happens to accept the context). Probes: F4, P4a, R6 — the
+  `_TypeError`. Fixed with one memo per adapted default: three `Expando`s
+  (`_adaptedQueryFns`, `_adaptedMutationFns`, `_adaptedSharing`), the memo
+  passed into `_memoised`. Alternative not taken: keying the inner map on a
+  `(kind, Type)` record — the same fix with a less visible shape.
+  Regressions: `C7 / F4 / P4a (R6) one function as query default and
+  mutation default: the adapted wrappers do not collide (either order)`,
+  `C7 / P4b (R6) mutation default first, then query default: the query calls
+  the query wrapper with its context`.
+
+- **C8 — `QueryCache.build(state:)` only asserted "success ⇒ hasData"**
+  (release R11, deep-dive F5; #38). `Query.setState` throws `ArgumentError`
+  for a `success` state without data (eighth review, A10), but the
+  persistence door next to it, `build(state:)`, checked the same rule with
+  an `assert`. A release build accepted the state and the next observer's
+  constructor died on `type 'Null' is not a subtype of type 'int'`, far
+  from the write that caused it. Probes: F5 (an `_AssertionError` where an
+  `ArgumentError` was expected) and the release probe under
+  `dart run --no-enable-asserts`: `accepted=true error=_TypeError`; after
+  the fix `accepted=false error=ArgumentError`. Fixed by throwing the
+  `ArgumentError` `setState` throws, in every build mode. The A10 case is
+  renamed `A10: build refuses a success state that carries no data` and
+  asserts the `ArgumentError`. Regression: `C8 / F5 (R11) build(state:)
+  rejects a success state without data the way setState does: an
+  ArgumentError, not an assert`.
+
+- **C9 — a query removed mid-fetch dispatched after its `QueryRemoved`**
+  (deep-dive F6 ×2; #38). The eighth review's idle reset in `Query.cancel`
+  — a silent cancel with no successor puts `fetchStatus` back to `idle`, so
+  `cancelQueries(silent: true)` cannot wedge a query — ran on *every* silent
+  cancel, `destroy`'s included. A query removed while fetching (`clear()`,
+  `removeQueries`) therefore emitted `QueryUpdated(QuerySetStateAction)`
+  after the cache's `QueryRemoved`, and an observer still attached to it
+  received a result from a query outside any cache. Probe F6 ×2: `events
+  after removal: [added, updated:QueryFetchAction, removed,
+  updated:QuerySetStateAction<int>]`. Fixed by skipping the reset when
+  `_removed` is set: a removed query dispatches nothing after its silent
+  cancel, which is what upstream does after every silent cancel. The
+  observer left behind is not told — upstream's behaviour too; its next
+  `setOptions` or `refetch` re-resolves the key and joins the live entry.
+  Regressions: `C9 / F6 clear() during a fetch: no QueryUpdated after
+  QueryRemoved`, `C9 / F6 removeQueries() during a fetch: a subscribed
+  observer is not notified from a query that already left the cache`.
+
+- **C10 — `resumePausedMutations()` promised the settled state but returned
+  the transport future** (release R3, deep-dive P2a/P2b; #38).
+  `Mutation.continueMutation` returned `retryer.continueFetch()` — the
+  retryer's future, which completes when the request does, *before* the
+  first callback runs — while its own dartdoc, `MutationCache.resumePaused`'s
+  and `QueryClient.resumePausedMutations`'s all said "settled". The visible
+  cost: `mount()` awaits the resume before the reconnect refetch precisely so
+  the refetch reflects the mutation, and the refetch ran before the
+  `onSuccess` cache write. Probes: P2a (`[]` where `['onSuccess',
+  'onSettled']` was expected), P2b (`[refetch, onSuccess]`), R3 (`resumed`
+  already `true` under a pending async `onSuccess`). **Decision** — the
+  options were (a) return the run's own future, `execute()`'s, which settles
+  after the callbacks and the settled dispatch, or (b) leave the future and
+  correct the three doc sites to say "transport". (a), as the reviews
+  recommend: the ordering `mount()` relies on is the point of awaiting at
+  all, and upstream's `continue()` for a restored mutation *is* `execute()`,
+  so (a) makes the two paths agree. Upstream's `continue()` with a live
+  retryer does return the retryer's promise — so upstream has P2b's race
+  too; recorded in the divergence table. Fixed by `execute` recording its
+  future (`_execution`, set with `_retryer`, cleared with it) and
+  `continueMutation` releasing the pause with `continueFetch().ignore()`
+  and handing `_execution` on. A hanging user callback now hangs the resume,
+  as it hangs `mutateAsync` and upstream's `execute()`. Regressions, in
+  `port_lifecycle_test.dart`: `C10 / P2 (R3)` — `P2a (R3)
+  resumePausedMutations completes after the synchronous callbacks ran and
+  the state settled`, `P2b (R3) a mounted client refetches on reconnect after
+  the resumed mutation's onSuccess wrote to the cache`, `R3 resuming
+  mutations awaits an async onSuccess and the settled state`.
+
+- **C11 — `clear()` with an offline-paused optimistic mutation: the `onError`
+  rollback re-creates the query, gc timer included, a few microtasks after
+  `clear()` returned** (deep-dive P6; #38). Reproduced as described: `the
+  rollback re-created the query after clear(); 1 timer(s) pending`, which is
+  exactly what `queryWidgetTest`'s teardown sees. The cause is a decided
+  rule, not an accident: a paused mutation the cache drops fails with a
+  `CancelledError` (third/fourth review, pinned by C-M3 and D7/F03), so its
+  `onError` runs, and the canonical rollback `setQueryData(key, previous)`
+  writes into the cache `clear()` just emptied. Upstream never runs that
+  rollback because it abandons the paused mutation — `mutateAsync` never
+  settles there, the observer stays `pending`, and an in-flight mutation's
+  late `onError` produces the very same write. **Decision** — the options:
+  (a) skip the callbacks of a dropped paused mutation (silent, like
+  `Query.destroy`): rejected, it un-decides the rule the two regressions
+  pin, and the rollback is *wanted* when a single mutation is removed at
+  runtime; (b) make the write not create, or not arm gc, when it comes from
+  a removed mutation's callback: a zone-scoped flag changing what
+  `setQueryData` means depending on who calls it — rejected as magic, and an
+  entry without gc is a leak; (c) have `clear()` clear again once the dropped
+  runs settle: rejected, it would wipe whatever the app wrote in between
+  (logout, then the login screen's prefetch); (d) keep the core rule —
+  `clear()` empties the caches, it does not seal them, and a write after it
+  is a write like any other — state it on `QueryClient.clear` and
+  `Mutation.destroy`, and make the teardown that must leave nothing pending
+  let the callbacks run and clear once more. (d): the only shape that is
+  honest about what happens without inventing a second meaning for a
+  write. `tearDownQueryClient` in `query_kit_flutter/lib/testing.dart` now
+  pumps once after `clear()` and clears again (its dartdoc, the README and
+  the site's testing guide say why), which map #33's C45 already named as a
+  reason to deepen the helper. Regressions: `C11 / P6 the onError rollback
+  re-creates the query after clear(); a second clear once the callbacks ran
+  leaves nothing pending` (`port_lifecycle_test.dart`, the decided
+  behaviour) and, in the binding's `testing_helper_test.dart`, `C11 an
+  offline optimistic mutation left paused: its rollback runs after clear(),
+  and the teardown still leaves nothing pending` — red on the old helper
+  with `A Timer is still pending even after the widget tree was disposed`.
+
+- **C12 — a restored `pending` mutation with `hasVariables: false` was
+  never continued** (deep-dive P7; #38). `continueMutation` ran a restored
+  mutation only `if (… && _state.hasVariables)`, but a `void`-variables
+  mutation is naturally restored without variables, and
+  `resumePausedMutations` then reported success having run nothing. Probe
+  P7: `0` executions where `1` was expected. Upstream's `continue()` calls
+  `execute(this.state.variables!)` regardless. Fixed by running when
+  `hasVariables || null is TVariables`: `null` is a real value for a
+  nullable or `void` `TVariables`. A non-nullable `TVariables` restored with
+  no variables at all is still left alone — there is nothing to run it with,
+  and the dartdoc says so; refusing it at `MutationCache.build(state:)` the
+  way C8 refuses a data-less success state is a persistence-door check for a
+  later ticket, not this one. Regressions, in `port_lifecycle_test.dart`:
+  `C12 / P7` — `P7 a restored pending mutation with hasVariables false and
+  void variables is continued`, `P7 a restored pending mutation with
+  non-nullable variables and none restored is left alone`.
+
+- **C13 — `hasNextPage`/`hasPreviousPage` flipped without a notification when
+  `select` collapsed the change** (release R5, deep-dive P1/P11; #38). The
+  fifth review made `InfiniteQueryObserver.shouldNotify` re-ask the two
+  paging flags only when the paging functions changed, on the argument that
+  equal results carry `==`-equal data. Equal *results* do not mean equal
+  *data* under a `select`: `pages.length` over a page whose cursor turned
+  `null` is the same result, and when the write kept `dataUpdatedAt` too
+  (a manual write or restore with the same timestamp) nothing else differed,
+  so the flags flipped in silence. A real refetch is not affected — its
+  `isFetching` transitions notify (the deep-dive's refetch variant was green
+  at `f6a9ddd`). Probes: P1 (R5), P11, R5 — `0` notifications where `1` was
+  expected. Fixed by making the data part of the memo key: `_notifiedData`
+  is recorded with the paging options at each notification, and the flags
+  are re-asked when the functions *or* the data (by identity — structural
+  sharing hands an equal write back as the same instance) differ from what
+  the last notification was answered over, old over old against new over
+  new. Still lazy about user code: when the result changed, `||`
+  short-circuits before the paging functions are called, so the ported
+  suite's call counts hold. Regressions: `C13 / P1 (R5) hasNextPage flips on
+  a same-timestamp write whose selected result is unchanged: the listener is
+  told`, `C13 / P11 (R5) hasPreviousPage flips the same way`.
+
+- **C14 — the `select` memo compared with `identical`, the options with
+  `==`** (deep-dive P12; #38). `createResult` reused the last selection only
+  when `identical(select, _selectFn)`, while `DefaultedQueryObserverOptions`
+  compares `select` with `==`. An instance-method tear-off is `==` to the
+  next tear-off of the same method but never `identical`, so a widget
+  passing `select: model.pick` re-ran the selector on every `setOptions`
+  that the options said changed nothing — work only, no wrong notification.
+  Probe P12: `5` runs where `0` were expected. Fixed with `==` at both memo
+  sites (the placeholder path's `select` check too). Upstream memoises on
+  `===`, where a bound method is a fresh function object each render and
+  the re-run is the price paid; Dart's `==` on tear-offs is exactly the
+  distinction worth keeping. Regression: `C14 / P12 an instance-method
+  tear-off select is not re-run per setOptions (== but not identical)`.
+
+- **C16 — `QueryCancelToken.onCancel` on an already-cancelled token ran the
+  callback unisolated** (deep-dive probe O3; #38). `cancel()`'s loop wraps
+  every callback in a `try`/`catch` that reports to the zone (third review),
+  but the "already cancelled, run it now" branch called the callback bare, so
+  a throwing late registration threw into the query function registering
+  it. Probe O3: `threw StateError: Bad state: late`. **Decision** — the
+  options were the same isolation, or one dartdoc sentence saying the late
+  path throws into the caller. Isolation: a callback's throw is the
+  callback's own whichever path runs it, and a query function should not
+  have to know which path it got. Fixed by routing both paths through one
+  `_run`. Regression: `C16 / O3 onCancel on an already-cancelled token
+  isolates a throwing callback like the loop path does`.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -1796,9 +2001,9 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | `initialData: null` / `placeholderData: null` mean "none" | `.value(null)` is a value of `null`; `.compute` returning `null` means "none" | review, 2026-09-09 |
 | a throwing `retry` / `retryDelay` callback leaves the fetch pending forever | the throw is the fetch's error | third review, 2026-09-09 |
 | a retry backoff runs to its end after the fetch was cancelled | the delay is a timer the retryer drops on resolve | third review, 2026-09-09 |
-| a mutation removed from the cache keeps retrying | `Mutation.destroy` stops the retries; the mutation fails with its last error (from a backoff) or a `CancelledError` (from a pause). Removed before its run began — from inside `MutationAdded` — `destroy` has no retryer to stop yet, so `execute` applies the same cancel to the one it builds | third and fourth review, 2026-09-09; ninth review, 2026-09-10 (C5) |
+| a mutation removed from the cache keeps retrying; a paused one is abandoned for good (its callbacks never run, its promise never settles) | `Mutation.destroy` stops the retries; the mutation fails with its last error (from a backoff) or a `CancelledError` (from a pause), and failing runs its error callbacks a few microtasks after the removal — so `clear()` is followed by a dropped optimistic mutation's rollback, writing into the cache it emptied (a teardown lets the callbacks run and clears again). Removed before its run began — from inside `MutationAdded` — `destroy` has no retryer to stop yet, so `execute` applies the same cancel to the one it builds | third and fourth review, 2026-09-09; ninth review, 2026-09-10 (C5, C11) |
 | a throwing observer listener becomes the query's error (via `Query.fetch`) | reported to the zone; the query keeps its state | third review, 2026-09-09 |
-| a throwing cancel callback skips the rest and escapes into the canceller | each is isolated and reported to the zone | third review, 2026-09-09 |
+| a throwing cancel callback skips the rest and escapes into the canceller; an abort listener added after the abort never fires | each is isolated and reported to the zone, on the loop path and on the already-cancelled path alike, where the callback runs at once | third review, 2026-09-09; ninth review, 2026-09-10 (C16) |
 | `Query.reset()` on an unobserved query leaves it in the cache for good | it re-arms collection | third review, 2026-09-09 |
 | `isRefetching`/`isRefetchError` corrected for page fetches on the infinite *result* | on `InfiniteQueryObserver` / `InfiniteQueryController`, next to the other paging flags | third review, 2026-09-09 |
 | `{ pages, pageParams }` is walked by `replaceEqualDeep` as a plain object | `InfiniteData` is special-cased: each list shared on its own, the whole kept when both are | fourth review, 2026-09-09 |
@@ -1817,7 +2022,10 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | `Query.fetch`'s success path schedules gc unconditionally (via the retryer's `onSuccess`) | only when no observer is attached; the leaving observer arms it | fifth review, 2026-09-09 (52) — one rule with 42 |
 | `replaceEqualDeep` walks any array; a `Uint8Array` is compared by identity | `TypedData` is a leaf (`==`, never walked); every `previous` returned is first checked `is T`, a list copy likewise, else `next` — sharing is best effort and never a type error | fifth review, 2026-09-09 |
 | `#updateStaleTimeout` adds 1 ms to the timeout | the stale timer rounds its duration up to whole milliseconds and, if it still runs before the deadline (truncation, or the 2^31 ms clamp), re-arms for the remainder | fifth review, 2026-09-09 |
-| `hasNextPage` and friends are fields of the infinite result, compared with it | getters on `InfiniteQueryObserver` (#16); `shouldNotify` compares the direction flags at every notification and re-asks `hasNextPage`/`hasPreviousPage` only when the paging functions changed | #16, fifth review, 2026-09-09 |
+| `hasNextPage` and friends are fields of the infinite result, compared with it | getters on `InfiniteQueryObserver` (#16); `shouldNotify` compares the direction flags at every notification and re-asks `hasNextPage`/`hasPreviousPage` only when the paging functions or the data (by identity) differ from what the last notification was answered over | #16, fifth review, 2026-09-09; ninth review, 2026-09-10 (C13) |
+| a silent cancel with no successor leaves `fetchStatus: 'fetching'` for good (`cancelQueries({ silent: true })` wedges the query) | the query puts itself back to `idle` — unless the cache has dropped it, in which case it dispatches nothing after the cancel, as upstream never does | eighth review, 2026-09-10; ninth review, 2026-09-10 (C9) |
+| `Mutation.continue()` with a live retryer returns the retryer's promise, which resolves before the callbacks run; `resumePausedMutations` resolves with it, and `mount()`'s reconnect refetch can overtake an `onSuccess` cache write | `continueMutation` releases the pause and hands on `execute()`'s own future, settled after the callbacks and the settled dispatch — the restored-mutation path upstream already takes | ninth review, 2026-09-10 (C10) |
+| the `select` memo keeps the last selection while the selector is `===` the last one | `==`: an instance-method tear-off is `==` to the next tear-off of the same method, as the options already treat it | ninth review, 2026-09-10 (C14) |
 | observer `TData` defaults to the query's type; nothing checks a mismatch | a `QueryObserver` with no `select` whose `TQueryData` is not a `TData` is refused with `ArgumentError` at construction, `setOptions` and `getOptimisticResult` | fifth review, 2026-09-09 |
 | an observer's `onQueryUpdate` throwing inside a dispatch propagates into the fetch | isolated per observer and reported to the zone, like the cache listeners; the query keeps its state | fifth review, 2026-09-09 (59) |
 | `useQueries` with a heterogeneous tuple and a `combine` step | a homogeneous `QueriesObserver` (`QueriesController`/`QueriesBuilder` in the binding); mixed data types need a `select`, and there is no `combine` — map the returned list | functional improvements plan, `competitor-deep-dive.md` §6 #13 |

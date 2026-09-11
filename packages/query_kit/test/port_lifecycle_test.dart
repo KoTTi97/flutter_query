@@ -821,4 +821,221 @@ void main() {
       client.clear();
     });
   });
+
+  group('C10 / P2 (R3) — continueMutation hands on the run, not the transport',
+      () {
+    // `resumePausedMutations` promised the settled state but returned the
+    // retryer's future, which completes before the first callback runs; a
+    // mounted client's reconnect refetch overtook the `onSuccess` cache
+    // write it was meant to reflect.
+    testFakeAsync(
+        'P2a (R3) resumePausedMutations completes after the synchronous '
+        'callbacks ran and the state settled', (time) async {
+      final client = testClient();
+      client.onlineManager.setOnline(false);
+      final log = <String>[];
+      final observer = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+          mutationFn: (value) => value,
+          onSuccess: (_, __, ___) => log.add('onSuccess'),
+          onSettled: (_, __, ___, ____, _____) => log.add('onSettled'),
+        ),
+      );
+      observer.mutate(42);
+      await time.flushMicrotasks();
+      expect(observer.currentResult.isPaused, isTrue);
+      client.onlineManager.setOnline(true);
+      await client.resumePausedMutations();
+      expect(log, ['onSuccess', 'onSettled'],
+          reason: 'callbacks not yet run when resumePausedMutations '
+              'completed');
+      expect(observer.currentResult.status, MutationStatus.success,
+          reason: 'state not settled when resumePausedMutations completed');
+      observer.destroy();
+      client.clear();
+    });
+
+    testFakeAsync(
+        'P2b (R3) a mounted client refetches on reconnect after the resumed '
+        'mutation\'s onSuccess wrote to the cache', (time) async {
+      final client = testClient()..mount();
+      final key = queryKey();
+      final log = <String>[];
+      client.setQueryData<int>(key, 0);
+      final query = QueryObserver<int, int>(
+        client,
+        QueryObserverOptions(
+          queryKey: key,
+          queryFn: (_) {
+            log.add('refetch');
+            return 1;
+          },
+        ),
+      );
+      final unsubscribe = query.subscribe((_) {});
+      await time.flushMicrotasks();
+      log.clear();
+      client.onlineManager.setOnline(false);
+      final observer = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+          mutationFn: (value) => value,
+          onSuccess: (_, __, ___) {
+            log.add('onSuccess');
+            client.setQueryData<int>(key, 99);
+          },
+        ),
+      );
+      observer.mutate(42);
+      await time.flushMicrotasks();
+      expect(observer.currentResult.isPaused, isTrue);
+      client.onlineManager.setOnline(true);
+      await time.flushMicrotasks();
+      expect(log, ['onSuccess', 'refetch'],
+          reason: 'the reconnect refetch must follow the cache write');
+      unsubscribe();
+      query.destroy();
+      observer.destroy();
+      client.unmount();
+      client.clear();
+    });
+
+    testFakeAsync(
+        'R3 resuming mutations awaits an async onSuccess and the settled '
+        'state', (time) async {
+      final client = testClient();
+      client.onlineManager.setOnline(false);
+      final hook = Completer<void>();
+      final observer = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+            mutationFn: (value) => value,
+            onSuccess: (_, __, ___) => hook.future),
+      );
+      observer.mutate(42);
+      await time.flushMicrotasks();
+      expect(observer.currentResult.isPaused, isTrue);
+      client.onlineManager.setOnline(true);
+      var resumed = false;
+      unawaited(client.resumePausedMutations().then((_) => resumed = true));
+      await time.flushMicrotasks();
+      expect(observer.currentResult.status, MutationStatus.pending);
+      expect(resumed, isFalse,
+          reason: 'onSuccess is still running and the state is pending');
+      hook.complete();
+      await time.flushMicrotasks();
+      expect(resumed, isTrue);
+      expect(observer.currentResult.status, MutationStatus.success);
+      observer.destroy();
+      client.clear();
+    });
+  });
+
+  group(
+      'C12 / P7 — a restored pending mutation runs with the variables it '
+      'was restored with', () {
+    // `continueMutation` required `hasVariables`, which a `void`-variables
+    // mutation is naturally restored without; `resumePausedMutations`
+    // reported success and nothing ran.
+    testFakeAsync(
+        'P7 a restored pending mutation with hasVariables false and void '
+        'variables is continued', (time) async {
+      final client = testClient();
+      var calls = 0;
+      final mutation = client.mutationCache.build<String, void, void>(
+        client,
+        client.defaultMutationOptions<String, void, void>(
+          MutationOptions<String, void, void>(mutationFn: (_) => 'x${++calls}'),
+        ),
+        state: MutationState<String, void, void>(
+          isPaused: true,
+          status: MutationStatus.pending,
+          submittedAt: time.now,
+        ),
+      );
+      await client.resumePausedMutations();
+      await time.flushMicrotasks();
+      expect(calls, 1, reason: 'upstream executes regardless of variables');
+      expect(mutation.state.status, MutationStatus.success);
+      expect(mutation.state.data, 'x1');
+      client.clear();
+    });
+
+    testFakeAsync(
+        'P7 a restored pending mutation with non-nullable variables and none '
+        'restored is left alone', (time) async {
+      final client = testClient();
+      var calls = 0;
+      final mutation = client.mutationCache.build<String, int, void>(
+        client,
+        client.defaultMutationOptions<String, int, void>(
+          MutationOptions<String, int, void>(mutationFn: (_) => 'x${++calls}'),
+        ),
+        state: MutationState<String, int, void>(
+          isPaused: true,
+          status: MutationStatus.pending,
+          submittedAt: time.now,
+        ),
+      );
+      await client.resumePausedMutations();
+      await time.flushMicrotasks();
+      expect(calls, 0, reason: 'there is nothing to run it with');
+      expect(mutation.state.status, MutationStatus.pending);
+      client.clear();
+    });
+  });
+
+  group('C11 / P6 — clear() and the rollback of a dropped paused mutation', () {
+    // A paused mutation `clear()` drops fails with a `CancelledError` (the
+    // rule since the third review, pinned by C-M3 and D7), so its `onError`
+    // runs a few microtasks later — and the canonical optimistic rollback
+    // `setQueryData(key, previous)` re-creates the query in the cache
+    // `clear()` just emptied, gc timer included. Decided as the behaviour:
+    // `clear()` empties, it does not seal, and a write after it is a write.
+    // The teardown that must leave nothing pending lets the callbacks run
+    // and clears again; the binding's `tearDownQueryClient` does.
+    testFakeAsync(
+        'P6 the onError rollback re-creates the query after clear(); a second '
+        'clear once the callbacks ran leaves nothing pending', (time) async {
+      final client = testClient();
+      final key = queryKey();
+      client.setQueryData<int>(key, 1);
+      client.onlineManager.setOnline(false);
+      final calls = <String>[];
+      final observer = MutationObserver<int, int, int>(
+        client,
+        MutationOptions(
+          mutationFn: (v) => v,
+          onMutate: (_) {
+            final previous = client.getQueryData<int>(key)!;
+            client.setQueryData<int>(key, 2);
+            return previous;
+          },
+          onError: (error, _, __, previous) {
+            calls.add(error.runtimeType.toString());
+            client.setQueryData<int>(key, previous!);
+          },
+        ),
+      );
+      observer.mutate(2);
+      await time.flushMicrotasks();
+      expect(observer.currentResult.isPaused, isTrue);
+      expect(client.getQueryData<int>(key), 2);
+      observer.destroy();
+      client.clear();
+      expect(client.queryCache.queries, isEmpty);
+      expect(time.pendingTimers, 0, reason: 'right after clear()');
+      await time.flushMicrotasks();
+      // The rollback ran, with the cancellation as its error, and wrote.
+      expect(calls, ['CancelledError']);
+      expect(client.getQueryData<int>(key), 1);
+      expect(client.queryCache.queries, hasLength(1));
+      expect(time.pendingTimers, 1, reason: 'the re-created query\'s gc');
+      client.clear();
+      await time.flushMicrotasks();
+      expect(client.queryCache.queries, isEmpty);
+      expect(time.pendingTimers, 0);
+    });
+  });
 }

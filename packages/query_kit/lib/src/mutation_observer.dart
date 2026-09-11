@@ -59,7 +59,15 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
         _updateResult(mutation.state);
       }
     }
+    // Once only, as the query observer's handles: a second call removed
+    // another registration of the same listener and detached the observer
+    // under a subscriber still present (ninth review, 2026-09-10, C6).
+    var removed = false;
     return () {
+      if (removed) {
+        return;
+      }
+      removed = true;
       _listeners.remove(listener);
       if (!hasListeners) {
         _currentMutation?.removeObserver(this);

@@ -152,9 +152,10 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
       );
 
   // What the last notification carried: the direction flags, and the paging
-  // options `hasNextPage`/`hasPreviousPage` were answered with.
+  // options and the data `hasNextPage`/`hasPreviousPage` were answered over.
   _DirectionFlags? _notifiedDirectionFlags;
   InfiniteQueryOptions<TPageData, TPageParam>? _notifiedPagingOptions;
+  InfiniteData<TPageData, TPageParam>? _notifiedData;
 
   /// The base rule, or a change in any paging flag since the last
   /// notification. The flags are not part of the result, so a
@@ -168,11 +169,14 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   /// Exact, but lazy about user code: the six flags that follow from the
   /// result and the fetch direction are compared as values, while
   /// `hasNextPage`/`hasPreviousPage` — each a call into the user's paging
-  /// function — are only re-asked when the paging functions differ from the
-  /// ones the last notification was answered with, old against new over the
-  /// same data. Equal results carry `==`-equal data, so with the same
-  /// functions the answer is the same; and the ported suite counts those
-  /// calls.
+  /// function — are only re-asked when the paging functions or the data
+  /// differ from what the last notification was answered over, old over old
+  /// against new over new. Same functions over the same data is the same
+  /// answer, and the ported suite counts those calls. The data is part of
+  /// the key because an equal *result* does not mean equal data: a `select`
+  /// that collapses the change — `pages.length` over a page whose cursor
+  /// turned null — left the flags flipping with no notification when the
+  /// write kept `dataUpdatedAt` too (ninth review, 2026-09-10, C13).
   ///
   /// The snapshot is taken here, on `true`, because `updateResult` notifies
   /// exactly then.
@@ -180,31 +184,35 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   bool shouldNotify(QueryResult<TData>? previous, QueryResult<TData> next) {
     final directionFlags = _directionFlags;
     final pagingOptions = infiniteOptions;
+    final data = _data;
     final notify = super.shouldNotify(previous, next) ||
         directionFlags != _notifiedDirectionFlags ||
-        _pageAvailabilityChanged(pagingOptions);
+        _pageAvailabilityChanged(pagingOptions, data);
     if (notify) {
       _notifiedDirectionFlags = directionFlags;
       _notifiedPagingOptions = pagingOptions;
+      _notifiedData = data;
     }
     return notify;
   }
 
   bool _pageAvailabilityChanged(
     InfiniteQueryOptions<TPageData, TPageParam> pagingOptions,
+    InfiniteData<TPageData, TPageParam>? data,
   ) {
     final notified = _notifiedPagingOptions;
     if (notified == null ||
         (notified.getNextPageParam == pagingOptions.getNextPageParam &&
             notified.getPreviousPageParam ==
-                pagingOptions.getPreviousPageParam)) {
+                pagingOptions.getPreviousPageParam &&
+            identical(data, _notifiedData))) {
       return false;
     }
-    final data = _data;
+    final notifiedData = _notifiedData;
     return hasNextPageOf(pagingOptions, data) !=
-            hasNextPageOf(notified, data) ||
+            hasNextPageOf(notified, notifiedData) ||
         hasPreviousPageOf(pagingOptions, data) !=
-            hasPreviousPageOf(notified, data);
+            hasPreviousPageOf(notified, notifiedData);
   }
 
   /// The result these options would produce right now — the infinite twin of

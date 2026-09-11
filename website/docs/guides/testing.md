@@ -44,13 +44,19 @@ it from `lib/`.
 ## Doing it yourself
 
 For a test that builds its own clients, or drives more than one,
-`tearDownQueryClient(tester, client)` is the same three steps on their own:
+`tearDownQueryClient(tester, client)` is the same steps on their own:
 
 ```dart
 await tester.pumpWidget(const SizedBox()); // let the widgets go
 await tester.pumpAndSettle();              // and the frame after them run
 client.clear();                            // then the cache and its timers
+await tester.pump();                       // let a dropped mutation's callbacks run
+client.clear();                            // and what they wrote go too
 ```
+
+The last two matter when a test leaves a mutation paused offline: `clear()`
+fails it, its `onError` runs a moment later, and an optimistic rollback's
+`setQueryData` re-creates the query it names — gc timer included.
 
 ## The pump rules
 

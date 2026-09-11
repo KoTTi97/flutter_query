@@ -63,10 +63,21 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   bool get hasListeners => _listeners.isNotEmpty;
 
   /// Registers [listener] and returns the function that removes it again.
+  ///
+  /// Each handle removes its own registration, once: called twice it removes
+  /// nothing more, as `Subscribable`'s handles already promised. Unguarded,
+  /// a second call took another registration of the same listener with it
+  /// and ran the last-listener teardown under a subscriber still present
+  /// (ninth review, 2026-09-10, C6).
   void Function() subscribe(QueryObserverListener<TData> listener) {
     _listeners.add(listener);
     _onSubscribe();
+    var removed = false;
     return () {
+      if (removed) {
+        return;
+      }
+      removed = true;
       _listeners.remove(listener);
       _onUnsubscribe();
     };
@@ -433,7 +444,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       if (prevResult != null &&
           prevResult.isPlaceholderData &&
           identical(placeholderData, prevResultOptions?.placeholderData) &&
-          identical(options.select, prevResultOptions?.select)) {
+          options.select == prevResultOptions?.select) {
         // Already selected on the previous pass, so `select` must not run
         // again over an already-selected value. Only while `select` is the
         // same one, though — upstream memoises on the placeholder alone and
@@ -460,11 +471,16 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     if (!skipSelect) {
       final select = options.select;
       if (select != null && hasCandidate) {
+        // The selector is compared with `==`, as the options compare it: an
+        // instance-method tear-off is `==` to the next tear-off of the same
+        // method but never `identical`, so an `identical` memo re-ran such a
+        // `select` on every `setOptions` that changed nothing (ninth review,
+        // 2026-09-10, C14). A closure is only ever `==` to itself.
         if (prevResult != null &&
             prevResultState != null &&
             prevResultState.hasData &&
             candidate == prevResultState.data &&
-            identical(select, _selectFn)) {
+            select == _selectFn) {
           outData = _selectResult;
           hasOutData = _hasSelectResult;
         } else {

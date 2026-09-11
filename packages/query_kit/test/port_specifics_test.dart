@@ -1499,17 +1499,19 @@ void fourthReview() {
     client.clear();
   });
 
-  test('A10: build asserts that a success state carries data', () {
+  test('A10: build refuses a success state that carries no data', () {
     final client = testClient();
     final options = client.defaultQueryOptions<String>(
         QueryOptions<String>(queryKey: queryKey()));
+    // An `ArgumentError` in every build mode since the ninth review (C8); it
+    // was an `assert` here, which a release build skipped.
     expect(
       () => client.queryCache.build<String>(
         client,
         options,
         state: const QueryState<String>(status: QueryStatus.success),
       ),
-      throwsA(isA<AssertionError>()),
+      throwsArgumentError,
     );
     // With data it is the persistence door, as documented.
     final query = client.queryCache.build<String>(
@@ -2396,4 +2398,315 @@ void ninthReview() {
     client.unmount();
     client.clear();
   });
+
+  // C6 — an observer's unsubscribe handle called twice removed *another*
+  // registration of the same listener and ran the last-listener teardown
+  // under a subscriber still present. `Subscribable` already guarded.
+  testFakeAsync(
+      'C6 / F2 (R2) a QueryObserver unsubscribe handle called twice does not '
+      'remove another registration of the same listener', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final observer = client.observe<int, int>(
+        QueryObserverOptions(queryKey: key, enabled: Enabled.no));
+    var notifications = 0;
+    void listener(QueryResult<int> _) => notifications++;
+    final first = observer.subscribe(listener);
+    final second = observer.subscribe(listener);
+    notifications = 0;
+    first();
+    first();
+    client.setQueryData(key, 42);
+    expect(observer.hasListeners, isTrue,
+        reason: 'the second registration is still subscribed');
+    expect(notifications, 1);
+    expect(time.pendingTimers, 0,
+        reason: 'a subscribed observer keeps the gc timer off');
+    second();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'C6 / P1 (R2) a MutationObserver unsubscribe handle called twice '
+      'removes nothing the second time', (time) async {
+    final client = testClient();
+    final observer = MutationObserver<int, int, void>(
+        client, MutationOptions(mutationFn: (value) => value));
+    final seen = <MutationStatus>[];
+    void listener(MutationResult<int, int> result) => seen.add(result.status);
+    final first = observer.subscribe(listener);
+    final second = observer.subscribe(listener);
+    first();
+    first();
+    expect(observer.hasListeners, isTrue,
+        reason: 'the second registration must survive the first handle '
+            'being called twice');
+    await observer.mutateAsync(42);
+    expect(seen, contains(MutationStatus.success));
+    second();
+    observer.destroy();
+    client.clear();
+  });
+
+  // C7 — one memo keyed on (function, data type) served the query wrapper
+  // and the mutation wrapper of one default function from the same slot.
+  test(
+      'C7 / F4 / P4a (R6) one function as query default and mutation '
+      'default: the adapted wrappers do not collide (either order)', () {
+    Object? common(Object? value) => 42;
+    for (final queryFirst in [true, false]) {
+      final client = testClient(
+        defaultOptions: DefaultOptions(
+          queries: QueryDefaults(queryFn: common),
+          mutations: MutationDefaults(mutationFn: common),
+        ),
+      );
+      void queries() =>
+          client.defaultQueryOptions<int>(QueryOptions(queryKey: queryKey()));
+      void mutations() => client
+          .defaultMutationOptions<int, String, void>(const MutationOptions());
+      if (queryFirst) {
+        expect(queries, returnsNormally);
+        expect(mutations, returnsNormally, reason: 'query first');
+      } else {
+        expect(mutations, returnsNormally);
+        expect(queries, returnsNormally, reason: 'mutation first');
+      }
+      client.clear();
+    }
+  });
+
+  testFakeAsync(
+      'C7 / P4b (R6) mutation default first, then query default: the query '
+      'calls the query wrapper with its context', (time) async {
+    final client = testClient();
+    final seen = <Object?>[];
+    Object? common(Object? value) {
+      seen.add(value);
+      return 42;
+    }
+
+    client.setDefaultOptions(DefaultOptions(
+      queries: QueryDefaults(queryFn: common),
+      mutations: MutationDefaults(mutationFn: common),
+    ));
+    final mutationOptions = client
+        .defaultMutationOptions<int, String, void>(const MutationOptions());
+    expect(await mutationOptions.mutationFn!('vars'), 42);
+    expect(seen.last, 'vars');
+    expect(await client.query<int>(QueryOptions(queryKey: queryKey())), 42);
+    expect(seen.last, isA<QueryFunctionContext>());
+    client.clear();
+  });
+
+  // C8 — `build(state:)` only asserted; a release build accepted the state
+  // and the next observer died on `type 'Null' is not a subtype of 'int'`.
+  test(
+      'C8 / F5 (R11) build(state:) rejects a success state without data the '
+      'way setState does: an ArgumentError, not an assert', () {
+    final client = testClient();
+    final key = queryKey();
+    expect(
+      () => client.queryCache.build<int>(
+        client,
+        client.defaultQueryOptions(QueryOptions<int>(queryKey: key)),
+        state: const QueryState<int>(status: QueryStatus.success),
+      ),
+      throwsArgumentError,
+    );
+    expect(client.queryCache.queries, isEmpty);
+    client.clear();
+  });
+
+  // C9 — a removed query's silent cancel put its fetch status back to idle
+  // with a dispatch, *after* the cache's `QueryRemoved`.
+  testFakeAsync(
+      'C9 / F6 clear() during a fetch: no QueryUpdated after QueryRemoved',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final events = <String>[];
+    client.queryCache.subscribe((event) {
+      final action =
+          event is QueryUpdated ? ':${event.action.runtimeType}' : '';
+      events.add('${eventName(event)}$action');
+    });
+    final gate = Completer<int>();
+    client
+        .query<int>(QueryOptions(queryKey: key, queryFn: (_) => gate.future))
+        .ignore();
+    await time.flushMicrotasks();
+    client.clear();
+    await time.flushMicrotasks();
+    final removedAt = events.lastIndexOf('removed');
+    expect(removedAt, isNonNegative);
+    expect(events.sublist(removedAt + 1), isEmpty,
+        reason: 'events after removal: $events');
+    client.clear();
+  });
+
+  testFakeAsync(
+      'C9 / F6 removeQueries() during a fetch: a subscribed observer is not '
+      'notified from a query that already left the cache', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final gate = Completer<int>();
+    final observer = client.observe<int, int>(QueryObserverOptions(
+      queryKey: key,
+      queryFn: (_) => gate.future,
+    ));
+    final results = <QueryResult<int>>[];
+    final unsubscribe = observer.subscribe(results.add);
+    await time.flushMicrotasks();
+    final removedEvents = <QueryCacheEvent>[];
+    client.queryCache.subscribe((event) {
+      if (event is QueryUpdated && event.query.queryKey == key) {
+        removedEvents.add(event);
+      }
+    });
+    client.removeQueries(filters: QueryFilters(queryKey: key));
+    final before = results.length;
+    await time.flushMicrotasks();
+    expect(removedEvents, isEmpty,
+        reason: 'a removed query dispatched: '
+            '${removedEvents.map((e) => (e as QueryUpdated).action)}');
+    expect(results.length, before);
+    unsubscribe();
+    client.clear();
+  });
+
+  // C13 — the paging flags were only re-asked when the paging functions
+  // changed, on the assumption that an equal result means equal data; a
+  // `select` that collapses the change broke it.
+  testFakeAsync(
+      'C13 / P1 (R5) hasNextPage flips on a same-timestamp write whose '
+      'selected result is unchanged: the listener is told', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final stamp = DateTime.utc(2026);
+    client.setQueryData(
+        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        updatedAt: stamp);
+    final observer = InfiniteQueryObserver<int, int, int>(
+      client,
+      InfiniteQueryObserverOptions(
+        queryKey: key,
+        pageFn: (_) => 1,
+        initialPageParam: 0,
+        getNextPageParam: (last, _, __, ___) => last == 1 ? 1 : null,
+        select: (data) => data.pages.length,
+        enabled: Enabled.no,
+      ),
+    );
+    var notifications = 0;
+    final unsubscribe = observer.subscribe((_) => notifications++);
+    client.setQueryData(
+        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        updatedAt: stamp);
+    notifications = 0;
+    expect(observer.hasNextPage, isTrue);
+    client.setQueryData(
+        key, const InfiniteData<int, int>(pages: [2], pageParams: [0]),
+        updatedAt: stamp);
+    expect(observer.hasNextPage, isFalse);
+    expect(notifications, 1,
+        reason: 'hasNextPage flipped true -> false; upstream carries it on '
+            'the result and would have notified');
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync('C13 / P11 (R5) hasPreviousPage flips the same way',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final stamp = DateTime.utc(2026);
+    client.setQueryData(
+        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        updatedAt: stamp);
+    final observer = InfiniteQueryObserver<int, int, int>(
+      client,
+      InfiniteQueryObserverOptions(
+        queryKey: key,
+        pageFn: (_) => 1,
+        initialPageParam: 0,
+        getNextPageParam: (_, __, ___, ____) => null,
+        getPreviousPageParam: (first, _, __, ___) => first == 1 ? -1 : null,
+        select: (data) => data.pages.length,
+        enabled: Enabled.no,
+      ),
+    );
+    var notifications = 0;
+    final unsubscribe = observer.subscribe((_) => notifications++);
+    client.setQueryData(
+        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        updatedAt: stamp);
+    notifications = 0;
+    expect(observer.hasPreviousPage, isTrue);
+    client.setQueryData(
+        key, const InfiniteData<int, int>(pages: [2], pageParams: [0]),
+        updatedAt: stamp);
+    expect(observer.hasPreviousPage, isFalse);
+    expect(notifications, 1);
+    unsubscribe();
+    client.clear();
+  });
+
+  // C14 — the `select` memo compared with `identical` while the options
+  // compare with `==`: an instance-method tear-off re-ran on every
+  // `setOptions` that changed nothing.
+  testFakeAsync(
+      'C14 / P12 an instance-method tear-off select is not re-run per '
+      'setOptions (== but not identical)', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData(key, <int>[1, 2, 3]);
+    final selector = _Selector();
+    QueryObserverOptions<List<int>, int> options() =>
+        QueryObserverOptions<List<int>, int>(
+          queryKey: key,
+          enabled: Enabled.no,
+          select: selector.length,
+        );
+    final observer = QueryObserver<List<int>, int>(client, options());
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    final before = selector.calls;
+    var events = 0;
+    final unsubscribeCache = client.queryCache.subscribe((event) {
+      if (event is QueryObserverOptionsUpdated) events++;
+    });
+    for (var i = 0; i < 5; i++) {
+      observer.setOptions(options());
+    }
+    unsubscribeCache();
+    expect(events, 0, reason: 'defaulted options compare select by ==');
+    expect(selector.calls - before, 0,
+        reason: 'tear-off select was re-run on each setOptions');
+    expect(observer.currentResult.dataOrNull, 3);
+    unsubscribe();
+    client.clear();
+  });
+
+  // C16 — `onCancel` on an already-cancelled token ran the callback
+  // unisolated, so its throw escaped into the query function registering
+  // it; `cancel()`'s loop had isolated and reported to the zone all along.
+  testFakeAsyncGuarded(
+      'C16 / O3 onCancel on an already-cancelled token isolates a throwing '
+      'callback like the loop path does', (time, uncaught) async {
+    final token = QueryCancelToken();
+    token.cancel();
+    expect(
+        () => token.onCancel(() => throw StateError('late')), returnsNormally);
+    await time.flushMicrotasks();
+    expect(uncaught.whereType<StateError>(), hasLength(1));
+  });
+}
+
+class _Selector {
+  int calls = 0;
+  int length(List<int> data) {
+    calls++;
+    return data.length;
+  }
 }

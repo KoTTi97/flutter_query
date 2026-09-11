@@ -34,9 +34,10 @@ export 'package:query_kit/query_kit.dart' show QueryClient, DefaultOptions;
 /// that no timer is pending when the tree comes down — and it does that
 /// *before* any `tearDown` runs, so clearing the client from one is already
 /// too late. The end of a query widget test is therefore always the same
-/// three steps: tear the tree down, let the frame after it run, then
-/// `client.clear()`. Getting them wrong fails the test with a pending-timer
-/// error that says nothing about queries, which is a poor first hour with any
+/// steps: tear the tree down, let the frame after it run, `client.clear()`,
+/// and — for a mutation the clear dropped — let its callbacks run and clear
+/// once more. Getting them wrong fails the test with a pending-timer error
+/// that says nothing about queries, which is a poor first hour with any
 /// library.
 ///
 /// [createClient] builds the client — pass one to set `defaultOptions`. The
@@ -70,15 +71,23 @@ void queryWidgetTest(
   );
 }
 
-/// The three steps [queryWidgetTest] ends with, for a test that builds its
-/// own client or drives more than one.
+/// The steps [queryWidgetTest] ends with, for a test that builds its own
+/// client or drives more than one.
 ///
 /// Tears the tree down, lets the frame after it run — an observer released by
 /// the unmount notifies there — and then clears [client], which cancels the
-/// `gcTime` timers the test binding would otherwise refuse.
+/// `gcTime` timers the test binding would otherwise refuse. Then once more:
+/// a pending mutation the clear dropped fails a few microtasks later, and
+/// its error callbacks run then — an offline optimistic update's rollback
+/// writes the previous value back with `setQueryData`, which re-creates the
+/// query it names, gc timer included. The callbacks are let run and the
+/// cache is cleared again, so a test that leaves a mutation paused offline
+/// tears down like any other (ninth review, 2026-09-10, C11).
 Future<void> tearDownQueryClient(
     WidgetTester tester, QueryClient client) async {
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pumpAndSettle();
+  client.clear();
+  await tester.pump();
   client.clear();
 }

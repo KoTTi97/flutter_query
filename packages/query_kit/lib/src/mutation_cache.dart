@@ -252,8 +252,9 @@ class MutationCache
   /// event releases it. Upstream gates the whole call on
   /// `onlineManager.isOnline()` in `QueryClient.resumePausedMutations`
   /// instead (fifth review, 2026-09-09; the gate was the *start* rule until
-  /// the ninth review, 2026-09-10, C4). Completes when the states have
-  /// settled; an async `onSuccess` or `onSettled` may still be running.
+  /// the ninth review, 2026-09-10, C4). Completes when the resumed runs have
+  /// settled — callbacks run, states moved on — since `continueMutation`
+  /// hands on the run's own future (ninth review, 2026-09-10, C10).
   Future<void> resumePaused() async {
     final paused = _mutations
         .where((mutation) => mutation.state.isPaused && mutation.canResume)

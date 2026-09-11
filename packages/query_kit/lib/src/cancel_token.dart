@@ -58,9 +58,13 @@ class QueryCancelToken {
   /// Callbacks run *synchronously* inside [cancel], the way a browser's
   /// `AbortController` dispatches its abort event. A microtask's delay would be
   /// long enough for an in-flight page loop to start one more page.
+  ///
+  /// A callback's throw is its own, whichever path runs it: reported to the
+  /// zone, never thrown into [cancel]'s caller or into the query function
+  /// registering it late (ninth review, 2026-09-10, C16).
   void onCancel(void Function() callback) {
     if (isCancelled) {
-      callback();
+      _run(callback);
     } else {
       _callbacks.add(callback);
     }
@@ -82,13 +86,17 @@ class QueryCancelToken {
     final callbacks = List<void Function()>.of(_callbacks);
     _callbacks.clear();
     for (final callback in callbacks) {
-      // One callback's throw must not skip the rest, nor escape into the
-      // code that cancelled; it is the callback's error, reported as such.
-      try {
-        callback();
-      } catch (error, stackTrace) {
-        Zone.current.handleUncaughtError(error, stackTrace);
-      }
+      _run(callback);
+    }
+  }
+
+  // One callback's throw must not skip the rest, nor escape into the code
+  // that cancelled; it is the callback's error, reported as such.
+  static void _run(void Function() callback) {
+    try {
+      callback();
+    } catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
 }
