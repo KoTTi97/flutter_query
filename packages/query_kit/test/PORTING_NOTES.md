@@ -1168,13 +1168,19 @@ Core, fixed:
     `networkMode: always` mutation paused in the background was not resumed
     by a refocus while offline (review A's R40: refocus → 1 attempt,
     `setOnline(true)` → 2). The gate is per mutation now, inside
-    `MutationCache.resumePaused`: `canFetch(networkMode, onlineManager)`, the
-    same test the retryer applies. An `online` mutation is still left alone
-    offline, so `mount`'s listeners cannot hang on it. Upstream has the
-    *global* gate in `QueryClient.resumePausedMutations` (its per-mutation
-    `canContinue` is in the retryer, which only runs once resumed), so this
-    is a divergence rather than a port bug; the table's row from 4 is
-    corrected.
+    `MutationCache.resumePaused`. Upstream has the *global* gate in
+    `QueryClient.resumePausedMutations` (its per-mutation `canContinue` is in
+    the retryer, which only runs once resumed), so this is a divergence
+    rather than a port bug; the table's row from 4 is corrected.
+    *Corrected by the ninth review (C4, 2026-09-10):* the gate written here
+    was `canFetch(networkMode, onlineManager)`, called "the same test the
+    retryer applies" — but that is the retryer's *start* rule, and a paused
+    mutation is continued, under `networkMode == always || isOnline()`. For
+    `offlineFirst` the two differ, so an `offlineFirst` mutation paused
+    mid-retry *was* awaited offline and `mount`'s listeners *did* hang on it.
+    The gate is `Mutation.canResume` now: the continuation's network rule
+    (`canContinue` in `retryer.dart`) when a retryer exists, the start rule
+    for a restored mutation that has none.
 48. **`QueryClient.query()` wrote `retry: never` into the shared query for
     good** (D6; upstream-identical). The imperative default went into the
     query's options through `setOptions` and stayed: an observer with
@@ -1639,6 +1645,107 @@ because the record is what makes a decision reopenable:
   once. The two-line guard was kept as hardening, not as a fix for an observed
   defect, and it changes no behaviour the suites can see.
 
+### Ninth review (2026-09-10, of `f6a9ddd`)
+
+Four reviews of `f6a9ddd` — a release review, a deep-dive, an architecture
+review and a design pass — were consolidated on 2026-09-11; their findings are
+numbered C1–C59, and this section collects the rows as the tickets of map #33
+land them. Every finding is reproduced with the review's own probe before
+anything changes, and the regression keeps the probe's name next to the
+consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
+`port_specifics_test.dart` (`ninthReview()`) or `port_lifecycle_test.dart`.
+
+- **C3 — a throwing cache `onError`/`onSettled` hung every caller of the
+  fetch** (release R1, deep-dive F1; #37). `Query._settle` ran
+  `_cache.onQueryFetchError` *before* `operation.completeError`, unprotected,
+  and `_settle`'s own future is nobody's (`.ignore()`d in `fetch`): the hook's
+  exception vanished and the operation stayed open. The `client.query` that
+  started the fetch, the callers deduplicated onto it, and every
+  `invalidateQueries` / `refetchQueries` / `resetQueries` awaiting it waited
+  forever, while the query's state already said `error`. On the success path a
+  throwing `onSettled` fell into the same `catch` and rethrew from there —
+  also unheard. Probes: F1 ×3 and R1 ×2, `['pending', 'pending']` where
+  `['error', 'error']` was expected, `invalidateQueries` never completing.
+  Fixed in `_settle` by completing the operation *first* and running the hooks
+  through `_runCacheHook`, which reports a throw to the zone — the isolation
+  cache listeners and observer updates already have. Upstream's `fetch` *is*
+  the operation, so a throwing hook rejects it there and, on the success path,
+  dispatches an error over the data it just wrote; here the state is what the
+  hook was told about, the caller sees that state, and the hook's failure is
+  its own. Alternative not taken: completing the operation with the hook's
+  error, upstream-like — it would make callers disagree with the query's
+  state, and a telemetry hook's throw is not a transport failure.
+  Regressions: `C3 / F1 (R1) a throwing cache onError|onSettled still settles
+  every client.query caller of a failed fetch`, `… on the SUCCESS path still
+  settles the caller with the data the cache holds`, `… await
+  client.invalidateQueries() completes when the cache onError throws`.
+
+- **C4 — `resumePausedMutations()` hung offline on an `offlineFirst` retry,
+  and `mount()`'s focus refetches behind it** (release R4, deep-dive F3,
+  P3a/P3b; #37). The fifth review's per-mutation gate (47) was `canFetch` —
+  the retryer's *start* rule, `networkMode != online || isOnline()` — but a
+  paused mutation is not started, it is continued, and the retryer continues
+  under `networkMode == always || isOnline()`. The two differ for
+  `offlineFirst`, which may make its first attempt offline but cannot retry
+  offline: paused mid-retry, it passed the gate, `continueFetch` parked on the
+  pause completer, and `resumePaused` awaited a network that was not coming
+  back inside the call. `mount()` runs `resumePausedMutations` before every
+  focus and reconnect refetch, so while offline *every* focus event's refetch
+  — a `networkMode: always` query's included — was blocked behind the one
+  mutation. Item 47 below and the divergence table's row were wrong to call
+  `canFetch` "the same test the retryer applies"; both are corrected. Probes:
+  F3 ×2, P3a, P3b, R4 ×2 — `resumePausedMutations` completes `false` after a
+  day offline; focus-refetch count `1` (deep-dive) or `2` (with a control
+  round) where one more was expected. Fixed by gating on the continuation's
+  network rule: `Mutation.canResume` is `canContinue(networkMode,
+  onlineManager)` (new in `retryer.dart`, next to `canFetch`) when a retryer
+  exists, and the start rule for a restored mutation that has none yet.
+  Only the network is asked, deliberately: a pause for focus or for the
+  scope's turn is awaited, as upstream awaits it, because its own event
+  releases it — and the ported `should notify queryCache after
+  resumePausedMutations has finished when coming online` proved the scope
+  half, going red when the first cut of the gate included `canRun`
+  (`data2` overtook the scope-queued `mutation3`). Alternatives not taken:
+  making `mount()`'s focus path not await the resume at all — upstream orders
+  a mutation before the refetch that should reflect it, and with the gate
+  right nothing that cannot go on is awaited; and making `resumePaused`
+  resolve when a continued mutation re-pauses — a new contract for
+  `continueMutation`, for a case (a restored `offlineFirst` mutation whose
+  retry pauses offline inside the resume) that only stalls the one
+  `_resumeThen` in flight, since the next focus event's gate skips it.
+  Regressions, in `port_lifecycle_test.dart`: `C4 / F3 / P3 (R4)` — `F3 /
+  P3a (R4) resumePausedMutations completes while offline when the only paused
+  mutation is an offlineFirst retry that needs the network`, `F3 / P3b (R4) an
+  offlineFirst mutation paused offline does not suppress the focus refetch of
+  an independent networkMode.always query`.
+
+- **C5 — a mutation removed inside the `MutationAdded` event kept retrying
+  with its full policy; offline, its `mutateAsync` parked forever** (release
+  R7, deep-dive P5/P5b/P5c; #37). `MutationCache.build` emits `MutationAdded`
+  before the observer calls `execute`, so a listener removing the mutation
+  there ran `destroy` while `_retryer` was still `null`: the cancel hit
+  nothing, and the retryer `execute` built a moment later ran unaware —
+  `RetryPolicy.times(2)` made 3 attempts, `RetryPolicy.always` 31 in thirty
+  seconds, and offline the run paused for good with nobody left to resume it
+  (the mutation was no longer in any cache). The divergence table's "`Mutation.destroy`
+  stops the retries" row was false on this path; corrected. Probes: P5 `3`
+  attempts, P5b `31`, P5c `mutateAsync` still pending a day after
+  reconnecting. Fixed in `execute`, right after `_retryer = retryer`: `if
+  (_removed) retryer.cancelRetry(immediately: true)` — the cancel `destroy`
+  would have applied, now that there is something to apply it to. The one
+  attempt still runs if it can start (an in-flight request is left to
+  settle, as everywhere else); a run that cannot start rejects with a
+  `CancelledError` on the spot, the fifth review's rule for a mutation
+  removed during an async `onMutate`, so `mutateAsync` settles. Alternative
+  not taken: refusing to `execute` a removed mutation at all — it would skip
+  `onMutate`, the pending dispatch and the error callbacks, leaving the
+  observer at `idle` with a `mutateAsync` that never settled, the very shape
+  of the finding. Regressions: `C5 / P5 (R7) a mutation removed from the
+  cache inside the MutationAdded event does not retry after removal`, `C5 /
+  P5b (R7) the same through build() + remove() + execute(), with
+  RetryPolicy.always`, `C5 / P5c (R7) removed from MutationAdded while
+  offline, mutateAsync still settles`.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -1689,7 +1796,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | `initialData: null` / `placeholderData: null` mean "none" | `.value(null)` is a value of `null`; `.compute` returning `null` means "none" | review, 2026-09-09 |
 | a throwing `retry` / `retryDelay` callback leaves the fetch pending forever | the throw is the fetch's error | third review, 2026-09-09 |
 | a retry backoff runs to its end after the fetch was cancelled | the delay is a timer the retryer drops on resolve | third review, 2026-09-09 |
-| a mutation removed from the cache keeps retrying | `Mutation.destroy` stops the retries; the mutation fails with its last error (from a backoff) or a `CancelledError` (from a pause) | third and fourth review, 2026-09-09 |
+| a mutation removed from the cache keeps retrying | `Mutation.destroy` stops the retries; the mutation fails with its last error (from a backoff) or a `CancelledError` (from a pause). Removed before its run began — from inside `MutationAdded` — `destroy` has no retryer to stop yet, so `execute` applies the same cancel to the one it builds | third and fourth review, 2026-09-09; ninth review, 2026-09-10 (C5) |
 | a throwing observer listener becomes the query's error (via `Query.fetch`) | reported to the zone; the query keeps its state | third review, 2026-09-09 |
 | a throwing cancel callback skips the rest and escapes into the canceller | each is isolated and reported to the zone | third review, 2026-09-09 |
 | `Query.reset()` on an unobserved query leaves it in the cache for good | it re-arms collection | third review, 2026-09-09 |
@@ -1703,7 +1810,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | a fetch with no query function is retried like any failure, `retry` and backoff included | `MissingQueryFunctionError` is never retried: a configuration error, so the one attempt is the answer and the message is seen at once | A20, fourth review 2026-09-09 |
 | the `fetch` action is dispatched before the retryer is installed, so a listener reacting to it finds nothing to cancel or join | the retryer is installed first: `cancelQueries` from the fetching notification stops the request, and a `client.query` of the same key from the fetch event joins it | fifth review, 2026-09-09 (44) |
 | a caller joining a running fetch gets the retryer's promise; the first caller's `setData` and cache hooks run after it | every caller gets one operation future, settled after the cache write and the hooks (or the error dispatch), so all callers agree with the query's state | fifth review, 2026-09-09 (45) |
-| `resumePausedMutations` is gated on `onlineManager.isOnline()` as a whole | gated per mutation, with the retryer's own rule (`networkMode != online \|\| isOnline()`), so an `always` mutation paused for focus or its scope resumes offline | fifth review, 2026-09-09 (47) — replaces the "no-op while offline" wording of 4 |
+| `resumePausedMutations` is gated on `onlineManager.isOnline()` as a whole | gated per mutation, with the retryer's network rule for *continuing* (`networkMode == always \|\| isOnline()`; the start rule for a restored mutation that has no retryer yet), so an `always` mutation paused for focus or its scope resumes offline and an `offlineFirst` retry is left alone offline. A pause for focus or the scope's turn is awaited, as upstream awaits it | fifth review, 2026-09-09 (47) — replaces the "no-op while offline" wording of 4; the gate was the *start* rule until the ninth review, 2026-09-10 (C4) |
 | `fetchQuery` writes `retry: 0` into the shared query's options when the caller configured none | the imperative retry rule rides on `FetchOptions.retry` for that fetch alone; the query's options keep the observer's `retry` | fifth review, 2026-09-09 (48) |
 | `invalidateQueries` re-runs its filter for the refetch, so a state-dependent filter (`stale: false`, a predicate over `isInvalidated`) refetches none of what it invalidated | the match set is frozen before invalidating, like `resetQueries`; only `type` is re-evaluated | fifth review, 2026-09-09 (49) |
 | a `setOptions` on a running mutation moves it to the new `scope`'s queue | the scope is fixed per run; a change while pending moves nothing | fifth review, 2026-09-09 (46) |

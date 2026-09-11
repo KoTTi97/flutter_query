@@ -31,6 +31,16 @@ enum RetryerStatus {
 bool canFetch(NetworkMode networkMode, OnlineManager onlineManager) =>
     networkMode != NetworkMode.online || onlineManager.isOnline();
 
+/// Whether a paused fetch may go on under [networkMode] right now, as far as
+/// the network is concerned — the network half of the retryer's continuation
+/// rule (the other halves, focus and the scope's turn, are released by their
+/// own events). Stricter than [canFetch]: an [NetworkMode.offlineFirst] fetch
+/// may *begin* offline but cannot *continue* offline. What
+/// `MutationCache.resumePaused` asks before awaiting a paused mutation (ninth
+/// review, 2026-09-10, C4).
+bool canContinue(NetworkMode networkMode, OnlineManager onlineManager) =>
+    networkMode == NetworkMode.always || onlineManager.isOnline();
+
 /// Runs a fetch, retries it, and pauses it while the app is backgrounded or
 /// offline.
 ///
@@ -200,7 +210,7 @@ class Retryer<TData> {
 
   bool _canContinue() =>
       focusManager.isFocused() &&
-      (networkMode == NetworkMode.always || onlineManager.isOnline()) &&
+      canContinue(networkMode, onlineManager) &&
       canRun();
 
   void _tryContinue() {

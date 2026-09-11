@@ -727,4 +727,98 @@ void main() {
       client.clear();
     });
   });
+
+  group(
+      'C4 / F3 / P3 (R4) — resumePausedMutations gates on the continuation '
+      'rule', () {
+    // The gate was the *start* rule (`canFetch`), so an `offlineFirst`
+    // mutation paused mid-retry offline was awaited by every
+    // `resumePausedMutations` — the one `mount()` runs before each focus
+    // refetch included — and nothing offline could release it.
+    testFakeAsync(
+        'F3 / P3a (R4) resumePausedMutations completes while offline when '
+        'the only paused mutation is an offlineFirst retry that needs the '
+        'network', (time) async {
+      final client = testClient();
+      client.onlineManager.setOnline(false);
+      var attempts = 0;
+      final observer = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+          mutationFn: (v) {
+            attempts++;
+            if (attempts == 1) throw StateError('offline');
+            return v;
+          },
+          networkMode: NetworkMode.offlineFirst,
+          retry: const RetryPolicy.times(1),
+          retryDelay: const RetryDelay.fixed(Duration.zero),
+        ),
+      );
+      observer.mutate(1);
+      await time.advance(Duration.zero);
+      expect(attempts, 1, reason: 'offlineFirst makes its first attempt');
+      expect(observer.currentResult.isPaused, isTrue);
+      var completed = false;
+      unawaited(client.resumePausedMutations().then((_) => completed = true));
+      await time.advance(const Duration(days: 1));
+      expect(completed, isTrue,
+          reason: 'nothing can be continued offline; the call must not wait '
+              'for the network');
+      expect(attempts, 1);
+      // The network's return is what releases it, through mount()'s
+      // listener or a direct call.
+      client.onlineManager.setOnline(true);
+      await client.resumePausedMutations();
+      await time.flushMicrotasks();
+      expect(attempts, 2);
+      expect(observer.currentResult.status, MutationStatus.success);
+      observer.destroy();
+      client.clear();
+    });
+
+    testFakeAsync(
+        'F3 / P3b (R4) an offlineFirst mutation paused offline does not '
+        'suppress the focus refetch of an independent networkMode.always '
+        'query', (time) async {
+      final client = testClient()..mount();
+      client.onlineManager.setOnline(false);
+      var reads = 0;
+      final query = client.observe<int, int>(QueryObserverOptions(
+        queryKey: queryKey(),
+        queryFn: (_) => ++reads,
+        networkMode: NetworkMode.always,
+      ));
+      final unsubscribe = query.subscribe((_) {});
+      await time.flushMicrotasks();
+      expect(reads, 1);
+      // Control: with no paused mutation the focus refetch runs offline.
+      client.focusManager.setFocused(false);
+      client.focusManager.setFocused(true);
+      await time.flushMicrotasks();
+      expect(reads, 2);
+      final mutation = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+          mutationFn: (_) => throw StateError('offline'),
+          networkMode: NetworkMode.offlineFirst,
+          retry: const RetryPolicy.times(1),
+          retryDelay: const RetryDelay.fixed(Duration.zero),
+        ),
+      );
+      mutation.mutate(1);
+      await time.advance(Duration.zero);
+      expect(mutation.currentResult.isPaused, isTrue);
+      client.focusManager.setFocused(false);
+      client.focusManager.setFocused(true);
+      await time.advance(const Duration(days: 1));
+      expect(reads, 3, reason: 'the always query can run offline');
+      unsubscribe();
+      mutation.destroy();
+      client.onlineManager.setOnline(true);
+      await time.flushMicrotasks();
+      client.unmount();
+      client.clear();
+    });
+  });
 }

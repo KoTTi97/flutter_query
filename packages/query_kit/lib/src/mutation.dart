@@ -496,6 +496,26 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     return Future<void>.value();
   }
 
+  /// Whether the network lets [continueMutation] get anywhere right now — the
+  /// rule the cache's `resumePaused` applies before awaiting a paused
+  /// mutation.
+  ///
+  /// A run with a retryer continues under the retryer's network rule
+  /// ([canContinue]: online unless `always`); a restored run, which has no
+  /// retryer until it is executed, starts under the start rule ([canFetch]).
+  /// The two differ for `offlineFirst`: it may begin offline but not retry
+  /// offline. Gating on the start rule alone let `resumePaused` await an
+  /// `offlineFirst` retry that nothing offline could release, and every focus
+  /// refetch behind it. Only the network is asked: a pause for focus or for
+  /// the scope's turn is released by the focus listener or the scope-mate's
+  /// settling, so awaiting it is safe — and upstream's ordering, a mutation
+  /// before the refetch that should reflect it, depends on the scope case
+  /// being awaited (ninth review, 2026-09-10, C4).
+  @internal
+  bool get canResume => _retryer != null
+      ? canContinue(_options.networkMode, client.onlineManager)
+      : canFetch(_options.networkMode, client.onlineManager);
+
   /// Cancels the pending collection, and stops this mutation re-arming one.
   ///
   /// Called by the cache when the mutation is removed; user code removes a
@@ -577,6 +597,15 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       onContinue: () => _dispatch(const MutationContinueAction()),
     );
     _retryer = retryer;
+    // Removed from the cache before this run began — from inside the
+    // `MutationAdded` event, say — `destroy` found no retryer to stop, and
+    // the run it is about to make would otherwise retry with its full policy
+    // or, paused offline, park for good. The same cancel `destroy` applies,
+    // now that there is something to apply it to: one attempt at most, and a
+    // pause rejects on the spot (ninth review, 2026-09-10, C5).
+    if (_removed) {
+      retryer.cancelRetry(immediately: true);
+    }
 
     final isRestart = _state.status == MutationStatus.pending;
     TOnMutateResult? onMutateResult = _state.onMutateResult;

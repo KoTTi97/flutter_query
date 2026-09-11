@@ -818,8 +818,8 @@ class Query<TQueryData> extends Removable {
     try {
       final data = await retryer.start();
       setData(data);
-      _cache.onQueryFetchSuccess(this, data);
       operation.complete(data);
+      _runCacheHook(() => _cache.onQueryFetchSuccess(this, data));
     } catch (error, stackTrace) {
       if (error is CancelledError) {
         if (error.silent) {
@@ -845,8 +845,8 @@ class Query<TQueryData> extends Removable {
         }
       }
       _dispatch(QueryErrorAction(error, stackTrace));
-      _cache.onQueryFetchError(this, error, stackTrace);
       operation.completeError(error, stackTrace);
+      _runCacheHook(() => _cache.onQueryFetchError(this, error, stackTrace));
     } finally {
       if (identical(_retryer, retryer)) {
         _retryer = null;
@@ -862,6 +862,25 @@ class Query<TQueryData> extends Removable {
       if (_observers.isEmpty) {
         scheduleGc();
       }
+    }
+  }
+
+  /// Runs one of the cache's fetch hooks (`onSuccess`, `onError`,
+  /// `onSettled`) after the operation has been completed, reporting a throw
+  /// to the zone the way the cache's listeners and the observers' updates
+  /// are. Run *before* completing and unprotected, a throwing hook left the
+  /// operation open for good: `_settle` is nobody's future, so the exception
+  /// vanished and every caller of the fetch — the `client.query` that started
+  /// it, the ones deduplicated onto it, an `invalidateQueries` or
+  /// `refetchQueries` awaiting it — waited forever. Upstream's `fetch` is the
+  /// operation itself, so a throwing hook rejects it there; here the query's
+  /// state is already what the hook was told about, and a telemetry hook's
+  /// failure is not the fetch's (ninth review, 2026-09-10, C3).
+  void _runCacheHook(void Function() hook) {
+    try {
+      hook();
+    } catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
 

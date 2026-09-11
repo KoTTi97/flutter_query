@@ -9,7 +9,6 @@ import 'filters.dart';
 import 'mutation.dart';
 import 'mutation_options.dart';
 import 'query_client.dart';
-import 'retryer.dart';
 import 'subscribable.dart';
 
 /// Something happened to a mutation in the cache. The mutation-side twin of
@@ -242,22 +241,22 @@ class MutationCache
   /// resumed in. Resuming them one after another would make every paused
   /// mutation wait for the slowest one before it.
   ///
-  /// A mutation under [NetworkMode.online] is left alone while the device is
-  /// offline — it would only park on the same wait, and the returned future
-  /// would not complete until the network came back. The gate is per
-  /// mutation, so an `always` or `offlineFirst` mutation paused for focus or
-  /// its scope is resumed regardless of the network; upstream gates the whole
-  /// call in `QueryClient.resumePausedMutations` instead (fifth review,
-  /// 2026-09-09). Completes when the states have settled; an async
-  /// `onSuccess` or `onSettled` may still be running.
+  /// A mutation the network would not let go on is left alone — it would
+  /// only park on the same wait, and the returned future would not complete
+  /// until the network came back. The gate is per mutation and it is the
+  /// retryer's own network rule for continuing ([Mutation.canResume]): an
+  /// `always` mutation paused for focus or its scope is resumed offline, an
+  /// `online` one is not, and neither is an `offlineFirst` one paused
+  /// mid-retry, which may begin offline but cannot retry offline. A pause for
+  /// focus or for the scope's turn is awaited, as upstream awaits it: its own
+  /// event releases it. Upstream gates the whole call on
+  /// `onlineManager.isOnline()` in `QueryClient.resumePausedMutations`
+  /// instead (fifth review, 2026-09-09; the gate was the *start* rule until
+  /// the ninth review, 2026-09-10, C4). Completes when the states have
+  /// settled; an async `onSuccess` or `onSettled` may still be running.
   Future<void> resumePaused() async {
     final paused = _mutations
-        .where(
-          (mutation) =>
-              mutation.state.isPaused &&
-              canFetch(
-                  mutation.options.networkMode, mutation.client.onlineManager),
-        )
+        .where((mutation) => mutation.state.isPaused && mutation.canResume)
         .toList();
     await Future.wait<void>(
       // Errors belong to each mutation's state, not to whoever resumed it —

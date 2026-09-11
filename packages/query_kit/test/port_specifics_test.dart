@@ -452,6 +452,7 @@ void main() {
   fifthReviewObserver();
   showcaseFindings();
   eighthReview();
+  ninthReview();
 }
 
 // -----------------------------------------------------------------------------
@@ -2199,4 +2200,200 @@ class _CacheWatcher {
   int calls = 0;
 
   void onEvent(QueryCacheEvent event) => calls += 1;
+}
+
+// -----------------------------------------------------------------------------
+// Ninth review, 2026-09-10 (of `f6a9ddd`): four reviews consolidated on
+// 2026-09-11 as C1–C59. Each case keeps the name of the probe that found it
+// (deep-dive F/P numbers, release-review R numbers) and was red before its
+// fix. C4's cases are in `port_lifecycle_test.dart`.
+
+void ninthReview() {
+  // C3 — a throwing cache `onError`/`onSettled` left every caller of the
+  // fetch pending forever: the hook ran before the operation was completed
+  // and `_settle`'s own future is nobody's.
+  for (final hook in ['onError', 'onSettled']) {
+    testFakeAsyncGuarded(
+        'C3 / F1 (R1) a throwing cache $hook still settles every client.query '
+        'caller of a failed fetch', (time, uncaught) async {
+      final client = testClient(
+        queryCache: QueryCache(
+          onError: hook == 'onError'
+              ? (_, __, ___) => throw StateError('telemetry')
+              : null,
+          onSettled: hook == 'onSettled'
+              ? (_, __, ___, ____) => throw StateError('telemetry')
+              : null,
+        ),
+      );
+      final options = QueryOptions<int>(
+        queryKey: queryKey(),
+        queryFn: (_) => throw StateError('transport'),
+      );
+      var first = 'pending';
+      var joined = 'pending';
+      unawaited(client.query(options).then<void>((_) => first = 'data',
+          onError: (Object _) => first = 'error'));
+      unawaited(client.query(options).then<void>((_) => joined = 'data',
+          onError: (Object _) => joined = 'error'));
+      await time.advance(const Duration(minutes: 1));
+      expect(client.getQueryState<int>(options.queryKey)!.status,
+          QueryStatus.error);
+      expect([first, joined], ['error', 'error'],
+          reason: 'the operation future must settle whatever the hook does');
+      // The hook's failure is its own, reported to the zone once — not the
+      // fetch's, and not swallowed.
+      expect(uncaught.whereType<StateError>().map((e) => e.message),
+          ['telemetry']);
+      client.clear();
+    });
+  }
+
+  testFakeAsyncGuarded(
+      'C3 / F1 (R1) a throwing cache onSettled on the SUCCESS path still '
+      'settles the caller with the data the cache holds',
+      (time, uncaught) async {
+    final client = testClient(
+      queryCache: QueryCache(
+        onSettled: (_, __, ___, ____) => throw StateError('telemetry'),
+      ),
+    );
+    final key = queryKey();
+    var outcome = 'pending';
+    unawaited(client
+        .query<int>(QueryOptions(queryKey: key, queryFn: (_) => 42))
+        .then<void>((_) => outcome = 'data',
+            onError: (Object _) => outcome = 'error'));
+    await time.advance(const Duration(minutes: 1));
+    expect(client.getQueryData<int>(key), 42);
+    // Upstream's `fetch` would reject with the hook error here and dispatch
+    // an error over the data it just wrote; the query's state is what the
+    // hook was told about, so the caller sees that state.
+    expect(outcome, 'data');
+    expect(client.getQueryState<int>(key)!.status, QueryStatus.success);
+    expect(
+        uncaught.whereType<StateError>().map((e) => e.message), ['telemetry']);
+    client.clear();
+  });
+
+  testFakeAsyncGuarded(
+      'C3 / F1 (R1) await client.invalidateQueries() completes when the cache '
+      'onError throws', (time, uncaught) async {
+    final client = testClient(
+      queryCache: QueryCache(
+        onError: (_, __, ___) => throw StateError('telemetry'),
+      ),
+    );
+    var calls = 0;
+    final observer = client.observe<int, int>(QueryObserverOptions(
+      queryKey: queryKey(),
+      queryFn: (_) {
+        calls++;
+        if (calls > 1) throw StateError('transport');
+        return calls;
+      },
+      retry: RetryPolicy.never,
+    ));
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(observer.currentResult.dataOrNull, 1);
+    var invalidated = false;
+    unawaited(client.invalidateQueries().then((_) => invalidated = true));
+    await time.advance(const Duration(minutes: 1));
+    expect(observer.currentResult, isA<QueryError<int>>());
+    expect(invalidated, isTrue,
+        reason: 'invalidateQueries awaits the fetch futures');
+    expect(
+        uncaught.whereType<StateError>().map((e) => e.message), ['telemetry']);
+    unsubscribe();
+    client.clear();
+  });
+
+  // C5 — a mutation removed from the cache inside the `MutationAdded` event
+  // was destroyed before it had a retryer, so nothing stopped the run that
+  // followed: the full retry policy ran, and offline it parked for good.
+  testFakeAsync(
+      'C5 / P5 (R7) a mutation removed from the cache inside the '
+      'MutationAdded event does not retry after removal', (time) async {
+    final client = testClient();
+    var attempts = 0;
+    final unsubscribe = client.mutationCache.subscribe((event) {
+      if (event is MutationAdded) client.mutationCache.remove(event.mutation);
+    });
+    final observer = MutationObserver<int, int, void>(
+      client,
+      MutationOptions(
+        mutationFn: (_) {
+          attempts++;
+          throw StateError('fail');
+        },
+        retry: const RetryPolicy.times(2),
+        retryDelay: const RetryDelay.fixed(Duration(seconds: 1)),
+      ),
+    );
+    observer.mutate(42);
+    await time.advance(const Duration(seconds: 3));
+    expect(client.mutationCache.mutations, isEmpty);
+    expect(attempts, lessThanOrEqualTo(1),
+        reason: 'a removed mutation must not keep retrying');
+    expect(observer.currentResult.isError, isTrue);
+    unsubscribe();
+    observer.destroy();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'C5 / P5b (R7) the same through build() + remove() + execute(), with '
+      'RetryPolicy.always', (time) async {
+    final client = testClient();
+    var attempts = 0;
+    final mutation = client.mutationCache.build<int, int, void>(
+      client,
+      client.defaultMutationOptions(MutationOptions(
+        mutationFn: (_) {
+          attempts++;
+          throw StateError('fail');
+        },
+        retry: RetryPolicy.always,
+        retryDelay: const RetryDelay.fixed(Duration(seconds: 1)),
+      )),
+    );
+    client.mutationCache.remove(mutation);
+    mutation.execute(1).ignore();
+    await time.advance(const Duration(seconds: 30));
+    expect(attempts, lessThanOrEqualTo(1));
+    expect(time.pendingTimers, 0);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'C5 / P5c (R7) removed from MutationAdded while offline, mutateAsync '
+      'still settles', (time) async {
+    final client = testClient()..mount();
+    client.onlineManager.setOnline(false);
+    final unsubscribe = client.mutationCache.subscribe((event) {
+      if (event is MutationAdded) client.mutationCache.remove(event.mutation);
+    });
+    final observer = MutationObserver<int, int, void>(
+      client,
+      MutationOptions(mutationFn: (v) => v),
+    );
+    Object? settledWith;
+    unawaited(observer.mutateAsync(1).then<void>((_) => settledWith = 'data',
+        onError: (Object error) => settledWith = error));
+    await time.flushMicrotasks();
+    expect(client.mutationCache.mutations, isEmpty);
+    // A paused run with its retries cancelled rejects on the spot, as one
+    // removed during an async `onMutate` has since the fifth review; nothing
+    // is in flight and nothing would ever release it.
+    expect(settledWith, isA<CancelledError>());
+    client.onlineManager.setOnline(true);
+    await time.advance(const Duration(days: 1));
+    expect(observer.currentResult.isPaused, isFalse);
+    expect(time.pendingTimers, 0);
+    unsubscribe();
+    observer.destroy();
+    client.unmount();
+    client.clear();
+  });
 }
