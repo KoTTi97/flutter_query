@@ -61,7 +61,7 @@ because each is a behaviour you only know to check if you know the original:
 
 ## What review found
 
-Nine external deep-dive reviews found roughly **85 more** — again, none caught
+Nine rounds of external deep-dive review found roughly **100 more** — again, none caught
 by a ported case, because a ported case tests the port against upstream and
 these were about Dart and Flutter:
 
@@ -79,7 +79,8 @@ Every one of them has a regression test —
 `review_regressions_test.dart` in the binding — and PORTING_NOTES' "regressions
 found by review" section says what each was.
 
-**Four reported findings could not be reproduced.** They are written down too,
+**Six reported findings could not be reproduced** — four from the earlier
+rounds, two from the ninth, one of those plausible on a later SDK. They are written down too,
 with the disproof, because an unreproduced report is worth knowing about — and
 because "we checked, and here is what we found instead" is the only way that
 information survives.
@@ -98,10 +99,10 @@ That is what [the examples](examples.md) are for.
 
 | | |
 |---|---|
-| core | **549** tests, on the Dart VM and compiled to JavaScript |
-| binding | **84** widget tests |
-| showcase | **200** widget tests + **146** Playwright tests in Chromium |
-| task manager | **15** widget tests + **9** Playwright tests |
+| core | **586** tests, on the Dart VM and compiled to JavaScript |
+| binding | **98** tests, widget tests behind one harness |
+| showcase | **217** widget tests + **163** Playwright tests in Chromium |
+| task manager | **16** widget tests + **9** Playwright tests |
 | contract | **17** cases, each run against the fake backend *and* the real server |
 
 Every push runs all of it, plus the analyzer at `--fatal-infos`, the formatter,

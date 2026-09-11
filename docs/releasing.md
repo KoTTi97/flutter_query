@@ -32,9 +32,13 @@ The examples (`examples/showcase`, `examples/task_manager`) are never published
   binding's `query_kit` constraint names it (`^0.1.0`).
 - Both `CHANGELOG.md` files have a heading for exactly that version; pub
   validates it.
-- CI is green on `main`: it runs the tests, the analyzer, the formatter,
-  `dart doc`, `dart pub publish --dry-run` for both packages, a web build of
-  each example and both Playwright suites.
+- CI is green on `main` for the commit being tagged — every job of
+  `ci.yml`: `gates` (the five test suites, the core's also compiled to
+  JavaScript, the analyzer, the formatter, `dart doc --validate-links`,
+  `dart pub publish --dry-run` for both packages, a web build of each
+  example), `floors` (the suites on Flutter 3.27.4), `website` and both `e2e`
+  legs. The wizard's preflight looks this up for `HEAD` and refuses a red or
+  unfinished run.
 
 ## Tags
 

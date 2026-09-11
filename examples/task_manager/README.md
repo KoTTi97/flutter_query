@@ -114,8 +114,8 @@ real express backend.
 flutter test
 ```
 
-Fifteen widget tests — one per row of the MVP feature checklist, plus a
-regression found by review — running the real app, with its own client
+Sixteen widget tests — one per row of the MVP feature checklist, plus two
+regressions found by review — running the real app, with its own client
 defaults, against [`test/fake_backend.dart`](test/fake_backend.dart) — an
 in-memory stand-in for [`server/server.ts`](server/server.ts) wired in as a dio
 `HttpClientAdapter`. Only the transport is replaced: the app's own `TaskApi`,

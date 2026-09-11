@@ -138,6 +138,10 @@ road, each closed with the options, the answer and why. The research behind
 those tickets is under [`docs/research/`](docs/research/), and the one decision
 the maintainer kept for himself — the binding's API shape — is written up in
 [`docs/decisions/binding-api-shape.md`](docs/decisions/binding-api-shape.md).
+The release itself was a second map,
+[issue #33](https://github.com/KoTTi97/flutter_query/issues/33): the ninth
+review's findings, fixed or decided one ticket at a time, two of them as
+ADRs under [`docs/adr/`](docs/adr/).
 
 The rule that shaped everything: **closeness to upstream is a tiebreaker, not a
 goal.** Where a Dart or Flutter idiom is better, the port diverges and writes

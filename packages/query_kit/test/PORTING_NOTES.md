@@ -44,6 +44,12 @@ Suites not ported at all, each for one recorded reason:
 `streamedQuery.test.tsx` (experimental upstream; the Dart `Stream` mapping is
 fog).
 
+The totals at the 0.1.0 tag: 17 suites, 409 of their 535 upstream cases
+ported, and `dart test` runs 586 tests — the port-only cases
+(`smoke_test.dart`, `functional_improvements_test.dart`, `barrel_test.dart`)
+and the review regressions (`port_specifics_test.dart`,
+`port_lifecycle_test.dart`) included — on the VM and compiled to JavaScript.
+
 ## Omissions and adaptations, by suite
 
 ### `queriesObserver.test.tsx`
@@ -1650,9 +1656,10 @@ because the record is what makes a decision reopenable:
 
 Four reviews of `f6a9ddd` — a release review, a deep-dive, an architecture
 review and a design pass — were consolidated on 2026-09-11; their findings are
-numbered C1–C59, and this section collects the rows as the tickets of map #33
-land them. Every finding is reproduced with the review's own probe before
-anything changes, and the regression keeps the probe's name next to the
+numbered C1–C59, and this section holds the rows the tickets of map #33
+landed, one per finding or group of findings, complete at the 0.1.0 release
+commit (#47). Every finding was reproduced with the review's own probe before
+anything changed, and the regression keeps the probe's name next to the
 consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
 `port_specifics_test.dart` (`ninthReview()`) or `port_lifecycle_test.dart`.
 
@@ -2332,6 +2339,11 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   as their docs describe. Regression: `barrel_test.dart`'s `C24 the
   observer-internal paging aliases are hidden`.
 
+- **C22 — moot: what `testing.dart` should export** (deep-dive 3.14; #40).
+  The question assumed the export; ADR-0002 (#36, #42) removed the library
+  and the helper with it, so there is nothing left to shape. Nothing changed
+  for this id.
+
 - **C43 — `maxPages` is upstream-faithful; release R10 refuted, doc added**
   (release R10; #45). The release review lowered `maxPages` on a query
   already holding more pages and expected the next fetch to trim the excess
@@ -2478,6 +2490,48 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   nothing is shared *across* the two suites, which are separate npm projects
   with no repeated shape between them. Verified: the spec six times over
   (24/24), the whole suite 146/146 on that build.
+
+**Checked and not valid — §9 of the consolidated list.** Each of these was
+looked at once, on the record, and is closed; none is to be reinvestigated:
+
+- `maxPages` lowered on a query holding more pages must trim to the new limit
+  at once (release R10) — the port is upstream's arithmetic, one page per
+  directional fetch; a doc sentence (C43).
+- `QueryListener` must see every transition inside a `batch` (release R9) — a
+  `ValueListenable` carries no history, and a batch is the request to
+  coalesce; a doc sentence (C19).
+- the showcase's end-to-end flake is the SnackBar's 30 s duration (deep-dive
+  §5) — the evidence log shows a Playwright strict-mode double match on the
+  live region's announcement copy (C44).
+- the `testing.dart` dartdoc's `GcTime.never` example does not compile
+  (deep-dive 3.14) — no such snippet was there; folded into C22, itself moot.
+- `RefetchInterval.every`'s effective period is the interval plus the fetch
+  duration (deep-dive 3.25) — the timer is `Timer.periodic`; the proposed
+  correction would have been wrong.
+- an unchecked cache downcast at `query.dart:710–717` (architecture A11) — it
+  is an options cast; `client.queryCache` is already a `QueryCache`.
+- the reviews' own miscounts (A11, A4, the design pass) — `MutationCacheRef`
+  has ten members, not nine; sixteen widget-test files use the group finder,
+  not twenty-five; the duplicated lines are some 94–105, not 120–130. The
+  findings behind the numbers (C54, C56, C47) stand, for the next map.
+- `invalid_return_type_for_then` in `query_test.dart` (release R17) — no
+  diagnostic on Dart 3.10.7; carried as plausible (C29), not reproduced.
+- the deep-dive's own not-reproduced items — a silent drop in the notify
+  scheduler, leaks after a provider unmount, `QueryKey([double.nan])`, the
+  `_reject`/`_resolve` order, `cancelQueries(revert: false)` beside a
+  synchronous `query` (O1), R5 over a real refetch — checked by the deep-dive
+  itself and either not reproduced or upstream-identical; O1 was confirmed
+  upstream-identical here once more.
+- R12, the formatter gate — fixed in `9ac9010`, before the map.
+
+The round in numbers: C1–C46 landed, of which seventeen changed the library's
+behaviour (C1, C3–C10, C12–C14, C16–C18, C20, C23) and three its surface or
+dependency graph (C2, C21, C24); two could not be reproduced (C15, and C29 as
+plausible on a later SDK); two were moot by the time their ticket ran (C22,
+C45); one moved the demo (C40), two the showcase (C39, C44); C11 kept the
+core's rule and moved the teardown; the rest moved documentation or the
+release tooling. C47–C59, the structural findings, are out of this map's
+scope and the seed of the next one.
 
 ## Deliberate divergences that will show up in later suites
 

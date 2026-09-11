@@ -83,10 +83,10 @@ strategy, this sentence — was decided by an agent.
 
 - **Upstream's own test suite**, ported case for case. It is the one referee
   that cannot be talked round, and it found 22 bugs.
-- **Nine external deep-dive reviews**, each by a fresh reviewer with no memory
-  of the decisions, which found roughly 85 more.
+- **Nine rounds of external deep-dive review**, each by a fresh reviewer with
+  no memory of the decisions, which found roughly 100 more.
 - **A standing rule that no reported finding is acted on until it has been
-  reproduced.** Four confident findings turned out not to reproduce at all;
+  reproduced.** Six confident findings turned out not to reproduce at all;
   those are written down too, with the disproof.
 - **Two example applications** that use the library for real, whose failures
   found two bugs no unit test could reach.

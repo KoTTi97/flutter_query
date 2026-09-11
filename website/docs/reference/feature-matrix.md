@@ -19,7 +19,7 @@ description: What is here, what is deliberately not, and where the reason for ea
 | Mutation scopes (serialised writes) | `MutationScope` |
 | Infinite queries, both directions, `maxPages` | `InfiniteQueryOptions` |
 | `initialData` and `placeholderData` | including `keepPrevious` |
-| `select` and structural sharing | plus `buildWhen` on the builders |
+| `select` and structural sharing | `QuerySelectOptions`, a second options shape with `select` required ([ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md)); plus `buildWhen` on the builders |
 | A list of queries | `QueriesObserver` / `QueriesBuilder` |
 | Cache-wide mutation state | `MutationStateObserver` / `MutationStateController` |
 | Cache events and global callbacks | `queryCache.subscribe`, `mutationCache.subscribe`, `meta` |
@@ -64,6 +64,11 @@ that decided each one. The ones you are most likely to notice:
 - **`refetchMinBackgroundDuration`** suppresses a focus refetch after an
   absence too short to matter. Upstream always refetches; the default here is
   upstream's behaviour.
+- **Two options shapes, not one.** `QueryObserverOptions<TData>` has no
+  `select` and one type slot; `QuerySelectOptions<TQueryData, TData>` has a
+  required one. Upstream's one object with an optional `select` let a
+  literal without one infer its data type to `dynamic`; here that is a
+  compile error — [ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md).
 - **Every filter parameter is a named `filters:`.**
 - **A `Set` of listeners does not port.** Dart tear-offs compare equal
   (`watcher.onEvent == watcher.onEvent` is `true`, which is never true in JS),

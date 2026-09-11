@@ -5,30 +5,32 @@ A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
 **behavioural fidelity proven by porting the upstream test suite**, so fidelity
 work is first-class here, not an add-on.
 
-## Where the work stands (2026-09-09)
+## Where the work stands (2026-09-11)
 
 | Phase | State |
 |---|---|
-| **`packages/query_kit/`** — the pure-Dart core | **done, seven times reviewed.** 549 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
-| **`packages/query_kit_flutter/`** — the Flutter binding | **done, six times reviewed.** 97 widget tests behind one harness (`test/harness.dart`); four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
+| **`packages/query_kit/`** — the pure-Dart core | **done, nine times reviewed.** 586 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
+| **`packages/query_kit_flutter/`** — the Flutter binding | **done, nine times reviewed.** 98 tests behind one harness (`test/harness.dart`); four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46).** 27 screens, 217 widget tests against a dio fake of the backend and 163 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
-| **`examples/task_manager/`** — the acceptance demo, one whole app | **done, kept as is.** A small to-do app: 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against its real express backend; iOS and web generated |
+| **`examples/task_manager/`** — the acceptance demo, one whole app | **done, kept as is.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, and 9 Playwright end-to-end tests in a real browser against its real express backend; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
 reason — is
 [`packages/query_kit/test/PORTING_NOTES.md`](packages/query_kit/test/PORTING_NOTES.md),
 and it is the first thing to read before touching a ported suite. Nine
-external reviews (2026-09-08, five on 2026-09-09 and three on 2026-09-10)
-found some 85 bugs between
-them, none caught by a ported case; their regressions live in
+review rounds — one on 2026-09-08, four on 2026-09-09, three on 2026-09-10,
+and the ninth of `f6a9ddd`, four reviews consolidated as C1–C59 and worked
+off by map #33 on 2026-09-11 — found some 100 bugs between them, none caught
+by a ported case; their regressions live in
 `port_specifics_test.dart` and `port_lifecycle_test.dart` (core) and
 `review_regressions_test.dart` (binding),
 and the notes' "Regressions found by review" section says what each one was. **A review's finding is verified by
 reproducing it before anything is changed** — two of the second review's own
-reproductions did not exercise the code they claimed to, and four claims of
-2026-09-10 could not be reproduced at all; the notes record why, because an
-unreproduced report is worth writing down too.
+reproductions did not exercise the code they claimed to, four claims of
+2026-09-10 could not be reproduced at all, and the ninth round's C15 and C29
+joined them; the notes record why, because an unreproduced report is worth
+writing down too.
 
 ```bash
 cd packages/query_kit && dart test
@@ -99,7 +101,12 @@ The plan of record is [GitHub issue #1](https://github.com/KoTTi97/flutter_query
 frontier (open, unblocked, unassigned) is visible in GitHub's UI through native
 blocked-by edges. **Start there.** The map's Notes are the standing rules for
 every session; the wayfinding operations are in
-[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). Its successor,
+[issue #33](https://github.com/KoTTi97/flutter_query/issues/33) (release
+0.1.0), worked off the ninth review's findings C1–C46 — two of them as ADRs
+under [`docs/adr/`](docs/adr/) — and ended at the wizard's door with the
+release commit (#47); C47–C59, the structural findings, are the seed of the
+next map. Map #1's Notes and Decisions remain in force.
 
 What the map settles:
 
