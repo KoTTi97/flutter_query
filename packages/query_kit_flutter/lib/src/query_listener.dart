@@ -15,8 +15,14 @@ typedef ListenWhen<T> = bool Function(T previous, T next);
 /// Listens to query transitions without owning the supplied controller.
 class QueryListener<TQueryData, TData>
     extends _ResultListener<QueryResult<TData>> {
-  /// Does not invoke [listener] on mount. [listenWhen] sees every subsequent
-  /// transition, including ones following a previously rejected transition.
+  /// Does not invoke [listener] on mount. Each later notification of the
+  /// controller whose value differs from the last one seen is a transition,
+  /// and [listenWhen] sees each of them — a rejected transition still moves
+  /// the "previous" the next one is compared against. What a notification
+  /// carries is the controller's *latest* value, as with any
+  /// `ValueListenable`: two cache writes inside one `notifyManager.batch`
+  /// are one transition to the second value, not two (ninth review,
+  /// 2026-09-10, C19).
   const QueryListener({
     super.key,
     required QueryController<TQueryData, TData> controller,

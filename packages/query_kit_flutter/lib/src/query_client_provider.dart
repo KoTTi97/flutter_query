@@ -109,7 +109,9 @@ class QueryClientProvider extends StatefulWidget {
   /// `null` uses the built-in mapping the class doc describes, which reads
   /// `AppLifecycleState.inactive` differently per platform. Override it for a
   /// platform whose conventions differ, or to switch focus refetching to a
-  /// signal of your own (sixth review, 2026-09-10).
+  /// signal of your own (sixth review, 2026-09-10). The mapping given on the
+  /// latest build is the one in force: it is applied to the state the app is
+  /// in when it changes, and decides every transition after.
   final bool Function(AppLifecycleState state)? isAppShown;
 
   /// The nearest client above [context].
@@ -230,17 +232,32 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     // The listener only reports transitions; the state the app is already in
     // has to be read. A provider mounted while the app is hidden would
     // otherwise keep the client "focused" until the next show.
-    final isShown = widget.isAppShown ?? _isShown;
-    final current = WidgetsBinding.instance.lifecycleState;
-    if (current != null) {
-      client.focusManager.setFocused(isShown(current));
-    }
+    _applyCurrentLifecycleState(client);
     // Every transition, through one mapping — not `onShow`/`onHide`, which
     // are two of the transitions: `detached → resumed` fires neither, and
-    // left the client unfocused for good.
+    // left the client unfocused for good. The mapping is read when the
+    // transition arrives, not captured here: a `isAppShown` given on a later
+    // build then decides the next transition without re-wiring anything
+    // (ninth review, 2026-09-10, C17).
     _lifecycle = AppLifecycleListener(
-      onStateChange: (state) => client.focusManager.setFocused(isShown(state)),
+      onStateChange: (state) =>
+          client.focusManager.setFocused(_currentIsShown(state)),
     );
+  }
+
+  /// The mapping the latest build gave, or the built-in one.
+  bool _currentIsShown(AppLifecycleState state) =>
+      (widget.isAppShown ?? _isShown)(state);
+
+  /// Maps the state the app is in right now onto [client]'s focus — on mount,
+  /// and again when the mapping changes, so the change is not held back until
+  /// the next transition. `setFocused` with an unchanged value is a no-op, so
+  /// an inline closure that is new on every build costs one call of it.
+  void _applyCurrentLifecycleState(QueryClient client) {
+    final current = WidgetsBinding.instance.lifecycleState;
+    if (current != null) {
+      client.focusManager.setFocused(_currentIsShown(current));
+    }
   }
 
   void _stopObservingLifecycle() {
@@ -414,6 +431,12 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       if (widget.observeAppLifecycle) {
         _observeLifecycle(widget.client);
       }
+    } else if (widget.observeAppLifecycle &&
+        oldWidget.isAppShown != widget.isAppShown) {
+      // The listener reads the new mapping by itself; what it cannot do is
+      // re-map the state the app is already in, which the class doc promises
+      // is mapped too (ninth review, 2026-09-10, C17).
+      _applyCurrentLifecycleState(widget.client);
     }
     if (oldWidget.onlineStatus != widget.onlineStatus) {
       _follow(widget.onlineStatus);

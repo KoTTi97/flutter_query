@@ -384,18 +384,36 @@ class MutationController<TData, TVariables, TOnMutateResult>
 
   /// Fire and forget: the result lands in [value], errors never reach the
   /// caller.
+  ///
+  /// Still runs after [dispose] — see [mutateAsync].
   void mutate(
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,
   }) =>
-      _observer.mutate(variables, callbacks: callbacks);
+      mutateAsync(variables, callbacks: callbacks).ignore();
 
   /// Completes with the data, or throws.
+  ///
+  /// Called after [dispose] — a tap handler that awaited a dialog and whose
+  /// widget is gone by the time it gets here — the mutation still runs, with
+  /// its options' callbacks, and is collected after its `gcTime` like any
+  /// mutation nobody watches. Nothing lands in [value], and the per-call
+  /// [callbacks] are dropped, as they are for any run whose controller has no
+  /// listener. Upstream re-attaches the forgotten observer, so the mutation
+  /// stays in the cache for good; a disposed controller here does not come
+  /// back (ninth review, 2026-09-10, C18). Hold the controller above the
+  /// widget when the result is wanted after the widget is gone.
   Future<TData> mutateAsync(
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,
-  }) =>
-      _observer.mutateAsync(variables, callbacks: callbacks);
+  }) {
+    if (_disposed) {
+      return client.mutationCache
+          .build<TData, TVariables, TOnMutateResult>(client, _observer.options)
+          .execute(variables);
+    }
+    return _observer.mutateAsync(variables, callbacks: callbacks);
+  }
 
   /// Back to idle, detaching from the mutation being observed.
   void reset() => _observer.reset();

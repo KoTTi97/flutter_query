@@ -1,6 +1,7 @@
 /// Regressions found by the second, third and fourth external reviews
-/// (2026-09-09) and by the fifth and sixth (2026-09-10), each pinned by the
-/// case that reproduced it. Binding-only; the core's are in
+/// (2026-09-09), by the fifth and sixth (2026-09-10) and by the ninth
+/// (2026-09-10, consolidated 2026-09-11), each pinned by the case that
+/// reproduced it. Binding-only; the core's are in
 /// `query_kit/test/port_specifics_test.dart`.
 library;
 
@@ -1264,6 +1265,166 @@ void main() {
       expect(find.text('4'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       client.clear();
+    });
+  });
+
+  // ---- ninth review (2026-09-10, consolidated 2026-09-11) ------------------
+  // Each case keeps the probe's name (deep-dive `P`, release-review `R`) next
+  // to the consolidated id; the core's ninth-review rows are in
+  // `port_specifics_test.dart` and `port_lifecycle_test.dart`.
+
+  group('C17 (P1, R8) a changed isAppShown on the same client', () {
+    Widget tree(QueryClient client, bool shown) => QueryClientProvider(
+          client: client,
+          isAppShown: (_) => shown,
+          child: const SizedBox(),
+        );
+
+    testWidgets('decides the next transition without a remount',
+        (tester) async {
+      final client = newClient();
+      try {
+        await tester.pumpWidget(tree(client, false));
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        expect(client.focusManager.isFocused(), isFalse);
+        // Same client, same provider element: only the mapping changed. The
+        // listener used to capture the mapping it was installed with, and
+        // `didUpdateWidget` re-wired it only for a new client or a toggled
+        // `observeAppLifecycle`.
+        await tester.pumpWidget(tree(client, true));
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        expect(client.focusManager.isFocused(), isTrue,
+            reason: 'the mapping given on the latest build decides');
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        client.clear();
+      }
+    });
+
+    testWidgets('is applied to the state the app is already in',
+        (tester) async {
+      final client = newClient();
+      try {
+        await tester.pumpWidget(tree(client, false));
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        expect(client.focusManager.isFocused(), isFalse);
+        // No transition follows the change: the class doc promises the
+        // current state is mapped too, not only the transitions after it.
+        await tester.pumpWidget(tree(client, true));
+        expect(client.focusManager.isFocused(), isTrue);
+        await tester.pumpWidget(tree(client, false));
+        expect(client.focusManager.isFocused(), isFalse);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        client.clear();
+      }
+    });
+  });
+
+  group('C18 (P3a, P3b) mutate() on a disposed MutationController', () {
+    testWidgets('runs the mutation, attaches nothing, and lets it be collected',
+        (tester) async {
+      final client = newClient();
+      var runs = 0;
+      var optionCallbacks = 0;
+      var callCallbacks = 0;
+      final controller = MutationController<int, int, void>(
+        client,
+        MutationOptions<int, int, void>(
+          mutationFn: (v) async {
+            runs++;
+            return v;
+          },
+          onSuccess: (_, __, ___) => optionCallbacks++,
+          gcTime: const GcTimeDuration(Duration(seconds: 1)),
+        ),
+      );
+      try {
+        controller.dispose();
+        expect(controller.isDisposed, isTrue);
+        controller.mutate(
+          1,
+          callbacks: MutateCallbacks(onSuccess: (_, __, ___) {
+            callCallbacks++;
+          }),
+        );
+        await tester.pump();
+        expect(runs, 1, reason: 'fire-and-forget still fires');
+        final mutation = client.mutationCache.mutations.single;
+        expect(mutation.state.status, MutationStatus.success);
+        expect(mutation.observers, isEmpty,
+            reason: 'the destroyed observer used to re-attach itself here');
+        expect(optionCallbacks, 1,
+            reason: "the options' callbacks belong to the mutation");
+        expect(callCallbacks, 0,
+            reason: 'per-call callbacks belong to a live subscription');
+        expect(controller.value.isIdle, isTrue,
+            reason: 'nothing lands on a disposed controller');
+        await tester.pump(const Duration(seconds: 2));
+        expect(client.mutationCache.mutations, isEmpty,
+            reason: 'settled and unobserved: collected after gcTime');
+      } finally {
+        client.clear();
+        await tester.pump();
+      }
+    });
+
+    testWidgets('mutateAsync still completes with the data', (tester) async {
+      final client = newClient();
+      final controller = MutationController<int, int, void>(
+        client,
+        MutationOptions<int, int, void>(mutationFn: (v) async => v * 2),
+      );
+      try {
+        controller.dispose();
+        expect(await controller.mutateAsync(21), 42);
+        expect(client.mutationCache.mutations.single.observers, isEmpty);
+      } finally {
+        client.clear();
+        await tester.pump();
+      }
+    });
+
+    testWidgets(
+        'P3b a tap handler outliving its context.mutation widget leaks nothing',
+        (tester) async {
+      final client = newClient();
+      MutationController<int, int, void>? captured;
+      try {
+        await tester.pumpWidget(app(
+          client,
+          Builder(builder: (context) {
+            captured = context.mutation(MutationOptions<int, int, void>(
+              mutationFn: (v) async => v,
+              gcTime: const GcTimeDuration(Duration(seconds: 1)),
+            ));
+            return const SizedBox();
+          }),
+        ));
+        // The widget goes; the handler that captured its controller fires
+        // afterwards, as one does after awaiting a dialog.
+        await tester.pumpWidget(app(client, const SizedBox()));
+        await tester.pump();
+        expect(captured!.isDisposed, isTrue);
+        captured!.mutate(1);
+        await tester.pump();
+        expect(client.mutationCache.mutations.single.state.status,
+            MutationStatus.success);
+        await tester.pump(const Duration(seconds: 2));
+        expect(client.mutationCache.mutations, isEmpty);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        client.clear();
+      }
     });
   });
 }

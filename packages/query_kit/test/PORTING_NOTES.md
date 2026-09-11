@@ -1951,6 +1951,110 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   `_run`. Regression: `C16 / O3 onCancel on an already-cancelled token
   isolates a throwing callback like the loop path does`.
 
+- **C15 — not reproduced: `MutationStateController.addListener` has no
+  `_subscribing` guard, and needs none** (architecture review; #39). The
+  guard the third review put into `QueryController`, `MutationController`
+  and `QueriesController` closes a window their observers open: `subscribe`
+  on a `QueryObserver` can notify *synchronously* — the result moved on
+  while nobody listened, and `onSubscribe` reports the difference on the
+  spot — so a listener called from inside the first subscription could add
+  a second listener, whose `addListener` still saw no handle and subscribed
+  again. `MutationStateObserver.subscribe` has no such notification:
+  `_update(notify: false)` refreshes the result silently *before* the
+  listener is added, and `MutationCache.subscribe` (a `Subscribable`) never
+  notifies on subscribe either. There is no first notification to re-enter
+  from, so the guard's condition cannot arise. The probe drove the same
+  shape as the third review's regression — attach, detach, run a mutation
+  behind the detached observer, re-attach with a listener that adds a
+  listener — and counted `0` listener calls inside `addListener`; after
+  every listener left, `mutationCache.hasListeners` was `false`, one
+  subscription released once. No regression kept: the case would pin an
+  absence, and the third review's `a listener that leaves inside its first
+  notification unsubscribes` already pins the mechanism for the observers
+  that have it. The architecture review's C50 (one `ListenerRegistry` for
+  all six hand-written registries) is where a shared guard would belong,
+  and is out of this map's scope.
+
+- **C17 — a changed `isAppShown` was ignored until remount** (release R8,
+  deep-dive P1(R8); #39). `_observeLifecycle` captured
+  `widget.isAppShown ?? _isShown` into the `AppLifecycleListener` it
+  installed, and `didUpdateWidget` re-wired the listener only for a new
+  client or a toggled `observeAppLifecycle`; a provider rebuilt with a
+  different mapping kept mapping with the old one. Probes P1(R8) and R8:
+  `isFocused()` stayed `false` after `inactive → resumed` under a mapping
+  that says `true`. **Decision** — two options. (a) Read the mapping at
+  delivery time, so the latest build's decides the next transition; a
+  closure new on every build costs nothing, as the deep-dive's P15 asks.
+  (b) The same, and when the mapping's identity changes, re-apply it to the
+  state the app is already in. Taken: (b). The class doc promises the
+  current state is mapped, not only the transitions after it, and a mapping
+  switched from "never shown" to "shown" while the app sits resumed would
+  otherwise leave the client unfocused until the platform happens to send
+  something; `setFocused` with an unchanged value is a no-op, so an inline
+  closure costs one call of a pure function per provider rebuild — P15
+  stays green (the test binding reports no lifecycle state until one is
+  set, and the closure is not called for `null`). Rejected: re-wiring the
+  whole listener on a mapping change (a dispose and re-register of a
+  `WidgetsBindingObserver` per rebuild for an inline closure, for nothing
+  a delivery-time read does not give). Regressions: `C17 (P1, R8) a
+  changed isAppShown on the same client decides the next transition without
+  a remount`, `… is applied to the state the app is already in`.
+
+- **C18 — `mutate()` on a disposed `MutationController` re-attached the
+  destroyed observer, and the mutation was never collected** (deep-dive
+  P3a/P3b; #39). `dispose` destroys the observer — detaches it from its
+  mutation and drops its listeners — but `MutationObserver.mutateAsync`
+  builds a mutation and `addObserver(this)` unconditionally, so a `mutate`
+  after `dispose` put the dead observer back on a fresh mutation, and
+  `optionalRemove` (observers non-empty) never removed it. The scenario is
+  ordinary Flutter: a handler awaits a dialog, the widget is gone when it
+  continues, `context.mutation`'s controller is disposed, `mutate` runs.
+  Probes P3a and P3b: `[Mutation(1, MutationStatus.success)]` still in the
+  cache two seconds past a one-second `gcTime`, with one observer attached.
+  Upstream leaks identically (a forgotten `useMutation` observer re-attaches
+  the same way and nothing ever removes it). **Decision — diverge; four
+  options.** (1) Keep upstream's behaviour: rejected, the ticket's premise.
+  (2) Throw `StateError` from `mutate` and `mutateAsync` after `dispose`.
+  (3) `mutate` a no-op reported once through `FlutterError.reportError`,
+  `mutateAsync` a failed future. (4) Run the mutation without attaching:
+  `mutationCache.build(client, observer.options).execute(variables)`, the
+  path a mutation nobody observes already takes — the options' callbacks
+  run in the `Mutation`, the settled mutation arms its own collection
+  (fourth review), and `value` stays idle. Taken: (4). Under (2) and (3) the
+  user's save is *lost* — the dialog-then-mutate handler that works under
+  upstream stops working, and a throw after an `await` is an unhandled
+  async error that nobody's `try` sees; a leaked cache entry is the lesser
+  harm, and (4) removes even that. Per-call `callbacks` are dropped, which
+  is the existing rule for a run whose observer has no listener ("a
+  `mutate` whose widget has since gone must not call back") and what
+  upstream does for an unmounted component. `ChangeNotifier`'s
+  after-dispose assert is the Flutter precedent for (2), but it guards a
+  *listener* registration, which after dispose can only be a bug; a
+  mutation after dispose is the tap handler doing its job. Binding-only:
+  the core's `MutationObserver.destroy()` still says "for good" and its
+  `mutateAsync` still re-attaches — noted for the core, not changed here.
+  Regressions: `C18 (P3a, P3b) mutate() on a disposed MutationController
+  runs the mutation, attaches nothing, and lets it be collected`, `… 
+  mutateAsync still completes with the data`, `… P3b a tap handler
+  outliving its context.mutation widget leaks nothing`.
+
+- **C19 — `QueryListener`'s dartdoc promised every transition; R9 as a
+  behaviour bug is refuted** (release R9, deep-dive §4; #39). The release
+  review's R9 expected a listener to see `[1, 2]` for two `setQueryData`
+  writes inside one `notifyManager.batch`; it sees `[2]`. That is what a
+  `ValueListenable` is: a notification says "the value changed", the value
+  is read when it arrives, and a batch is precisely the request to coalesce
+  — the controller drops the observer's snapshot in `batchCalls((_) =>
+  _notify())` on purpose, and `_ResultListenerState._onResult` compares the
+  value it reads against the last one it saw. Probe R9: `[2]` where `[1,
+  2]` was expected; the deep-dive's P2 pins `[2]` and two raw notifications
+  as the intended behaviour. What was wrong was the sentence "sees every
+  subsequent transition", which a reader takes as "every write". Rewritten
+  on `QueryListener` to say what is delivered: each notification whose
+  value differs from the last one seen is a transition, `listenWhen` sees
+  each of those, a rejected one still advances the comparison, and a batch
+  of writes is one transition to the last value. Doc only; no regression.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -2034,3 +2138,4 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | `keepPreviousData` / `placeholderData: (prev) => prev` | `const PlaceholderData.keepPrevious()` — identical to `.compute((previous, _) => previous)` including its "a previous `null` means no placeholder" rule, but `const`, so it survives the observer's placeholder memoisation | functional improvements plan, `competitor-deep-dive.md` §6 #4 |
 | the binding: a provider always borrows its client | `QueryClientProvider.create` owns the client it builds and `clear()`s it once, after the inner provider unmounted; the `client:` form still borrows and never clears | functional improvements plan, `competitor-deep-dive.md` §6 #7 |
 | the binding: side effects need a builder that also rebuilds | `QueryListener` / `InfiniteQueryListener` / `MutationListener` borrow a controller, deliver each accepted transition off the build phase and never rebuild their `child`; a rejected `listenWhen` still advances the comparison state | functional improvements plan, `competitor-deep-dive.md` §6 #8 |
+| `mutate` on a forgotten `useMutation` observer re-attaches it to the new mutation, which is then never collected | the binding: `mutate`/`mutateAsync` on a disposed `MutationController` run the mutation through the cache without attaching anything — the options' callbacks run, the per-call ones are dropped as for any unlistened run, `value` stays idle, and the settled mutation is collected after its `gcTime` | ninth review, 2026-09-10 (C18) |
