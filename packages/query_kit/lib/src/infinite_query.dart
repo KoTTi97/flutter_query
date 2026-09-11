@@ -222,7 +222,12 @@ class InfiniteQueryOptions<TPageData, TPageParam>
   /// Only an option with one of these can page backwards.
   final PageParamFn<TPageData, TPageParam>? getPreviousPageParam;
 
-  /// How many pages to keep. Older ones fall off the far end.
+  /// How many pages to keep. Older ones fall off the far end — one per fetch:
+  /// a page added past the limit drops exactly one page from the other end
+  /// and never more (upstream's `addToEnd`/`addToStart` arithmetic), so on a
+  /// query already holding more pages than a lowered limit a page fetch
+  /// swaps one page for one, and the count comes down to the limit only at
+  /// the next refetch, which rebuilds the pages from the first.
   final int? maxPages;
 
   /// How many pages to fetch up front — used to warm a cache with several

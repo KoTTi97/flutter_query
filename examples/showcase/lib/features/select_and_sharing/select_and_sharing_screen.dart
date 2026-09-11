@@ -34,15 +34,15 @@
 ///   selected values are shared regardless. The fifth reader, the one
 ///   without `select`, is the control that should see it: with sharing off
 ///   the list in the cache is a new instance on every refetch, and upstream
-///   hands an observer without `select` the cache's data as it is. Measured,
-///   it does not see it either: the port's observer runs the cache's data
-///   through `replaceEqualDeep` against the last result it reported even
-///   without a `select` (`query_observer.dart`, the no-select branch of
-///   `createResult`), a pass upstream's `createResult` does not have — so
-///   the `(_, next) => next` opt-out that `StructuralSharing` documents as
-///   upstream's `structuralSharing: false` cannot reach any reader. The
-///   widget test that shows it is kept and skipped as a suspected library
-///   bug; what the switch provably does not do is proven as designed.
+///   hands an observer without `select` the cache's data as it is — and so
+///   does the port's, now: when this screen was first measured (2026-09-09)
+///   the observer ran the cache's data through `replaceEqualDeep` against
+///   the last result even without a `select`, a pass upstream's
+///   `createResult` does not have, which hid the `(_, next) => next` opt-out
+///   from every reader. That was a library bug; it is fixed in the core
+///   (the no-select branch of `createResult` passes cached data through) and
+///   recorded in the core's PORTING_NOTES under "Found by the showcase". The
+///   widget test that found it is green and runs with the rest.
 ///
 /// Proofs (widget tests in `test/features/select_and_sharing_test.dart`,
 /// end-to-end in `e2e/tests/select_and_sharing.spec.ts`): every reader shows
@@ -53,9 +53,9 @@
 /// (and the control); with sharing off, a refetch with equal data provably
 /// reaches the cache write (an equal list, but a new instance, where sharing
 /// on kept the old one) and still moves no `select` reader's `data builds`
-/// while the guard-less readers' `builds` climb; and — skipped, see above —
-/// the control's `data builds` should climb with sharing off and stand still
-/// once it is back on.
+/// while the guard-less readers' `builds` climb; and the control's
+/// `data builds` climbs with sharing off and stands still once it is back
+/// on.
 library;
 
 import 'package:flutter/material.dart';

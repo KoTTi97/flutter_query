@@ -231,14 +231,15 @@ void main() {
     });
   });
 
-  // Measured: the control's `data builds` stays at 1 with sharing off.
-  // `QueryObserver.createResult` runs the cache's data through
-  // `replaceEqualDeep` against the last result it reported even when there
-  // is no `select` (its `select == null` branch), a pass upstream's
+  // The library bug this screen found (2026-09-09): `QueryObserver.createResult`
+  // ran the cache's data through `replaceEqualDeep` against the last result
+  // it reported even when there was no `select`, a pass upstream's
   // `createResult` does not have (`data = state.data`), so the
-  // `(_, next) => next` opt-out on the cache write never reaches a reader.
-  // The core's own case for the opt-out only pins `query.state.data`.
-  // Reproduce by removing `skip`; `showcaseTest` has no `skip` of its own.
+  // `(_, next) => next` opt-out on the cache write never reached a reader and
+  // the control's `data builds` stayed at 1 with sharing off. Fixed in the
+  // core (its no-select branch now passes cached data through; PORTING_NOTES,
+  // "Found by the showcase", item 2); this case is the regression and runs
+  // green.
   group(
     'structural sharing off',
     () {

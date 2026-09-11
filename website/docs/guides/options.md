@@ -64,7 +64,7 @@ returned without a fetch; stale data is returned *and* refetched behind it.
 | `StaleTime.zero` | stale immediately — the default, as upstream |
 | `StaleTime.duration(d)` | fresh for `d` |
 | `StaleTime.infinite` | never stale by time, still refetched when explicitly asked |
-| `StaleTime.static` | never stale **and** skipped by every refetch trigger, `invalidateQueries` included — but not by an observer's own `refetch()` |
+| `StaleTime.static` | never stale **and** skipped by every refetch trigger — mount, focus, reconnect, `invalidateQueries`, `refetchQueries` — but not by an observer's own `refetch()`, and not by an explicit `refetchInterval`, which polls a static query exactly as it polls any other |
 | `StaleTime.dynamic((query) => …)` | computed per query |
 
 `StaleTime.static` is the "fetch this once, ever" option — it is what
@@ -117,6 +117,16 @@ The computed forms come in three families, named by what they compute:
 `.dynamic(fn)` computes the value itself from the query or the attempt
 (`StaleTime`, `RefetchInterval`, `RetryDelay`), and `.compute(fn)` produces
 data (`InitialData`, `PlaceholderData`).
+
+A computed form is equal to another when its function is. Two tear-offs of
+one top-level, static or instance method compare equal, and a `const` value
+is one value; a closure written inline in `build` is a new function on every
+build, so options carrying one never compare as unchanged — every rebuild is
+a `setOptions`. That costs an options-updated event, not a restart: the
+observer compares the *resolved* values before it touches a timer, so an
+inline `StaleTime.dynamic` or `RefetchInterval.dynamic` does not reset a poll
+on every frame. Keep the functions stable when you want the options to read
+as unchanged — `select` and `queryFn` included.
 
 While a query is retrying, `failureCount` and `failureReason` are on the
 result, so the UI can say "attempt 2 of 3" without owning a counter. A

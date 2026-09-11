@@ -170,7 +170,7 @@ Which of those fire, and when, is [options](../guides/options.md).
 ## A runnable version
 
 `packages/query_kit_flutter/example/` is a one-file tour of the same ground —
-a provider, a query read three ways and a mutation that invalidates it, with
+a provider, a query read two ways and a mutation that invalidates it, with
 no server. `flutter run` in that directory.
 
 For the full catalogue, every feature as its own screen against a real

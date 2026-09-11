@@ -16,8 +16,9 @@ one is the most common way to be surprised here.
 ## `select` narrows what a widget reads
 
 A `select` runs at the observer. A fetch that brings back data whose
-*selection* is equal stops there: no new result is produced, so nothing
-rebuilds.
+*selection* is equal keeps the previous selected value — same instance, so
+`data` is unchanged and anything compared on it (a `buildWhen` over
+`dataOrNull`, a child keyed on the data) sees no change.
 
 ```dart
 QuerySelectOptions<List<Task>, int>(
@@ -29,9 +30,10 @@ QuerySelectOptions<List<Task>, int>(
 
 What `select` does **not** narrow is the rest of the result. A widget is handed
 a `QueryResult`, and `fetchStatus`, `failureCount` and `dataUpdatedAt` are part
-of it. A background refetch that returns identical data still moves
-`dataUpdatedAt`, and that is a changed result — so the widget rebuilds with an
-unchanged `data`.
+of it — and of its `==`. A background refetch that returns identical data
+still moves `dataUpdatedAt` (and `fetchStatus` through `fetching` and back),
+and that is a changed result — so the widget **does** rebuild, with an
+unchanged `data`. If you want no rebuild at all, `buildWhen` is the tool.
 
 `select` is the tool for *what a widget reads*. `buildWhen` is the tool for
 *when it rebuilds*, and only the second one can ignore a metadata change.

@@ -62,7 +62,8 @@ example it mirrors, and how it is proven. Its widget tests are
 | `cache-inspector` | every entry and event of both caches, live | (devtools) |
 
 Not here, because the port does not have them: hydration and persisters,
-`useQueries`, `streamedQuery`, SSR. The reasons are in the core's
+`useQueries`' `combine` step (the homogeneous list is `query-collections`
+above), `streamedQuery`, SSR. The reasons are in the core's
 [PORTING_NOTES](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
 
 No screen presents one of the four call styles as the default; across the
@@ -135,7 +136,11 @@ paints to a canvas, so the tests read the **semantics tree**, switched on by
   backend answers, `holdRequest(page, glob)` holds the request in the browser
   and releases it after the assertion. Counts are asserted through the
   scenario's request log; a poll is proven to stop by sampling the count,
-  waiting, and sampling again.
+  waiting, and sampling again. The one deliberate exception is
+  `test/backend_contract_test.dart`'s `?delay` case, which times the real
+  server with a `Stopwatch`: there the delay *is* the contract under test,
+  nothing can be held or counted instead, and the bound is loose (280 ms for
+  a 300 ms delay) so a slow CI runner cannot fail it.
 - A `Card` that is a semantic container folds its texts into its accessible
   name; `SectionCard` opts out so every text stays findable. Buttons are their
   tooltips; a text field mirrors its text only once focused, so click before

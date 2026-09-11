@@ -560,13 +560,11 @@ class QueryClient {
   /// settled.
   ///
   /// [revert] puts each query back to the state it held before the cancelled
-  /// fetch — upstream's default too. [silent] is *not* on by default: a silent
-  /// cancel means "a new fetch is taking over", which is not what an explicit
-  /// cancel is.
-  ///
-  /// [silent] cancels without dispatching an error. A silently cancelled
-  /// fetch that nothing replaces is put back to `idle` rather than left
-  /// `fetching` forever — see [Query.cancel].
+  /// fetch — upstream's default too. [silent] cancels without dispatching an
+  /// error; it is *not* on by default, because a silent cancel means "a new
+  /// fetch is taking over", which is not what an explicit cancel is. A
+  /// silently cancelled fetch that nothing replaces is put back to `idle`
+  /// rather than left `fetching` forever — see [Query.cancel].
   Future<void> cancelQueries({
     QueryFilters filters = const QueryFilters(),
     bool revert = true,

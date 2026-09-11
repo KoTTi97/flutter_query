@@ -121,9 +121,13 @@ Future<List<Task>> listTasks(QueryFunctionContext context) {
 }
 ```
 
-`client.cancelQueries(filters: …)` cancels in flight. A cancel is *silent* by
-default: the query returns to `idle` rather than dispatching an error nobody
-asked for.
+`client.cancelQueries(filters: …)` cancels in flight. The defaults are
+`revert: true, silent: false`: each query goes back to the state it held
+before the fetch, `fetchStatus` `idle`, so a reader keeps the data it had, and
+whoever awaited the fetch gets that data back — or a `CancelledError` when
+there was none. `silent: true` is not the default: it means "a new fetch is
+taking over", and a silently cancelled fetch that nothing replaces is put
+back to `idle` too rather than left `fetching` forever.
 
 ## The mount contract
 

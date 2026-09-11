@@ -11,10 +11,12 @@ typedef FocusSetup = void Function() Function(
 
 /// Tracks whether the app is in the foreground.
 ///
-/// Pure Dart has no notion of focus, so the default is "focused" and changes
-/// arrive through [setFocused] or a [setEventListener] adapter — the Flutter
-/// binding installs one backed by `AppLifecycleListener`
-/// (https://github.com/KoTTi97/flutter_query/issues/19).
+/// Pure Dart has no notion of focus, so the default is "focused". Nothing is
+/// installed for you: changes arrive through [setFocused] — the Flutter
+/// binding's `QueryClientProvider` maps every `AppLifecycleState` onto it
+/// directly (https://github.com/KoTTi97/flutter_query/issues/19) — or through
+/// a [setEventListener] adapter of your own, for a focus source that is not
+/// the app lifecycle.
 class AppFocusManager extends Subscribable<void Function(bool focused)> {
   /// Creates a manager. [refetchMinBackgroundDuration] suppresses new focus
   /// refetches after shorter absences, without blocking paused work resuming.

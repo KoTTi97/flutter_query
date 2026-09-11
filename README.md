@@ -120,11 +120,11 @@ Each row is recorded, with its reason, in
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |
 | `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook |
-| `useQueries` / `QueriesObserver` | not ported |
+| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` (`QueriesBuilder` in the binding) is homogeneous; mixed data types need a `select`, and the returned list is mapped by the caller |
 | `streamedQuery` | not ported |
 | `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
 | `select` on `fetchQuery` | map the future |
-| `initialDataUpdatedAt` as a function | `DateTime?` only |
+| `initialDataUpdatedAt` as a function | `initialDataUpdatedAtCompute: () => DateTime?`, evaluated only when the data is actually seeded |
 | SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
 | `MutationFunctionContext` | not ported; a mutation function takes its variables only |
 | Callbacks in `setMutationDefaults` | not ported |

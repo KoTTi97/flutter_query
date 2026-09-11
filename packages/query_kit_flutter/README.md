@@ -238,14 +238,15 @@ a background refetch that brings back equal data is still a change, because
 `dataUpdatedAt` moved. Two tools narrow that down.
 
 `select` narrows the **data** a widget sees. A fetch that brings back data
-whose selection is equal stops at the observer: no new result is produced, so
-nothing rebuilds. What it does not narrow is the rest of the result — a widget
-is handed a `QueryResult`, and `fetchStatus`, `failureCount` and
-`dataUpdatedAt` are part of it. A background refetch that returns identical
-data still moves `dataUpdatedAt`, and that is a changed result, so the widget
-rebuilds with an unchanged `data`. `select` is the tool for *what a widget
-reads*; `buildWhen` below is the tool for *when it rebuilds*, and only the
-second one can ignore a metadata change.
+whose selection is equal keeps the previous selected value — same instance,
+so `data` is unchanged and anything compared on it sees no change. What it
+does not narrow is the rest of the result — a widget is handed a
+`QueryResult`, and `fetchStatus`, `failureCount` and `dataUpdatedAt` are part
+of it, and of its `==`. A background refetch that returns identical data
+still moves `dataUpdatedAt`, and that is a changed result, so the widget
+*does* rebuild, with an unchanged `data`. `select` is the tool for *what a
+widget reads*; `buildWhen` below is the tool for *when it rebuilds*, and only
+the second one can ignore a metadata change.
 
 Equal by value, for the part `select` does control: a `select` returning a
 fresh list every call is fine (lists are shared element by element), and so is
@@ -322,11 +323,15 @@ QueryClientProvider.create(
 That does three things while it is mounted:
 
 - **App lifecycle → focus.** Every lifecycle state the app reports is mapped
-  onto the client's focus state — `resumed` and `inactive` are focused,
-  `hidden`, `paused` and `detached` are not — so `refetchOnWindowFocus` works.
-  `inactive` counts as focused on purpose: on iOS it fires for the notification
-  shade and every system dialog, and treating those as "unfocused" would
-  refetch the world on the way back.
+  onto the client's focus state — `resumed` is focused, `hidden`, `paused` and
+  `detached` are not — so `refetchOnWindowFocus` works. `inactive` depends on
+  the platform, because the state means two different things: on iOS, Android
+  and Fuchsia it is a transient interruption (the notification shade, the app
+  switcher, an incoming call) and counts as focused, since treating those as
+  "unfocused" would refetch the world on the way back; on macOS, Windows and
+  Linux it is precisely the window losing focus — the event
+  `refetchOnWindowFocus` is named after — and counts as unfocused. Pass
+  `isAppShown` to decide it yourself.
 - **A build-aware scheduler.** Results are delivered right away outside a
   build — a tap handler or a resolved future is where Flutter expects a
   `setState`, and one `pump` in a test shows the new result — and after the

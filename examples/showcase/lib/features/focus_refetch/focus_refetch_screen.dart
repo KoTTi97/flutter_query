@@ -11,11 +11,14 @@
 ///
 /// Where focus comes from: in a real app `QueryClientProvider` installs an
 /// `AppLifecycleListener` and maps every `AppLifecycleState` onto
-/// `client.focusManager.setFocused(...)` — `resumed` and `inactive` are
-/// focused, `hidden`, `paused` and `detached` are not. A headless browser
-/// never reports a Flutter lifecycle transition, so the screen's own
-/// `App focused` switch calls `setFocused` directly and *is* the focus source
-/// the tests drive.
+/// `client.focusManager.setFocused(...)` — `resumed` is focused, `hidden`,
+/// `paused` and `detached` are not, and `inactive` depends on the platform:
+/// an interruption that counts as focused on iOS, Android and Fuchsia, the
+/// window losing focus — unfocused — on macOS, Windows and Linux (the
+/// provider's class doc has the reasoning; `isAppShown` overrides it). A
+/// headless browser never reports a Flutter lifecycle transition, so the
+/// screen's own `App focused` switch calls `setFocused` directly and *is*
+/// the focus source the tests drive.
 ///
 /// Entry C is the port's own `AppFocusManager(refetchMinBackgroundDuration:)`:
 /// a return to the foreground after an absence *shorter* than the threshold
@@ -52,7 +55,8 @@
 /// entry C, a full absence-and-return under the `long` threshold leaves
 /// `shouldRefetchOnFocus=false` with its fetch count unmoved, the same
 /// sequence under `none` refetches, and an `inactive`-only blip — which maps
-/// to focused, so it is no absence at all — changes nothing under either.
+/// to focused on the test binding's default platform, Android, so it is no
+/// absence at all — changes nothing under either.
 /// The threshold is measured with `package:clock`, which under a widget test
 /// is real time, not pumped time: the tests use an hour, so every absence
 /// they stage is short, and `Duration.zero` for the other side.
@@ -427,8 +431,10 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
               Text(
                 'In a real app QueryClientProvider installs an '
                 'AppLifecycleListener and maps every state onto the focus '
-                'manager: resumed and inactive are focused, hidden, paused '
-                'and detached are not. A headless browser reports no such '
+                'manager: resumed is focused, hidden, paused and detached '
+                'are not, and inactive is focused on a phone (an '
+                'interruption) but not on a desktop (the window lost '
+                'focus). A headless browser reports no such '
                 'transition, so this switch calls '
                 'client.focusManager.setFocused(false) and (true) itself, and '
                 'is the focus source the tests drive.',

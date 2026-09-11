@@ -247,11 +247,13 @@ MutationOptions<String, String, ListSnapshot> deleteTaskMutation(
           }
         }
       },
-      onSettled: (_, __, ___, id, ____) async {
-        client.removeQueries(
-            filters: QueryFilters(queryKey: TaskKeys.detail(id)));
-        await client.invalidateQueries(
-          filters: QueryFilters(queryKey: TaskKeys.lists),
-        );
-      },
+      // The per-task entry goes only once the server has agreed: a refused
+      // delete springs the row back, and the detail screen behind it must
+      // still render from the seeded entry rather than fetch it again.
+      onSuccess: (_, id, __) => client.removeQueries(
+        filters: QueryFilters(queryKey: TaskKeys.detail(id)),
+      ),
+      onSettled: (_, __, ___, ____, _____) => client.invalidateQueries(
+        filters: QueryFilters(queryKey: TaskKeys.lists),
+      ),
     );

@@ -10,7 +10,7 @@ Three, of increasing size.
 
 ## The one-file tour
 
-`packages/query_kit_flutter/example/` — a provider, one query read three ways
+`packages/query_kit_flutter/example/` — a provider, one query read two ways
 and a mutation that invalidates it, with no server at all. `flutter run` in
 that directory. It is what pub.dev shows on the package page.
 

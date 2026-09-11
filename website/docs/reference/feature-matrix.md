@@ -45,7 +45,7 @@ No omission is silent.
 | `streamedQuery` | not ported |
 | `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
 | `select` on `fetchQuery` | map the future |
-| `initialDataUpdatedAt` as a function | `initialDataUpdatedAtCompute`, a `DateTime?` |
+| `initialDataUpdatedAt` as a function | `initialDataUpdatedAtCompute`, a `DateTime? Function()` evaluated only when the data is actually seeded |
 | SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
 | `MutationFunctionContext` | not ported; a mutation function takes its variables only |
 | Callbacks in `setMutationDefaults` | not ported |

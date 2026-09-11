@@ -84,8 +84,10 @@ Future<void> backgroundAndReturn(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// A notification shade or an incoming call: `inactive` maps to *focused*, so
-/// focus never drops and no focus event is raised at all.
+/// A notification shade or an incoming call: `inactive` maps to *focused* on
+/// the test binding's default platform, Android (on a desktop platform it
+/// would be the window losing focus), so focus never drops and no focus event
+/// is raised at all.
 Future<void> inactiveBlip(WidgetTester tester) async {
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -307,8 +309,8 @@ void main() {
 
       await inactiveBlip(tester);
 
-      // `inactive` is focused, so focus never dropped: no event, nothing
-      // suppressed, nothing refetched.
+      // `inactive` is focused on Android, the test platform, so focus never
+      // dropped: no event, nothing suppressed, nothing refetched.
       expect(facts('reader-c', 'focused=true'), findsOneWidget);
       expect(facts('reader-c', 'shouldRefetchOnFocus=true'), findsOneWidget);
       expect(facts('reader-c', 'fetches=1'), findsOneWidget);

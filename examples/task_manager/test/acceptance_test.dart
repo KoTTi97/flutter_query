@@ -270,6 +270,38 @@ void main() {
     expect(find.text('Draft the changelog'), findsNothing);
   });
 
+  demoTest('a refused delete keeps the per-task entry', (tester) async {
+    await start(tester);
+    // The list refetch that follows any settled delete re-seeds every
+    // per-task entry, so "is the entry there afterwards" cannot tell the
+    // mutation's own callbacks apart from the reseed. The cache's event log
+    // can: a removal is a `QueryRemoved`, and a refused delete must raise
+    // none for the task it failed to delete.
+    final removed = <QueryKey>[];
+    final unsubscribe = client.queryCache.subscribe((event) {
+      if (event is QueryRemoved) {
+        removed.add(event.query.queryKey);
+      }
+    });
+
+    // The first delete attempt fails, by the backend's script.
+    await tester.tap(find.byTooltip('Delete Draft the changelog'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('The server refused the delete — try again'),
+      findsOneWidget,
+    );
+    expect(removed, isNot(contains(TaskKeys.detail('1'))));
+    expect(client.getQueryData<Task>(TaskKeys.detail('1')), isNotNull);
+
+    // The retry goes through, and only then does the entry go.
+    await tester.tap(find.byTooltip('Delete Draft the changelog'));
+    await tester.pumpAndSettle();
+    expect(removed, contains(TaskKeys.detail('1')));
+    expect(client.getQueryData<Task>(TaskKeys.detail('1')), isNull);
+    unsubscribe();
+  });
+
   demoTest('creating a task invalidates every list', (tester) async {
     await start(tester);
     final before = requestsFor('GET /tasks');

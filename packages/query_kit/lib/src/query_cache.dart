@@ -103,9 +103,14 @@ final class QueryObserverResultsUpdated extends QueryCacheEvent {
 ///
 /// Upstream casts blindly and TypeScript cannot catch it; here the mismatch is
 /// always a bug, so it is loud rather than a silent `null`
-/// (https://github.com/KoTTi97/flutter_query/issues/7). [queryKey] is `null`
-/// when the default that produced the value has no key to name: a sharing
-/// hook sees only the data, and a mutation function only its variables.
+/// (https://github.com/KoTTi97/flutter_query/issues/7). It is thrown
+/// *synchronously*, from the call that reads or writes the key —
+/// `getQueryData`, `setQueryData`, `getQueriesData`, `updateQueriesData`,
+/// `QueryClient.query` and an observer's `setOptions` all throw before any
+/// future exists; only the erased-default case surfaces through the fetch or
+/// mutation the default ran in, as its error. [queryKey] is `null` when the
+/// default that produced the value has no key to name: a sharing hook sees
+/// only the data, and a mutation function only its variables.
 final class QueryDataTypeError implements Exception {
   /// Creates the error for a read of [queryKey] that [expected] one type and
   /// found [actual].

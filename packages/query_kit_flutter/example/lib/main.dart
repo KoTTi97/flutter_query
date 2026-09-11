@@ -1,4 +1,4 @@
-// A one-file tour: a provider, a query read three ways, and a mutation that
+// A one-file tour: a provider, a query read two ways, and a mutation that
 // invalidates it. No server — the "API" is a delay and a list.
 //
 //   flutter run
@@ -31,8 +31,11 @@ QueryObserverOptions<List<String>> tasksQuery() => QueryObserverOptions(
       staleTime: const StaleTime.duration(Duration(seconds: 30)),
     );
 
-/// The same entry, reduced to one flag — a `select` shares the cache entry
-/// and only rebuilds its reader when the selected value changes.
+/// The same entry, reduced to one flag. A `select` shares the cache entry;
+/// its reader still rebuilds whenever the *result* changes — `fetchStatus`
+/// and `dataUpdatedAt` are part of it, so every refetch is a rebuild, which
+/// is exactly what a spinner needs. `select` keeps `data` stable, and
+/// `buildWhen` on a builder is what would skip the rebuild.
 QuerySelectOptions<List<String>, bool> fetchingQuery() => QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: fetchTasks,

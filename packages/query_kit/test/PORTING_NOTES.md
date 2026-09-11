@@ -2055,6 +2055,14 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   value differs from the last one seen is a transition, `listenWhen` sees
   each of those, a rejected one still advances the comparison, and a batch
   of writes is one transition to the last value. Doc only; no regression.
+  The widget side of the same rule was wrong the other way (C32, #45): the
+  rebuilds guide, the binding README and the package example said a refetch
+  returning equal data produces "no new result, so nothing rebuilds", but
+  `QueryResult ==` includes `fetchStatus` and `dataUpdatedAt`, so that
+  refetch *is* a new result and the widget does rebuild, with an unchanged
+  `data` — which is what the showcase's `select-and-sharing` counters have
+  shown all along. Rewritten to say so; `buildWhen` is named as the tool for
+  a reader who wants no rebuild.
 
 - **C1 — an options literal without `select` inferred its data type to
   `dynamic`** (deep-dive B1/B3/B6, api-design probe; #35, #41; ADR-0001).
@@ -2323,6 +2331,74 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   and `QueriesObserver`'s discarded `defaultQueryObserverOptions` call stay
   as their docs describe. Regression: `barrel_test.dart`'s `C24 the
   observer-internal paging aliases are hidden`.
+
+- **C43 — `maxPages` is upstream-faithful; release R10 refuted, doc added**
+  (release R10; #45). The release review lowered `maxPages` on a query
+  already holding more pages and expected the next fetch to trim the excess
+  at once; it trimmed one page. That is upstream's arithmetic
+  (`infiniteQueryBehavior.ts`, `addToEnd`/`addToStart` in `utils.ts`): a
+  page added past the limit drops exactly one page from the other end
+  (`slice(1)` / `slice(0, -1)`), never more, and the port's `addToEnd` /
+  `addToStart` in `infinite_query.dart` do the same — a directional fetch
+  swaps one page for one, and the count comes down to the new limit at the
+  next refetch, whose loop rebuilds the pages from the first under
+  `maxPages`. Behaviour kept; the `maxPages` dartdoc now says so, so the
+  next reader is not surprised. Doc only; no regression. (Not to be
+  confused with the fifth review's item 58, whose "R10" is that review's
+  own numbering and concerns `StaleTime.static` polling.)
+
+- **C31–C38, C42, C46 — documentation and example corrections** (deep-dive
+  3.18–3.25, architecture review; #45). Every claim was checked against the
+  code before the text moved, and the code was right each time. C31: the
+  binding README and the showcase's `focus-refetch` screen said `inactive`
+  "counts as focused on purpose"; `QueryClientProvider` reads it per
+  platform (focused on iOS, Android and Fuchsia, unfocused on macOS, Windows
+  and Linux) and the class doc and site already said so — README, screen and
+  the showcase test's comments now agree, naming Android as the test
+  binding's platform. C33: the root README listed `QueriesObserver` as "not
+  ported" and `initialDataUpdatedAt` as "`DateTime?` only" — both exist
+  (`queries_observer.dart`, `initialDataUpdatedAtCompute`); the showcase
+  README said `useQueries` was absent two rows below the `query-collections`
+  screen that shows it; the feature matrix called the compute form "a
+  `DateTime?`". C34: the `select-and-sharing` screen and test described the
+  no-select sharing pass as an open bug with a skipped test; it was fixed on
+  2026-09-09 ("Found by the showcase", item 2) and the test runs green — the
+  comments now say what was found and that it is fixed. C35: the site said a
+  cancel is "silent by default"; `cancelQueries` is `revert: true, silent:
+  false`. C36: the options page said `StaleTime.static` is "skipped by every
+  refetch trigger"; an explicit `refetchInterval` polls it (item 58 above),
+  and the page now says so beside the dartdoc. C37: the core changelog's
+  bullet written relative to unpublished revisions ("used to fire a fraction
+  early", "no longer rewrites") is gone; what stays is absolute, and the
+  test count is not repeated there. The binding changelog had no relative
+  bullet. C38: "three ways" is "two" in `examples.md`, `first-query.md` and
+  the package example (the file has two styles); the `cancelQueries`
+  dartdoc described `silent` twice; `QueryDataTypeError` now says it is
+  thrown synchronously from the call (`QueryClient.query` is not `async`),
+  the erased-default case excepted; the options page says a computed form
+  is equal when its function is, so an inline closure never reads as
+  unchanged, and that the observer compares resolved values before touching
+  a timer (third review). The binding README's `app(client, …)` was already
+  gone — #42 rewrote that section. Not done, on purpose: the deep-dive's
+  "effective period = interval + fetch duration" for `RefetchInterval.every`
+  — the timer is `Timer.periodic`, the correction would be wrong. C42: the
+  `AppFocusManager` doc said the binding installs a `setEventListener`
+  adapter; it calls `setFocused` directly — reworded like
+  `OnlineManager`'s. C46: the showcase README names
+  `backend_contract_test.dart`'s `Stopwatch` as the one exception to "no
+  clock in any assertion" and why. Doc only; no regression.
+
+- **C40 — the task manager removed a task's detail entry after a *refused*
+  delete** (deep-dive 3.27; #45). `deleteTaskMutation.onSettled` called
+  `removeQueries` on `TaskKeys.detail(id)` whether or not the server agreed,
+  so a rejected delete rolled the row back into the list and dropped the
+  entry the detail screen behind it renders from. Moved to `onSuccess`; the
+  list invalidation stays in `onSettled`. Behaviour change in the demo, not
+  the library. Regression: `examples/task_manager/test/acceptance_test.dart`'s
+  `a refused delete keeps the per-task entry` — it reads the cache's
+  `QueryRemoved` events, because the list refetch that follows any settled
+  delete re-seeds every entry and would mask the removal; against the old
+  code it fails with the detail key in the removed list.
 
 ## Deliberate divergences that will show up in later suites
 
