@@ -994,7 +994,7 @@ void main() {
     // `clear()` just emptied, gc timer included. Decided as the behaviour:
     // `clear()` empties, it does not seal, and a write after it is a write.
     // The teardown that must leave nothing pending lets the callbacks run
-    // and clears again; the binding's `tearDownQueryClient` does.
+    // and clears again; the widget-test teardown the binding documents does.
     testFakeAsync(
         'P6 the onError rollback re-creates the query after clear(); a second '
         'clear once the callbacks ran leaves nothing pending', (time) async {

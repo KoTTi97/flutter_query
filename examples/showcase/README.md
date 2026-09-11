@@ -98,8 +98,9 @@ cd examples/showcase && flutter test
 `server/seed.json`, and scripts the same faults. `test/harness.dart` has
 `showcaseTest`: a fresh backend and client per test, the app opened on one
 route, and the teardown a `QueryClient` needs (tear the tree down, let the
-frame after it run, then `client.clear()` — the test binding checks for
-pending timers before any `tearDown`). Two rules learned the hard way: the
+frame after it run, `client.clear()`, then one more pump and clear for what a
+dropped mutation's callbacks wrote — the test binding checks for pending
+timers before any `tearDown`; the site's testing guide has the snippet). Two rules learned the hard way: the
 fake's latency is a timer, so step it with `tester.pump(duration)` —
 `pumpAndSettle` only pumps while a frame is scheduled; and a screen that polls
 or retries is stepped the same way, because `pumpAndSettle` never returns

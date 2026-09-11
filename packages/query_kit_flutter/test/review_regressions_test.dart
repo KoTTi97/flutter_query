@@ -17,6 +17,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'harness.dart';
+
 final key = QueryKey(<Object?>['review']);
 
 QueryClient newClient() => QueryClient(
@@ -30,12 +32,6 @@ QueryObserverOptions<String> seeded() => QueryObserverOptions(
       queryKey: key,
       enabled: Enabled.no,
       staleTime: StaleTime.infinite,
-    );
-
-Widget app(QueryClient client, Widget child) => QueryClientProvider(
-      client: client,
-      observeAppLifecycle: false,
-      child: MaterialApp(home: Scaffold(body: child)),
     );
 
 class _ContextReader extends StatelessWidget {
@@ -111,53 +107,32 @@ class _TwoSelects extends StatelessWidget {
 }
 
 void main() {
-  Future<void> withClient(
-    WidgetTester tester,
-    List<QueryClient> clients,
-    Future<void> Function() body,
-  ) async {
-    try {
-      await body();
-    } finally {
-      await tester.pumpWidget(const SizedBox());
-      for (final client in clients) {
-        client.clear();
-      }
-    }
-  }
-
   // ---- fifth and sixth reviews (2026-09-10) --------------------------------
 
   group('R01 an overridden queryClient that changes with the widget', () {
-    testWidgets('the mixin follows it across a plain widget update',
-        (tester) async {
-      final a = QueryClient()..setQueryData<String>(key, 'from A');
-      final b = QueryClient()..setQueryData<String>(key, 'from B');
-      await withClient(tester, <QueryClient>[a, b], () async {
-        await tester.pumpWidget(app(a, _R01Override(a)));
-        await tester.pumpAndSettle();
-        expect(find.text('from A'), findsOneWidget);
+    queryWidgetTest('the mixin follows it across a plain widget update',
+        (tester, a) async {
+      final b =
+          tester.adopt(QueryClient()..setQueryData<String>(key, 'from B'));
+      await tester.pumpWidget(app(a, _R01Override(a)));
+      await tester.pumpAndSettle();
+      expect(find.text('from A'), findsOneWidget);
 
-        // Only `widget.client` changes: not a dependency change, so
-        // `didChangeDependencies` never runs and the client is reconciled at
-        // the next read instead.
-        await tester.pumpWidget(app(a, _R01Override(b)));
-        await tester.pumpAndSettle();
-        expect(find.text('from B'), findsOneWidget);
-        expect(
-          b.queryCache
-              .find(filters: QueryFilters(queryKey: key))!
-              .observersCount,
-          1,
-        );
-        expect(
-          a.queryCache
-              .find(filters: QueryFilters(queryKey: key))!
-              .observersCount,
-          0,
-        );
-      });
-    });
+      // Only `widget.client` changes: not a dependency change, so
+      // `didChangeDependencies` never runs and the client is reconciled at
+      // the next read instead.
+      await tester.pumpWidget(app(a, _R01Override(b)));
+      await tester.pumpAndSettle();
+      expect(find.text('from B'), findsOneWidget);
+      expect(
+        b.queryCache.find(filters: QueryFilters(queryKey: key))!.observersCount,
+        1,
+      );
+      expect(
+        a.queryCache.find(filters: QueryFilters(queryKey: key))!.observersCount,
+        0,
+      );
+    }, createClient: () => QueryClient()..setQueryData<String>(key, 'from A'));
 
     testWidgets('a State that reads nothing needs no provider', (tester) async {
       await tester.pumpWidget(const _R01Bare());
@@ -167,61 +142,57 @@ void main() {
   });
 
   group('R02 an infinite query switching direction', () {
-    testWidgets('the builder sees it, though the result is unchanged',
-        (tester) async {
-      final client = QueryClient();
+    queryWidgetTest('the builder sees it, though the result is unchanged',
+        (tester, client) async {
       final gates = <int, Completer<String>>{};
       InfiniteQueryController<String, int, InfiniteData<String, int>>? ctl;
       String? shown;
-      await withClient(tester, <QueryClient>[client], () async {
-        await tester.pumpWidget(app(
-          client,
-          InfiniteQueryBuilder<String, int, InfiniteData<String, int>>(
-            options: InfiniteQueryObserverOptions(
-              queryKey: key,
-              pageFn: (context) =>
-                  (gates[context.pageParam] ??= Completer<String>()).future,
-              initialPageParam: 0,
-              getNextPageParam: (_, __, last, ___) => last + 1,
-              getPreviousPageParam: (_, __, first, ___) => first - 1,
-            ),
-            builder: (_, q) {
-              ctl = q;
-              shown = 'next=${q.isFetchingNextPage} '
-                  'prev=${q.isFetchingPreviousPage}';
-              return Text(shown!);
-            },
+      await tester.pumpWidget(app(
+        client,
+        InfiniteQueryBuilder<String, int, InfiniteData<String, int>>(
+          options: InfiniteQueryObserverOptions(
+            queryKey: key,
+            pageFn: (context) =>
+                (gates[context.pageParam] ??= Completer<String>()).future,
+            initialPageParam: 0,
+            getNextPageParam: (_, __, last, ___) => last + 1,
+            getPreviousPageParam: (_, __, first, ___) => first - 1,
           ),
-        ));
-        await tester.pump();
-        gates[0]!.complete('page 0');
-        await tester.pumpAndSettle();
+          builder: (_, q) {
+            ctl = q;
+            shown = 'next=${q.isFetchingNextPage} '
+                'prev=${q.isFetchingPreviousPage}';
+            return Text(shown!);
+          },
+        ),
+      ));
+      await tester.pump();
+      gates[0]!.complete('page 0');
+      await tester.pumpAndSettle();
 
-        unawaited(ctl!.fetchNextPage());
-        await tester.pump();
-        expect(shown, 'next=true prev=false');
+      unawaited(ctl!.fetchNextPage());
+      await tester.pump();
+      expect(shown, 'next=true prev=false');
 
-        // The pages held do not change, so the `QueryResult` does not either:
-        // the direction lives on the controller, and comparing results alone
-        // left the widget showing the old one.
-        unawaited(ctl!.fetchPreviousPage());
-        await tester.pump();
-        expect(shown, 'next=false prev=true');
+      // The pages held do not change, so the `QueryResult` does not either:
+      // the direction lives on the controller, and comparing results alone
+      // left the widget showing the old one.
+      unawaited(ctl!.fetchPreviousPage());
+      await tester.pump();
+      expect(shown, 'next=false prev=true');
 
-        for (final gate in gates.values) {
-          if (!gate.isCompleted) {
-            gate.complete('page');
-          }
+      for (final gate in gates.values) {
+        if (!gate.isCompleted) {
+          gate.complete('page');
         }
-        await tester.pumpAndSettle();
-      });
+      }
+      await tester.pumpAndSettle();
     });
   });
 
   group('R04 a GlobalKey subtree that moves', () {
-    testWidgets('keeps the running mutation the widget started',
-        (tester) async {
-      final client = QueryClient();
+    queryWidgetTest('keeps the running mutation the widget started',
+        (tester, client) async {
       final gate = Completer<int>();
       final globalKey = GlobalKey();
       Widget tree({required bool right}) => app(
@@ -239,30 +210,27 @@ void main() {
               ),
             ]),
           );
-      await withClient(tester, <QueryClient>[client], () async {
-        await tester.pumpWidget(tree(right: false));
-        await tester.tap(find.text('go'));
-        await tester.pump();
-        expect(find.text('pending=true data=null'), findsOneWidget);
+      await tester.pumpWidget(tree(right: false));
+      await tester.tap(find.text('go'));
+      await tester.pump();
+      expect(find.text('pending=true data=null'), findsOneWidget);
 
-        // Flutter deactivates the element and reactivates it in the same
-        // frame. Treating `removeDependent` as the end of the reader threw
-        // the observation away and the answer never arrived.
-        await tester.pumpWidget(tree(right: true));
-        await tester.pump();
-        expect(find.text('pending=true data=null'), findsOneWidget);
+      // Flutter deactivates the element and reactivates it in the same
+      // frame. Treating `removeDependent` as the end of the reader threw
+      // the observation away and the answer never arrived.
+      await tester.pumpWidget(tree(right: true));
+      await tester.pump();
+      expect(find.text('pending=true data=null'), findsOneWidget);
 
-        gate.complete(7);
-        await tester.pumpAndSettle();
-        expect(find.text('pending=false data=7'), findsOneWidget);
-      });
+      gate.complete(7);
+      await tester.pumpAndSettle();
+      expect(find.text('pending=false data=7'), findsOneWidget);
     });
   });
 
   group('R06 two providers on one client', () {
-    testWidgets('the scheduler survives the first of them leaving',
-        (tester) async {
-      final client = QueryClient();
+    queryWidgetTest('the scheduler survives the first of them leaving',
+        (tester, client) async {
       final original = client.notifyManager.scheduler;
       Widget both({required bool first, required bool second}) =>
           Directionality(
@@ -286,265 +254,236 @@ void main() {
                 const SizedBox(),
             ]),
           );
-      await withClient(tester, <QueryClient>[client], () async {
-        await tester.pumpWidget(both(first: true, second: true));
-        expect(client.notifyManager.scheduler, isNot(original));
+      await tester.pumpWidget(both(first: true, second: true));
+      expect(client.notifyManager.scheduler, isNot(original));
 
-        // Lifetimes that overlap without nesting: a per-provider save and
-        // restore put the original back while the second was still running.
-        await tester.pumpWidget(both(first: false, second: true));
-        expect(client.notifyManager.scheduler, isNot(original));
+      // Lifetimes that overlap without nesting: a per-provider save and
+      // restore put the original back while the second was still running.
+      await tester.pumpWidget(both(first: false, second: true));
+      expect(client.notifyManager.scheduler, isNot(original));
 
-        await tester.pumpWidget(both(first: false, second: false));
-        expect(client.notifyManager.scheduler, same(original));
-      });
+      await tester.pumpWidget(both(first: false, second: false));
+      expect(client.notifyManager.scheduler, same(original));
     });
   });
 
   group('R07 a connectivity stream that is taken away', () {
-    testWidgets('does not pin a later client offline', (tester) async {
-      final first = QueryClient();
-      final second = QueryClient();
+    queryWidgetTest('does not pin a later client offline',
+        (tester, first) async {
+      final second = tester.adopt(QueryClient());
       final online = StreamController<bool>.broadcast();
-      await withClient(tester, <QueryClient>[first, second], () async {
-        await tester.pumpWidget(QueryClientProvider(
-          client: first,
-          observeAppLifecycle: false,
-          onlineStatus: online.stream,
-          child: const SizedBox(),
-        ));
-        online.add(false);
-        await tester.pump();
-        expect(first.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(QueryClientProvider(
+        client: first,
+        observeAppLifecycle: false,
+        onlineStatus: online.stream,
+        child: const SizedBox(),
+      ));
+      online.add(false);
+      await tester.pump();
+      expect(first.onlineManager.isOnline(), isFalse);
 
-        await tester.pumpWidget(QueryClientProvider(
-          client: first,
-          observeAppLifecycle: false,
-          child: const SizedBox(),
-        ));
-        await tester.pump();
+      await tester.pumpWidget(QueryClientProvider(
+        client: first,
+        observeAppLifecycle: false,
+        child: const SizedBox(),
+      ));
+      await tester.pump();
 
-        // Nothing is listening any more, so nothing could put a client back
-        // online: what the old stream last said must not follow the new one.
-        await tester.pumpWidget(QueryClientProvider(
-          client: second,
-          observeAppLifecycle: false,
-          child: const SizedBox(),
-        ));
-        await tester.pump();
-        expect(second.onlineManager.isOnline(), isTrue);
-        await online.close();
-      });
+      // Nothing is listening any more, so nothing could put a client back
+      // online: what the old stream last said must not follow the new one.
+      await tester.pumpWidget(QueryClientProvider(
+        client: second,
+        observeAppLifecycle: false,
+        child: const SizedBox(),
+      ));
+      await tester.pump();
+      expect(second.onlineManager.isOnline(), isTrue);
+      await online.close();
     });
 
-    testWidgets('initialOnlineStatus answers what a Stream cannot',
-        (tester) async {
-      final client = QueryClient();
+    queryWidgetTest('initialOnlineStatus answers what a Stream cannot',
+        (tester, client) async {
       final online = StreamController<bool>.broadcast();
-      await withClient(tester, <QueryClient>[client], () async {
-        await tester.pumpWidget(QueryClientProvider(
-          client: client,
-          observeAppLifecycle: false,
-          onlineStatus: online.stream,
-          initialOnlineStatus: false,
-          child: const SizedBox(),
-        ));
-        // Before the stream has said anything at all.
-        expect(client.onlineManager.isOnline(), isFalse);
-        online.add(true);
-        await tester.pump();
-        expect(client.onlineManager.isOnline(), isTrue);
-        await online.close();
-      });
+      await tester.pumpWidget(QueryClientProvider(
+        client: client,
+        observeAppLifecycle: false,
+        onlineStatus: online.stream,
+        initialOnlineStatus: false,
+        child: const SizedBox(),
+      ));
+      // Before the stream has said anything at all.
+      expect(client.onlineManager.isOnline(), isFalse);
+      online.add(true);
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isTrue);
+      await online.close();
     });
   });
 
   group('R08 the desktop reading of AppLifecycleState.inactive', () {
-    testWidgets('a window losing focus is a focus event on desktop',
-        (tester) async {
+    queryWidgetTest('a window losing focus is a focus event on desktop',
+        (tester, client) async {
       // Reset inside the body: the binding checks the foundation debug
       // variables before any `tearDown` runs.
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      final client = QueryClient();
       var fetches = 0;
       try {
-        await withClient(tester, <QueryClient>[client], () async {
-          await tester.pumpWidget(QueryClientProvider(
-            client: client,
-            child: MaterialApp(
-              home: QueryBuilder<String>(
-                options: QueryObserverOptions(
-                  queryKey: key,
-                  queryFn: (_) async => 'v${++fetches}',
-                  refetchOnWindowFocus: RefetchOn.always,
-                ),
-                builder: (_, result) => Text(result.dataOrNull ?? 'none'),
-              ),
-            ),
-          ));
-          await tester.pumpAndSettle();
-          // A test binding starts with no lifecycle state at all, so settle on
-          // a known-focused baseline before measuring a transition.
-          tester.binding
-              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-          await tester.pumpAndSettle();
-          final baseline = fetches;
-
-          // On macOS, Windows and Linux `inactive` *is* the window losing
-          // focus — the event `refetchOnWindowFocus` is named after. Counting
-          // it as focused, as a phone must, turned the option off on desktop.
-          tester.binding
-              .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-          await tester.pump();
-          tester.binding
-              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-          await tester.pumpAndSettle();
-          expect(fetches, baseline + 1);
-        });
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    });
-
-    testWidgets('a phone interruption is not', (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      final client = QueryClient();
-      var fetches = 0;
-      try {
-        await withClient(tester, <QueryClient>[client], () async {
-          await tester.pumpWidget(QueryClientProvider(
-            client: client,
-            child: MaterialApp(
-              home: QueryBuilder<String>(
-                options: QueryObserverOptions(
-                  queryKey: key,
-                  queryFn: (_) async => 'v${++fetches}',
-                  refetchOnWindowFocus: RefetchOn.always,
-                ),
-                builder: (_, result) => Text(result.dataOrNull ?? 'none'),
-              ),
-            ),
-          ));
-          await tester.pumpAndSettle();
-          tester.binding
-              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-          await tester.pumpAndSettle();
-          final baseline = fetches;
-
-          // The notification shade and the app switcher must not refetch the
-          // world on the way back.
-          tester.binding
-              .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-          await tester.pump();
-          tester.binding
-              .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-          await tester.pumpAndSettle();
-          expect(fetches, baseline);
-        });
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    });
-
-    testWidgets('isAppShown overrides the mapping', (tester) async {
-      final client = QueryClient();
-      final seen = <AppLifecycleState>[];
-      await withClient(tester, <QueryClient>[client], () async {
         await tester.pumpWidget(QueryClientProvider(
           client: client,
-          isAppShown: (state) {
-            seen.add(state);
-            return false;
-          },
-          child: const SizedBox(),
+          child: MaterialApp(
+            home: QueryBuilder<String>(
+              options: QueryObserverOptions(
+                queryKey: key,
+                queryFn: (_) async => 'v${++fetches}',
+                refetchOnWindowFocus: RefetchOn.always,
+              ),
+              builder: (_, result) => Text(result.dataOrNull ?? 'none'),
+            ),
+          ),
         ));
+        await tester.pumpAndSettle();
+        // A test binding starts with no lifecycle state at all, so settle on
+        // a known-focused baseline before measuring a transition.
         tester.binding
             .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        final baseline = fetches;
+
+        // On macOS, Windows and Linux `inactive` *is* the window losing
+        // focus — the event `refetchOnWindowFocus` is named after. Counting
+        // it as focused, as a phone must, turned the option off on desktop.
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
         await tester.pump();
-        expect(seen, contains(AppLifecycleState.resumed));
-        expect(client.focusManager.isFocused(), isFalse);
-      });
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        expect(fetches, baseline + 1);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    queryWidgetTest('a phone interruption is not', (tester, client) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      var fetches = 0;
+      try {
+        await tester.pumpWidget(QueryClientProvider(
+          client: client,
+          child: MaterialApp(
+            home: QueryBuilder<String>(
+              options: QueryObserverOptions(
+                queryKey: key,
+                queryFn: (_) async => 'v${++fetches}',
+                refetchOnWindowFocus: RefetchOn.always,
+              ),
+              builder: (_, result) => Text(result.dataOrNull ?? 'none'),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        final baseline = fetches;
+
+        // The notification shade and the app switcher must not refetch the
+        // world on the way back.
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        await tester.pump();
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        expect(fetches, baseline);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    queryWidgetTest('isAppShown overrides the mapping', (tester, client) async {
+      final seen = <AppLifecycleState>[];
+      await tester.pumpWidget(QueryClientProvider(
+        client: client,
+        isAppShown: (state) {
+          seen.add(state);
+          return false;
+        },
+        child: const SizedBox(),
+      ));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(seen, contains(AppLifecycleState.resumed));
+      expect(client.focusManager.isFocused(), isFalse);
     });
   });
 
   group('F01 notifications go through the scheduler', () {
-    testWidgets('late initialData in a sibling never notifies during build',
-        (tester) async {
-      final client = newClient();
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(
-          client,
-          Column(children: [
-            QueryBuilder<int>(
-              options: QueryObserverOptions(queryKey: key, enabled: Enabled.no),
-              builder: (_, r) => Text('first:${r.dataOrNull}'),
+    queryWidgetTest('late initialData in a sibling never notifies during build',
+        (tester, client) async {
+      await tester.pumpWidget(app(
+        client,
+        Column(children: [
+          QueryBuilder<int>(
+            options: QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+            builder: (_, r) => Text('first:${r.dataOrNull}'),
+          ),
+          QueryBuilder<int>(
+            options: QueryObserverOptions(
+              queryKey: key,
+              enabled: Enabled.no,
+              initialData: const InitialData.value(1),
             ),
-            QueryBuilder<int>(
-              options: QueryObserverOptions(
-                queryKey: key,
-                enabled: Enabled.no,
-                initialData: const InitialData.value(1),
-              ),
-              builder: (_, r) => Text('second:${r.dataOrNull}'),
-            ),
-          ]),
-        ));
-        expect(tester.takeException(), isNull);
-        await tester.pump();
-        expect(find.text('first:1'), findsOneWidget);
-        expect(find.text('second:1'), findsOneWidget);
-      });
-    });
+            builder: (_, r) => Text('second:${r.dataOrNull}'),
+          ),
+        ]),
+      ));
+      expect(tester.takeException(), isNull);
+      await tester.pump();
+      expect(find.text('first:1'), findsOneWidget);
+      expect(find.text('second:1'), findsOneWidget);
+    }, createClient: newClient);
   });
 
   group('F02 observers belong to readers, the query to the cache', () {
-    testWidgets('context readers may select different types from one key',
-        (tester) async {
-      final client = newClient()..setQueryData<String>(key, 'abc');
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(
-          client,
-          Column(children: [
-            const _ContextReader(),
-            Builder(builder: (context) {
-              final length = context.selectQuery<String, int>(
-                QuerySelectOptions(
-                  queryKey: key,
-                  enabled: Enabled.no,
-                  select: (v) => v.length,
-                ),
-              );
-              return Text('len:${length.dataOrNull}');
-            }),
-          ]),
-        ));
-        expect(tester.takeException(), isNull);
-        expect(find.text('abc'), findsOneWidget);
-        expect(find.text('len:3'), findsOneWidget);
-        expect(client.queryCache.get<String>(key)!.observersCount, 2);
-      });
-    });
+    queryWidgetTest('context readers may select different types from one key',
+        (tester, client) async {
+      await tester.pumpWidget(app(
+        client,
+        Column(children: [
+          const _ContextReader(),
+          Builder(builder: (context) {
+            final length = context.selectQuery<String, int>(
+              QuerySelectOptions(
+                queryKey: key,
+                enabled: Enabled.no,
+                select: (v) => v.length,
+              ),
+            );
+            return Text('len:${length.dataOrNull}');
+          }),
+        ]),
+      ));
+      expect(tester.takeException(), isNull);
+      expect(find.text('abc'), findsOneWidget);
+      expect(find.text('len:3'), findsOneWidget);
+      expect(client.queryCache.get<String>(key)!.observersCount, 2);
+    }, createClient: () => newClient()..setQueryData<String>(key, 'abc'));
 
-    testWidgets('two selects of one key in one widget, told apart by id',
-        (tester) async {
-      final client = newClient()..setQueryData<String>(key, 'abc');
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, const _TwoSelects()));
-        expect(find.text('ABC/cba'), findsOneWidget);
-        // And a rebuild keeps them apart, rather than flipping selectors.
-        await tester.pump();
-        expect(find.text('ABC/cba'), findsOneWidget);
-      });
-    });
+    queryWidgetTest('two selects of one key in one widget, told apart by id',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const _TwoSelects()));
+      expect(find.text('ABC/cba'), findsOneWidget);
+      // And a rebuild keeps them apart, rather than flipping selectors.
+      await tester.pump();
+      expect(find.text('ABC/cba'), findsOneWidget);
+    }, createClient: () => newClient()..setQueryData<String>(key, 'abc'));
 
-    testWidgets('a mixin reads one key with two selects, told apart by id',
-        (tester) async {
-      final client = newClient()..setQueryData<String>(key, 'abc');
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, const _MixinTwoSelects()));
-        expect(find.text('ABC/cba'), findsOneWidget);
-      });
-    });
+    queryWidgetTest('a mixin reads one key with two selects, told apart by id',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const _MixinTwoSelects()));
+      expect(find.text('ABC/cba'), findsOneWidget);
+    }, createClient: () => newClient()..setQueryData<String>(key, 'abc'));
   });
 
   group('F03 a replaced provider client', () {
@@ -553,36 +492,30 @@ void main() {
       ('builder', const _BuilderReader()),
       ('mixin', const _MixinReader()),
     ]) {
-      testWidgets('$name follows it', (tester) async {
-        final a = newClient()..setQueryData<String>(key, 'A');
-        final b = newClient()..setQueryData<String>(key, 'B');
-        await withClient(tester, [a, b], () async {
-          await tester.pumpWidget(app(a, child));
-          expect(find.text('A'), findsOneWidget);
+      queryWidgetTest('$name follows it', (tester, a) async {
+        final b = tester.adopt(newClient()..setQueryData<String>(key, 'B'));
+        await tester.pumpWidget(app(a, child));
+        expect(find.text('A'), findsOneWidget);
 
-          await tester.pumpWidget(app(b, child));
-          await tester.pump();
-          expect(find.text('B'), findsOneWidget);
-          expect(a.queryCache.get<String>(key)!.observersCount, 0);
-          expect(b.queryCache.get<String>(key)!.observersCount, 1);
-        });
-      });
+        await tester.pumpWidget(app(b, child));
+        await tester.pump();
+        expect(find.text('B'), findsOneWidget);
+        expect(a.queryCache.get<String>(key)!.observersCount, 0);
+        expect(b.queryCache.get<String>(key)!.observersCount, 1);
+      }, createClient: () => newClient()..setQueryData<String>(key, 'A'));
     }
   });
 
   group('F06 mutation identity', () {
-    testWidgets('an inline mutation survives its own result rebuild',
-        (tester) async {
-      final client = newClient();
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, const _InlineMutation()));
-        await tester.tap(find.byType(TextButton));
-        await tester.pump();
-        await tester.pump();
-        expect(find.text('done'), findsOneWidget);
-        expect(client.mutationCache.mutations, hasLength(1));
-      });
-    });
+    queryWidgetTest('an inline mutation survives its own result rebuild',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const _InlineMutation()));
+      await tester.tap(find.byType(TextButton));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('done'), findsOneWidget);
+      expect(client.mutationCache.mutations, hasLength(1));
+    }, createClient: newClient);
   });
 
   group('F08 / F09 controller lifetimes', () {
@@ -640,236 +573,205 @@ void main() {
   });
 
   group('F10 initial lifecycle state', () {
-    testWidgets('a provider mounted in a hidden app starts unfocused',
-        (tester) async {
-      final client = newClient();
-      try {
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-        await tester.pumpWidget(
-          QueryClientProvider(client: client, child: const SizedBox()),
-        );
-        // A hidden app produces no frames, so nothing has mounted yet; force
-        // one, as an embedder that keeps rendering while hidden would.
-        tester.binding.scheduleForcedFrame();
-        await tester.pump();
-        expect(find.byType(QueryClientProvider), findsOneWidget);
-        expect(client.focusManager.isFocused(), isFalse);
+    queryWidgetTest('a provider mounted in a hidden app starts unfocused',
+        (tester, client) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pumpWidget(
+        QueryClientProvider(client: client, child: const SizedBox()),
+      );
+      // A hidden app produces no frames, so nothing has mounted yet; force
+      // one, as an embedder that keeps rendering while hidden would.
+      tester.binding.scheduleForcedFrame();
+      await tester.pump();
+      expect(find.byType(QueryClientProvider), findsOneWidget);
+      expect(client.focusManager.isFocused(), isFalse);
 
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-        expect(client.focusManager.isFocused(), isTrue);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      }
-    });
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(client.focusManager.isFocused(), isTrue);
+    }, createClient: newClient);
   });
 
   group('buildWhen', () {
-    testWidgets('skips rebuilds the builder does not care about',
-        (tester) async {
-      final client = newClient()..setQueryData<String>(key, 'a');
+    queryWidgetTest('skips rebuilds the builder does not care about',
+        (tester, client) async {
       var builds = 0;
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(
-          client,
-          QueryBuilder<String>(
-            options: seeded(),
-            buildWhen: (previous, current) =>
-                previous.dataOrNull != current.dataOrNull,
-            builder: (_, result) {
-              builds++;
-              return Text(result.dataOrNull ?? 'none');
-            },
-          ),
-        ));
-        expect(builds, 1);
+      await tester.pumpWidget(app(
+        client,
+        QueryBuilder<String>(
+          options: seeded(),
+          buildWhen: (previous, current) =>
+              previous.dataOrNull != current.dataOrNull,
+          builder: (_, result) {
+            builds++;
+            return Text(result.dataOrNull ?? 'none');
+          },
+        ),
+      ));
+      expect(builds, 1);
 
-        // Metadata only: the result changes (`isStale`), the data does not.
-        await client.invalidateQueries(
-          filters: QueryFilters(queryKey: key),
-          refetchType: RefetchType.none,
-        );
-        await tester.pump();
-        expect(builds, 1);
+      // Metadata only: the result changes (`isStale`), the data does not.
+      await client.invalidateQueries(
+        filters: QueryFilters(queryKey: key),
+        refetchType: RefetchType.none,
+      );
+      await tester.pump();
+      expect(builds, 1);
 
-        client.setQueryData<String>(key, 'b');
-        await tester.pump();
-        expect(builds, 2);
-        expect(find.text('b'), findsOneWidget);
-      });
-    });
+      client.setQueryData<String>(key, 'b');
+      await tester.pump();
+      expect(builds, 2);
+      expect(find.text('b'), findsOneWidget);
+    }, createClient: () => newClient()..setQueryData<String>(key, 'a'));
   });
 
   // ---------------------------------------------------------------------------
   // Third review, 2026-09-09.
 
   group('B1 the bootstrap build', () {
-    testWidgets(
+    queryWidgetTest(
         'a sibling initialData notifies after the first build, not in it',
-        (tester) async {
-      final client = newClient();
-      await withClient(tester, [client], () async {
-        final root = app(
-          client,
-          Column(children: [
-            QueryBuilder<int>(
-              options: QueryObserverOptions(queryKey: key, enabled: Enabled.no),
-              builder: (_, r) => Text('first:${r.dataOrNull}'),
+        (tester, client) async {
+      final root = app(
+        client,
+        Column(children: [
+          QueryBuilder<int>(
+            options: QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+            builder: (_, r) => Text('first:${r.dataOrNull}'),
+          ),
+          QueryBuilder<int>(
+            options: QueryObserverOptions(
+              queryKey: key,
+              enabled: Enabled.no,
+              initialData: const InitialData.value(1),
             ),
-            QueryBuilder<int>(
-              options: QueryObserverOptions(
-                queryKey: key,
-                enabled: Enabled.no,
-                initialData: const InitialData.value(1),
-              ),
-              builder: (_, r) => Text('second:${r.dataOrNull}'),
-            ),
-          ]),
-        );
-        // What `runApp` does: `Timer.run(() => attachRootWidget(…))`, whose
-        // `RootWidget.attach` runs `buildScope` synchronously — in
-        // `SchedulerPhase.idle`, the one build no phase accounts for. The
-        // test binding already owns a root element, so the same `buildScope`
-        // is run by hand, still in `idle`.
-        expect(SchedulerBinding.instance.schedulerPhase, SchedulerPhase.idle);
-        tester.binding
-            .attachRootWidget(tester.binding.wrapWithDefaultView(root));
-        tester.binding.buildOwner!.buildScope(tester.binding.rootElement!);
-        expect(tester.takeException(), isNull);
+            builder: (_, r) => Text('second:${r.dataOrNull}'),
+          ),
+        ]),
+      );
+      // What `runApp` does: `Timer.run(() => attachRootWidget(…))`, whose
+      // `RootWidget.attach` runs `buildScope` synchronously — in
+      // `SchedulerPhase.idle`, the one build no phase accounts for. The
+      // test binding already owns a root element, so the same `buildScope`
+      // is run by hand, still in `idle`.
+      expect(SchedulerBinding.instance.schedulerPhase, SchedulerPhase.idle);
+      tester.binding.attachRootWidget(tester.binding.wrapWithDefaultView(root));
+      tester.binding.buildOwner!.buildScope(tester.binding.rootElement!);
+      expect(tester.takeException(), isNull);
 
-        await tester.pump();
-        expect(find.text('first:1'), findsOneWidget);
-        expect(find.text('second:1'), findsOneWidget);
-      });
-    });
+      await tester.pump();
+      expect(find.text('first:1'), findsOneWidget);
+      expect(find.text('second:1'), findsOneWidget);
+    }, createClient: newClient);
   });
 
   group('B2 a select returning a fresh but equal value', () {
-    testWidgets('does not rebuild a context reader every frame',
-        (tester) async {
-      final client = newClient()..setQueryData<List<int>>(key, [1, 2, 3, 4]);
+    queryWidgetTest('does not rebuild a context reader every frame',
+        (tester, client) async {
       final builds = <int>[];
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, _R3ListSelect(builds)));
-        // One kick from outside — a parent rebuild, as any real screen has;
-        // this used to start a rebuild on every frame, for good.
-        await tester.pumpWidget(app(client, _R3ListSelect(builds)));
-        final after = builds.length;
-        for (var i = 0; i < 4; i++) {
-          await tester.pump();
-        }
-        expect(builds.length, after);
-        expect(find.text('[2, 4]'), findsOneWidget);
-      });
-    });
+      await tester.pumpWidget(app(client, _R3ListSelect(builds)));
+      // One kick from outside — a parent rebuild, as any real screen has;
+      // this used to start a rebuild on every frame, for good.
+      await tester.pumpWidget(app(client, _R3ListSelect(builds)));
+      final after = builds.length;
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
+      expect(builds.length, after);
+      expect(find.text('[2, 4]'), findsOneWidget);
+    },
+        createClient: () =>
+            newClient()..setQueryData<List<int>>(key, [1, 2, 3, 4]));
 
-    testWidgets('does not rebuild a mixin reader every frame', (tester) async {
-      final client = newClient()..setQueryData<List<int>>(key, [1, 2, 3, 4]);
+    queryWidgetTest('does not rebuild a mixin reader every frame',
+        (tester, client) async {
       final builds = <int>[];
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, _R3MixinListSelect(builds)));
-        await tester.pumpWidget(app(client, _R3MixinListSelect(builds)));
-        final after = builds.length;
-        for (var i = 0; i < 4; i++) {
-          await tester.pump();
-        }
-        expect(builds.length, after);
-      });
-    });
+      await tester.pumpWidget(app(client, _R3MixinListSelect(builds)));
+      await tester.pumpWidget(app(client, _R3MixinListSelect(builds)));
+      final after = builds.length;
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
+      expect(builds.length, after);
+    },
+        createClient: () =>
+            newClient()..setQueryData<List<int>>(key, [1, 2, 3, 4]));
   });
 
   group('M7 collisions without id', () {
-    testWidgets('two selects of one key in one build are caught',
-        (tester) async {
-      final client = newClient()..setQueryData<String>(key, 'Ab');
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, const _R3TwoSelectsNoId()));
-        expect(tester.takeException(), isA<FlutterError>());
-      });
-    });
+    queryWidgetTest('two selects of one key in one build are caught',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const _R3TwoSelectsNoId()));
+      expect(tester.takeException(), isA<FlutterError>());
+    }, createClient: () => newClient()..setQueryData<String>(key, 'Ab'));
 
-    testWidgets('two mutations of one shape in one build are caught',
-        (tester) async {
-      final client = newClient();
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, const _R3TwoMutationsNoId()));
-        expect(tester.takeException(), isA<FlutterError>());
-        // With ids, the same widget is fine.
-        await tester.pumpWidget(
-          app(client, const _R3TwoMutationsNoId(withIds: true)),
-        );
-        expect(tester.takeException(), isNull);
-      });
-    });
+    queryWidgetTest('two mutations of one shape in one build are caught',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const _R3TwoMutationsNoId()));
+      expect(tester.takeException(), isA<FlutterError>());
+      // With ids, the same widget is fine.
+      await tester.pumpWidget(
+        app(client, const _R3TwoMutationsNoId(withIds: true)),
+      );
+      expect(tester.takeException(), isNull);
+    }, createClient: newClient);
   });
 
   group('M4 the mixin releases a key it stopped reading', () {
-    testWidgets('and its stale queryFn never runs again', (tester) async {
-      final client = newClient();
+    queryWidgetTest('and its stale queryFn never runs again',
+        (tester, client) async {
       final fetched = <String>[];
       Future<String> fetch(String id) async {
         fetched.add(id);
         return 'Task $id';
       }
 
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(client, _R3MixinById('a', fetch)));
-        await tester.pump();
-        expect(find.text('Task a'), findsOneWidget);
+      await tester.pumpWidget(app(client, _R3MixinById('a', fetch)));
+      await tester.pump();
+      expect(find.text('Task a'), findsOneWidget);
 
-        await tester.pumpWidget(app(client, _R3MixinById('b', fetch)));
-        await tester.pump();
-        await tester.pump();
-        expect(find.text('Task b'), findsOneWidget);
+      await tester.pumpWidget(app(client, _R3MixinById('b', fetch)));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Task b'), findsOneWidget);
 
-        final a = client.queryCache.get<String>(QueryKey(<Object?>['m4', 'a']));
-        expect(a!.observersCount, 0);
+      final a = client.queryCache.get<String>(QueryKey(<Object?>['m4', 'a']));
+      expect(a!.observersCount, 0);
 
-        // The old observer's `queryFn` closed over `widget.id` — which is
-        // now 'b'. Left alive, a refetch of key 'a' would have fetched 'b'
-        // and written "Task b" into a's cache entry.
-        fetched.clear();
-        await client.invalidateQueries(
-          filters: QueryFilters(queryKey: QueryKey(<Object?>['m4', 'a'])),
-        );
-        await tester.pump();
-        expect(fetched, isEmpty);
-        expect(a.state.data, 'Task a');
-      });
-    });
+      // The old observer's `queryFn` closed over `widget.id` — which is
+      // now 'b'. Left alive, a refetch of key 'a' would have fetched 'b'
+      // and written "Task b" into a's cache entry.
+      fetched.clear();
+      await client.invalidateQueries(
+        filters: QueryFilters(queryKey: QueryKey(<Object?>['m4', 'a'])),
+      );
+      await tester.pump();
+      expect(fetched, isEmpty);
+      expect(a.state.data, 'Task a');
+    }, createClient: newClient);
   });
 
   group('M5 lifecycle transitions', () {
-    testWidgets('detached → resumed focuses the client', (tester) async {
-      final client = newClient();
-      await withClient(tester, [client], () async {
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.detached);
-        await tester.pumpWidget(
-          QueryClientProvider(client: client, child: const SizedBox()),
-        );
-        tester.binding.scheduleForcedFrame();
-        await tester.pump();
-        expect(client.focusManager.isFocused(), isFalse);
+    queryWidgetTest('detached → resumed focuses the client',
+        (tester, client) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.detached);
+      await tester.pumpWidget(
+        QueryClientProvider(client: client, child: const SizedBox()),
+      );
+      tester.binding.scheduleForcedFrame();
+      await tester.pump();
+      expect(client.focusManager.isFocused(), isFalse);
 
-        // Neither `onShow` nor `onHide`: only `onResume` fires for this one.
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-        await tester.pump();
-        expect(client.focusManager.isFocused(), isTrue);
-      });
+      // Neither `onShow` nor `onHide`: only `onResume` fires for this one.
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    });
+      await tester.pump();
+      expect(client.focusManager.isFocused(), isTrue);
+    }, createClient: newClient);
   });
 
   group('M6 a new onlineStatus stream per build', () {
-    testWidgets('rebinds the subscription and nothing else', (tester) async {
-      final client = newClient();
+    queryWidgetTest('rebinds the subscription and nothing else',
+        (tester, client) async {
       var listens = 0;
       Stream<bool> status() {
         late StreamController<bool> controller;
@@ -885,80 +787,75 @@ void main() {
             onlineStatus: status(),
             child: const SizedBox(),
           );
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(build());
-        await tester.pump();
-        expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(build());
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isFalse);
 
-        // A remount would re-read the lifecycle state and refocus the client;
-        // rebinding just the stream leaves it alone.
-        client.focusManager.setFocused(false);
-        await tester.pumpWidget(build());
-        await tester.pumpWidget(build());
-        await tester.pump();
-        expect(listens, 3);
-        expect(client.focusManager.isFocused(), isFalse);
-        expect(client.onlineManager.isOnline(), isFalse);
-      });
-    });
+      // A remount would re-read the lifecycle state and refocus the client;
+      // rebinding just the stream leaves it alone.
+      client.focusManager.setFocused(false);
+      await tester.pumpWidget(build());
+      await tester.pumpWidget(build());
+      await tester.pump();
+      expect(listens, 3);
+      expect(client.focusManager.isFocused(), isFalse);
+      expect(client.onlineManager.isOnline(), isFalse);
+    }, createClient: newClient);
   });
 
   group('buildWhen on every builder', () {
-    testWidgets('InfiniteQueryBuilder and MutationBuilder take one',
-        (tester) async {
-      final client = newClient();
+    queryWidgetTest('InfiniteQueryBuilder and MutationBuilder take one',
+        (tester, client) async {
       var feedBuilds = 0;
       var mutationBuilds = 0;
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(
-          client,
-          Column(children: [
-            InfiniteQueryBuilder<int, int, InfiniteData<int, int>>(
-              options: InfiniteQueryObserverOptions(
-                queryKey: key,
-                initialPageParam: 0,
-                pageFn: (context) async => context.pageParam,
-                getNextPageParam: (page, pages, param, params) => param + 1,
-              ),
-              // Only the page count matters to this widget.
-              buildWhen: (previous, current) =>
-                  previous.dataOrNull?.pages.length !=
-                  current.dataOrNull?.pages.length,
-              builder: (_, feed) {
-                feedBuilds++;
-                return Text('pages:${feed.value.dataOrNull?.pages.length}');
-              },
+      await tester.pumpWidget(app(
+        client,
+        Column(children: [
+          InfiniteQueryBuilder<int, int, InfiniteData<int, int>>(
+            options: InfiniteQueryObserverOptions(
+              queryKey: key,
+              initialPageParam: 0,
+              pageFn: (context) async => context.pageParam,
+              getNextPageParam: (page, pages, param, params) => param + 1,
             ),
-            MutationBuilder<int, int, void>(
-              options: MutationOptions(mutationFn: (v) async => v),
-              buildWhen: (previous, current) => current.isSuccess,
-              builder: (_, mutation) {
-                mutationBuilds++;
-                return TextButton(
-                  onPressed: () => mutation.mutate(1),
-                  child: Text('m:${mutation.value.dataOrNull}'),
-                );
-              },
-            ),
-          ]),
-        ));
-        await tester.pump();
-        expect(find.text('pages:1'), findsOneWidget);
-        final feedAfterFirstPage = feedBuilds;
+            // Only the page count matters to this widget.
+            buildWhen: (previous, current) =>
+                previous.dataOrNull?.pages.length !=
+                current.dataOrNull?.pages.length,
+            builder: (_, feed) {
+              feedBuilds++;
+              return Text('pages:${feed.value.dataOrNull?.pages.length}');
+            },
+          ),
+          MutationBuilder<int, int, void>(
+            options: MutationOptions(mutationFn: (v) async => v),
+            buildWhen: (previous, current) => current.isSuccess,
+            builder: (_, mutation) {
+              mutationBuilds++;
+              return TextButton(
+                onPressed: () => mutation.mutate(1),
+                child: Text('m:${mutation.value.dataOrNull}'),
+              );
+            },
+          ),
+        ]),
+      ));
+      await tester.pump();
+      expect(find.text('pages:1'), findsOneWidget);
+      final feedAfterFirstPage = feedBuilds;
 
-        // A refetch of the held page changes the result (`dataUpdatedAt`)
-        // but not the page count.
-        await client.refetchQueries(filters: QueryFilters(queryKey: key));
-        await tester.pump();
-        expect(feedBuilds, feedAfterFirstPage);
+      // A refetch of the held page changes the result (`dataUpdatedAt`)
+      // but not the page count.
+      await client.refetchQueries(filters: QueryFilters(queryKey: key));
+      await tester.pump();
+      expect(feedBuilds, feedAfterFirstPage);
 
-        await tester.tap(find.byType(TextButton));
-        await tester.pump(); // pending: skipped
-        await tester.pump(); // success: built
-        expect(find.text('m:1'), findsOneWidget);
-        expect(mutationBuilds, 2);
-      });
-    });
+      await tester.tap(find.byType(TextButton));
+      await tester.pump(); // pending: skipped
+      await tester.pump(); // success: built
+      expect(find.text('m:1'), findsOneWidget);
+      expect(mutationBuilds, 2);
+    }, createClient: newClient);
   });
 
   group('release-mode-safe errors', () {
@@ -1005,36 +902,32 @@ void main() {
   // Fourth review, 2026-09-09.
 
   group('B2 a single-subscription onlineStatus stream', () {
-    testWidgets('survives a client switch, which inherits the last value',
-        (tester) async {
-      final a = newClient();
-      final b = newClient();
+    queryWidgetTest('survives a client switch, which inherits the last value',
+        (tester, a) async {
+      final b = tester.adopt(newClient());
       // Not broadcast: a second `listen` would throw.
       final online = StreamController<bool>();
-      await withClient(tester, [a, b], () async {
-        await tester.pumpWidget(_provided(a, online.stream));
-        online.add(false);
-        await tester.pump();
-        expect(a.onlineManager.isOnline(), isFalse);
+      addTearDown(online.close);
+      await tester.pumpWidget(_provided(a, online.stream));
+      online.add(false);
+      await tester.pump();
+      expect(a.onlineManager.isOnline(), isFalse);
 
-        await tester.pumpWidget(_provided(b, online.stream));
-        expect(tester.takeException(), isNull);
-        // The stream will not repeat itself for the newcomer.
-        expect(b.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(_provided(b, online.stream));
+      expect(tester.takeException(), isNull);
+      // The stream will not repeat itself for the newcomer.
+      expect(b.onlineManager.isOnline(), isFalse);
 
-        online.add(true);
-        await tester.pump();
-        expect(b.onlineManager.isOnline(), isTrue);
-        expect(a.onlineManager.isOnline(), isFalse);
-      });
-      unawaited(online.close());
-    });
+      online.add(true);
+      await tester.pump();
+      expect(b.onlineManager.isOnline(), isTrue);
+      expect(a.onlineManager.isOnline(), isFalse);
+    }, createClient: newClient);
   });
 
   group('B3 the first build is the only build', () {
-    testWidgets('until the result actually changes, in all three styles',
-        (tester) async {
-      final client = newClient();
+    queryWidgetTest('until the result actually changes, in all three styles',
+        (tester, client) async {
       final builds = <String>[];
       final fetches = <String, Completer<String>>{};
       QueryObserverOptions<String> pending(String id) => QueryObserverOptions(
@@ -1042,44 +935,42 @@ void main() {
             queryFn: (_) =>
                 fetches.putIfAbsent(id, Completer<String>.new).future,
           );
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(app(
-          client,
-          Column(children: [
-            QueryBuilder<String>(
-              options: pending('builder'),
-              builder: (_, r) {
-                builds.add('builder:${r.dataOrNull}');
-                return const SizedBox();
-              },
-            ),
-            _R4ContextReader(pending('context'), builds),
-            _R4MixinReader(pending('mixin'), builds),
-          ]),
-        ));
-        for (var i = 0; i < 3; i++) {
-          await tester.pump();
-        }
-        // The subscribe started the fetch, the build read `fetching`, and the
-        // observer's notification about that very fetch has nothing to add.
-        expect(builds, ['builder:null', 'context:null', 'mixin:null']);
+      await tester.pumpWidget(app(
+        client,
+        Column(children: [
+          QueryBuilder<String>(
+            options: pending('builder'),
+            builder: (_, r) {
+              builds.add('builder:${r.dataOrNull}');
+              return const SizedBox();
+            },
+          ),
+          _R4ContextReader(pending('context'), builds),
+          _R4MixinReader(pending('mixin'), builds),
+        ]),
+      ));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump();
+      }
+      // The subscribe started the fetch, the build read `fetching`, and the
+      // observer's notification about that very fetch has nothing to add.
+      expect(builds, ['builder:null', 'context:null', 'mixin:null']);
 
-        for (final fetch in fetches.values) {
-          fetch.complete('ok');
-        }
-        // Completed from outside a frame, the result reaches the widgets on
-        // the frame after the one that runs the completion's microtasks.
-        await tester.pumpAndSettle();
-        expect(builds, [
-          'builder:null',
-          'context:null',
-          'mixin:null',
-          'builder:ok',
-          'context:ok',
-          'mixin:ok',
-        ]);
-      });
-    });
+      for (final fetch in fetches.values) {
+        fetch.complete('ok');
+      }
+      // Completed from outside a frame, the result reaches the widgets on
+      // the frame after the one that runs the completion's microtasks.
+      await tester.pumpAndSettle();
+      expect(builds, [
+        'builder:null',
+        'context:null',
+        'mixin:null',
+        'builder:ok',
+        'context:ok',
+        'mixin:ok',
+      ]);
+    }, createClient: newClient);
   });
 
   group('B5 one mutationKey, two type triples', () {
@@ -1087,15 +978,12 @@ void main() {
       ('context', const _R4KeyedMutations()),
       ('mixin', const _R4MixinKeyedMutations()),
     ]) {
-      testWidgets('$name gets two controllers, not a failed cast',
-          (tester) async {
-        final client = newClient();
-        await withClient(tester, [client], () async {
-          await tester.pumpWidget(app(client, widget));
-          expect(tester.takeException(), isNull);
-          expect(find.text('distinct'), findsOneWidget);
-        });
-      });
+      queryWidgetTest('$name gets two controllers, not a failed cast',
+          (tester, client) async {
+        await tester.pumpWidget(app(client, widget));
+        expect(tester.takeException(), isNull);
+        expect(find.text('distinct'), findsOneWidget);
+      }, createClient: newClient);
     }
   });
 
@@ -1104,14 +992,12 @@ void main() {
       ('context', const _R4StaleBetweenReads()),
       ('mixin', const _R4MixinStaleBetweenReads()),
     ]) {
-      testWidgets('$name is not mistaken for two selects', (tester) async {
-        final client = newClient()..setQueryData<String>(key, 'x');
-        await withClient(tester, [client], () async {
-          await tester.pumpWidget(app(client, widget));
-          expect(tester.takeException(), isNull);
-          expect(find.text('false/true'), findsOneWidget);
-        });
-      });
+      queryWidgetTest('$name is not mistaken for two selects',
+          (tester, client) async {
+        await tester.pumpWidget(app(client, widget));
+        expect(tester.takeException(), isNull);
+        expect(find.text('false/true'), findsOneWidget);
+      }, createClient: () => newClient()..setQueryData<String>(key, 'x'));
     }
   });
 
@@ -1120,39 +1006,34 @@ void main() {
       ('context', _R4MutationById.new),
       ('mixin', _R4MixinMutationById.new),
     ]) {
-      testWidgets('$name releases it after the frame, like a query',
-          (tester) async {
-        final client = newClient();
+      queryWidgetTest('$name releases it after the frame, like a query',
+          (tester, client) async {
         final seen = <MutationController<Object?, Object?, Object?>>[];
-        await withClient(tester, [client], () async {
-          await tester.pumpWidget(app(client, build('a', seen)));
-          await tester.pumpWidget(app(client, build('b', seen)));
-          await tester.pump();
-          expect(seen, hasLength(2));
-          expect(seen[0], isNot(same(seen[1])));
-          expect(seen[0].isDisposed, isTrue);
-          expect(seen[1].isDisposed, isFalse);
-        });
-      });
+        await tester.pumpWidget(app(client, build('a', seen)));
+        await tester.pumpWidget(app(client, build('b', seen)));
+        await tester.pump();
+        expect(seen, hasLength(2));
+        expect(seen[0], isNot(same(seen[1])));
+        expect(seen[0].isDisposed, isTrue);
+        expect(seen[1].isDisposed, isFalse);
+      }, createClient: newClient);
     }
   });
 
   group('A-24 QueryClientProvider.maybeOf', () {
-    testWidgets('is the client, or null without a provider', (tester) async {
-      final client = newClient();
+    queryWidgetTest('is the client, or null without a provider',
+        (tester, client) async {
       QueryClient? found;
       Widget probe() => Builder(builder: (context) {
             found = QueryClientProvider.maybeOf(context);
             return const SizedBox();
           });
-      await withClient(tester, [client], () async {
-        await tester.pumpWidget(MaterialApp(home: probe()));
-        expect(found, isNull);
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(app(client, probe()));
-        expect(found, same(client));
-      });
-    });
+      await tester.pumpWidget(MaterialApp(home: probe()));
+      expect(found, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(app(client, probe()));
+      expect(found, same(client));
+    }, createClient: newClient);
   });
 
   group('A-25 a controller read before anyone listens', () {
@@ -1254,18 +1135,15 @@ void main() {
   });
 
   group('A21 MutationOptions.simple', () {
-    testWidgets('infers both types from mutationFn under strict inference',
-        (tester) async {
-      final client = newClient();
+    queryWidgetTest('infers both types from mutationFn under strict inference',
+        (tester, client) async {
       final seen = <Object?>[];
       await tester.pumpWidget(app(client, _A21Reader(seen)));
       expect(seen.single, isA<MutationController<int, String, void>>());
       (seen.single as MutationController<int, String, void>).mutate('four');
       await tester.pump();
       expect(find.text('4'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      client.clear();
-    });
+    }, createClient: newClient);
   });
 
   // ---- ninth review (2026-09-10, consolidated 2026-09-11) ------------------
@@ -1298,99 +1176,74 @@ void main() {
       }
     });
 
-    testWidgets('QueryBuilder', (tester) async {
-      final client = QueryClient();
-      try {
-        await tester.pumpWidget(app(
-          client,
-          QueryBuilder(
-            options:
-                QueryObserverOptions(queryKey: key, queryFn: (_) async => 1),
-            builder: (_, result) => Text('v:${result.dataOrNull}'),
+    queryWidgetTest('QueryBuilder', (tester, client) async {
+      await tester.pumpWidget(app(
+        client,
+        QueryBuilder(
+          options: QueryObserverOptions(queryKey: key, queryFn: (_) async => 1),
+          builder: (_, result) => Text('v:${result.dataOrNull}'),
+        ),
+      ));
+      expect(cached(client), isA<Query<int>>());
+      await tester.pump();
+      expect(find.text('v:1'), findsOneWidget);
+    });
+
+    queryWidgetTest('context.query', (tester, client) async {
+      await tester.pumpWidget(app(
+        client,
+        Builder(
+          builder: (context) => Text(
+            'v:${context.query(QueryObserverOptions(queryKey: key, queryFn: (_) async => 1)).dataOrNull}',
           ),
-        ));
-        expect(cached(client), isA<Query<int>>());
-        await tester.pump();
-        expect(find.text('v:1'), findsOneWidget);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-      }
+        ),
+      ));
+      expect(cached(client), isA<Query<int>>());
+      await tester.pump();
+      expect(find.text('v:1'), findsOneWidget);
     });
 
-    testWidgets('context.query', (tester) async {
-      final client = QueryClient();
-      try {
-        await tester.pumpWidget(app(
-          client,
-          Builder(
-            builder: (context) => Text(
-              'v:${context.query(QueryObserverOptions(queryKey: key, queryFn: (_) async => 1)).dataOrNull}',
-            ),
-          ),
-        ));
-        expect(cached(client), isA<Query<int>>());
-        await tester.pump();
-        expect(find.text('v:1'), findsOneWidget);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-      }
+    queryWidgetTest('QueryMixin.watchQuery', (tester, client) async {
+      await tester.pumpWidget(app(client, const _C1MixinReader()));
+      expect(cached(client), isA<Query<int>>());
+      await tester.pump();
+      expect(find.text('v:1'), findsOneWidget);
     });
 
-    testWidgets('QueryMixin.watchQuery', (tester) async {
-      final client = QueryClient();
-      try {
-        await tester.pumpWidget(app(client, const _C1MixinReader()));
-        expect(cached(client), isA<Query<int>>());
-        await tester.pump();
-        expect(find.text('v:1'), findsOneWidget);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-      }
-    });
-
-    testWidgets(
+    queryWidgetTest(
         'InfiniteQueryBuilder needs no type arguments, for a helper and for '
-        'an inline plain literal', (tester) async {
-      final client = QueryClient();
-      try {
-        await tester.pumpWidget(app(
-          client,
-          Column(children: <Widget>[
-            InfiniteQueryBuilder(
-              options: _c1Feed(),
-              builder: (_, feed) => Text('a:${feed.value.dataOrNull?.pages}'),
+        'an inline plain literal', (tester, client) async {
+      await tester.pumpWidget(app(
+        client,
+        Column(children: <Widget>[
+          InfiniteQueryBuilder(
+            options: _c1Feed(),
+            builder: (_, feed) => Text('a:${feed.value.dataOrNull?.pages}'),
+          ),
+          InfiniteQueryBuilder(
+            options: InfiniteQueryObserverOptions(
+              queryKey: QueryKey(<Object?>['c1', 'inline']),
+              pageFn: (context) async => 'p${context.pageParam}',
+              initialPageParam: 0,
+              getNextPageParam: (_, __, param, ___) => param + 1,
             ),
-            InfiniteQueryBuilder(
-              options: InfiniteQueryObserverOptions(
-                queryKey: QueryKey(<Object?>['c1', 'inline']),
-                pageFn: (context) async => 'p${context.pageParam}',
-                initialPageParam: 0,
-                getNextPageParam: (_, __, param, ___) => param + 1,
-              ),
-              builder: (_, feed) {
-                // The slots are read off the options: TData is InfiniteData.
-                expect(
-                    feed,
-                    isA<
-                        InfiniteQueryController<String, int,
-                            InfiniteData<String, int>>>());
-                return Text('b:${feed.value.dataOrNull?.pages}');
-              },
-            ),
-          ]),
-        ));
-        await tester.pump();
-        expect(find.text('a:[[1]]'), findsOneWidget);
-        expect(find.text('b:[p0]'), findsOneWidget);
-        expect(client.queryCache.find(filters: QueryFilters(queryKey: key)),
-            isA<Query<InfiniteData<List<int>, int>>>());
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-      }
+            builder: (_, feed) {
+              // The slots are read off the options: TData is InfiniteData.
+              expect(
+                  feed,
+                  isA<
+                      InfiniteQueryController<String, int,
+                          InfiniteData<String, int>>>());
+              return Text('b:${feed.value.dataOrNull?.pages}');
+            },
+          ),
+        ]),
+      ));
+      await tester.pump();
+      expect(find.text('a:[[1]]'), findsOneWidget);
+      expect(find.text('b:[p0]'), findsOneWidget);
+      expect(client.queryCache.find(filters: QueryFilters(queryKey: key)),
+          isA<Query<InfiniteData<List<int>, int>>>());
     });
 
     testWidgets('the backstop names the cure for a key-only literal',
@@ -1445,54 +1298,34 @@ void main() {
           child: const SizedBox(),
         );
 
-    testWidgets('decides the next transition without a remount',
-        (tester) async {
-      final client = newClient();
-      try {
-        await tester.pumpWidget(tree(client, false));
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-        expect(client.focusManager.isFocused(), isFalse);
-        // Same client, same provider element: only the mapping changed. The
-        // listener used to capture the mapping it was installed with, and
-        // `didUpdateWidget` re-wired it only for a new client or a toggled
-        // `observeAppLifecycle`.
-        await tester.pumpWidget(tree(client, true));
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-        expect(client.focusManager.isFocused(), isTrue,
-            reason: 'the mapping given on the latest build decides');
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-        client.clear();
-      }
-    });
+    queryWidgetTest('decides the next transition without a remount',
+        (tester, client) async {
+      await tester.pumpWidget(tree(client, false));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(client.focusManager.isFocused(), isFalse);
+      // Same client, same provider element: only the mapping changed. The
+      // listener used to capture the mapping it was installed with, and
+      // `didUpdateWidget` re-wired it only for a new client or a toggled
+      // `observeAppLifecycle`.
+      await tester.pumpWidget(tree(client, true));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(client.focusManager.isFocused(), isTrue,
+          reason: 'the mapping given on the latest build decides');
+    }, createClient: newClient);
 
-    testWidgets('is applied to the state the app is already in',
-        (tester) async {
-      final client = newClient();
-      try {
-        await tester.pumpWidget(tree(client, false));
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-        expect(client.focusManager.isFocused(), isFalse);
-        // No transition follows the change: the class doc promises the
-        // current state is mapped too, not only the transitions after it.
-        await tester.pumpWidget(tree(client, true));
-        expect(client.focusManager.isFocused(), isTrue);
-        await tester.pumpWidget(tree(client, false));
-        expect(client.focusManager.isFocused(), isFalse);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        tester.binding
-            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-        client.clear();
-      }
-    });
+    queryWidgetTest('is applied to the state the app is already in',
+        (tester, client) async {
+      await tester.pumpWidget(tree(client, false));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(client.focusManager.isFocused(), isFalse);
+      // No transition follows the change: the class doc promises the
+      // current state is mapped too, not only the transitions after it.
+      await tester.pumpWidget(tree(client, true));
+      expect(client.focusManager.isFocused(), isTrue);
+      await tester.pumpWidget(tree(client, false));
+      expect(client.focusManager.isFocused(), isFalse);
+    }, createClient: newClient);
   });
 
   group('C18 (P3a, P3b) mutate() on a disposed MutationController', () {
@@ -1559,38 +1392,32 @@ void main() {
       }
     });
 
-    testWidgets(
+    queryWidgetTest(
         'P3b a tap handler outliving its context.mutation widget leaks nothing',
-        (tester) async {
-      final client = newClient();
+        (tester, client) async {
       MutationController<int, int, void>? captured;
-      try {
-        await tester.pumpWidget(app(
-          client,
-          Builder(builder: (context) {
-            captured = context.mutation(MutationOptions<int, int, void>(
-              mutationFn: (v) async => v,
-              gcTime: const GcTimeDuration(Duration(seconds: 1)),
-            ));
-            return const SizedBox();
-          }),
-        ));
-        // The widget goes; the handler that captured its controller fires
-        // afterwards, as one does after awaiting a dialog.
-        await tester.pumpWidget(app(client, const SizedBox()));
-        await tester.pump();
-        expect(captured!.isDisposed, isTrue);
-        captured!.mutate(1);
-        await tester.pump();
-        expect(client.mutationCache.mutations.single.state.status,
-            MutationStatus.success);
-        await tester.pump(const Duration(seconds: 2));
-        expect(client.mutationCache.mutations, isEmpty);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-      }
-    });
+      await tester.pumpWidget(app(
+        client,
+        Builder(builder: (context) {
+          captured = context.mutation(MutationOptions<int, int, void>(
+            mutationFn: (v) async => v,
+            gcTime: const GcTimeDuration(Duration(seconds: 1)),
+          ));
+          return const SizedBox();
+        }),
+      ));
+      // The widget goes; the handler that captured its controller fires
+      // afterwards, as one does after awaiting a dialog.
+      await tester.pumpWidget(app(client, const SizedBox()));
+      await tester.pump();
+      expect(captured!.isDisposed, isTrue);
+      captured!.mutate(1);
+      await tester.pump();
+      expect(client.mutationCache.mutations.single.state.status,
+          MutationStatus.success);
+      await tester.pump(const Duration(seconds: 2));
+      expect(client.mutationCache.mutations, isEmpty);
+    }, createClient: newClient);
   });
 }
 

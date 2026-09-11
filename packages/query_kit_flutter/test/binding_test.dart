@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'harness.dart';
+
 QueryKey taskKey(String id) => QueryKey(<Object?>['task', id]);
 
 QueryObserverOptions<String> taskQuery(
@@ -24,43 +26,10 @@ QueryObserverOptions<String> taskQuery(
       staleTime: const StaleTime.duration(Duration(minutes: 5)),
     );
 
-Widget app(QueryClient client, Widget child) => QueryClientProvider(
-      client: client,
-      // These tests drive focus through the manager directly; the lifecycle
-      // wiring itself runs fine under the test binding and is proven in
-      // review_regressions_test.dart (F10, M5).
-      observeAppLifecycle: false,
-      child: MaterialApp(home: Scaffold(body: child)),
-    );
-
 void main() {
-  late QueryClient client;
   late List<String> fetched;
 
-  setUp(() {
-    client = QueryClient();
-    fetched = <String>[];
-  });
-
-  /// `testWidgets` plus the cleanup a `QueryClient` needs.
-  ///
-  /// A client outlives the widget tree by design — it owns the cache and its
-  /// `gcTime` timers — but Flutter's test binding asserts that no timer is
-  /// pending when the tree comes down, and it checks that *before* any
-  /// `tearDown` runs. So the teardown has to happen inside the body. The same
-  /// rule applies to anyone writing widget tests against this library, and the
-  /// README says so.
-  void widgetTest(
-      String description, Future<void> Function(WidgetTester) body) {
-    testWidgets(description, (tester) async {
-      try {
-        await body(tester);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-      }
-    });
-  }
+  setUp(() => fetched = <String>[]);
 
   Future<String> fetch(String id) async {
     fetched.add(id);
@@ -68,7 +37,8 @@ void main() {
   }
 
   group('the four call styles', () {
-    widgetTest('QueryBuilder renders pending, then data', (tester) async {
+    queryWidgetTest('QueryBuilder renders pending, then data',
+        (tester, client) async {
       await tester.pumpWidget(app(
         client,
         QueryBuilder<String>(
@@ -89,7 +59,8 @@ void main() {
       expect(fetched, <String>['a']);
     });
 
-    widgetTest('context.query renders the same query', (tester) async {
+    queryWidgetTest('context.query renders the same query',
+        (tester, client) async {
       await tester
           .pumpWidget(app(client, _ContextScreen(id: 'a', fetch: fetch)));
 
@@ -98,7 +69,8 @@ void main() {
       expect(find.text('Task a'), findsOneWidget);
     });
 
-    widgetTest('QueryMixin renders the same query', (tester) async {
+    queryWidgetTest('QueryMixin renders the same query',
+        (tester, client) async {
       await tester.pumpWidget(app(client, _MixinScreen(id: 'a', fetch: fetch)));
 
       expect(find.text('loading'), findsOneWidget);
@@ -106,7 +78,8 @@ void main() {
       expect(find.text('Task a'), findsOneWidget);
     });
 
-    widgetTest('a controller renders the same query', (tester) async {
+    queryWidgetTest('a controller renders the same query',
+        (tester, client) async {
       await tester
           .pumpWidget(app(client, _ControllerScreen(id: 'a', fetch: fetch)));
 
@@ -115,7 +88,8 @@ void main() {
       expect(find.text('Task a'), findsOneWidget);
     });
 
-    widgetTest('all four in one app share a single fetch', (tester) async {
+    queryWidgetTest('all four in one app share a single fetch',
+        (tester, client) async {
       await tester.pumpWidget(app(
         client,
         Column(
@@ -146,8 +120,8 @@ void main() {
   });
 
   group('options changes', () {
-    widgetTest('a changed key moves a context reader to the new query',
-        (tester) async {
+    queryWidgetTest('a changed key moves a context reader to the new query',
+        (tester, client) async {
       await tester.pumpWidget(app(
         client,
         _ContextScreen(id: 'a', fetch: fetch),
@@ -165,7 +139,8 @@ void main() {
       expect(fetched, <String>['a', 'b']);
     });
 
-    widgetTest('QueryBuilder follows a changed key too', (tester) async {
+    queryWidgetTest('QueryBuilder follows a changed key too',
+        (tester, client) async {
       Widget screen(String id) => app(
             client,
             QueryBuilder<String>(
@@ -186,8 +161,9 @@ void main() {
   });
 
   group('release', () {
-    widgetTest('context.query releases the observer when its reader unmounts',
-        (tester) async {
+    queryWidgetTest(
+        'context.query releases the observer when its reader unmounts',
+        (tester, client) async {
       await tester
           .pumpWidget(app(client, _ContextScreen(id: 'a', fetch: fetch)));
       await tester.pump();
@@ -202,8 +178,9 @@ void main() {
       expect(query.observersCount, 0);
     });
 
-    widgetTest('a key the widget stopped reading is released within a frame',
-        (tester) async {
+    queryWidgetTest(
+        'a key the widget stopped reading is released within a frame',
+        (tester, client) async {
       await tester
           .pumpWidget(app(client, _ContextScreen(id: 'a', fetch: fetch)));
       await tester.pump();
@@ -226,7 +203,8 @@ void main() {
       );
     });
 
-    widgetTest('the mixin releases everything with its State', (tester) async {
+    queryWidgetTest('the mixin releases everything with its State',
+        (tester, client) async {
       await tester.pumpWidget(app(client, _MixinScreen(id: 'a', fetch: fetch)));
       await tester.pump();
 
@@ -242,8 +220,9 @@ void main() {
   });
 
   group('rebuild granularity', () {
-    widgetTest('context.query rebuilds only the widgets that read that key',
-        (tester) async {
+    queryWidgetTest(
+        'context.query rebuilds only the widgets that read that key',
+        (tester, client) async {
       final builds = <String, int>{'a': 0, 'b': 0};
 
       await tester.pumpWidget(app(
@@ -270,8 +249,8 @@ void main() {
   });
 
   group('mutations', () {
-    widgetTest('MutationBuilder runs a mutation and reports its result',
-        (tester) async {
+    queryWidgetTest('MutationBuilder runs a mutation and reports its result',
+        (tester, client) async {
       await tester.pumpWidget(app(
         client,
         MutationBuilder<String, String, Object?>(
@@ -293,7 +272,8 @@ void main() {
       expect(find.text('renamed to Küche'), findsOneWidget);
     });
 
-    widgetTest('context.mutation is owned by its widget', (tester) async {
+    queryWidgetTest('context.mutation is owned by its widget',
+        (tester, client) async {
       await tester
           .pumpWidget(app(client, _ContextMutationScreen(client: client)));
 
@@ -306,8 +286,8 @@ void main() {
   });
 
   group('the provider', () {
-    widgetTest('mounts and unmounts the client with the widget',
-        (tester) async {
+    queryWidgetTest('mounts and unmounts the client with the widget',
+        (tester, client) async {
       await tester.pumpWidget(app(client, const Text('hi')));
 
       // A mounted client reacts to focus; an unmounted one does not.
@@ -319,7 +299,8 @@ void main() {
       expect(() => client.focusManager.setFocused(false), returnsNormally);
     });
 
-    widgetTest('follows an onlineStatus stream when given one', (tester) async {
+    queryWidgetTest('follows an onlineStatus stream when given one',
+        (tester, client) async {
       final online = StreamController<bool>.broadcast();
       addTearDown(online.close);
 

@@ -43,7 +43,7 @@ The output lands in `doc/api/` (gitignored). Open `doc/api/index.html`.
 | paging | `InfiniteQueryOptions`, `InfiniteData`, `InfiniteQueryObserver` |
 | writes | `MutationOptions`, `MutationResult`, `MutationObserver` |
 | the Flutter side | `QueryClientProvider`, `QueryController`, `QueryBuilder`, `QueryMixin`, and the `context.query` extension |
-| test helpers | `package:query_kit_flutter/testing.dart` |
+| widget tests | nothing exported: the teardown is a documented snippet, see [Testing](../guides/testing.md) |
 
 ## The other reference
 

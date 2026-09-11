@@ -53,7 +53,8 @@ class Harness {
 
 /// `testWidgets` plus the cleanup a `QueryClient` needs: it owns `gcTime`
 /// timers, and the test binding checks for pending timers before any
-/// `tearDown` runs.
+/// `tearDown` runs. The teardown is the documented one (ADR-0002, the site's
+/// testing guide), in its order.
 ///
 /// Screens that poll or retry must be stepped with `tester.pump(duration)`;
 /// `pumpAndSettle` never returns while a `refetchInterval` is running.
@@ -73,6 +74,11 @@ void showcaseTest(
       // sweep to re-create what it is about to drop.
       await tester.pumpWidget(const SizedBox());
       await tester.pumpAndSettle();
+      h.client.clear();
+      // A mutation the clear dropped fails a few microtasks later and its
+      // callbacks run then; an optimistic rollback's `setQueryData` re-creates
+      // the query it names, gc timer included. Let them run, clear once more.
+      await tester.pump();
       h.client.clear();
       h.backend.close();
     }

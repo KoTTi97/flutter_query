@@ -12,9 +12,11 @@ First release.
 - No dependency beyond Flutter; connectivity is opt-in through
   `QueryClientProvider.onlineStatus`, with `initialOnlineStatus` for what a
   `Stream` cannot say before its first event.
-- `package:query_kit_flutter/testing.dart`: `queryWidgetTest` and
-  `tearDownQueryClient`, so a first widget test does not fail on a pending
-  `gcTime` timer.
+- Widget tests: the teardown a `QueryClient` needs — tear the tree down, let
+  the frame after it run, `clear()`, let a dropped mutation's callbacks run,
+  clear once more — is documented in the README and the testing guide as a
+  snippet a suite wraps once; `flutter_test` is a dev dependency only, so
+  nothing a test needs sits in an app's dependency graph.
 - App lifecycle drives the client's focus state — `AppLifecycleState.inactive`
   read per platform, with `isAppShown` as the seam — and results that arrive
   mid-build are delivered after the frame.

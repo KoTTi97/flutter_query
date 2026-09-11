@@ -1,32 +1,31 @@
-/// The shipped test helper, tested the way a user's first widget test uses it.
+/// The suite's harness, tested the way a user's first widget test uses the
+/// documented teardown it wraps (ADR-0002).
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
-import 'package:query_kit_flutter/testing.dart';
+
+import 'harness.dart';
 
 void main() {
   queryWidgetTest('a query read in build, with no teardown of its own',
       (tester, client) async {
-    await tester.pumpWidget(QueryClientProvider(
-      client: client,
-      observeAppLifecycle: false,
-      child: MaterialApp(
-        home: QueryBuilder<String>(
-          options: QueryObserverOptions(
-            queryKey: QueryKey(<Object?>['helper']),
-            queryFn: (_) async => 'Task a',
-          ),
-          builder: (_, result) => Text(result.dataOrNull ?? 'loading'),
+    await tester.pumpApp(
+      client,
+      QueryBuilder<String>(
+        options: QueryObserverOptions(
+          queryKey: QueryKey(<Object?>['helper']),
+          queryFn: (_) async => 'Task a',
         ),
+        builder: (_, result) => Text(result.dataOrNull ?? 'loading'),
       ),
-    ));
+    );
     expect(find.text('loading'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text('Task a'), findsOneWidget);
-    // The gcTime timer this leaves behind is exactly what the helper exists
-    // for: without its teardown the binding fails the test on a pending timer.
+    // The gcTime timer this leaves behind is exactly what the teardown exists
+    // for: without it the binding fails the test on a pending timer.
   });
 
   queryWidgetTest(
@@ -56,10 +55,10 @@ void main() {
     expect(mutation.value.isPaused, isTrue);
     expect(client.getQueryData<int>(key), 2);
     mutation.dispose();
-    // Left paused on purpose: the helper's teardown drops it, which fails it
-    // with a CancelledError and runs the rollback a few microtasks after
-    // `clear()`. Without the helper's second clear the binding fails this
-    // test on the re-created query's pending gc timer.
+    // Left paused on purpose: the teardown drops it, which fails it with a
+    // CancelledError and runs the rollback a few microtasks after `clear()`.
+    // Without the teardown's second clear the binding fails this test on the
+    // re-created query's pending gc timer.
   });
 
   queryWidgetTest('createClient carries defaults through',
@@ -76,4 +75,24 @@ void main() {
               queries: QueryDefaults(gcTime: GcTime.never),
             ),
           ));
+
+  queryWidgetTest('an adopted client is torn down with the case\'s own',
+      (tester, client) async {
+    final other = tester.adopt(QueryClient());
+    await tester.pumpApp(
+      other,
+      QueryBuilder<String>(
+        options: QueryObserverOptions(
+          queryKey: QueryKey(<Object?>['adopted']),
+          queryFn: (_) async => 'Task b',
+        ),
+        builder: (_, result) => Text(result.dataOrNull ?? 'loading'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Task b'), findsOneWidget);
+    expect(client.queryCache.queries, isEmpty);
+    // `other` owns the gc timer this leaves behind; the teardown clears it
+    // because the case adopted it.
+  });
 }

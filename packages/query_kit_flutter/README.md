@@ -383,37 +383,40 @@ Nothing is needed from this package for that.
 A `QueryClient` outlives the widget tree by design — it owns the cache and its
 `gcTime` timers. Flutter's test binding asserts that no timer is pending when
 the tree comes down, and it checks that **before** any `tearDown` runs, so the
-cleanup has to happen inside the test body. `package:query_kit_flutter/testing.dart`
-does it for you:
+cleanup has to happen inside the test body. The end of a query widget test
+is therefore always the same steps:
 
 ```dart
-import 'package:query_kit_flutter/testing.dart';
-
-queryWidgetTest('the list loads', (tester, client) async {
-  await tester.pumpWidget(app(client, const TaskScreen()));
+testWidgets('the list loads', (tester) async {
+  final client = QueryClient();
+  await tester.pumpWidget(QueryClientProvider(
+    client: client,
+    child: const MaterialApp(home: TasksScreen()),
+  ));
   await tester.pumpAndSettle();
-  expect(find.text('Task a'), findsOneWidget);
+  expect(find.byType(ListView), findsOneWidget);
+
+  // Let the widgets go, and the frame after them run.
+  await tester.pumpWidget(const SizedBox());
+  await tester.pumpAndSettle();
+  // Then the cache and its timers.
+  client.clear();
+  // A mutation the clear dropped fails a moment later and its callbacks
+  // run then; let them, then clear what they wrote.
+  await tester.pump();
+  client.clear();
 });
 ```
 
-The client is built for the case and taken down after it; pass `createClient`
-to give it `defaultOptions`. For a test that builds its own clients, or drives
-more than one, `tearDownQueryClient(tester, client)` is the same steps on
-their own:
+The last two steps matter when a test leaves a mutation paused offline:
+`clear()` fails it, its `onError` runs a moment later, and an optimistic
+rollback's `setQueryData` re-creates the query it names — gc timer included.
 
-```dart
-await tester.pumpWidget(const SizedBox()); // let the widgets go
-await tester.pumpAndSettle();              // and the frame after them run
-client.clear();                            // then the cache and its timers
-await tester.pump();                       // let a dropped mutation's callbacks run
-client.clear();                            // and what they wrote go too
-```
-
-The last two matter when a test leaves a mutation paused offline: `clear()`
-fails it, its `onError` runs a moment later, and an optimistic rollback's
-`setQueryData` re-creates the query it names — gc timer included.
-
-Import that library from `test/` only — it pulls in `flutter_test`.
+Nothing here is exported: `flutter_test` is a dev dependency of this package,
+not a regular one, so nothing a test needs sits in your app's dependency
+graph. Write the steps once per suite as a `queryWidgetTest` wrapper — the
+[testing guide](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/guides/testing.md)
+has the fifteen lines, and both example apps wrap the same shape.
 
 ## Licence
 

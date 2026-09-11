@@ -783,8 +783,9 @@ class QueryClient {
   /// write after it is a write like any other. Upstream never runs those
   /// callbacks because it abandons a paused mutation for good; here the
   /// caller of `mutateAsync` is told. A teardown that must leave nothing
-  /// pending lets the callbacks run and clears once more — the Flutter
-  /// binding's `tearDownQueryClient` does (ninth review, 2026-09-10, C11).
+  /// pending lets the callbacks run and clears once more — the widget-test
+  /// teardown the Flutter binding documents does (ninth review, 2026-09-10,
+  /// C11).
   void clear() {
     queryCache.clear();
     mutationCache.clear();

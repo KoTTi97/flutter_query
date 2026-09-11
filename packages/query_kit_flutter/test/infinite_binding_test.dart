@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'harness.dart';
+
 final feedKey = QueryKey(<Object?>['feed']);
 
 typedef Feed = InfiniteData<List<int>, int>;
@@ -31,12 +33,6 @@ String render(InfiniteQueryController<List<int>, int, Feed> feed) {
   return '${pages.expand((p) => p).join(',')}'
       '${feed.hasNextPage ? ' +' : ''}';
 }
-
-Widget app(QueryClient client, Widget child) => QueryClientProvider(
-      client: client,
-      observeAppLifecycle: false,
-      child: MaterialApp(home: Scaffold(body: child)),
-    );
 
 class _Mixin extends StatefulWidget {
   const _Mixin(this.fetched);
@@ -70,43 +66,36 @@ class _Context extends StatelessWidget {
 }
 
 void main() {
-  late QueryClient client;
   late List<int> fetched;
 
-  setUp(() {
-    client = QueryClient();
-    fetched = <int>[];
-  });
+  setUp(() => fetched = <int>[]);
 
   Future<void> pagesThrough(
     WidgetTester tester,
+    QueryClient client,
     Widget child,
   ) async {
-    try {
-      await tester.pumpWidget(app(client, child));
-      await tester.pump();
-      expect(find.text('0,1 +'), findsOneWidget);
-      expect(fetched, [0]);
+    await tester.pumpApp(client, child);
+    await tester.pump();
+    expect(find.text('0,1 +'), findsOneWidget);
+    expect(fetched, [0]);
 
-      await tester.tap(find.byType(TextButton));
-      await tester.pump();
-      await tester.pump();
-      expect(find.text('0,1,2,3 +'), findsOneWidget);
+    await tester.tap(find.byType(TextButton));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('0,1,2,3 +'), findsOneWidget);
 
-      await tester.tap(find.byType(TextButton));
-      await tester.pump();
-      await tester.pump();
-      expect(find.text('0,1,2,3,4,5'), findsOneWidget);
-      expect(fetched, [0, 1, 2]);
-    } finally {
-      await tester.pumpWidget(const SizedBox());
-      client.clear();
-    }
+    await tester.tap(find.byType(TextButton));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('0,1,2,3,4,5'), findsOneWidget);
+    expect(fetched, [0, 1, 2]);
   }
 
-  testWidgets('InfiniteQueryBuilder pages', (tester) async {
+  queryWidgetTest('InfiniteQueryBuilder pages', (tester, client) async {
     await pagesThrough(
       tester,
+      client,
       InfiniteQueryBuilder<List<int>, int, Feed>(
         options: feedQuery(fetched),
         builder: (_, feed) => TextButton(
@@ -117,21 +106,23 @@ void main() {
     );
   });
 
-  testWidgets('QueryMixin.watchInfiniteQuery pages', (tester) async {
-    await pagesThrough(tester, _Mixin(fetched));
+  queryWidgetTest('QueryMixin.watchInfiniteQuery pages',
+      (tester, client) async {
+    await pagesThrough(tester, client, _Mixin(fetched));
   });
 
-  testWidgets('context.infiniteQuery pages', (tester) async {
-    await pagesThrough(tester, _Context(fetched));
+  queryWidgetTest('context.infiniteQuery pages', (tester, client) async {
+    await pagesThrough(tester, client, _Context(fetched));
   });
 
-  testWidgets('InfiniteQueryController pages', (tester) async {
+  queryWidgetTest('InfiniteQueryController pages', (tester, client) async {
     final feed = InfiniteQueryController<List<int>, int, Feed>(
       client,
       feedQuery(fetched),
     );
     await pagesThrough(
       tester,
+      client,
       ListenableBuilder(
         listenable: feed,
         builder: (_, __) => TextButton(

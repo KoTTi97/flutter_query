@@ -26,7 +26,7 @@ description: What is here, what is deliberately not, and where the reason for ea
 | Offline behaviour | `NetworkMode`, paused mutations, `resumePausedMutations` |
 | Per-client focus / online / notify managers | not module-level singletons |
 | A Flutter binding with four equal call styles | and no dependency beyond Flutter |
-| Test helpers | `package:query_kit_flutter/testing.dart` |
+| Widget tests | the teardown is a documented snippet, not an export — see [Testing](../guides/testing.md) |
 
 ## Deliberately not in 0.1
 

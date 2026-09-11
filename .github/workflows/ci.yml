@@ -36,6 +36,11 @@ jobs:
       - name: showcase tests
         run: flutter test
         working-directory: examples/showcase
+      # The testing guide's teardown snippet, as a test that runs: the
+      # analyzer proves it compiles, this proves it leaves nothing pending.
+      - name: doc snippet tests
+        run: flutter test
+        working-directory: examples/doc_snippets
       # `dart pub publish --dry-run` exits 65 when validation finds a warning
       # (a missing CHANGELOG, say) and 0 when the package is clean, so a
       # warning fails the job without any extra flag.
@@ -56,7 +61,7 @@ jobs:
         run: dart doc --validate-links
         working-directory: packages/query_kit_flutter
       - name: formatter
-        run: dart format --set-exit-if-changed --output=none packages examples/task_manager/lib examples/task_manager/test examples/showcase/lib examples/showcase/test examples/doc_snippets/lib tool
+        run: dart format --set-exit-if-changed --output=none packages examples/task_manager/lib examples/task_manager/test examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test tool
       - name: demo web build
         run: flutter build web --no-pub
         working-directory: examples/task_manager
@@ -88,6 +93,9 @@ jobs:
       - name: showcase tests
         run: flutter test
         working-directory: examples/showcase
+      - name: doc snippet tests
+        run: flutter test
+        working-directory: examples/doc_snippets
 
   # The documentation site. Nothing is deployed — this job exists because
   # `onBrokenLinks: 'throw'` turns a link to a page that does not exist into a

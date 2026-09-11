@@ -10,7 +10,7 @@ work is first-class here, not an add-on.
 | Phase | State |
 |---|---|
 | **`packages/query_kit/`** — the pure-Dart core | **done, seven times reviewed.** 549 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
-| **`packages/query_kit_flutter/`** — the Flutter binding | **done, six times reviewed.** 84 widget tests; four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter, and `lib/testing.dart` for the widget tests a user writes |
+| **`packages/query_kit_flutter/`** — the Flutter binding | **done, six times reviewed.** 97 widget tests behind one harness (`test/harness.dart`); four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25).** 26 screens, 200 widget tests against a dio fake of the backend and 146 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
 | **`examples/task_manager/`** — the acceptance demo, one whole app | **done, kept as is.** A small to-do app: 15 widget tests, one per row of the MVP checklist plus one regression, and 9 Playwright end-to-end tests in a real browser against its real express backend; iOS and web generated |
 
@@ -47,7 +47,11 @@ cd examples/showcase && flutter test
 ```
 
 ```bash
-dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib tool
+cd examples/doc_snippets && flutter test
+```
+
+```bash
+dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test tool
 ```
 
 ```bash
@@ -76,11 +80,15 @@ harness `showcaseTest` in `test/harness.dart`.
 **Widget tests need one extra step.** A `QueryClient` outlives the tree and owns
 `gcTime` timers; Flutter's test binding asserts no timer is pending when the
 tree comes down, *before* any `tearDown` runs. So a widget test ends with
-`await tester.pumpWidget(const SizedBox()); client.clear();`. The binding ships
-that as `queryWidgetTest` in
-`packages/query_kit_flutter/lib/testing.dart` — a user's first widget test
-fails without it, so it is API, not a snippet — and the examples wrap their own
-(`showcaseTest` in `examples/showcase/test/harness.dart`). And
+`pumpWidget(const SizedBox())`, `pumpAndSettle()`, `client.clear()`, then one
+more `pump()` and `clear()` for what a dropped mutation's callbacks wrote
+(C11). That teardown is a **documented snippet, not an export**
+([ADR-0002](docs/adr/0002-widget-test-teardown-is-a-documented-snippet.md)):
+`flutter_test` is a dev dependency of the binding, the snippet is the first
+section of the site's testing guide and the binding README, it is compiled and
+run in `examples/doc_snippets/test/teardown_snippet_test.dart`, and the
+binding's suite (`packages/query_kit_flutter/test/harness.dart`) and both
+examples (`showcaseTest`, `demoTest`) wrap the same shape. And
 `pumpAndSettle` only pumps while a frame is scheduled: a fake backend's latency
 or a `refetchInterval` is a timer, stepped with `tester.pump(duration)`.
 

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'harness.dart';
+
 class _TrackedClient extends QueryClient {
   int clears = 0;
   final events = <String>[];
@@ -23,26 +25,8 @@ class _TrackedClient extends QueryClient {
 }
 
 void main() {
-  late QueryClient client;
-  setUp(() => client = QueryClient());
-
-  Widget app(Widget child) => QueryClientProvider(
-      client: client,
-      observeAppLifecycle: false,
-      child: Directionality(textDirection: TextDirection.ltr, child: child));
-
-  void widgetTest(String name, Future<void> Function(WidgetTester) body) {
-    testWidgets(name, (tester) async {
-      try {
-        await body(tester);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        client.clear();
-      }
-    });
-  }
-
-  widgetTest('an inactive blip is not an absence at all', (tester) async {
+  queryWidgetTest('an inactive blip is not an absence at all',
+      (tester, client) async {
     // `inactive` maps to focused, so a notification shade or an incoming call
     // must not raise a focus event, and must not start the background clock.
     // The threshold is an hour: every absence this test stages is "short",
@@ -107,9 +91,9 @@ void main() {
     }
   });
 
-  widgetTest(
+  queryWidgetTest(
       'owned provider creates once, replaces by key and clears after unmount',
-      (tester) async {
+      (tester, client) async {
     final clients = <_TrackedClient>[];
     var created = 0;
     QueryClient create() {
@@ -142,7 +126,8 @@ void main() {
     expect(clients.last.events, ['unmount', 'clear']);
   });
 
-  widgetTest('borrowed provider does not clear its client', (tester) async {
+  queryWidgetTest('borrowed provider does not clear its client',
+      (tester, client) async {
     final borrowed = _TrackedClient();
     await tester.pumpWidget(QueryClientProvider(
         client: borrowed, observeAppLifecycle: false, child: const SizedBox()));
@@ -153,9 +138,9 @@ void main() {
     borrowed.clear();
   });
 
-  widgetTest(
+  queryWidgetTest(
       'listener filters consecutive results without rebuilding its child',
-      (tester) async {
+      (tester, client) async {
     final key = QueryKey(['listener']);
     client.setQueryData(key, 1);
     final controller = QueryController.create<int>(
@@ -163,17 +148,19 @@ void main() {
     final transitions = <(int?, int?)>[];
     final accepted = <int?>[];
     var builds = 0;
-    await tester.pumpWidget(app(QueryListener<int, int>(
-        controller: controller,
-        listener: (_, result) => accepted.add(result.dataOrNull),
-        listenWhen: (previous, next) {
-          transitions.add((previous.dataOrNull, next.dataOrNull));
-          return next.dataOrNull == 3;
-        },
-        child: Builder(builder: (_) {
-          builds++;
-          return const SizedBox();
-        }))));
+    await tester.pumpWidget(app(
+        client,
+        QueryListener<int, int>(
+            controller: controller,
+            listener: (_, result) => accepted.add(result.dataOrNull),
+            listenWhen: (previous, next) {
+              transitions.add((previous.dataOrNull, next.dataOrNull));
+              return next.dataOrNull == 3;
+            },
+            child: Builder(builder: (_) {
+              builds++;
+              return const SizedBox();
+            }))));
     expect(accepted, isEmpty);
     client.setQueryData(key, 2);
     client.setQueryData(key, 3);
@@ -187,8 +174,9 @@ void main() {
     controller.dispose();
   });
 
-  widgetTest('listener changes controller without delivering initial snapshots',
-      (tester) async {
+  queryWidgetTest(
+      'listener changes controller without delivering initial snapshots',
+      (tester, client) async {
     QueryController<int, int> make(String id) {
       final key = QueryKey([id]);
       client.setQueryData(key, 1);
@@ -199,8 +187,9 @@ void main() {
     final first = make('first');
     final second = make('second');
     final values = <int?>[];
-    Widget view(QueryController<int, int> controller) =>
-        app(QueryListener<int, int>(
+    Widget view(QueryController<int, int> controller) => app(
+        client,
+        QueryListener<int, int>(
             controller: controller,
             listener: (_, r) => values.add(r.dataOrNull),
             child: const SizedBox()));
@@ -219,26 +208,29 @@ void main() {
     second.dispose();
   });
 
-  widgetTest('listener side effects are safe when data changes during build',
-      (tester) async {
+  queryWidgetTest(
+      'listener side effects are safe when data changes during build',
+      (tester, client) async {
     final key = QueryKey(['build']);
     client.setQueryData(key, 1);
     final controller = QueryController.create(
         client, QueryObserverOptions<int>(queryKey: key, enabled: Enabled.no));
     var effect = 0;
     var changed = false;
-    await tester.pumpWidget(app(StatefulBuilder(
-        builder: (context, setState) => QueryListener<int, int>(
-            controller: controller,
-            listener: (_, result) =>
-                setState(() => effect = result.dataOrNull!),
-            child: Builder(builder: (_) {
-              if (!changed) {
-                changed = true;
-                client.setQueryData(key, 2);
-              }
-              return Text('$effect');
-            })))));
+    await tester.pumpWidget(app(
+        client,
+        StatefulBuilder(
+            builder: (context, setState) => QueryListener<int, int>(
+                controller: controller,
+                listener: (_, result) =>
+                    setState(() => effect = result.dataOrNull!),
+                child: Builder(builder: (_) {
+                  if (!changed) {
+                    changed = true;
+                    client.setQueryData(key, 2);
+                  }
+                  return Text('$effect');
+                })))));
     await tester.pump();
     await tester.pump();
     expect(tester.takeException(), isNull);
@@ -247,16 +239,18 @@ void main() {
     controller.dispose();
   });
 
-  widgetTest('mutation listener observes the controller the UI executes',
-      (tester) async {
+  queryWidgetTest('mutation listener observes the controller the UI executes',
+      (tester, client) async {
     final response = Completer<int>();
     final controller = MutationController<int, String, void>(
         client, MutationOptions(mutationFn: (_) => response.future));
     final statuses = <bool>[];
-    await tester.pumpWidget(app(MutationListener<int, String, void>(
-        controller: controller,
-        listener: (_, result) => statuses.add(result.isPending),
-        child: const SizedBox())));
+    await tester.pumpWidget(app(
+        client,
+        MutationListener<int, String, void>(
+            controller: controller,
+            listener: (_, result) => statuses.add(result.isPending),
+            child: const SizedBox())));
     expect(statuses, isEmpty);
     final future = controller.mutateAsync('save');
     await tester.pump();
@@ -269,9 +263,9 @@ void main() {
     controller.dispose();
   });
 
-  widgetTest(
+  queryWidgetTest(
       'infinite listener follows paging transitions without owning controller',
-      (tester) async {
+      (tester, client) async {
     final controller =
         InfiniteQueryController<int, int, InfiniteData<int, int>>(
             client,
@@ -281,8 +275,9 @@ void main() {
                 initialPageParam: 0,
                 getNextPageParam: (_, __, param, ___) => param + 1));
     final lengths = <int>[];
-    await tester
-        .pumpWidget(app(InfiniteQueryListener<int, int, InfiniteData<int, int>>(
+    await tester.pumpWidget(app(
+        client,
+        InfiniteQueryListener<int, int, InfiniteData<int, int>>(
             controller: controller,
             listener: (_, result) {
               if (result.isSuccess) {
@@ -300,17 +295,19 @@ void main() {
     controller.dispose();
   });
 
-  widgetTest('mutation state controller subscribes lazily and cleans up',
-      (tester) async {
+  queryWidgetTest('mutation state controller subscribes lazily and cleans up',
+      (tester, client) async {
     final key = QueryKey(['mutations']);
     final states = MutationStateController<String?>(client,
         filters:
             MutationFilters(mutationKey: key, status: MutationStatus.pending),
         select: (m) => m.state.variables as String?);
     expect(client.mutationCache.hasListeners, isFalse);
-    await tester.pumpWidget(app(ValueListenableBuilder<List<String?>>(
-        valueListenable: states,
-        builder: (_, values, __) => Text(values.join(',')))));
+    await tester.pumpWidget(app(
+        client,
+        ValueListenableBuilder<List<String?>>(
+            valueListenable: states,
+            builder: (_, values, __) => Text(values.join(',')))));
     final response = Completer<int>();
     final mutation = MutationController<int, String, void>(client,
         MutationOptions(mutationKey: key, mutationFn: (_) => response.future));
@@ -327,9 +324,9 @@ void main() {
     mutation.dispose();
   });
 
-  widgetTest(
+  queryWidgetTest(
       'queries builder handles list changes and isolates partial failures',
-      (tester) async {
+      (tester, client) async {
     var calls = 0;
     QueryObserverOptions<int> options(int id) => QueryObserverOptions(
         queryKey: QueryKey(['query', id]),
@@ -339,8 +336,9 @@ void main() {
           if (id == 3) throw StateError('failed');
           return id;
         });
-    Widget view(List<int> ids, {QueryClient? explicitClient}) =>
-        app(QueriesBuilder<int, int>(
+    Widget view(List<int> ids, {QueryClient? explicitClient}) => app(
+        client,
+        QueriesBuilder<int, int>(
             client: explicitClient,
             queries: ids.map(options).toList(),
             builder: (_, results) => Text(results
@@ -370,9 +368,9 @@ void main() {
     other.clear();
   });
 
-  widgetTest(
+  queryWidgetTest(
       'queries controller shares duplicate keys with independent selections',
-      (tester) async {
+      (tester, client) async {
     final key = QueryKey(['duplicate']);
     var calls = 0;
     final first = QueryObserverOptions<int>(
@@ -389,10 +387,12 @@ void main() {
     final controller = QueriesController<int, int>(
         client, [first, selecting((value) => value * 10)]);
     expect(calls, 0);
-    await tester.pumpWidget(app(ValueListenableBuilder<List<QueryResult<int>>>(
-        valueListenable: controller,
-        builder: (_, values, __) =>
-            Text(values.map((r) => r.dataOrNull).join(',')))));
+    await tester.pumpWidget(app(
+        client,
+        ValueListenableBuilder<List<QueryResult<int>>>(
+            valueListenable: controller,
+            builder: (_, values, __) =>
+                Text(values.map((r) => r.dataOrNull).join(',')))));
     await tester.pump();
     expect(find.text('2,20'), findsOneWidget);
     expect(calls, 1);

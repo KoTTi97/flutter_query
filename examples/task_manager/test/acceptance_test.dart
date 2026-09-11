@@ -40,7 +40,8 @@ void main() {
 
   /// `testWidgets` plus the cleanup a `QueryClient` needs: it owns `gcTime`
   /// timers, and the test binding checks for pending timers before any
-  /// `tearDown` runs.
+  /// `tearDown` runs. The teardown is the documented one (ADR-0002, the
+  /// site's testing guide), in its order.
   void demoTest(String description, Future<void> Function(WidgetTester) body) {
     testWidgets(description, (tester) async {
       try {
@@ -52,6 +53,12 @@ void main() {
         // sweep to re-create what it is about to drop.
         await tester.pumpWidget(const SizedBox());
         await tester.pumpAndSettle();
+        client.clear();
+        // A mutation the clear dropped fails a few microtasks later and its
+        // callbacks run then; an optimistic rollback's `setQueryData`
+        // re-creates the query it names, gc timer included. Let them run,
+        // clear once more.
+        await tester.pump();
         client.clear();
       }
     });

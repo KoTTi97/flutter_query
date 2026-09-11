@@ -1877,7 +1877,8 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   write. `tearDownQueryClient` in `query_kit_flutter/lib/testing.dart` now
   pumps once after `clear()` and clears again (its dartdoc, the README and
   the site's testing guide say why), which map #33's C45 already named as a
-  reason to deepen the helper. Regressions: `C11 / P6 the onError rollback
+  reason to deepen the helper (since C2, #42, the same two steps live in the
+  documented snippet and in the suite's harness; the export is gone). Regressions: `C11 / P6 the onError rollback
   re-creates the query after clear(); a second clear once the callbacks ran
   leaves nothing pending` (`port_lifecycle_test.dart`, the decided
   behaviour) and, in the binding's `testing_helper_test.dart`, `C11 an
@@ -2107,6 +2108,58 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   literal without `select` or type argument through each plain style yields
   a `Query<int>`, the infinite builder and an inline infinite literal infer
   every slot, and the backstop's message for a key-only literal.
+
+- **C2 — `flutter_test` was a regular dependency of the binding, for
+  `lib/testing.dart`** (release review, §1; #36, #42; ADR-0002). Reproduced
+  with `flutter pub deps --style=compact` in `examples/showcase`:
+  `query_kit_flutter 0.1.0 [flutter flutter_test meta query_kit]`, with
+  `test_api`, `matcher` and `leak_tracker_*` in every consumer's regular
+  graph — the pubspec comment "nothing is pulled from pub.dev" and the
+  README's "No dependency beyond Flutter itself" were both false, and pana's
+  platform tagger would have followed `flutter_test` to `dart:io` and marked
+  the binding not-Web on its package page. **Decision** (#36, the research
+  in `docs/research/test-helper-packaging.md`) — the options: (1) a companion
+  `query_kit_flutter_test` package: the honest place for the dependency, but
+  the helper *is* `testWidgets` plus `WidgetTester`, so it could not stay off
+  `flutter_test` the way `bloc_test` does, and it costs a permanent pub.dev
+  name, a seventh workspace member, a third publish stage with its own wait
+  and a third leg in every CI job, for two functions with one caller in the
+  repository (their own test); (2) a documented snippet: `flutter_test`
+  moves to `dev_dependencies`, `lib/testing.dart` goes, and the teardown is
+  the first section of the testing guide and the README, compiled and run
+  in `examples/doc_snippets/test/teardown_snippet_test.dart`; (3) keep the
+  regular dependency: no points lost, but a visible contradiction between
+  what the package says and what its page shows, and a floor bump every time
+  `flutter_test` changes its API. (2), as provider, go_router and dio do.
+  After: `query_kit_flutter 0.1.0 [flutter meta query_kit]`, and
+  `dart pub publish --dry-run` passes. No regression: a dependency graph
+  is checked by the deps line, not a test.
+
+- **C41 — the testing guide claimed "Both example apps wrap the same
+  helper"** (§6; #42). False as written: `queryWidgetTest` had one caller,
+  its own test, and the showcase and task_manager each re-implemented the
+  teardown — the showcase and task_manager with `pumpAndSettle` before
+  `clear()`, the binding's own `widgetTest`s without it, none with the
+  second pump and clear C11 added. Both examples (`showcaseTest`,
+  `demoTest`) now take the snippet's five steps in its order, and the page
+  says what is true: they wrap one *shape*, shown on the page as the
+  fifteen-line `queryWidgetTest` a suite writes once.
+
+- **C45 — `queryWidgetTest` was shallow and unused; the binding's tests
+  rolled `widgetTest` ×3 and `withClient` (33 calls) themselves, with an
+  inconsistent teardown order** (§7; #42). Not deepened as API — with C2
+  there is no API to deepen. The binding's suite got one harness instead,
+  `packages/query_kit_flutter/test/harness.dart`: a client per case
+  (`createClient` for defaults), a second client adopted for the teardown
+  (`tester.adopt`), the provider wired with lifecycle observation off
+  (`app`, `tester.pumpApp`), the app lifecycle put back to `resumed` when a
+  case faked it, and the teardown once, in the documented order. The three
+  local `widgetTest`s, `withClient` and the inline `try`/`finally` copies of
+  tree-pumping cases are gone; the cases that pump no tree keep their
+  `client.clear()`. Pure plumbing: every case kept its name and its
+  assertions (the JSON reporter's name list before and after was diffed),
+  `testing_helper_test.dart`'s three cases became `harness_test.dart`'s,
+  plus one for `adopt` — 96 cases became 97.
 
 ## Deliberate divergences that will show up in later suites
 

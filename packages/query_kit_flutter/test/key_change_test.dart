@@ -14,6 +14,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'harness.dart';
+
 QueryKey pageKey(int n) => QueryKey(<Object?>['page', n]);
 
 QueryObserverOptions<String> pageQuery(int n) => QueryObserverOptions(
@@ -68,42 +70,19 @@ class _BuilderReader extends StatelessWidget {
 }
 
 void main() {
-  late QueryClient client;
-
-  setUp(() => client = QueryClient());
-
-  Widget app(Widget child) => QueryClientProvider(
-        client: client,
-        observeAppLifecycle: false,
-        child: MaterialApp(home: Scaffold(body: child)),
-      );
-
-  void widgetTest(
-      String description, Future<void> Function(WidgetTester) body) {
-    testWidgets(description, (tester) async {
-      try {
-        await body(tester);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        await tester.pumpAndSettle();
-        client.clear();
-      }
-    });
-  }
-
   for (final (name, reader) in <(String, Widget Function(int))>[
     ('context.query with an id', (n) => _ContextReader(n, id: 'page')),
     ('QueryMixin.watchQuery with an id', (n) => _MixinReader(n, id: 'page')),
     ('QueryBuilder', _BuilderReader.new),
   ]) {
-    widgetTest('$name keeps the previous page while the next one loads',
-        (tester) async {
-      await tester.pumpWidget(app(reader(1)));
+    queryWidgetTest('$name keeps the previous page while the next one loads',
+        (tester, client) async {
+      await tester.pumpApp(client, reader(1));
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
       expect(find.text('page 1 placeholder=false'), findsOneWidget);
 
-      await tester.pumpWidget(app(reader(2)));
+      await tester.pumpApp(client, reader(2));
       await tester.pump();
       expect(find.text('page 1 placeholder=true'), findsOneWidget);
 
@@ -130,13 +109,13 @@ void main() {
     ('context.query', _ContextReader.new),
     ('QueryMixin.watchQuery', _MixinReader.new),
   ]) {
-    widgetTest('$name without an id treats a new key as a new read',
-        (tester) async {
-      await tester.pumpWidget(app(reader(1)));
+    queryWidgetTest('$name without an id treats a new key as a new read',
+        (tester, client) async {
+      await tester.pumpApp(client, reader(1));
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
 
-      await tester.pumpWidget(app(reader(2)));
+      await tester.pumpApp(client, reader(2));
       await tester.pump();
       // A fresh observer has no previous data to show as a placeholder.
       expect(find.text('none placeholder=false'), findsOneWidget);
