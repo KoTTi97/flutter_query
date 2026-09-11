@@ -15,7 +15,7 @@ dependencies:
   dio: ^5.7.0
   flutter:
     sdk: flutter
-  query_kit_flutter: ^0.1.0-dev
+  query_kit_flutter: ^0.1.0
 
 dev_dependencies:
   clock: ^1.1.1

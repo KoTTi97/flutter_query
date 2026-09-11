@@ -40,10 +40,16 @@ void main(List<String> args) {
     stdout.writeln('${entry.key} -> ${entry.value}');
   }
 
-  // Longest first, so a name that is a prefix of another is never applied to
-  // it first and left half-rewritten.
+  // One pass over the text, not one `replaceAll` per name: applied one after
+  // another, the shorter rename would hit the name the longer one has just
+  // produced (`query_kit_next_flutter` -> `query_kit_next_next_flutter`). An
+  // alternation tries its branches in order, so longest first is what makes
+  // `query_kit_flutter` win over its prefix `query_kit` at the same offset.
   final ordered = renames.keys.toList()
     ..sort((a, b) => b.length.compareTo(a.length));
+  final pattern = RegExp(ordered.map(RegExp.escape).join('|'));
+  String rename(String text) =>
+      text.replaceAllMapped(pattern, (match) => renames[match[0]]!);
 
   final tracked = _run('git', ['ls-files', '-z']).split(String.fromCharCode(0))
     ..removeWhere((path) => path.isEmpty);
@@ -56,10 +62,7 @@ void main(List<String> args) {
     final bytes = file.readAsBytesSync();
     if (bytes.contains(0)) continue; // binary
     final before = utf8.decode(bytes);
-    var after = before;
-    for (final old in ordered) {
-      after = after.replaceAll(old, renames[old]!);
-    }
+    final after = rename(before);
     if (after == before) continue;
     changed++;
     if (!options.dryRun) file.writeAsStringSync(after);
@@ -71,10 +74,7 @@ void main(List<String> args) {
   // directory it sits in.
   final moves = <String, String>{};
   for (final path in tracked) {
-    var renamed = path;
-    for (final old in ordered) {
-      renamed = renamed.replaceAll(old, renames[old]!);
-    }
+    final renamed = rename(path);
     if (renamed != path) moves[path] = renamed;
   }
   for (final from in moves.keys.toList()

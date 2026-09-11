@@ -9,9 +9,9 @@ description: Which package to add, what it depends on, and which SDK versions ar
 Two packages. Add the one that matches what you are building.
 
 :::warning Not published yet
-Nothing is on pub.dev at the time of writing. The `pubspec.yaml` snippets below
-are what installation *will* look like; the [git
-dependency](#before-the-first-publish) below is what works today.
+Nothing is on pub.dev at the time of writing. The snippets below are what
+installation looks like once `0.1.0` is published; a git dependency is not an
+alternative, because the binding depends on a hosted `query_kit`.
 :::
 
 ## In a Flutter app
@@ -56,22 +56,6 @@ you have to do yourself there is `client.mount()`.
 Platforms: the core supports all six pub.dev platforms. The binding is exercised
 on the web and on the iOS simulator by the examples' end-to-end suites; the
 others are untested rather than unsupported.
-
-## Before the first publish
-
-Until the packages are on pub.dev, depend on the repository:
-
-```yaml
-dependencies:
-  query_kit_flutter:
-    git:
-      url: https://github.com/KoTTi97/flutter_query.git
-      path: packages/query_kit_flutter
-      ref: main
-```
-
-Pin `ref` to a commit rather than `main` if you want a build that does not
-move under you.
 
 ## Next
 

@@ -393,7 +393,9 @@ void main() {
         retry: const RetryTimes(3),
         retryDelay: const RetryDelay.fixed(Duration(milliseconds: 10)),
       ));
-      promise.then((_) {}, onError: (Object e) => error = e).ignore();
+      promise.then((_) {}, onError: (Object e) {
+        error = e;
+      }).ignore();
 
       final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
 
@@ -426,7 +428,9 @@ void main() {
         retry: const RetryTimes(3),
         retryDelay: const RetryDelay.fixed(Duration(milliseconds: 10)),
       ));
-      promise.then((_) {}, onError: (Object e) => error = e).ignore();
+      promise.then((_) {}, onError: (Object e) {
+        error = e;
+      }).ignore();
 
       final query = queryCache.find(filters: QueryFilters(queryKey: key))!;
       query.cancel().ignore();
@@ -445,17 +449,18 @@ void main() {
 
       queryClient
           .query<String>(QueryOptions<String>(
-            queryKey: key,
-            queryFn: (_) async {
-              calls++;
-              await sleep(ms(10));
-              throw Exception();
-            },
-            retry: const RetryTimes(3),
-            retryDelay: const RetryDelay.fixed(Duration(milliseconds: 10)),
-          ))
-          .then((_) {}, onError: (Object e) => error = e)
-          .ignore();
+        queryKey: key,
+        queryFn: (_) async {
+          calls++;
+          await sleep(ms(10));
+          throw Exception();
+        },
+        retry: const RetryTimes(3),
+        retryDelay: const RetryDelay.fixed(Duration(milliseconds: 10)),
+      ))
+          .then((_) {}, onError: (Object e) {
+        error = e;
+      }).ignore();
 
       // Ensure the query is pending
       final query = queryCache.find(filters: QueryFilters(queryKey: key))!;

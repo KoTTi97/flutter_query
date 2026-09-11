@@ -227,6 +227,24 @@ dry_run() {
   fi
 }
 
+# ensure_tag TAG MESSAGE — an annotated TAG at HEAD, created or reused. A tag
+# that already exists is fine when it points at HEAD (an interrupted run made
+# it); one pointing anywhere else is a different release wearing this name,
+# and pushing it would mark the wrong commit as $VERSION for good.
+ensure_tag() {
+  local tag="$1" message="$2" target
+  if target=$(git rev-parse --verify --quiet "$tag^{}"); then
+    if [[ "$target" == "$head_sha" ]]; then
+      note "$tag already exists at ${head_sha:0:7} — reusing it"
+    else
+      fail "$tag already exists at ${target:0:7}, but HEAD is ${head_sha:0:7}. Nothing was pushed: delete or move the tag by hand, then re-run."
+    fi
+  else
+    git tag -a "$tag" -m "$message" || fail "could not create $tag."
+    ok "created $tag at ${head_sha:0:7}"
+  fi
+}
+
 # workflow_state — 'active', 'disabled_manually', or 'unknown'. `gh workflow
 # view` has no --json flag, so this reads the REST API directly.
 workflow_state() {
@@ -255,11 +273,12 @@ stage "Pre-flight — is this tree releasable?"
 say "Nothing is published in this stage. Every check has to pass first."
 printf '\n'
 
-command -v dart >/dev/null 2>&1 || fail "dart is not on PATH."
-command -v gh   >/dev/null 2>&1 || fail "the gh CLI is not on PATH."
-command -v curl >/dev/null 2>&1 || fail "curl is not on PATH."
-gh auth status >/dev/null 2>&1  || fail "gh is not authenticated — run: gh auth login"
-ok "dart, gh and curl are ready"
+command -v dart    >/dev/null 2>&1 || fail "dart is not on PATH."
+command -v flutter >/dev/null 2>&1 || fail "flutter is not on PATH — the binding's dry-run needs it."
+command -v gh      >/dev/null 2>&1 || fail "the gh CLI is not on PATH."
+command -v curl    >/dev/null 2>&1 || fail "curl is not on PATH."
+gh auth status >/dev/null 2>&1     || fail "gh is not authenticated — run: gh auth login"
+ok "dart, flutter, gh and curl are ready"
 
 branch=$(git rev-parse --abbrev-ref HEAD)
 [[ "$branch" == "main" ]] || fail "on branch '$branch' — releases are cut from main."
@@ -462,8 +481,8 @@ else
     || fail "Stopped. $VERSION is published; only its tags are missing."
 fi
 
-git tag -a "$CORE_TAG"    -m "$CORE_PKG $VERSION"    2>/dev/null || note "$CORE_TAG already exists locally"
-git tag -a "$BINDING_TAG" -m "$BINDING_PKG $VERSION" 2>/dev/null || note "$BINDING_TAG already exists locally"
+ensure_tag "$CORE_TAG"    "$CORE_PKG $VERSION"
+ensure_tag "$BINDING_TAG" "$BINDING_PKG $VERSION"
 git push origin "$CORE_TAG" "$BINDING_TAG"
 ok "pushed $CORE_TAG and $BINDING_TAG"
 

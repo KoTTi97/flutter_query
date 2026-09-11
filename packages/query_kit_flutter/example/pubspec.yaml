@@ -11,4 +11,4 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  query_kit_flutter: ^0.1.0-dev
+  query_kit_flutter: ^0.1.0

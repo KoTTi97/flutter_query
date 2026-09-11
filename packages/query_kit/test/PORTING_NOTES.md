@@ -2161,6 +2161,44 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   `testing_helper_test.dart`'s three cases became `harness_test.dart`'s,
   plus one for `adopt` — 96 cases became 97.
 
+- **C29 — plausible, not reproduced: `then((_) {}, onError: (Object e) =>
+  error = e)` in `query_test.dart`** (release R17; #44). The release review
+  reported `invalid_return_type_for_then` from Dart 3.13 at the three sites
+  (`should not continue when last observer unsubscribed if the signal was
+  consumed`, `should not continue if explicitly cancelled`, `should not
+  override fetching state when revert happens after new observer subscribes`).
+  On 3.10.7, locally and in CI, `dart analyze --fatal-infos` and the test
+  runner both accept the form: `onError` is typed `Function`, so only that
+  diagnostic looks at its return type, and here it lets an `Object`-valued
+  expression body stand in for the `void` the `then` closure returns. A
+  stricter check would be a plausible tightening on a later SDK, and the
+  three sites are the only expression-bodied `onError` callbacks in the ported
+  suites, so they are block bodies now (`onError: (Object e) { error = e; }`);
+  the 44 cases of the file pass unchanged. No regression: nothing behavioural
+  moved.
+
+- **C25–C28, C30 — release hygiene, no behaviour** (deep-dive 3.16, 3.17,
+  3.28; release R13, R15, R16, R18; #44). C25: the three example pubspecs
+  depended on `query_kit_flutter: ^0.1.0-dev`, which `0.1.0` does not satisfy
+  once the package is hosted; now `^0.1.0`, like `doc_snippets` already was.
+  C26: the installation page's "Before the first publish" git dependency could
+  not resolve, because the binding's pubspec needs a hosted `query_kit`; the
+  section and the admonition's link to it are gone. C27: `scripts/release.sh`
+  took any `git tag -a` failure for "already exists" and pushed whatever the
+  tag pointed at; `ensure_tag` now reuses a tag only when its target is
+  `head_sha` and aborts naming both SHAs otherwise, and the preflight checks
+  for `flutter` as well as `dart`, `gh` and `curl`. C28:
+  `tool/rename_packages.dart` applied its renames as sequential `replaceAll`s,
+  so the shorter name hit the longer one's output (`query_kit_next_flutter` →
+  `query_kit_next_next_flutter`, 27 such moves in a dry-run); one
+  `replaceAllMapped` over a longest-first alternation now, and the dry-run is
+  the test — two runs, identical, zero `next_next`. C30: `npm audit` in
+  `website/` reports 26 advisories (18 high, 8 moderate) before and after
+  `npm audit fix`, every one behind a major bump npm will not take without
+  `--force` (`webpack-dev-server` 6 for `sockjs`/`uuid`/`express`/`qs`,
+  `serialize-javascript` and `image-size` with no fix at all), all in the
+  build tooling of the documentation site; both example backends audit clean.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
