@@ -2806,3 +2806,73 @@ public.
 unrewritten — including the 62 ported `queryObserver` cases, which cover these
 rules more densely than anything else in the port. The change is a move and a
 rename of private members; no call gained or lost a condition.
+
+### C47 — the reader registry, once instead of twice ([#56](https://github.com/KoTTi97/flutter_query/issues/56))
+
+**Measured.** §8 already corrected itself once here — the deep-dive's
+"120/130 shared lines" became "~94 shared, ~105 in the four parallel blocks" —
+and the re-measurement lands between the two. Counting *code* lines (comments
+and blanks dropped) across the five parallel regions, normalising only the
+three names that genuinely differ (the `state.` receiver, `_currentClient` vs
+`client`, `'This State'` vs `'This widget'`): **122 lines on the mixin side,
+131 on the context side, 110 of them identical** — the entry class 18, the
+query read 18, the infinite read 26, the mutation read 39, `_entryFor` 9. So
+§8's "~105 in the four parallel blocks" was right (101 by this count, 110 with
+`_entryFor`) and its "~94 shared" was the low one. The cross-reference the
+mixin carried was indeed at `query_mixin.dart:85-86`.
+
+**What moved.** One new module, `packages/query_kit_flutter/lib/src/read_set.dart`:
+`ReadSet`, the reads one reader holds. It owns the entry class, the three
+identity tuples, `_entryFor`, the generation rotation (`beginBuild`), the
+release (`sweep`, `releaseAll`), `debugCheckRepeatRead`'s call sites and the
+mutation-ambiguity assertion. Its interface is seven members, and the two
+things the callers actually differ in are its two constructor arguments:
+`rebuild` (a `State`'s `setState`, an `Element`'s `markNeedsBuild`) and `who`
+(the name in the two debug messages). `QueryMixin` holds one `ReadSet`;
+`QueryScopeElement` holds a `Map<Element, ReadSet>` and exposes `readsFor`,
+which replaced its three generic forwarders — `context.query` and its two
+siblings now read through the set directly. 491 code lines became 389.
+
+**What was deliberately left.** Three things, and the first is the interesting
+one:
+
+- **`detached` did not generalise, and it did not have to.** It is a fact
+  about *which readers are still here* — a question only something holding
+  many read sets can ask, and a `State` gets no such signal at all. It stayed
+  on `QueryScopeElement`, now as `Set<Element> _detached` rather than a field
+  on a per-reader wrapper, which made the asymmetry visible instead of
+  looking like a field one caller forgot to use. `_Reader` is gone entirely.
+- **Scheduling the post-frame sweep** stays on each owner (~9 lines each):
+  `ReadSet.sweep()` releases, but *when* it runs differs — one set behind a
+  `mounted` check versus every reader's plus dropping the ones that left. A
+  `FrameSweeper` holding a flag and a callback would have been a shallow
+  module; deleting it would make nine trivial lines reappear, not complexity.
+- **The client** is a parameter of each read, not a field: the mixin re-reads
+  an overridable `queryClient` on every read (third review, 2026-09-10), the
+  scope takes its `InheritedWidget`'s.
+
+**Coverage came first.** The binding has no ported suite, so three regions of
+the registry were reached by nothing before they could be moved: the mixin's
+mutation-ambiguity assertion and its `debugCheckRepeatRead` (only
+`context`'s were exercised, by `M7`), and the `(#infinite, …, id)` identity
+tuple, which nothing in either package or either example read. Six cases —
+`C47 the registry regions the suite did not reach` in
+`query_kit_flutter/test/review_regressions_test.dart` — were written and run
+**green against the two copies first**, so they say the extraction changed
+nothing rather than describing the extraction. Two of them were checked
+against a deliberately broken mixin (identity tuple flattened, assertion
+disabled) and failed, so they bite.
+
+**What proves the behaviour did not change:** the binding's 98 widget tests,
+the showcase's 217 and the task manager's 16, all green and **none rewritten**
+— the commit touches no existing test, only appends the six new ones. The core
+is untouched (587).
+
+**What #58 does here.** `buildWhen:` on the two keyless reads goes on
+`_Entry._onChanged` in this module — one further condition on the branch that
+already asks "did `observedStateOf` move?", passed down through
+`ReadSet.readQuery` / `readInfiniteQuery` and stored on the entry beside
+`built` and `builtState`. Written once now, for both call styles; the comment
+marking the spot is in the code. The rebuild-decision copies in
+`query_builder.dart` are [#57](https://github.com/KoTTi97/flutter_query/issues/57)
+and were not touched.

@@ -18,46 +18,13 @@
 /// widget's presence in the tree.
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:query_kit/query_kit.dart';
 
 import 'query_client_provider.dart';
 import 'query_controller.dart';
-import 'repeat_read.dart';
-
-/// One controller the State holds — a query's or a mutation's — and the value
-/// its last build read. See `_Entry` in `query_context.dart`: a notification
-/// carrying the value already built is not worth a `setState`.
-class _WatchEntry {
-  _WatchEntry(this.controller, this.rebuild) {
-    controller.addListener(_onChanged);
-  }
-
-  final ValueListenable<Object?> controller;
-  final VoidCallback rebuild;
-  Object? built;
-
-  /// See `_Entry.builtState` in `query_context.dart`.
-  Object? builtState;
-
-  T read<T>() {
-    builtState = observedStateOf(controller);
-    return (built = controller.value) as T;
-  }
-
-  void _onChanged() {
-    if (observedStateOf(controller) != builtState) {
-      rebuild();
-    }
-  }
-
-  void dispose() {
-    controller.removeListener(_onChanged);
-    (controller as ChangeNotifier).dispose();
-  }
-}
+import 'read_set.dart';
 
 /// Adds [watchQuery] and [watchMutation] to a [State].
 ///
@@ -75,18 +42,17 @@ class _WatchEntry {
 /// Everything created this way is disposed with the [State], and recreated
 /// when the client above it changes.
 mixin QueryMixin<T extends StatefulWidget> on State<T> {
-  /// Controllers by identity: `(key, types…)` for a query without an `id`,
-  /// `(#query, types…, id)` for one with — so a read that carries an `id`
-  /// keeps its observer across a key change — and `(#mutation, id or key,
-  /// types…)` for a mutation.
-  final Map<Object, _WatchEntry> _entries = <Object, _WatchEntry>{};
+  /// This State's reads — the registry `context.query` keeps one of per
+  /// reading `Element` (C47,
+  /// https://github.com/KoTTi97/flutter_query/issues/56). A `State` is one
+  /// reader, so it holds exactly one.
+  late final ReadSet _reads = ReadSet(rebuild: _rebuild, who: 'This State');
+
   QueryClient? _client;
 
-  // The same epoch bookkeeping `QueryScopeElement` keeps per reader: what the
-  // current build read, what earlier builds held, and a sweep after the frame
-  // that releases the difference.
-  Set<Object> _current = <Object>{};
-  Set<Object> _pending = <Object>{};
+  /// The generation [_reads] is on: bumped by the post-frame sweep, so the
+  /// first read of each frame rotates what the previous one held.
+  int _generation = 0;
   bool _sweepScheduled = false;
 
   /// The client these observers run on. Defaults to the nearest provider;
@@ -123,25 +89,8 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   QueryResult<TData> _watch<TQueryData, TData>(
     QueryObserverOptionsBase<TQueryData, TData> options,
     Object? id,
-  ) {
-    final identity = id == null
-        ? (options.queryKey, TQueryData, TData)
-        : (#query, TQueryData, TData, id);
-    final repeat = _startEpoch().contains(identity);
-    final entry = _entryFor(
-      identity,
-      () => QueryController<TQueryData, TData>(_currentClient, options),
-    );
-    final controller = entry.controller as QueryController<TQueryData, TData>;
-    final before = repeat ? controller.value : null;
-    // Unconditional, as upstream re-applies options on every render: the
-    // observer itself decides whether anything actually changed, and
-    // options built inline carry a fresh closure every build anyway.
-    controller.setOptions(options);
-    final result = entry.read<QueryResult<TData>>();
-    debugCheckRepeatRead(repeat, before, result, identity, 'This State');
-    return result;
-  }
+  ) =>
+      _beginRead().readQuery<TQueryData, TData>(_currentClient, options, id);
 
   /// [watchQuery] for an infinite query. Returns the controller rather than
   /// the result, because paging lives on it.
@@ -149,42 +98,12 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
       watchInfiniteQuery<TPageData, TPageParam, TData>(
     InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options, {
     Object? id,
-  }) {
-    final identity = id == null
-        ? (options.queryKey, TPageData, TPageParam, TData)
-        : (#infinite, TPageData, TPageParam, TData, id);
-    final repeat = _startEpoch().contains(identity);
-    final entry = _entryFor(
-      identity,
-      () => InfiniteQueryController<TPageData, TPageParam, TData>(
-        _currentClient,
-        options,
-      ),
-    );
-    final controller = entry.controller
-        as InfiniteQueryController<TPageData, TPageParam, TData>;
-    final before = repeat ? controller.value : null;
-    controller.setInfiniteOptions(options);
-    debugCheckRepeatRead(
-      repeat,
-      before,
-      entry.read<QueryResult<TData>>(),
-      identity,
-      'This State',
-    );
-    return controller;
-  }
-
-  _WatchEntry _entryFor(
-    Object identity,
-    ValueListenable<Object?> Function() create,
-  ) {
-    _current.add(identity);
-    return _entries.putIfAbsent(
-      identity,
-      () => _WatchEntry(create(), _rebuild),
-    );
-  }
+  }) =>
+          _beginRead().readInfiniteQuery<TPageData, TPageParam, TData>(
+            _currentClient,
+            options,
+            id,
+          );
 
   /// Subscribes to a mutation and returns its controller.
   ///
@@ -196,73 +115,37 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
       watchMutation<TData, TVariables, TOnMutateResult>(
     MutationOptions<TData, TVariables, TOnMutateResult> options, {
     Object? id,
-  }) {
-    // Never the function itself: a closure built in `build` is a new object
-    // every build, and the types are part of the identity (see
-    // `context.mutation` on both).
-    final identity = (
-      #mutation,
-      id ?? options.mutationKey,
-      TData,
-      TVariables,
-      TOnMutateResult,
-    );
-    final current = _startEpoch();
-    assert(() {
-      if (id == null &&
-          options.mutationKey == null &&
-          current.contains(identity)) {
-        throw FlutterError(
-          'This State read two mutations of the shape '
-          '${(TData, TVariables, TOnMutateResult)} in one build. They would '
-          'share one controller, and whichever was read last would run for '
-          'both. Give each an `id:`.',
-        );
-      }
-      return true;
-    }());
-    final existed = _entries.containsKey(identity);
-    final entry = _entryFor(
-      identity,
-      () => MutationController<TData, TVariables, TOnMutateResult>(
-        _currentClient,
-        options,
-      ),
-    );
-    final controller = entry.controller
-        as MutationController<TData, TVariables, TOnMutateResult>;
-    if (existed) {
-      controller.setOptions(options);
-    }
-    entry.read<Object?>();
-    return controller;
-  }
+  }) =>
+          _beginRead().readMutation<TData, TVariables, TOnMutateResult>(
+            _currentClient,
+            options,
+            id,
+          );
 
-  /// The first read of a build: what earlier builds held becomes provisional,
-  /// and whatever this build does not read again is released after the frame.
-  Set<Object> _startEpoch() {
+  /// Every read goes through here: the client is reconciled, this frame's
+  /// generation is opened if it is not open already, and the sweep that ends
+  /// it is booked.
+  ReadSet _beginRead() {
     // Before anything is recorded: a client switch releases what the old one
-    // owned, and empties both sets on the way out.
+    // owned, and leaves the set empty for this build to repopulate.
     _reconcileClient();
+    _reads.beginBuild(_generation);
     if (!_sweepScheduled) {
       _sweepScheduled = true;
-      _pending = <Object>{..._pending, ..._current};
-      _current = <Object>{};
       SchedulerBinding.instance.addPostFrameCallback((_) => _sweep());
     }
-    return _current;
+    return _reads;
   }
 
-  /// Releases what the last build stopped reading, mutations included.
+  /// Releases what the last build stopped reading, mutations included, and
+  /// opens the next generation.
   void _sweep() {
     _sweepScheduled = false;
+    _generation++;
     if (!mounted) {
       return;
     }
-    for (final identity in _pending.difference(_current)) {
-      _entries.remove(identity)?.dispose();
-    }
-    _pending = <Object>{};
+    _reads.sweep();
   }
 
   /// The client this State's reads run on, as [_reconcileClient] last left it.
@@ -284,7 +167,7 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   void _reconcileClient() {
     final client = queryClient;
     if (_client != null && _client != client) {
-      _disposeAll();
+      _reads.releaseAll();
     }
     _client = client;
   }
@@ -295,18 +178,9 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
-  void _disposeAll() {
-    for (final entry in _entries.values) {
-      entry.dispose();
-    }
-    _entries.clear();
-    _current = <Object>{};
-    _pending = <Object>{};
-  }
-
   @override
   void dispose() {
-    _disposeAll();
+    _reads.releaseAll();
     super.dispose();
   }
 }

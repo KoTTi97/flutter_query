@@ -1444,6 +1444,70 @@ void main() {
       expect(hidden('query_context'), {'QueryScope', 'QueryScopeElement'});
     });
   });
+
+  // The three regions of the reader registry the suite did not reach before
+  // C47 (https://github.com/KoTTi97/flutter_query/issues/56) moved it into
+  // one `ReadSet`. Written and run green against the two copies first, so
+  // they say the extraction changed nothing rather than describing it: the
+  // mixin's two debug assertions (only `context`'s were exercised) and the
+  // `(#infinite, …, id)` identity tuple, which nothing anywhere read.
+  group('C47 the registry regions the suite did not reach', () {
+    queryWidgetTest('the mixin catches two selects of one key in one build',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const _C47MixinTwoSelects()));
+      expect(tester.takeException(), isA<FlutterError>());
+    }, createClient: () => newClient()..setQueryData<String>(key, 'Ab'));
+
+    queryWidgetTest('the mixin catches two mutations of one shape in one build',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const _C47MixinTwoMutations()));
+      expect(tester.takeException(), isA<FlutterError>());
+      // With ids, the same State is fine.
+      await tester.pumpWidget(
+        app(client, const _C47MixinTwoMutations(withIds: true)),
+      );
+      expect(tester.takeException(), isNull);
+    }, createClient: newClient);
+
+    for (final (style, reader)
+        in <(String, Widget Function(int, List<Object>, Object?))>[
+      (
+        'context.infiniteQuery',
+        (n, seen, id) => _C47InfiniteContext(n, seen, id: id)
+      ),
+      (
+        'watchInfiniteQuery',
+        (n, seen, id) => _C47InfiniteMixin(n, seen, id: id)
+      ),
+    ]) {
+      queryWidgetTest(
+          '$style with an id keeps its controller across a key '
+          'change', (tester, client) async {
+        final seen = <Object>[];
+        await tester.pumpApp(client, reader(1, seen, 'feed'));
+        await tester.pump();
+        await tester.pumpApp(client, reader(2, seen, 'feed'));
+        await tester.pump();
+
+        expect(seen.first, same(seen.last));
+        expect(_c47Observers(client, 1), 0);
+        expect(_c47Observers(client, 2), 1);
+      }, createClient: newClient);
+
+      queryWidgetTest('$style without an id treats a new key as a new read',
+          (tester, client) async {
+        final seen = <Object>[];
+        await tester.pumpApp(client, reader(1, seen, null));
+        await tester.pump();
+        await tester.pumpApp(client, reader(2, seen, null));
+        await tester.pump();
+
+        expect(seen.first, isNot(same(seen.last)));
+        expect(_c47Observers(client, 1), 0);
+        expect(_c47Observers(client, 2), 1);
+      }, createClient: newClient);
+    }
+  });
 }
 
 class _A21Reader extends StatelessWidget {
@@ -1838,5 +1902,107 @@ class _R04Box extends StatelessWidget {
       Text('pending=${run.value.isPending} data=${run.value.dataOrNull}'),
       TextButton(onPressed: () => run.mutate(7), child: const Text('go')),
     ]);
+  }
+}
+
+QueryKey _c47Key(int n) => QueryKey(<Object?>['c47', n]);
+
+int _c47Observers(QueryClient client, int n) =>
+    client.queryCache
+        .find(filters: QueryFilters(queryKey: _c47Key(n)))
+        ?.observersCount ??
+    0;
+
+InfiniteQueryObserverOptions<List<String>, int> _c47Feed(int n) =>
+    InfiniteQueryObserverOptions<List<String>, int>(
+      queryKey: _c47Key(n),
+      initialPageParam: 0,
+      pageFn: (context) async => <String>['$n.${context.pageParam}'],
+      getNextPageParam: (_, __, lastParam, ___) => lastParam + 1,
+      staleTime: StaleTime.infinite,
+    );
+
+class _C47InfiniteContext extends StatelessWidget {
+  const _C47InfiniteContext(this.n, this.seen, {this.id});
+
+  final int n;
+  final List<Object> seen;
+  final Object? id;
+
+  @override
+  Widget build(BuildContext context) {
+    final feed = context.infiniteQuery(_c47Feed(n), id: id);
+    seen.add(feed);
+    return Text('${feed.value.dataOrNull?.pages}');
+  }
+}
+
+class _C47InfiniteMixin extends StatefulWidget {
+  const _C47InfiniteMixin(this.n, this.seen, {this.id});
+
+  final int n;
+  final List<Object> seen;
+  final Object? id;
+
+  @override
+  State<_C47InfiniteMixin> createState() => _C47InfiniteMixinState();
+}
+
+class _C47InfiniteMixinState extends State<_C47InfiniteMixin> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final feed = watchInfiniteQuery(_c47Feed(widget.n), id: widget.id);
+    widget.seen.add(feed);
+    return Text('${feed.value.dataOrNull?.pages}');
+  }
+}
+
+class _C47MixinTwoSelects extends StatefulWidget {
+  const _C47MixinTwoSelects();
+
+  @override
+  State<_C47MixinTwoSelects> createState() => _C47MixinTwoSelectsState();
+}
+
+class _C47MixinTwoSelectsState extends State<_C47MixinTwoSelects>
+    with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final upper = watchSelectQuery<String, String>(QuerySelectOptions(
+      queryKey: key,
+      enabled: Enabled.no,
+      select: (v) => v.toUpperCase(),
+    ));
+    final lower = watchSelectQuery<String, String>(QuerySelectOptions(
+      queryKey: key,
+      enabled: Enabled.no,
+      select: (v) => v.toLowerCase(),
+    ));
+    return Text('${upper.dataOrNull}/${lower.dataOrNull}');
+  }
+}
+
+class _C47MixinTwoMutations extends StatefulWidget {
+  const _C47MixinTwoMutations({this.withIds = false});
+
+  final bool withIds;
+
+  @override
+  State<_C47MixinTwoMutations> createState() => _C47MixinTwoMutationsState();
+}
+
+class _C47MixinTwoMutationsState extends State<_C47MixinTwoMutations>
+    with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final archive = watchMutation<String, String, void>(
+      MutationOptions(mutationFn: (v) async => 'archived $v'),
+      id: widget.withIds ? 'archive' : null,
+    );
+    final delete = watchMutation<String, String, void>(
+      MutationOptions(mutationFn: (v) async => 'deleted $v'),
+      id: widget.withIds ? 'delete' : null,
+    );
+    return Text('${archive.value.dataOrNull}/${delete.value.dataOrNull}');
   }
 }

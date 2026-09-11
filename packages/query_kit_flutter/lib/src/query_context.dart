@@ -44,13 +44,12 @@
 /// controllers take one directly.
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:query_kit/query_kit.dart';
 
 import 'query_controller.dart';
-import 'repeat_read.dart';
+import 'read_set.dart';
 
 /// Reading queries and mutations from a [BuildContext].
 extension QueryContext on BuildContext {
@@ -89,11 +88,9 @@ extension QueryContext on BuildContext {
     Object? id,
   ) {
     final element = _scopeElement(this);
-    final result = element.readQuery<TQueryData, TData>(
-      options,
-      this as Element,
-      id,
-    );
+    final result = element
+        .readsFor(this as Element)
+        .readQuery<TQueryData, TData>(element.client, options, id);
     dependOnInheritedWidgetOfExactType<QueryScope>();
     return result;
   }
@@ -111,11 +108,10 @@ extension QueryContext on BuildContext {
     Object? id,
   }) {
     final element = _scopeElement(this);
-    final controller = element.readInfiniteQuery<TPageData, TPageParam, TData>(
-      options,
-      this as Element,
-      id,
-    );
+    final controller = element
+        .readsFor(this as Element)
+        .readInfiniteQuery<TPageData, TPageParam, TData>(
+            element.client, options, id);
     dependOnInheritedWidgetOfExactType<QueryScope>();
     return controller;
   }
@@ -133,11 +129,10 @@ extension QueryContext on BuildContext {
     Object? id,
   }) {
     final element = _scopeElement(this);
-    final controller = element.readMutation<TData, TVariables, TOnMutateResult>(
-      options,
-      this as Element,
-      id,
-    );
+    final controller = element
+        .readsFor(this as Element)
+        .readMutation<TData, TVariables, TOnMutateResult>(
+            element.client, options, id);
     dependOnInheritedWidgetOfExactType<QueryScope>();
     return controller;
   }
@@ -178,81 +173,6 @@ class QueryScope extends InheritedWidget {
   InheritedElement createElement() => QueryScopeElement(this);
 }
 
-/// One controller a widget holds — a query's or a mutation's — and how to let
-/// it go.
-class _Entry {
-  _Entry(this.controller, this.reader) {
-    controller.addListener(_onChanged);
-  }
-
-  final ValueListenable<Object?> controller;
-  final Element reader;
-
-  /// The value the last build read. A notification that carries the same
-  /// value is not worth a rebuild: the first build reads the result straight
-  /// after the subscribe started the fetch, and the observer's notification
-  /// about that very fetch lands after the frame (fourth review, 2026-09-09).
-  Object? built;
-
-  /// What [observedStateOf] said when [built] was recorded: the result for
-  /// every controller but an infinite query's, which keeps its paging flags
-  /// beside the result (third review, 2026-09-10).
-  Object? builtState;
-
-  /// Reads the current value and remembers it as this build's, both halves.
-  T read<T>() {
-    builtState = observedStateOf(controller);
-    return (built = controller.value) as T;
-  }
-
-  void _onChanged() {
-    if (reader.mounted && observedStateOf(controller) != builtState) {
-      reader.markNeedsBuild();
-    }
-  }
-
-  void dispose() {
-    controller.removeListener(_onChanged);
-    (controller as ChangeNotifier).dispose();
-  }
-}
-
-/// Everything one reading widget holds.
-class _Reader {
-  _Reader(this.reader, this.epoch);
-
-  /// The widget doing the reading.
-  final Element reader;
-
-  /// Set when Flutter said this element stopped depending on the scope, and
-  /// cleared again the moment it reads. A deactivated element can come back
-  /// in the same frame — that is what moving a `GlobalKey` subtree is — so
-  /// the flag is a question the post-frame sweep answers, not an answer in
-  /// itself (third review, 2026-09-10).
-  bool detached = false;
-
-  int epoch;
-
-  /// Controllers by identity: `(key, types…)` for a query without an `id`,
-  /// `(#query, types…, id)` for one with — so a read that carries an `id`
-  /// keeps its observer across a key change — and `(#mutation, id or key,
-  /// types…)` for a mutation.
-  final Map<Object, _Entry> entries = <Object, _Entry>{};
-
-  /// Identities read during [epoch].
-  Set<Object> current = <Object>{};
-
-  /// Identities held during the previous epoch, still to be reconciled.
-  Set<Object> pending = <Object>{};
-
-  void dispose() {
-    for (final entry in entries.values) {
-      entry.dispose();
-    }
-    entries.clear();
-  }
-}
-
 /// Keeps each reading widget's observers alive for as long as it reads them.
 /// Not public API; hidden from the barrel like [QueryScope].
 class QueryScopeElement extends InheritedElement {
@@ -260,7 +180,23 @@ class QueryScopeElement extends InheritedElement {
   /// observers for as long as the scope is mounted.
   QueryScopeElement(QueryScope super.widget);
 
-  final Map<Element, _Reader> _readers = <Element, _Reader>{};
+  /// Every reading widget's reads. One [ReadSet] per `Element`, the same
+  /// registry `QueryMixin` holds one of (C47,
+  /// https://github.com/KoTTi97/flutter_query/issues/56).
+  final Map<Element, ReadSet> _readers = <Element, ReadSet>{};
+
+  /// Elements Flutter said stopped depending on this scope, pending the
+  /// sweep's verdict. Not a [ReadSet] field: it is a fact about *which*
+  /// readers are still here, which is this element's question and has no
+  /// counterpart on the mixin side, where a `State` gets no such signal at
+  /// all.
+  ///
+  /// "Stopped depending" is not "gone": an element deactivated in one frame
+  /// can be reactivated in the same one somewhere else in the tree — that is
+  /// how a `GlobalKey` subtree moves — so the flag is a question the
+  /// post-frame sweep answers, not an answer in itself (third review,
+  /// 2026-09-10).
+  final Set<Element> _detached = <Element>{};
 
   int _epoch = 0;
   bool _sweepScheduled = false;
@@ -270,153 +206,29 @@ class QueryScopeElement extends InheritedElement {
   /// that belonged to the old one.
   QueryClient get client => (widget as QueryScope).client;
 
-  /// Creates or reuses [reader]'s observer for [options] and returns its
-  /// current result.
-  QueryResult<TData> readQuery<TQueryData, TData>(
-    QueryObserverOptionsBase<TQueryData, TData> options,
-    Element reader,
-    Object? id,
-  ) {
-    final identity = id == null
-        ? (options.queryKey, TQueryData, TData)
-        : (#query, TQueryData, TData, id);
-    final state = _startEpochFor(reader);
-    final repeat = state.current.contains(identity);
-    final entry = _entryFor(
-      state,
-      identity,
-      () => QueryController<TQueryData, TData>(client, options),
-    );
-    final controller = entry.controller as QueryController<TQueryData, TData>;
-    final before = repeat ? controller.value : null;
-    // Unconditional, as upstream re-applies options on every render: the
-    // observer itself decides whether anything actually changed.
-    controller.setOptions(options);
-    final result = entry.read<QueryResult<TData>>();
-    debugCheckRepeatRead(repeat, before, result, identity, 'This widget');
-    return result;
-  }
-
-  /// The infinite twin of [readQuery].
-  InfiniteQueryController<TPageData, TPageParam, TData>
-      readInfiniteQuery<TPageData, TPageParam, TData>(
-    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
-    Element reader,
-    Object? id,
-  ) {
-    final identity = id == null
-        ? (options.queryKey, TPageData, TPageParam, TData)
-        : (#infinite, TPageData, TPageParam, TData, id);
-    final state = _startEpochFor(reader);
-    final repeat = state.current.contains(identity);
-    final entry = _entryFor(
-      state,
-      identity,
-      () => InfiniteQueryController<TPageData, TPageParam, TData>(
-        client,
-        options,
+  /// [reader]'s reads, ready for this frame: the generation is opened if it
+  /// is not open already, and the sweep that ends it is booked.
+  ///
+  /// Public to the library only — `context.query` and its two siblings call
+  /// it, then read through the set it returns.
+  ReadSet readsFor(Element reader) {
+    final reads = _readers.putIfAbsent(
+      reader,
+      () => ReadSet(
+        rebuild: () {
+          if (reader.mounted) {
+            reader.markNeedsBuild();
+          }
+        },
+        who: 'This widget',
       ),
     );
-    final controller = entry.controller
-        as InfiniteQueryController<TPageData, TPageParam, TData>;
-    final before = repeat ? controller.value : null;
-    controller.setInfiniteOptions(options);
-    debugCheckRepeatRead(
-      repeat,
-      before,
-      entry.read<QueryResult<TData>>(),
-      identity,
-      'This widget',
-    );
-    return controller;
-  }
-
-  _Entry _entryFor(
-    _Reader state,
-    Object identity,
-    ValueListenable<Object?> Function() create,
-  ) {
-    state.current.add(identity);
-    return state.entries.putIfAbsent(
-      identity,
-      () => _Entry(create(), state.reader),
-    );
-  }
-
-  /// A mutation controller owned by [reader].
-  MutationController<TData, TVariables, TOnMutateResult>
-      readMutation<TData, TVariables, TOnMutateResult>(
-    MutationOptions<TData, TVariables, TOnMutateResult> options,
-    Element reader,
-    Object? id,
-  ) {
-    // Never the function itself: a closure built in `build` is a new object
-    // every build, and a controller keyed on it would be replaced — idle
-    // again — by the very rebuild its own result caused. The types are part
-    // of the identity the way they are for a query: the same `mutationKey`
-    // read with two type triples is two controllers, not a failed cast
-    // (fourth review, 2026-09-09).
-    final identity = (
-      #mutation,
-      id ?? options.mutationKey,
-      TData,
-      TVariables,
-      TOnMutateResult,
-    );
-    final state = _startEpochFor(reader);
-    assert(() {
-      // Two mutations of one shape in one widget without `id` would share a
-      // controller, and the second `setOptions` would win: a tap on
-      // "archive" running the delete. Only the type-triple fallback is
-      // ambiguous; an `id` or a `mutationKey` names the mutation.
-      if (id == null &&
-          options.mutationKey == null &&
-          state.current.contains(identity)) {
-        throw FlutterError(
-          'This widget read two mutations of the shape '
-          '${(TData, TVariables, TOnMutateResult)} in one build. They would '
-          'share one controller, and whichever was read last would run for '
-          'both. Give each an `id:`.',
-        );
-      }
-      return true;
-    }());
-
-    final existed = state.entries.containsKey(identity);
-    final entry = _entryFor(
-      state,
-      identity,
-      () => MutationController<TData, TVariables, TOnMutateResult>(
-        client,
-        options,
-      ),
-    );
-    final controller = entry.controller
-        as MutationController<TData, TVariables, TOnMutateResult>;
-    if (existed) {
-      controller.setOptions(options);
-    }
-    entry.read<Object?>();
-    return controller;
-  }
-
-  _Reader _startEpochFor(Element reader) {
-    final state = _readers.putIfAbsent(reader, () => _Reader(reader, _epoch));
     // It is reading, so it is here: whatever `removeDependent` said before
     // this frame ended is void.
-    state.detached = false;
-    if (state.epoch != _epoch) {
-      // First read of a new frame: what it held before becomes provisional,
-      // and whatever it does not read again this frame is released in the
-      // sweep. Without this a screen that switches from one key to another
-      // would stay subscribed to the key it no longer shows.
-      state
-        ..epoch = _epoch
-        ..pending = <Object>{...state.pending, ...state.current}
-        ..current = <Object>{};
-    }
+    _detached.remove(reader);
+    reads.beginBuild(_epoch);
     _scheduleSweep();
-    return state;
+    return reads;
   }
 
   void _scheduleSweep() {
@@ -433,16 +245,12 @@ class QueryScopeElement extends InheritedElement {
   /// Releases the observers a reader stopped reading, mutations included, and
   /// the whole of a reader that left the scope and did not come back.
   void _sweep() {
-    for (final state in _readers.values.toList()) {
-      if (state.detached) {
-        _readers.remove(state.reader)?.dispose();
-        continue;
-      }
-      final released = state.pending.difference(state.current);
-      state.pending = <Object>{};
-      for (final identity in released) {
-        state.entries.remove(identity)?.dispose();
-      }
+    for (final reader in _detached) {
+      _readers.remove(reader)?.releaseAll();
+    }
+    _detached.clear();
+    for (final reads in _readers.values) {
+      reads.sweep();
     }
     _epoch++;
   }
@@ -457,11 +265,10 @@ class QueryScopeElement extends InheritedElement {
     // observation away from a widget that never left (third review,
     // 2026-09-10). The sweep after the frame releases the readers that really
     // did not come back.
-    final state = _readers[dependent];
-    if (state == null) {
+    if (!_readers.containsKey(dependent)) {
       return;
     }
-    state.detached = true;
+    _detached.add(dependent);
     _scheduleSweep();
   }
 
@@ -477,10 +284,11 @@ class QueryScopeElement extends InheritedElement {
   }
 
   void _disposeAll() {
-    for (final state in _readers.values) {
-      state.dispose();
+    for (final reads in _readers.values) {
+      reads.releaseAll();
     }
     _readers.clear();
+    _detached.clear();
   }
 
   @override
