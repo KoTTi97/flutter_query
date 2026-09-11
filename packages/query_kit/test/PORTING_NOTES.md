@@ -2773,3 +2773,36 @@ observer events there too, not to its client's cache` in
 `port_specifics_test.dart` — red before the change with
 `Actual: WhereTypeIterable<QueryObserverAdded>:[]`, green after. No ported case
 was touched, and the binding's 98 and the showcase's 217 are unchanged.
+
+### C53 — where the staleness decision lives ([#63](https://github.com/KoTTi97/flutter_query/issues/63))
+
+**What moved, and nothing else.** The five refetch rules were free functions
+over `Query<Object?>` at the end of `query_observer.dart` — `_isStale`,
+`_shouldLoadOnMount`, `_shouldFetchOnMount`, `_shouldFetchOn`,
+`_shouldFetchOptionally` — each taking the options as a second argument. They
+are now a private extension `_RefetchRules` on
+`DefaultedQueryObserverOptions`, because that is whose rules they are: the
+query supplies the state, the options supply `enabled`, `staleTime` and the
+three `refetchOn*` fields. Every call site reads `options.<rule>(query)`, and
+the two `QueryObserverRef` members that used to spell out
+`_shouldFetchOn(_currentQuery, _options, _options.refetchOnWindowFocus)` are
+now `_options.shouldFetchOnWindowFocus(_currentQuery)` — one name where there
+were two levels.
+
+**The "round trip" is four different questions, not one asked four times**,
+and the extension's dartdoc says which is which: `Query.isStale()` (the
+query's view — it asks its observers, or applies the unobserved rule),
+`currentResultIsStale` (one observer's **cached** answer, which is why there
+is no runtime cycle), `isStaleFor` (the rule that produced that field) and
+`Query.isStaleByTime` (the time half, where `StaleTime.static` outranks an
+invalidation and `StaleTime.infinite` does not). `Query.isStale()` now points
+at that block, since a reader arriving there is one step into the chain.
+
+**The three public names §8 required to survive did:** `Query.isStale()`,
+`Query.isStaleByTime`, `QueryFilters.stale`. Nothing else about the module is
+public.
+
+**What proves the behaviour did not change:** `dart test` 587, unchanged and
+unrewritten — including the 62 ported `queryObserver` cases, which cover these
+rules more densely than anything else in the port. The change is a move and a
+rename of private members; no call gained or lost a condition.

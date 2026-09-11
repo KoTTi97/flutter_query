@@ -138,7 +138,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       _updateQuery();
       _currentQuery.addObserver(this);
 
-      if (_shouldFetchOnMount(_currentQuery, _options)) {
+      if (_options.shouldFetchOnMount(_currentQuery)) {
         executeFetch();
         // A fetch that joined one already running dispatched nothing, and
         // then nothing recomputed the result — while a binding reads
@@ -194,8 +194,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     final mounted = hasListeners;
 
     if (mounted &&
-        _shouldFetchOptionally(
-            _currentQuery, prevQuery, _options, prevOptions)) {
+        _options.shouldFetchOptionally(_currentQuery, prevQuery, prevOptions)) {
       executeFetch();
     }
 
@@ -340,7 +339,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       if (_currentResult.isStale) {
         return;
       }
-      if (_isStale(_currentQuery, _options)) {
+      if (_options.isStaleFor(_currentQuery)) {
         updateResult();
       } else {
         _updateStaleTimeout();
@@ -407,9 +406,9 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
     if (optimistic) {
       final mounted = hasListeners;
-      final fetchOnMount = !mounted && _shouldFetchOnMount(query, options);
+      final fetchOnMount = !mounted && options.shouldFetchOnMount(query);
       final fetchOptionally = mounted &&
-          _shouldFetchOptionally(query, _currentQuery, options, _options);
+          options.shouldFetchOptionally(query, _currentQuery, _options);
 
       if (fetchOnMount || fetchOptionally) {
         final fetchable = canFetch(options.networkMode, _client.onlineManager);
@@ -573,7 +572,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             failureReason: state.fetchFailureReason,
             failureStackTrace: state.fetchFailureStackTrace,
             errorUpdateCount: state.errorUpdateCount,
-            isStale: _isStale(query, options),
+            isStale: options.isStaleFor(query),
             isEnabled: options.enabled.resolve(query),
             isFetched: query.isFetched(),
             isFetchedAfterMount: isFetchedAfterMount,
@@ -590,7 +589,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             failureReason: state.fetchFailureReason,
             failureStackTrace: state.fetchFailureStackTrace,
             errorUpdateCount: state.errorUpdateCount,
-            isStale: _isStale(query, options),
+            isStale: options.isStaleFor(query),
             isEnabled: options.enabled.resolve(query),
             isFetched: query.isFetched(),
             isFetchedAfterMount: isFetchedAfterMount,
@@ -606,7 +605,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             failureReason: state.fetchFailureReason,
             failureStackTrace: state.fetchFailureStackTrace,
             errorUpdateCount: state.errorUpdateCount,
-            isStale: _isStale(query, options),
+            isStale: options.isStaleFor(query),
             isEnabled: options.enabled.resolve(query),
             isFetched: query.isFetched(),
             isFetchedAfterMount: isFetchedAfterMount,
@@ -718,12 +717,12 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   @override
   @internal
   bool shouldFetchOnWindowFocus() =>
-      _shouldFetchOn(_currentQuery, _options, _options.refetchOnWindowFocus);
+      _options.shouldFetchOnWindowFocus(_currentQuery);
 
   @override
   @internal
   bool shouldFetchOnReconnect() =>
-      _shouldFetchOn(_currentQuery, _options, _options.refetchOnReconnect);
+      _options.shouldFetchOnReconnect(_currentQuery);
 
   @override
   @internal
@@ -735,46 +734,70 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       _options.queryOptions;
 }
 
-bool _shouldLoadOnMount(
-  Query<Object?> query,
-  DefaultedQueryObserverOptions<Object?, Object?> options,
-) =>
-    options.enabled.resolve(query) &&
-    !query.state.hasData &&
-    !(query.state.status == QueryStatus.error && !options.retryOnMount);
+/// The refetch rules, as questions asked of one observer's options about one
+/// query. They were five free functions over `Query<Object?>` at the end of
+/// this file (ninth review, C53): the rules belong to the *options* — the
+/// query supplies the state, the options supply `enabled`, `staleTime` and the
+/// three `refetchOn*` fields, and every one of them reads
+/// `options.<rule>(query)` now.
+///
+/// **Four similar names, four different questions** — the "round trip" C53
+/// describes is this, and it terminates because the third step reads a field:
+///
+/// 1. [Query.isStale] — the *query's* view: does any observer call its own
+///    result stale, or, with nothing observing, is there no data / has it been
+///    invalidated;
+/// 2. `QueryObserver.currentResultIsStale` — one observer's **cached** answer,
+///    the `isStale` of the result it last built;
+/// 3. [isStaleFor] — the **rule** that produced that field: enabled, and stale
+///    by time;
+/// 4. [Query.isStaleByTime] — the time half of the rule, which is where
+///    `StaleTime.static` outranks an invalidation and `StaleTime.infinite`
+///    does not.
+extension _RefetchRules on DefaultedQueryObserverOptions<Object?, Object?> {
+  /// Enabled, and older than this observer's `staleTime`. Step 3 above.
+  bool isStaleFor(Query<Object?> query) =>
+      enabled.resolve(query) && query.isStaleByTime(staleTime);
 
-bool _shouldFetchOnMount(
-  Query<Object?> query,
-  DefaultedQueryObserverOptions<Object?, Object?> options,
-) =>
-    _shouldLoadOnMount(query, options) ||
-    (query.state.hasData &&
-        _shouldFetchOn(query, options, options.refetchOnMount));
+  /// Nothing to show yet: enabled, no data, and not an error a
+  /// `retryOnMount: false` says to leave alone.
+  bool shouldLoadOnMount(Query<Object?> query) =>
+      enabled.resolve(query) &&
+      !query.state.hasData &&
+      !(query.state.status == QueryStatus.error && !retryOnMount);
 
-bool _shouldFetchOn(
-  Query<Object?> query,
-  DefaultedQueryObserverOptions<Object?, Object?> options,
-  RefetchOn field,
-) {
-  if (options.enabled.resolve(query) && !options.staleTime.isStaticFor(query)) {
-    final value = field.resolve(query);
-    return value is RefetchOnAlways ||
-        (value is! RefetchOnNever && _isStale(query, options));
+  /// A first subscribe either loads or refreshes what is already there.
+  bool shouldFetchOnMount(Query<Object?> query) =>
+      shouldLoadOnMount(query) ||
+      (query.state.hasData && shouldFetchOn(query, refetchOnMount));
+
+  /// The shared body of the three `refetchOn*` fields: `always` refetches
+  /// whatever the state, `never` refetches nothing, and anything else asks
+  /// [isStaleFor]. A static `staleTime` opts out of all three.
+  bool shouldFetchOn(Query<Object?> query, RefetchOn field) {
+    if (enabled.resolve(query) && !staleTime.isStaticFor(query)) {
+      final value = field.resolve(query);
+      return value is RefetchOnAlways ||
+          (value is! RefetchOnNever && isStaleFor(query));
+    }
+    return false;
   }
-  return false;
+
+  /// The app returned to the foreground.
+  bool shouldFetchOnWindowFocus(Query<Object?> query) =>
+      shouldFetchOn(query, refetchOnWindowFocus);
+
+  /// The device came back online.
+  bool shouldFetchOnReconnect(Query<Object?> query) =>
+      shouldFetchOn(query, refetchOnReconnect);
+
+  /// `setOptions` moved to another query, or re-enabled this one, and what it
+  /// landed on is stale. Upstream's `shouldFetchOptionally`.
+  bool shouldFetchOptionally(
+    Query<Object?> query,
+    Query<Object?> prevQuery,
+    DefaultedQueryObserverOptions<Object?, Object?> prevOptions,
+  ) =>
+      (!identical(query, prevQuery) || !prevOptions.enabled.resolve(query)) &&
+      isStaleFor(query);
 }
-
-bool _shouldFetchOptionally(
-  Query<Object?> query,
-  Query<Object?> prevQuery,
-  DefaultedQueryObserverOptions<Object?, Object?> options,
-  DefaultedQueryObserverOptions<Object?, Object?> prevOptions,
-) =>
-    (!identical(query, prevQuery) || !prevOptions.enabled.resolve(query)) &&
-    _isStale(query, options);
-
-bool _isStale(
-  Query<Object?> query,
-  DefaultedQueryObserverOptions<Object?, Object?> options,
-) =>
-    options.enabled.resolve(query) && query.isStaleByTime(options.staleTime);

@@ -574,6 +574,12 @@ class Query<TQueryData> extends Removable {
 
   /// Whether the data should be refetched: any observer's result says so, or —
   /// with no observers — there is no data or it has been invalidated.
+  ///
+  /// This is the query's view, and it asks its observers rather than deciding:
+  /// an observer answers with the `isStale` of the result it last built, which
+  /// its own options computed from [isStaleByTime]. The four similar names and
+  /// where each one stops are laid out on `_RefetchRules` in
+  /// `query_observer.dart`.
   bool isStale() {
     if (observersCount > 0) {
       return _observers.any((observer) => observer.currentResultIsStale);
