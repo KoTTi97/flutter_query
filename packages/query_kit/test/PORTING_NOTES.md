@@ -2400,6 +2400,34 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   delete re-seeds every entry and would mask the removal; against the old
   code it fails with the detail key in the removed list.
 
+- **C44 — the showcase's one flaky end-to-end test was a Playwright
+  strict-mode double match, not the SnackBar's duration** (release R14
+  confirmed; the deep-dive's "30 s SnackBar" explanation refuted; #46).
+  `global_callbacks.spec.ts` asserted the toast with a bare
+  `page.getByText('Post not found', { exact: true })`, and the evidence log
+  (`e2e-showcase.log:165–177`) shows it resolving to *two* elements: the
+  SnackBar's node in Flutter's semantics tree (`<span>` under
+  `flt-semantic-node-74`) and a `<div>Post not found </div>`. Reproduced by
+  walking the DOM right after the click: a `SnackBar` is a `liveRegion`, and
+  Flutter web announces a live region a second time by copying its text into
+  `<flt-announcement-polite aria-live="polite">` under
+  `<flt-announcement-host>` — outside the semantics tree — and removing the
+  copy a few hundred milliseconds later. Whether the locator sees one node or
+  two therefore depends on when the assertion runs against the frame that
+  showed the toast, which is the whole flake; the SnackBar's 30 s duration
+  plays no part (the deep-dive's guess) and stays as it is. Fixed by scoping
+  the locator to the semantics host — `snackBar(page, text)` in the showcase's
+  `tests/fixtures.ts`, `page.locator('flt-semantics-host').getByText(text,
+  { exact: true })` — never `.first()`, which would hide the same race behind
+  whichever copy the DOM listed first. The helper decision, which is the
+  map's "Shared Playwright helpers" fog entry: the shape occurs once (the
+  task manager shows no SnackBar and no other live region), so it is one
+  helper in the one suite's fixtures, next to `strip`, `fact` and
+  `holdRequest`, plus a rule in the showcase README's "Writing a screen" list;
+  nothing is shared *across* the two suites, which are separate npm projects
+  with no repeated shape between them. Verified: the spec six times over
+  (24/24), the whole suite 146/146 on that build.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported

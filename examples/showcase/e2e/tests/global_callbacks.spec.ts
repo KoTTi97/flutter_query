@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, test } from './fixtures'
+import { expect, fact, snackBar, test } from './fixtures'
 
 // Three strips, two cards and a growing log: taller than the default viewport,
 // and a lazily built list only has the rows in view.
@@ -56,7 +56,9 @@ test('the missing post logs an error with its meta and toasts a SnackBar', async
   ])
   await expect(page.getByText('missing=error: Post not found', { exact: true })).toBeVisible()
   // The SnackBar the cache's `onError` showed because `query.meta` said so.
-  await expect(page.getByText('Post not found', { exact: true })).toBeVisible()
+  // Through `snackBar`: a live region is announced a second time outside the
+  // semantics tree, and a bare `getByText` would match both while it is.
+  await expect(snackBar(page, 'Post not found')).toBeVisible()
   await expect(fact(page, 'post-999', 'status=error')).toBeVisible()
   await expect(fact(page, 'post-999', 'fetchStatus=idle')).toBeVisible()
   // `retry: RetryPolicy.never`: one request, not four.

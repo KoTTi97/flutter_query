@@ -83,6 +83,16 @@ export const strip = (page: Page, label: string) => page.getByRole('group', { na
 
 export const fact = (page: Page, label: string, text: string) => strip(page, label).getByText(text, { exact: true })
 
+/// A SnackBar's text, or any other live region's. Flutter web renders a
+/// `liveRegion` twice: as its node in the semantics tree, and — for a few
+/// hundred milliseconds after it appears — as a copy in the
+/// `<flt-announcement-host>` that screen readers are told about, which sits
+/// outside the tree. A bare `page.getByText(text)` then resolves to both and
+/// strict mode refuses the locator, or to one, depending on when it runs
+/// (ninth review, C44). Scoped to the semantics host, so only the tree's copy
+/// is ever matched.
+export const snackBar = (page: Page, text: string) => page.locator('flt-semantics-host').getByText(text, { exact: true })
+
 /// Holds every request matching `glob` in the browser until `release()`, so
 /// an assertion between the action and the release runs while the backend
 /// provably has not answered. After the release the handler is a passthrough;

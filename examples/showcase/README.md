@@ -187,6 +187,12 @@ Rules that cost someone a debugging session, in the order they bite:
   assert `toBeChecked()`. The AppBar's back button is already named `Back`.
 - **Scrolling in the browser** is `locator.scrollIntoViewIfNeeded()` on a row;
   `mouse.wheel` does not reach the canvas through the semantics overlay.
+- **A `SnackBar` is a live region, and Flutter web announces one twice**: as
+  its node in the semantics tree and, for a few hundred milliseconds, as a
+  copy in `<flt-announcement-host>` outside it. A bare `getByText` on its text
+  matches two elements or one depending on when it runs, and strict mode
+  refuses two. `snackBar(page, text)` in `tests/fixtures.ts` scopes to the
+  semantics host; use it for any live-region text.
 - **`page.route` cannot filter by method** — hold a POST with a handler that
   checks `route.request().method()` and continues everything else, the CORS
   preflight included.
