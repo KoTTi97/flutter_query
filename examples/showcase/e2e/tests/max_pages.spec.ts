@@ -178,3 +178,24 @@ test('cursor 0 ends the backward direction and cursor 90 the forward', async ({ 
   await expect(text(page, 'Project 70')).toBeVisible()
   expect(await cursors(scenario)).toEqual(['30', '20', '10', '0', '30', '40', '50', '60', '70', '80', '90'])
 })
+
+test('the page context says which direction a fetch extends', async ({ page, open, scenario }) => {
+  await scenario.config({ latency: 0 })
+  await open('/max-pages')
+  // The first page has no other end to extend: it is forward.
+  await expect(text(page, 'lastPage=30 forward')).toBeVisible()
+
+  await page_(page, 'Load next', '30,40')
+  await expect(text(page, 'lastPage=40 forward')).toBeVisible()
+
+  await page_(page, 'Load previous', '20,30,40')
+  await expect(text(page, 'lastPage=20 backward')).toBeVisible()
+
+  // A refetch walks the window first to last, each page forward: the last
+  // one asked for is the window's last cursor.
+  await button(page, 'Refetch').click()
+  await expect(fact(page, 'projects', 'fetches=4')).toBeVisible()
+  await expect(fact(page, 'projects', 'fetchStatus=idle')).toBeVisible()
+  await expect(text(page, 'lastPage=40 forward')).toBeVisible()
+  expect(await cursors(scenario)).toEqual(['30', '40', '20', '20', '30', '40'])
+})

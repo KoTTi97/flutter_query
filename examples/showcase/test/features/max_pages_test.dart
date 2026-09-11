@@ -222,6 +222,29 @@ void main() {
     );
   });
 
+  showcaseTest(
+      'the page context says which direction a fetch extends: forward, '
+      'backward, and forward again for every page of a refetch',
+      (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/max-pages');
+    // The first page has no other end to extend: it is forward.
+    expect(find.text('lastPage=30 forward'), findsOneWidget);
+
+    await press(tester, 'Load next');
+    expect(find.text('lastPage=40 forward'), findsOneWidget);
+
+    await press(tester, 'Load previous');
+    expect(find.text('pageParams=20,30,40'), findsOneWidget);
+    expect(find.text('lastPage=20 backward'), findsOneWidget);
+
+    // A refetch walks the window first to last, each page forward: the last
+    // one asked for is the window's last cursor.
+    await press(tester, 'Refetch');
+    expect(find.text('lastPage=40 forward'), findsOneWidget);
+    expect(cursors(h), <String>['30', '40', '20', '20', '30', '40']);
+  });
+
   showcaseTest('leaving the screen releases the observer', (tester, h) async {
     tall(tester);
     await h.open(tester, '/max-pages');

@@ -27,6 +27,12 @@
 /// which is what makes a cached answer tell itself apart from a fresh one by
 /// its value alone.
 ///
+/// The fourth card is the infinite twin: `client.infiniteQuery(options)` is
+/// to an infinite query what `client.query` is to a plain one — the same
+/// rules, the same `.ignore()` for a prefetch — and it fetches the *first*
+/// page under the key, held by nobody. That is upstream's
+/// `prefetchInfiniteQuery`, folded in the same way.
+///
 /// Proofs (widget tests in `test/features/prefetching_test.dart`, end-to-end
 /// in `e2e/tests/prefetching.spec.ts`): a prefetch is one request and marks
 /// the row with nobody observing the entry; opening the prefetched post costs
@@ -37,7 +43,9 @@
 /// `revalidateIfStale` returns the old value on the frame of the tap while
 /// the entry is fetching and the cache holds the new one once the answer
 /// lands, the plain read returns the new value, and the static read makes no
-/// request at all.
+/// request at all; and an infinite prefetch is one request for the first
+/// page, cached with `observers=0`, and a second press within `staleTime` is
+/// a no-op.
 library;
 
 import 'package:flutter/material.dart';
@@ -112,6 +120,29 @@ QueryOptions<int> counterStaticRead(ShowcaseApi api) => QueryOptions<int>(
       staleTime: StaleTime.static,
     );
 
+/// The infinite prefetch's key: this screen's own, so the paging screens'
+/// entries are untouched by it.
+final QueryKey projectsPrefetchKey =
+    QueryKey(const <Object?>['prefetching', 'projects']);
+
+/// The first page of the projects, as an [InfiniteQueryOptions] — the paging
+/// fields plus the cache-layer ones a plain [QueryOptions] takes. `retry:
+/// never` for the reason [postPrefetch] gives; fresh for five minutes, so a
+/// second prefetch is a no-op.
+InfiniteQueryOptions<ProjectSlice, int> projectsPrefetch(ShowcaseApi api) =>
+    InfiniteQueryOptions<ProjectSlice, int>(
+      queryKey: projectsPrefetchKey,
+      initialPageParam: 0,
+      pageFn: (context) => api.projectsFrom(
+        context.pageParam,
+        limit: 10,
+        signal: context.signal,
+      ),
+      getNextPageParam: (page, _, __, ___) => page.nextId,
+      retry: RetryPolicy.never,
+      staleTime: const StaleTime.duration(Duration(minutes: 5)),
+    );
+
 class PrefetchingScreen extends StatefulWidget {
   const PrefetchingScreen({super.key});
 
@@ -149,6 +180,71 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
       });
 
   void _back() => setState(() => _selected = null);
+
+  /// The infinite twin of [_prefetch]: the first page, fetched and cached
+  /// with nobody observing it, the future ignored.
+  void _prefetchProjects() {
+    final api = ShowcaseScope.apiOf(context);
+    QueryClientProvider.of(context)
+        .infiniteQuery(projectsPrefetch(api))
+        .ignore();
+  }
+
+  /// The infinite prefetch, and what the cache holds under its key — read on
+  /// every cache event, like the imperative-read card, because nothing
+  /// observes the entry.
+  Widget _infinitePrefetchCard() => SectionCard(
+        title: 'An infinite prefetch',
+        child: Semantics(
+          container: true,
+          explicitChildNodes: true,
+          label: 'infinite prefetch',
+          child: _OnCacheEvent(
+            builder: (context) {
+              final cached = QueryClientProvider.of(context)
+                  .getInfiniteQueryData<ProjectSlice, int>(projectsPrefetchKey);
+              final rows = cached?.pages
+                      .fold<int>(0, (n, page) => n + page.items.length) ??
+                  0;
+              return Column(
+                key: const ValueKey<String>('infinite-prefetch'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'client.infiniteQuery(options).ignore() is to an '
+                    'infinite query what client.query is to a plain one: '
+                    'the first page, fetched and cached with nobody '
+                    'observing it — upstream\'s prefetchInfiniteQuery. A '
+                    'second press within staleTime is a no-op.',
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonal(
+                    onPressed: _prefetchProjects,
+                    child: const Text('Prefetch the first page'),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    children: <Widget>[
+                      for (final fact in <String>[
+                        'pages=${cached?.pages.length ?? 0}',
+                        'rows=$rows',
+                      ])
+                        Text(
+                          fact,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
 
   Future<void> _read(
     String label, {
@@ -315,6 +411,8 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
           ),
         _readsCard(),
         QueryDebugStrip(queryKey: counterKey, label: 'counter'),
+        _infinitePrefetchCard(),
+        QueryDebugStrip(queryKey: projectsPrefetchKey, label: 'projects'),
       ],
     );
   }

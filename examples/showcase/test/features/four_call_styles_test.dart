@@ -6,10 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../harness.dart';
 
-/// Seven cards and two strips: taller than the default test window, and a
+/// Eight cards and three strips: taller than the default test window, and a
 /// lazily built list would not have the lower ones.
 void tall(WidgetTester tester) {
-  tester.view.physicalSize = const Size(900, 3600);
+  tester.view.physicalSize = const Size(900, 4800);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 }
@@ -40,6 +40,13 @@ Finder listenerFact(String text) => find.descendant(
 
 Finder mutationFact(String name, String text) => find.descendant(
       of: find.byKey(ValueKey<String>('mutation-$name')),
+      matching: find.text(text),
+    );
+
+/// One fact of card 8's reader called [name]: `pages=1` is said by all three
+/// and `status=success` by the strip too.
+Finder infiniteFact(String name, String text) => find.descendant(
+      of: find.byKey(ValueKey<String>('infinite-$name')),
       matching: find.text(text),
     );
 
@@ -389,5 +396,106 @@ void main() {
     expect(listenerFact('listener-skips=4'), findsOneWidget);
     // And the child of the listener stayed where it was.
     expect(listenerFact('child-builds=1'), findsOneWidget);
+  });
+
+  showcaseTest(
+      'two plain writes are two transitions to the listener, two batched '
+      'ones are one', (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/four-call-styles');
+    expect(listenerFact('listener-calls=1'), findsOneWidget);
+
+    await tester.tap(button('Drop two posts'));
+    await tester.pumpAndSettle();
+
+    // Each write was delivered as it happened: 30 -> 29, then 29 -> 28.
+    expectEveryReader('posts=28');
+    expect(listenerFact('listener-calls=3'), findsOneWidget);
+    expect(
+      listenerFact('#3 success/idle:29->success/idle:28'),
+      findsOneWidget,
+    );
+
+    await tester.tap(button('Drop two posts, batched'));
+    await tester.pumpAndSettle();
+
+    // The batch held both notifications, and each carries the latest value:
+    // one transition, straight from 28 to 26.
+    expectEveryReader('posts=26');
+    expect(listenerFact('listener-calls=4'), findsOneWidget);
+    expect(
+      listenerFact('#4 success/idle:28->success/idle:26'),
+      findsOneWidget,
+    );
+    expect(h.requests('GET', '/api/posts'), 1);
+  });
+
+  showcaseTest(
+      'the mutation listener hears one call per state change and nothing on '
+      'mount', (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/four-call-styles');
+    expect(mutationFact('controller', 'status=idle'), findsOneWidget);
+    expect(mutationFact('controller', 'mutation-listener-calls=0'),
+        findsOneWidget);
+    expect(mutationFact('controller', 'mutation-last=none'), findsOneWidget);
+
+    h.backend.latency = const Duration(milliseconds: 200);
+    await tester.tap(button('Increment (controller)'));
+    await tester.pump();
+    // The first transition, delivered off the build phase a microtask later.
+    await tester.pump();
+    expect(mutationFact('controller', 'status=pending'), findsOneWidget);
+    expect(mutationFact('controller', 'mutation-listener-calls=1'),
+        findsOneWidget);
+    expect(mutationFact('controller', 'mutation-last=idle->pending'),
+        findsOneWidget);
+
+    // One latency for the POST, one for the refetch `onSuccess` awaits.
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(mutationFact('controller', 'status=success'), findsOneWidget);
+    expect(mutationFact('controller', 'data=1'), findsOneWidget);
+    expect(mutationFact('controller', 'mutation-listener-calls=2'),
+        findsOneWidget);
+    expect(mutationFact('controller', 'mutation-last=pending->success'),
+        findsOneWidget);
+    expect(find.text('counter=1'), findsOneWidget);
+    // The other two panels ran nothing.
+    expect(mutationFact('builder', 'status=idle'), findsOneWidget);
+    expect(mutationFact('context', 'status=idle'), findsOneWidget);
+  });
+
+  showcaseTest(
+      'the infinite shapes: three readers share one entry, and Load next '
+      'reaches all three through the mixin\'s controller', (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/four-call-styles');
+
+    for (final name in <String>['context', 'mixin', 'observer']) {
+      expect(infiniteFact(name, 'pages=1'), findsOneWidget, reason: name);
+      expect(infiniteFact(name, 'status=success'), findsOneWidget,
+          reason: name);
+    }
+    expect(h.fact('styles', 'observers=3'), findsOneWidget);
+    expect(h.fact('styles', 'fetches=1'), findsOneWidget);
+    expect(h.requests('GET', '/api/projects'), 1);
+    // Nothing on mount; the first page landing is the first call.
+    expect(infiniteFact('mixin', 'infinite-listener-calls=1'), findsOneWidget);
+    expect(infiniteFact('mixin', 'infinite-last=none->1'), findsOneWidget);
+
+    await tester.tap(button('Load next'));
+    await tester.pumpAndSettle();
+
+    for (final name in <String>['context', 'mixin', 'observer']) {
+      expect(infiniteFact(name, 'pages=2'), findsOneWidget, reason: name);
+    }
+    expect(h.fact('styles', 'fetches=2'), findsOneWidget);
+    expect(h.requests('GET', '/api/projects'), 2);
+    // The page fetch starting moved `fetchStatus`, not the page count, and
+    // was refused; its landing is the one call.
+    expect(infiniteFact('mixin', 'infinite-listener-calls=2'), findsOneWidget);
+    expect(infiniteFact('mixin', 'infinite-last=1->2'), findsOneWidget);
   });
 }

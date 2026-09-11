@@ -4,9 +4,11 @@
 ///
 /// Port-specific; it illustrates upstream's *Query Retries* guide
 /// (`docs/framework/react/guides/query-retries.md`). Upstream's
-/// `retry: false | number | true | fn` is the sealed [RetryPolicy] here, and
-/// `retryDelay: ms | fn` is [RetryDelay]; the guide's note that the error is
-/// the result's `failureReason` until the last attempt is what the
+/// `retry: false | number | true | fn` is the sealed [RetryPolicy] here —
+/// `never`, `times`, `always`, `when` — and `retryDelay: ms | fn` is
+/// [RetryDelay]: `fixed`, `exponential`, and `dynamic` for a wait computed
+/// from the attempt and what it threw; the guide's note that the error is the
+/// result's `failureReason` until the last attempt is what the
 /// `failureReason=` fact shows.
 ///
 /// The reader is a `QueryController` created next to the api and read through
@@ -19,12 +21,15 @@
 /// `failureCount=1` and `isLoadingError=true`; with `2 times` and two refusals
 /// the failure count climbs 1 → 2 while the retries run and the third attempt
 /// succeeds, three requests in all; with ten refusals the same policy ends in
-/// `failureCount=3`, still three requests; a refused *refetch* keeps the old
-/// serial on screen as `isRefetchError` with `hasStaleData=true`; `when 5xx`
-/// retries a 503 and gives up on a 404 after one request; an errored entry is
-/// refetched when a fresh reader mounts with `retryOnMount` on and left alone
-/// when it is off; and the exponential delay has not reached its first retry
-/// at 400 ms, where the fixed 300 ms one already has.
+/// `failureCount=3`, still three requests; `always` goes on past the third
+/// failure and past a 404 until the eleventh attempt succeeds; a refused
+/// *refetch* keeps the old serial on screen as `isRefetchError` with
+/// `hasStaleData=true`; `when 5xx` retries a 503 and gives up on a 404 after
+/// one request; an errored entry is refetched when a fresh reader mounts with
+/// `retryOnMount` on and left alone when it is off; the exponential delay has
+/// not reached its first retry at 400 ms, where the fixed 300 ms one already
+/// has; and the dynamic delay waits four seconds after a 404 and 200 ms after
+/// a 503, because it is computed from the error.
 library;
 
 import 'package:flutter/material.dart';
@@ -63,6 +68,19 @@ bool _retryServerErrors(int failureCount, Object error, StackTrace _) =>
 const RetryPolicy _when5xx = RetryPolicy.when(_retryServerErrors);
 const RetryDelay _fixed300 = RetryDelay.fixed(Duration(milliseconds: 300));
 
+/// A wait computed from what the attempt threw — the guide's
+/// `retryDelay: (attempt, error) => …`: a 404 is not going to change its mind
+/// soon, so it waits four seconds; anything else is retried after 200 ms.
+///
+/// A top-level function for the same reason as [_retryServerErrors]:
+/// [RetryDelayDynamic] compares by the identity of its function.
+Duration _delayByStatus(int failureCount, Object error) =>
+    error is BackendException && error.status == 404
+        ? const Duration(seconds: 4)
+        : const Duration(milliseconds: 200);
+
+const RetryDelay _dynamic = RetryDelay.dynamic(_delayByStatus);
+
 /// The screen's one query, with the three knobs the screen turns.
 QueryObserverOptions<ServerTime> retryTimeQuery(
   ShowcaseApi api, {
@@ -89,12 +107,14 @@ class _RetryScreenState extends State<RetryScreen> {
   static const List<(String, RetryPolicy)> _retries = <(String, RetryPolicy)>[
     ('never', RetryPolicy.never),
     ('2 times', RetryPolicy.times(2)),
+    ('always', RetryPolicy.always),
     ('when 5xx', _when5xx),
   ];
 
   static const List<(String, RetryDelay)> _delays = <(String, RetryDelay)>[
     ('300 ms', _fixed300),
     ('exponential', RetryDelay.defaultValue),
+    ('dynamic', _dynamic),
   ];
 
   static const List<(String, int)> _statuses = <(String, int)>[
@@ -304,8 +324,9 @@ class _RetryScreenState extends State<RetryScreen> {
               Text(
                 '2 times means one attempt plus two retries — the count a '
                 'policy is asked about is how many attempts had already '
-                'failed, so it starts at 0. when 5xx retries a server error '
-                'up to three times and gives up on a 404 at once.',
+                'failed, so it starts at 0. always retries until an attempt '
+                'succeeds, whatever the error. when 5xx retries a server '
+                'error up to three times and gives up on a 404 at once.',
                 style: small,
               ),
               const SizedBox(height: 8),
@@ -324,7 +345,9 @@ class _RetryScreenState extends State<RetryScreen> {
               Text(
                 'exponential is the default: one second, two, four, capped at '
                 'thirty. The delay is computed before the failure is counted, '
-                'so the first retry waits one second.',
+                'so the first retry waits one second. dynamic is computed '
+                'from the attempt and its error: four seconds after a 404, '
+                '200 ms after anything else.',
                 style: small,
               ),
             ],

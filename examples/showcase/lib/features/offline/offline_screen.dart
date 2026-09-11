@@ -41,6 +41,13 @@
 /// its write reached the backend, and that moment is what this screen is
 /// about.
 ///
+/// The reconnect is also an event of its own: `refetchOnReconnect` — the
+/// `On reconnect` knob, a [RefetchOn] like the focus screen's — decides
+/// whether a query that was *not* paused refetches when the connection
+/// returns. The default is `ifStale`, and the todos' stale time is zero, so
+/// out of the box every reconnect refetches them; `never` leaves them alone,
+/// and `always` would refetch fresh data too.
+///
 /// Read through `QueryMixin` (`watchQuery`, `watchMutation`).
 ///
 /// Proofs (widget tests in `test/features/offline_test.dart`, end-to-end in
@@ -50,8 +57,10 @@
 /// online sends it without anyone asking; `Resume paused mutations` while
 /// still offline leaves an `online` mutation exactly where it was; under
 /// `always` nothing pauses; under `offlineFirst` the first attempt goes out
-/// offline and the retry after it pauses; and two todos added offline are sent
-/// in the order they were made once the connection is back.
+/// offline and the retry after it pauses; two todos added offline are sent
+/// in the order they were made once the connection is back; and a reconnect
+/// with nothing paused refetches the todos under `always` and not under
+/// `never`.
 library;
 
 import 'package:flutter/material.dart';
@@ -83,14 +92,16 @@ QueryFilters get _todosFilter => QueryFilters(queryKey: ShowcaseKeys.todos);
 /// the default backoff's one, two and four.
 QueryObserverOptions<List<Todo>> todosQuery(
   ShowcaseApi api,
-  NetworkMode mode,
-) =>
+  NetworkMode mode, {
+  RefetchOn onReconnect = RefetchOn.ifStale,
+}) =>
     QueryObserverOptions<List<Todo>>(
       queryKey: ShowcaseKeys.todos,
       queryFn: (context) => api.todos(signal: context.signal),
       networkMode: mode,
       retry: const RetryPolicy.times(2),
       retryDelay: const RetryDelay.fixed(Duration(milliseconds: 400)),
+      refetchOnReconnect: onReconnect,
     );
 
 /// The write, under the same mode. `retry` stays at a mutation's default of
@@ -127,6 +138,7 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
 
   final TextEditingController _text = TextEditingController();
   NetworkMode _mode = NetworkMode.online;
+  RefetchOn _onReconnect = RefetchOn.ifStale;
   bool _rebuildScheduled = false;
 
   @override
@@ -193,7 +205,8 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
 
   @override
   Widget build(BuildContext context) {
-    final todos = watchQuery(todosQuery(_api, _mode));
+    final todos =
+        watchQuery(todosQuery(_api, _mode, onReconnect: _onReconnect));
     final add = watchMutation(addTodoMutation(_api, _client, _mode));
     final mutation = add.value;
     final online = _client.onlineManager.isOnline();
@@ -238,8 +251,10 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
               const SizedBox(height: 12),
               const Text('Network mode'),
               const SizedBox(height: 4),
-              SegmentedButton<NetworkMode>(
-                showSelectedIcon: false,
+              // Each segmented button in a named semantics group: this one
+              // and the reconnect knob both have an `always`.
+              _Knob<NetworkMode>(
+                semanticsKey: 'network-mode',
                 segments: const <ButtonSegment<NetworkMode>>[
                   ButtonSegment<NetworkMode>(
                     value: NetworkMode.online,
@@ -254,9 +269,37 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
                     label: Text('offlineFirst'),
                   ),
                 ],
-                selected: <NetworkMode>{_mode},
-                onSelectionChanged: (selection) =>
-                    setState(() => _mode = selection.first),
+                selected: _mode,
+                onChanged: (value) => setState(() => _mode = value),
+              ),
+              const SizedBox(height: 12),
+              const Text('On reconnect'),
+              const SizedBox(height: 4),
+              _Knob<RefetchOn>(
+                semanticsKey: 'on-reconnect',
+                segments: const <ButtonSegment<RefetchOn>>[
+                  ButtonSegment<RefetchOn>(
+                    value: RefetchOn.never,
+                    label: Text('never'),
+                  ),
+                  ButtonSegment<RefetchOn>(
+                    value: RefetchOn.ifStale,
+                    label: Text('ifStale'),
+                  ),
+                  ButtonSegment<RefetchOn>(
+                    value: RefetchOn.always,
+                    label: Text('always'),
+                  ),
+                ],
+                selected: _onReconnect,
+                onChanged: (value) => setState(() => _onReconnect = value),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'refetchOnReconnect: what a query that was not paused does '
+                'when the connection returns. ifStale is the default, and the '
+                'todos are stale the moment they arrive, so out of the box '
+                'every reconnect refetches them; never leaves them alone.',
               ),
               const SizedBox(height: 12),
               _Toolbar(
@@ -378,6 +421,36 @@ class _OfflineScreenState extends State<OfflineScreen> with QueryMixin {
 }
 
 const TextStyle _mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
+
+/// A segmented button in a named semantics group, so a test can pick this
+/// knob's `always` apart from another's.
+class _Knob<T extends Object> extends StatelessWidget {
+  const _Knob({
+    required this.semanticsKey,
+    required this.segments,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final String semanticsKey;
+  final List<ButtonSegment<T>> segments;
+  final T selected;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: semanticsKey,
+        child: SegmentedButton<T>(
+          key: ValueKey<String>(semanticsKey),
+          showSelectedIcon: false,
+          segments: segments,
+          selected: <T>{selected},
+          onSelectionChanged: (selection) => onChanged(selection.first),
+        ),
+      );
+}
 
 /// A row of buttons, each its own semantics node — several in one row
 /// otherwise fold into the row's.

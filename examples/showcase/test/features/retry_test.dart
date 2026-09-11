@@ -148,6 +148,87 @@ void main() {
     expect(h.requests('GET', '/api/time') - before, 3);
   });
 
+  showcaseTest(
+      'always: past the third failure and past a 404, until it succeeds',
+      (tester, h) async {
+    sizeUp(tester);
+    await h.open(tester, '/retry');
+    expect(reader('serial=1'), findsOneWidget);
+
+    await pick(tester, 'retry', 'always');
+    await pick(tester, 'delay', '300 ms');
+    await pick(tester, 'fail-next', '10');
+    await pick(tester, 'status', '404');
+    await tapText(tester, 'Arm');
+    expect(find.text('armed=10@404'), findsOneWidget);
+
+    final before = h.requests('GET', '/api/time');
+    await tester.tap(find.byTooltip('Refetch'));
+    await flush(tester);
+    // Ten refusals, one retry each: `2 times` would have stopped at three,
+    // `when 5xx` would not have retried a 404 at all.
+    for (var failures = 1; failures <= 10; failures++) {
+      expect(reader('failureCount=$failures'), findsOneWidget);
+      expect(reader('status=error'), findsNothing);
+      expect(reader('hasStaleData=false'), findsOneWidget);
+      expect(h.requests('GET', '/api/time') - before, failures);
+      await step(tester, const Duration(milliseconds: 300));
+    }
+
+    expect(reader('status=success'), findsOneWidget);
+    expect(reader('failureCount=0'), findsOneWidget);
+    expect(reader('serial=2'), findsOneWidget);
+    expect(h.requests('GET', '/api/time') - before, 11);
+  });
+
+  showcaseTest('dynamic: a 404 waits four seconds, a 503 two hundred ms',
+      (tester, h) async {
+    sizeUp(tester);
+    await h.open(tester, '/retry');
+    await pick(tester, 'retry', 'always');
+    await pick(tester, 'delay', 'dynamic');
+    await pick(tester, 'fail-next', '2');
+
+    await pick(tester, 'status', '404');
+    await tapText(tester, 'Arm');
+    expect(find.text('armed=2@404'), findsOneWidget);
+    var before = h.requests('GET', '/api/time');
+    await tester.tap(find.byTooltip('Refetch'));
+    await flush(tester);
+    expect(reader('failureCount=1'), findsOneWidget);
+
+    // The delay was computed from the 404: 400 ms buys nothing, and neither
+    // does most of the four seconds.
+    await step(tester, const Duration(milliseconds: 400));
+    expect(reader('failureCount=1'), findsOneWidget);
+    expect(h.requests('GET', '/api/time') - before, 1);
+    await step(tester, const Duration(milliseconds: 3600));
+    expect(reader('failureCount=2'), findsOneWidget);
+    expect(h.requests('GET', '/api/time') - before, 2);
+    await step(tester, const Duration(seconds: 4));
+    // `status` was `success` throughout, over the old serial; the new one
+    // says the third attempt landed.
+    expect(reader('serial=2'), findsOneWidget);
+    expect(reader('failureCount=0'), findsOneWidget);
+    expect(h.requests('GET', '/api/time') - before, 3);
+
+    // The same knob over a 503 waits 200 ms: two retries inside half a
+    // second, where the 404 had not managed one.
+    await pick(tester, 'status', '503');
+    await tapText(tester, 'Arm');
+    expect(find.text('armed=2@503'), findsOneWidget);
+    before = h.requests('GET', '/api/time');
+    await tester.tap(find.byTooltip('Refetch'));
+    await flush(tester);
+    expect(reader('failureCount=1'), findsOneWidget);
+    await step(tester, const Duration(milliseconds: 200));
+    expect(reader('failureCount=2'), findsOneWidget);
+    await step(tester, const Duration(milliseconds: 200));
+    expect(reader('serial=3'), findsOneWidget);
+    expect(reader('failureCount=0'), findsOneWidget);
+    expect(h.requests('GET', '/api/time') - before, 3);
+  });
+
   showcaseTest('a refused refetch keeps the serial next to the error',
       (tester, h) async {
     sizeUp(tester);

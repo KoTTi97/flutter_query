@@ -68,6 +68,69 @@ test('2 times: the count climbs and the third attempt succeeds', async ({ page, 
   expect(await scenario.count('GET', timeRequests)).toBe(3)
 })
 
+test('always: past the third failure and past a 404, until it succeeds', async ({ page, open, scenario }) => {
+  await scenario.config({ latency: 0 })
+  await open('/retry')
+  await expect(reader(page, 'serial=1')).toBeVisible()
+
+  await pick(page, 'retry', 'always')
+  await pick(page, 'delay', '300 ms')
+  await pick(page, 'fail-next', '10')
+  await pick(page, 'status', '404')
+  await arm(page, '10@404')
+
+  await scenario.clearRequests()
+  await button(page, 'Refetch').click()
+
+  // Ten refusals, one retry each — three seconds of them, so the success is
+  // given time: `2 times` would have stopped at three attempts, `when 5xx`
+  // would not have retried a 404 at all. `status` stays `success` through a
+  // refetch's retries (the old serial is still on screen), so the new serial
+  // is what says the eleventh attempt landed.
+  await expect(reader(page, 'serial=2')).toBeVisible({ timeout: 20_000 })
+  await expect(reader(page, 'failureCount=0')).toBeVisible()
+  await expect(reader(page, 'status=success')).toBeVisible()
+  expect(await scenario.count('GET', timeRequests)).toBe(11)
+})
+
+test('dynamic: the delay is computed from the error', async ({ page, open, scenario }) => {
+  await scenario.config({ latency: 0 })
+  await open('/retry')
+  await expect(reader(page, 'serial=1')).toBeVisible()
+
+  await pick(page, 'retry', 'always')
+  await pick(page, 'delay', 'dynamic')
+  await pick(page, 'fail-next', '2')
+  await pick(page, 'status', '404')
+  await arm(page, '2@404')
+
+  await scenario.clearRequests()
+  await button(page, 'Refetch').click()
+  await expect(reader(page, 'failureCount=1')).toBeVisible()
+
+  // A 404 waits four seconds: sampled two seconds in, the retry has not been
+  // spent. Not a stopwatch — the count is read once, and read again later.
+  await page.waitForTimeout(2_000)
+  expect(await scenario.count('GET', timeRequests)).toBe(1)
+  await expect(reader(page, 'failureCount=1')).toBeVisible()
+
+  // The new serial says the third attempt landed; `status` was `success`
+  // all along, over the old one.
+  await expect(reader(page, 'serial=2')).toBeVisible({ timeout: 20_000 })
+  await expect(reader(page, 'failureCount=0')).toBeVisible()
+  expect(await scenario.count('GET', timeRequests)).toBe(3)
+
+  // The same knob over a 503 waits 200 ms between its attempts.
+  await pick(page, 'status', '503')
+  await arm(page, '2@503')
+  await scenario.clearRequests()
+  await button(page, 'Refetch').click()
+
+  await expect(reader(page, 'serial=3')).toBeVisible()
+  await expect(reader(page, 'failureCount=0')).toBeVisible()
+  expect(await scenario.count('GET', timeRequests)).toBe(3)
+})
+
 test('a refused refetch keeps the serial next to the error', async ({ page, open, scenario }) => {
   await scenario.config({ latency: 0 })
   await open('/retry')

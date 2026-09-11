@@ -29,18 +29,44 @@
 /// logged for a change during a refetch starts at the fetching state the
 /// refusal saw and not at the state before the refetch. The child is handed
 /// back unchanged: `child-builds` is still 1 after every button on the screen
-/// has been pressed.
+/// has been pressed. The card's last two buttons write the cache twice, once
+/// as two writes and once inside one `NotifyManager.shared.batch(...)`: the
+/// app's client is built on the shared manager (`main.dart`), a batch holds
+/// every notification until it ends, and a notification carries the
+/// controller's *latest* value — so the listener hears two transitions from
+/// the plain pair and one, straight to the second value, from the batched
+/// pair.
+///
+/// The seventh card runs one mutation three ways — `MutationBuilder`,
+/// `context.mutation`, and a `MutationController` read through a
+/// `ListenableBuilder` — and the third has a `MutationListener` over it, the
+/// mutation's counterpart of card 6: nothing on mount, one call per state
+/// change, `idle->pending` and `pending->success`.
+///
+/// The eighth card is the same story for an infinite query: the builder is
+/// on the `load-more` screen and the controller on `max-pages`, so here are
+/// the other two — `context.infiniteQuery` in a `StatelessWidget` and
+/// `watchInfiniteQuery` in a `QueryMixin`, both of which hand back the
+/// *controller* because paging lives on it — next to the core's own
+/// `client.observeInfinite(...)`. Three readers, one entry, `observers=3`;
+/// `Load next` goes through the mixin's controller and all three show the
+/// page. An `InfiniteQueryListener` borrows that controller and logs each
+/// change of the page count.
 ///
 /// Proofs (widget tests in `test/features/four_call_styles_test.dart`,
 /// end-to-end in `e2e/tests/four_call_styles.spec.ts`): five readers make one
 /// `GET /api/posts` and the strip says `observers=5`; a refetch through the
 /// controller updates all five; either mutation button increments the counter
-/// and the invalidation refetches it; leaving the screen releases all five
-/// observers, the hand-rolled one included; the hand-rolled observer sees the
-/// same result as the binding's readers after a refetch; and the listener
-/// says nothing on mount, one thing per change of the data, nothing at all
-/// for a refetch that changes none of it, while its child builds once and
-/// never again.
+/// and the invalidation refetches it; leaving the screen releases every
+/// observer, the hand-rolled ones included; the hand-rolled observer sees the
+/// same result as the binding's readers after a refetch; the listener says
+/// nothing on mount, one thing per change of the data, nothing at all for a
+/// refetch that changes none of it, while its child builds once and never
+/// again; two plain writes are two transitions and two batched ones are one;
+/// the mutation listener hears `idle->pending` and `pending->success` and
+/// nothing on mount; and the three infinite readers share one entry, `Load
+/// next` reaches all three with one request, and the infinite listener logs
+/// `none->1` then `1->2`.
 library;
 
 import 'package:flutter/material.dart';
@@ -78,6 +104,32 @@ QueryObserverOptions<List<Post>> postsQuery(ShowcaseApi api) =>
 
 /// The entry the mutation writes to, and the one it invalidates.
 QueryKey get counterKey => QueryKey(const <Object?>['counter']);
+
+/// Card 8's entry: cursor pages of the projects, this screen's own key so the
+/// `load-more` and `max-pages` entries are untouched by what happens here.
+QueryKey get stylesKey => QueryKey(const <Object?>['projects', 'styles']);
+
+/// Ten projects a page; fresh for five minutes for the same reason as the
+/// posts — three readers, one request, whichever frame each first builds in.
+InfiniteQueryObserverOptions<ProjectSlice, int> stylesQuery(ShowcaseApi api) =>
+    InfiniteQueryObserverOptions<ProjectSlice, int>(
+      queryKey: stylesKey,
+      initialPageParam: 0,
+      pageFn: (context) => api.projectsFrom(
+        context.pageParam,
+        limit: 10,
+        signal: context.signal,
+      ),
+      getNextPageParam: (page, _, __, ___) => page.nextId,
+      staleTime: const StaleTime.duration(Duration(minutes: 5)),
+    );
+
+typedef ProjectPages = InfiniteData<ProjectSlice, int>;
+
+/// How many pages a result holds, as the infinite listener's `listenWhen`
+/// sees it: `none` before the first one.
+String _pagesOf(QueryResult<ProjectPages> result) =>
+    '${result.dataOrNull?.pages.length ?? 'none'}';
 
 QueryObserverOptions<int> counterQuery(ShowcaseApi api) =>
     QueryObserverOptions<int>(
@@ -124,6 +176,9 @@ class _FourCallStylesScreenState extends State<FourCallStylesScreen> {
   /// refetch provably goes through the controller and not through the client.
   late final QueryController<List<Post>, List<Post>> _controller;
 
+  /// The mutation behind card 7's third panel, and under its listener.
+  late final MutationController<int, int, void> _increment;
+
   final _Builds _contextBuilds = _Builds();
   final _Builds _builderBuilds = _Builds();
   final _Builds _mixinBuilds = _Builds();
@@ -142,11 +197,16 @@ class _FourCallStylesScreenState extends State<FourCallStylesScreen> {
     _api = context.getInheritedWidgetOfExactType<ShowcaseScope>()!.api;
     _client = QueryClientProvider.read(context);
     _controller = QueryController.create(_client, postsQuery(_api));
+    _increment = MutationController<int, int, void>(
+      _client,
+      incrementMutation(_api, _client),
+    );
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _increment.dispose();
     super.dispose();
   }
 
@@ -211,8 +271,10 @@ class _FourCallStylesScreenState extends State<FourCallStylesScreen> {
             client: _client,
             childBuilds: _listenerChildBuilds,
           ),
-          _MutationCard(api: _api, client: _client),
+          _MutationCard(api: _api, client: _client, controller: _increment),
           QueryDebugStrip(queryKey: counterKey, label: 'counter'),
+          _InfiniteCard(api: _api),
+          QueryDebugStrip(queryKey: stylesKey, label: 'styles'),
         ],
       );
 }
@@ -577,6 +639,18 @@ class _ListenerCardState extends State<_ListenerCard> {
     );
   }
 
+  /// Two writes, each delivered as it happens: two transitions.
+  void _dropTwo() {
+    _drop();
+    _drop();
+  }
+
+  /// The same two writes inside one batch on the shared notify manager —
+  /// the one the app's client was built on. Every notification is held until
+  /// the batch ends, and a notification carries the controller's latest
+  /// value, so the listener hears one transition, to the second value.
+  void _dropTwoBatched() => NotifyManager.shared.batch(_dropTwo);
+
   @override
   Widget build(BuildContext context) => SectionCard(
         title: '6. QueryListener, a side effect',
@@ -609,6 +683,11 @@ class _ListenerCardState extends State<_ListenerCard> {
             _Toolbar(
               children: <Widget>[
                 _Action(label: 'Drop a post', onPressed: _drop),
+                _Action(label: 'Drop two posts', onPressed: _dropTwo),
+                _Action(
+                  label: 'Drop two posts, batched',
+                  onPressed: _dropTwoBatched,
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -616,7 +695,12 @@ class _ListenerCardState extends State<_ListenerCard> {
               'Drop a post writes the cache directly, so the data genuinely '
               'changes and the listener has something to say. Refetch and '
               'Invalidate up top return the same 30 posts, and it says '
-              'nothing about either.',
+              'nothing about either. Drop two posts is two writes and two '
+              'transitions; the batched pair runs inside '
+              'NotifyManager.shared.batch — the app\'s client is built on '
+              'the shared manager — which holds every notification until '
+              'the batch ends, and a notification carries the latest value: '
+              'one transition, straight to the second value.',
             ),
             const SizedBox(height: 12),
             Semantics(
@@ -676,13 +760,19 @@ class _ListenerChild extends StatelessWidget {
       );
 }
 
-/// 7. The same mutation through two of the styles, side by side, with the
-/// counter it invalidates read through a third.
+/// 7. The same mutation through three of the styles, side by side, with the
+/// counter it invalidates read through a fourth — and a `MutationListener`
+/// over the controller-backed one.
 class _MutationCard extends StatelessWidget {
-  const _MutationCard({required this.api, required this.client});
+  const _MutationCard({
+    required this.api,
+    required this.client,
+    required this.controller,
+  });
 
   final ShowcaseApi api;
   final QueryClient client;
+  final MutationController<int, int, void> controller;
 
   @override
   Widget build(BuildContext context) => SectionCard(
@@ -705,16 +795,75 @@ class _MutationCard extends StatelessWidget {
           children: <Widget>[
             const Text(
               'Mutations have the same four shapes as queries, and a mutation '
-              'is owned by the widget that asks for it — these two are '
-              'separate runs of the same options. Both invalidate the '
-              'counter, and both stay pending until that refetch has landed, '
-              'because onSuccess returns its future.',
+              'is owned by the widget that asks for it — these three are '
+              'separate runs of the same options. All invalidate the '
+              'counter, and all stay pending until that refetch has landed, '
+              'because onSuccess returns its future. The third is a '
+              'MutationController read through a ListenableBuilder, with a '
+              'MutationListener over it: the side-effect half for mutations, '
+              'silent on mount and called once per state change.',
             ),
             const SizedBox(height: 12),
             _BuilderMutation(api: api, client: client),
             const SizedBox(height: 12),
             _ContextMutation(api: api, client: client),
+            const SizedBox(height: 12),
+            _ControllerMutation(controller: controller),
           ],
+        ),
+      );
+}
+
+/// The third style, with the listener: `MutationListener` borrows the
+/// screen's controller, disposes nothing, and logs each transition as
+/// `from->to` by status.
+class _ControllerMutation extends StatefulWidget {
+  const _ControllerMutation({required this.controller});
+
+  final MutationController<int, int, void> controller;
+
+  @override
+  State<_ControllerMutation> createState() => _ControllerMutationState();
+}
+
+class _ControllerMutationState extends State<_ControllerMutation> {
+  int _calls = 0;
+  String _last = 'none';
+  String _from = 'none';
+
+  bool _statusChanged(
+    MutationResult<int, int> previous,
+    MutationResult<int, int> next,
+  ) {
+    _from = previous.status.name;
+    return previous.status != next.status;
+  }
+
+  void _record(BuildContext context, MutationResult<int, int> next) {
+    setState(() {
+      _calls++;
+      _last = '$_from->${next.status.name}';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => MutationListener<int, int, void>(
+        controller: widget.controller,
+        listenWhen: _statusChanged,
+        listener: _record,
+        child: ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) => _MutationPanel(
+            code: 'MutationController(client, …) + MutationListener',
+            name: 'controller',
+            label: 'Increment (controller)',
+            result: widget.controller.value,
+            onPressed: () => widget.controller.mutate(1),
+            extraFacts: <String>[
+              'mutation-listener-calls=$_calls',
+              'mutation-last=$_last',
+            ],
+          ),
         ),
       );
 }
@@ -765,6 +914,7 @@ class _MutationPanel extends StatelessWidget {
     required this.label,
     required this.result,
     required this.onPressed,
+    this.extraFacts = const <String>[],
   });
 
   final String code;
@@ -776,6 +926,10 @@ class _MutationPanel extends StatelessWidget {
   final String label;
   final MutationResult<int, int> result;
   final VoidCallback onPressed;
+
+  /// More `key=value` texts for the same group — the listener's, on the
+  /// third panel.
+  final List<String> extraFacts;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -803,11 +957,223 @@ class _MutationPanel extends StatelessWidget {
                   Text('data=$data', style: _mono),
                 if (result case MutationError(:final error))
                   Text('error=$error', style: _mono),
+                for (final fact in extraFacts) Text(fact, style: _mono),
               ],
             ),
           ),
         ],
       );
+}
+
+/// 8. The infinite shapes: one infinite entry read three ways, the two
+/// styles the paging screens do not use plus the core's own observer, and an
+/// `InfiniteQueryListener` over the mixin's controller.
+class _InfiniteCard extends StatelessWidget {
+  const _InfiniteCard({required this.api});
+
+  final ShowcaseApi api;
+
+  @override
+  Widget build(BuildContext context) => SectionCard(
+        title: '8. The infinite shapes',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              'An infinite query has the same four styles. The builder is on '
+              'the load-more screen and the controller on max-pages; here '
+              'are the other two — context.infiniteQuery and '
+              'watchInfiniteQuery, which hand back the controller because '
+              'paging lives on it — next to the core\'s '
+              'client.observeInfinite. Three readers, one entry: the strip '
+              'below says observers=3 and fetches=1. Load next goes through '
+              'the mixin\'s controller, and all three show the page. The '
+              'InfiniteQueryListener borrows that same controller and logs '
+              'each change of the page count.',
+            ),
+            const SizedBox(height: 12),
+            _InfiniteContextReader(api: api),
+            const SizedBox(height: 8),
+            _InfiniteMixinReader(api: api),
+            const SizedBox(height: 8),
+            _InfiniteObserverReader(api: api),
+          ],
+        ),
+      );
+}
+
+/// One infinite reader's row: the call and its facts, in the group
+/// `infinite <name>`.
+class _InfiniteRow extends StatelessWidget {
+  const _InfiniteRow({
+    required this.code,
+    required this.name,
+    required this.result,
+    this.extraFacts = const <String>[],
+    this.trailing = const <Widget>[],
+  });
+
+  final String code;
+  final String name;
+  final QueryResult<ProjectPages> result;
+  final List<String> extraFacts;
+  final List<Widget> trailing;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(code, style: _mono),
+          const SizedBox(height: 4),
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            label: 'infinite $name',
+            child: Wrap(
+              key: ValueKey<String>('infinite-$name'),
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                Text('pages=${_pagesOf(result)}', style: _mono),
+                Text('status=${result.status.name}', style: _mono),
+                for (final fact in extraFacts) Text(fact, style: _mono),
+                ...trailing,
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
+/// `context.infiniteQuery`, in a `StatelessWidget`.
+class _InfiniteContextReader extends StatelessWidget {
+  const _InfiniteContextReader({required this.api});
+
+  final ShowcaseApi api;
+
+  @override
+  Widget build(BuildContext context) {
+    final projects = context.infiniteQuery(stylesQuery(api));
+    return _InfiniteRow(
+      code: 'context.infiniteQuery(stylesQuery(api))',
+      name: 'context',
+      result: projects.value,
+    );
+  }
+}
+
+/// `watchInfiniteQuery`, in a `QueryMixin` — and the listener, which borrows
+/// the controller the mixin hands back. The button pages through that same
+/// controller.
+class _InfiniteMixinReader extends StatefulWidget {
+  const _InfiniteMixinReader({required this.api});
+
+  final ShowcaseApi api;
+
+  @override
+  State<_InfiniteMixinReader> createState() => _InfiniteMixinReaderState();
+}
+
+class _InfiniteMixinReaderState extends State<_InfiniteMixinReader>
+    with QueryMixin {
+  int _calls = 0;
+  String _last = 'none';
+  String _from = 'none';
+
+  /// A change of the page count, and nothing else: a page fetch starting
+  /// moves `fetchStatus` and is refused here.
+  bool _pagesChanged(
+    QueryResult<ProjectPages> previous,
+    QueryResult<ProjectPages> next,
+  ) {
+    _from = _pagesOf(previous);
+    return _pagesOf(previous) != _pagesOf(next);
+  }
+
+  void _record(BuildContext context, QueryResult<ProjectPages> next) {
+    setState(() {
+      _calls++;
+      _last = '$_from->${_pagesOf(next)}';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final projects = watchInfiniteQuery(stylesQuery(widget.api));
+    return InfiniteQueryListener<ProjectSlice, int, ProjectPages>(
+      controller: projects,
+      listenWhen: _pagesChanged,
+      listener: _record,
+      child: _InfiniteRow(
+        code: 'watchInfiniteQuery(stylesQuery(api)) + InfiniteQueryListener',
+        name: 'mixin',
+        result: projects.value,
+        extraFacts: <String>[
+          'infinite-listener-calls=$_calls',
+          'infinite-last=$_last',
+        ],
+        trailing: <Widget>[
+          _Action(
+            label: 'Load next',
+            filled: true,
+            onPressed: projects.hasNextPage && !projects.isFetchingNextPage
+                ? () => projects.fetchNextPage().ignore()
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The core alone: an `InfiniteQueryObserver` from `client.observeInfinite`,
+/// subscribed by hand and destroyed in `dispose`, like card 5.
+class _InfiniteObserverReader extends StatefulWidget {
+  const _InfiniteObserverReader({required this.api});
+
+  final ShowcaseApi api;
+
+  @override
+  State<_InfiniteObserverReader> createState() =>
+      _InfiniteObserverReaderState();
+}
+
+class _InfiniteObserverReaderState extends State<_InfiniteObserverReader> {
+  late final InfiniteQueryObserver<ProjectSlice, int, ProjectPages> _observer;
+  late final void Function() _unsubscribe;
+  bool _built = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final client = QueryClientProvider.read(context);
+    _observer = client.observeInfinite(stylesQuery(widget.api));
+    _unsubscribe = _observer.subscribe(
+      client.notifyManager.batchCalls<QueryResult<ProjectPages>>((_) {
+        if (_built && mounted) {
+          setState(() {});
+        }
+      }),
+    );
+  }
+
+  @override
+  void dispose() {
+    _unsubscribe();
+    _observer.destroy();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _built = true;
+    return _InfiniteRow(
+      code: 'client.observeInfinite(stylesQuery(api)).subscribe(…)',
+      name: 'observer',
+      result: _observer.currentResult,
+    );
+  }
 }
 
 /// A row of buttons, each its own semantics node.

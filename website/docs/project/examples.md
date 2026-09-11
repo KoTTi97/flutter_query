@@ -16,7 +16,7 @@ that directory. It is what pub.dev shows on the package page.
 
 ## The showcase
 
-`examples/showcase/` — **every feature of the library as its own screen**, 26
+`examples/showcase/` — **every feature of the library as its own screen**, 27
 of them, against a dummy backend built for the purpose, each with widget tests
 and Playwright end-to-end tests in a real browser. The app is the catalogue;
 the tests are the proof.
@@ -42,7 +42,7 @@ example it mirrors, and how it is proven.
 | `parallel-queries` | | `invalidation-and-filters` | `focus-refetch` |
 | `query-collections` | | `global-callbacks` | `four-call-styles` |
 | `prefetching` | | | `cache-inspector` |
-| `select-and-sharing` | | | |
+| `select-and-sharing` | | | `diagnostics` |
 | `initial-and-placeholder` | | | |
 | `stale-and-gc` | | | |
 

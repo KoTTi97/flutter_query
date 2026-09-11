@@ -14,6 +14,7 @@ import 'features/cache_inspector/cache_inspector_screen.dart';
 import 'features/cancellation/cancellation_screen.dart';
 import 'features/default_query_function/default_query_function_screen.dart';
 import 'features/dependent_queries/dependent_queries_screen.dart';
+import 'features/diagnostics/diagnostics_screen.dart';
 import 'features/focus_refetch/focus_refetch_screen.dart';
 import 'features/four_call_styles/four_call_styles_screen.dart';
 import 'features/global_callbacks/global_callbacks_screen.dart';
@@ -75,6 +76,7 @@ final List<FeatureEntry> featureEntries = <FeatureEntry>[
   FeatureEntry(fourCallStylesFeature, (_) => const FourCallStylesScreen()),
   FeatureEntry(globalCallbacksFeature, (_) => const GlobalCallbacksScreen()),
   FeatureEntry(cacheInspectorFeature, (_) => const CacheInspectorScreen()),
+  FeatureEntry(diagnosticsFeature, (_) => const DiagnosticsScreen()),
 ];
 
 /// Serves `/` and every feature route. Unknown names get the home screen, so

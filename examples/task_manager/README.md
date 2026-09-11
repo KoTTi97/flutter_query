@@ -5,7 +5,7 @@ backend in [`server/`](server): optimistic writes, rollback, a poll that stops
 when the server confirms, and one cache entry read by two screens.
 
 > **The small app, not the catalogue.** [`examples/showcase/`](../showcase) has
-> one screen per feature — 26 of them — and is where to look up how a
+> one screen per feature — 27 of them — and is where to look up how a
 > particular thing is done. This is the other kind of example: *one ordinary
 > app* that happens to need six of those features at once, so you can see how
 > they compose. It was also the port's acceptance bar — the checklist below is

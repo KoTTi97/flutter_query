@@ -8,7 +8,9 @@
 /// last page, so a `nextId` of `null` is the end of the list and the button
 /// goes dark. An `About` view, upstream's `/about` page, unmounts the list:
 /// the pages stay in the cache without an observer and are back at once on
-/// return, with no request.
+/// return, with no request — and the About view proves it by reading them
+/// straight from the cache with `client.getInfiniteQueryData`, no observer
+/// involved.
 ///
 /// The read is an `InfiniteQueryBuilder`, whose builder receives the
 /// controller — where `hasNextPage`, `isFetchingNextPage` and
@@ -22,8 +24,9 @@
 /// the bottom of the list appends the next page without the button; after
 /// the tenth page (`cursor=90`) `hasNextPage` is false, the button is disabled
 /// and nothing asks for `cursor=100`; going to `About` and back shows the
-/// same rows with no request, the entry's observers going 1 → 0 → 1; a
-/// refetch re-requests every held page, first to last.
+/// same rows with no request, the entry's observers going 1 → 0 → 1, while
+/// About reads `cached pages=2`, `cached rows=20` off the cache with nobody
+/// observing; a refetch re-requests every held page, first to last.
 library;
 
 import 'package:flutter/material.dart';
@@ -364,35 +367,68 @@ class _ListSkeleton extends StatelessWidget {
       );
 }
 
-/// Upstream's `/about` page: nothing here reads the projects, so the entry
-/// has no observer while this is on screen — and it is still in the cache.
+/// Upstream's `/about` page: nothing here *observes* the projects, so the
+/// entry has no observer while this is on screen — and it is still in the
+/// cache, which `client.getInfiniteQueryData` reads without adding one.
 class _AboutView extends StatelessWidget {
   const _AboutView({required this.onBack});
 
   final VoidCallback onBack;
 
   @override
-  Widget build(BuildContext context) => SectionCard(
-        title: 'About',
-        trailing: FilledButton.tonal(
-          onPressed: onBack,
-          child: const Text('Back to list'),
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'The list is unmounted. Nothing on this view reads the projects '
-              'query, so its entry has no observer — the strip above says '
-              'observers=0 — and the pages it holds are untouched.',
+  Widget build(BuildContext context) {
+    // A plain read of the cache: the pages as the cache holds them — slices,
+    // not the lists the list's `select` projects them to — or null if the
+    // entry is gone. Typed by the key's page and param types, and it throws
+    // `QueryDataTypeError` rather than guess if they were wrong.
+    final cached = QueryClientProvider.of(context)
+        .getInfiniteQueryData<ProjectSlice, int>(projectsInfiniteKey);
+    final rows =
+        cached?.pages.fold<int>(0, (n, page) => n + page.items.length) ?? 0;
+    return SectionCard(
+      title: 'About',
+      trailing: FilledButton.tonal(
+        onPressed: onBack,
+        child: const Text('Back to list'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(
+            'The list is unmounted. Nothing on this view observes the '
+            'projects query, so its entry has no observer — the strip above '
+            'says observers=0 — and the pages it holds are untouched. This '
+            'view reads them anyway, with client.getInfiniteQueryData: a '
+            'read of the cache, no observer, no request.',
+          ),
+          const SizedBox(height: 8),
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            label: 'about facts',
+            child: Wrap(
+              key: const ValueKey<String>('about-facts'),
+              spacing: 12,
+              children: <Widget>[
+                Text(
+                  'cached pages=${cached?.pages.length ?? 0}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+                Text(
+                  'cached rows=$rows',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              ],
             ),
-            SizedBox(height: 8),
-            Text(
-              'Going back mounts a fresh reader on the same entry. The data '
-              'is still fresh, so every page is on screen at once and no '
-              'request is made.',
-            ),
-          ],
-        ),
-      );
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Going back mounts a fresh reader on the same entry. The data '
+            'is still fresh, so every page is on screen at once and no '
+            'request is made.',
+          ),
+        ],
+      ),
+    );
+  }
 }

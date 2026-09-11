@@ -1,6 +1,14 @@
+import type { Page } from '@playwright/test'
 import { expect, fact, holdRequest, test } from './fixtures'
 
+// The cards and the strips stack up; the summary line sits between them.
+test.use({ viewport: { width: 1280, height: 2200 } })
+
 const initial = [1, 2, 3]
+
+/// The summary reader's facts, in their own group.
+const summary = (page: Page, text: string) =>
+  page.getByRole('group', { name: 'summary', exact: true }).getByText(text, { exact: true })
 
 test('the collection fetches every member once, in parallel', async ({ page, open, scenario }) => {
   // Held before the screen opens: a sequential collection would show one.
@@ -93,4 +101,47 @@ test('a missing id fails without disturbing its neighbours', async ({ page, open
     await expect(fact(page, `post-${id}`, 'status=success')).toBeVisible()
   }
   await expect(page.getByText('Local development: setup guide')).toBeVisible()
+})
+
+test('a QueriesController reads the same collection, with a second observer on every entry', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/query-collections')
+  await expect(fact(page, 'post-3', 'status=success')).toBeVisible()
+
+  const toggle = page.getByRole('switch', { name: 'Summary reader', exact: true })
+  await toggle.click()
+  await expect(toggle).toBeChecked()
+
+  await expect(summary(page, 'ready=3/3')).toBeVisible()
+  await expect(summary(page, 'failed=0')).toBeVisible()
+  for (const id of initial) {
+    // A second collection is a second observer, and a second observer on a
+    // stale entry is one refetch of it.
+    await expect(fact(page, `post-${id}`, 'observers=2')).toBeVisible()
+    await expect(fact(page, `post-${id}`, 'fetches=2')).toBeVisible()
+  }
+
+  // `setQueries` follows the ids: both readers add the newcomer in one build,
+  // and the entry is fetched once for the two of them.
+  await page.getByRole('button', { name: 'Add post', exact: true }).click()
+  await expect(summary(page, 'ready=4/4')).toBeVisible()
+  await expect(fact(page, 'post-4', 'observers=2')).toBeVisible()
+  await expect(fact(page, 'post-4', 'fetches=1')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/posts\/4$/)).toBe(1)
+
+  await page.getByRole('button', { name: 'Add missing id', exact: true }).click()
+  await expect(summary(page, 'ready=4/5')).toBeVisible()
+  await expect(summary(page, 'failed=1')).toBeVisible()
+
+  // Switched off, the controller is disposed and its observers go.
+  await toggle.click()
+  await expect(toggle).not.toBeChecked()
+  await expect(summary(page, 'ready=4/5')).toHaveCount(0)
+  for (const id of [1, 2, 3, 4]) {
+    await expect(fact(page, `post-${id}`, 'observers=1')).toBeVisible()
+  }
 })

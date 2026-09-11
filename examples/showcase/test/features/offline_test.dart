@@ -36,10 +36,18 @@ Future<void> setOnline(WidgetTester tester, {required bool online}) async {
   expect(find.text('online=$online'), findsOneWidget);
 }
 
-Future<void> pickMode(WidgetTester tester, String mode) async {
-  await tester.tap(find.text(mode));
+/// A segment of one knob, by its label: the network mode and the reconnect
+/// knob both have an `always`, so the knob's own key comes first.
+Future<void> pick(WidgetTester tester, String knob, String label) async {
+  await tester.tap(find.descendant(
+    of: find.byKey(ValueKey<String>(knob)),
+    matching: find.text(label),
+  ));
   await tester.pump();
 }
+
+Future<void> pickMode(WidgetTester tester, String mode) =>
+    pick(tester, 'network-mode', mode);
 
 Future<void> addTodo(WidgetTester tester, String text) async {
   await tester.enterText(find.byType(TextField), text);
@@ -172,6 +180,28 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('query fetchStatus=paused'), findsOneWidget);
     expect(h.requests('GET', '/api/todos'), 2);
+  });
+
+  showcaseTest(
+      'refetchOnReconnect: never leaves the todos alone on reconnect, always '
+      'refetches them', (tester, h) async {
+    await open(tester, h);
+    expect(h.requests('GET', '/api/todos'), 1);
+
+    // Nothing paused, nothing stale-by-knob: the reconnect alone decides.
+    await pick(tester, 'on-reconnect', 'never');
+    await setOnline(tester, online: false);
+    await setOnline(tester, online: true);
+    await tester.pumpAndSettle();
+    expect(h.requests('GET', '/api/todos'), 1);
+    expect(h.fact('todos', 'fetches=1'), findsOneWidget);
+
+    await pick(tester, 'on-reconnect', 'always');
+    await setOnline(tester, online: false);
+    await setOnline(tester, online: true);
+    await tester.pumpAndSettle();
+    expect(h.requests('GET', '/api/todos'), 2);
+    expect(h.fact('todos', 'fetches=2'), findsOneWidget);
   });
 
   showcaseTest('two todos added offline are sent in the order they were made',

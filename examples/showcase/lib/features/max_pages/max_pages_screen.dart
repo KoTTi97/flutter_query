@@ -8,7 +8,10 @@
 /// The query is an `InfiniteQueryController` created in `initState` and read
 /// through a `ListenableBuilder`; the paging half — `hasNextPage`,
 /// `isFetchingPreviousPage`, `fetchNextPage` — lives on the controller, not
-/// on the sealed result.
+/// on the sealed result. The page function receives an `InfinitePageContext`,
+/// whose `direction` says which end of the window a fetch extends: the screen
+/// notes the last one as `lastPage=<cursor> <direction>`. A refetch walks
+/// the window first to last, every page `forward`.
 ///
 /// Proofs (widget tests in `test/features/max_pages_test.dart`, end-to-end in
 /// `e2e/tests/max_pages.spec.ts`): the screen starts on the page at cursor 30
@@ -19,7 +22,9 @@
 /// `Refetch` sends one request per page in the window, bumps `fetches` by one
 /// and renews every row's `fetched` stamp; cursor 90 ends the forward
 /// direction (`hasNextPage=false`, button disabled) and cursor 0 the backward
-/// one.
+/// one; and `lastPage` says `40 forward` after `Load next`, `20 backward`
+/// after `Load previous`, and the window's last cursor `forward` after a
+/// refetch.
 library;
 
 import 'package:flutter/material.dart';
@@ -58,17 +63,25 @@ const int windowSize = 3;
 typedef ProjectWindow = InfiniteData<ProjectSlice, int>;
 
 /// The window's options. The cursors come back with every slice, so the
-/// paging functions read them off the page rather than counting.
+/// paging functions read them off the page rather than counting. [onPage]
+/// hears each page fetch with what the page function was told about it: the
+/// cursor and the direction — `forward` for `fetchNextPage`, the first page
+/// and every page of a refetch, `backward` for `fetchPreviousPage`.
 InfiniteQueryObserverOptions<ProjectSlice, int> projectsWindowQuery(
-        ShowcaseApi api) =>
+  ShowcaseApi api, {
+  void Function(int cursor, FetchDirection direction)? onPage,
+}) =>
     InfiniteQueryObserverOptions<ProjectSlice, int>(
       queryKey: projectsWindowKey,
       initialPageParam: startCursor,
-      pageFn: (context) => api.projectsFrom(
-        context.pageParam,
-        limit: pageSize,
-        signal: context.signal,
-      ),
+      pageFn: (context) {
+        onPage?.call(context.pageParam, context.direction);
+        return api.projectsFrom(
+          context.pageParam,
+          limit: pageSize,
+          signal: context.signal,
+        );
+      },
       getNextPageParam: (page, _, __, ___) => page.nextId,
       getPreviousPageParam: (page, _, __, ___) => page.previousId,
       maxPages: windowSize,
@@ -84,6 +97,12 @@ class MaxPagesScreen extends StatefulWidget {
 class _MaxPagesScreenState extends State<MaxPagesScreen> {
   late final InfiniteQueryController<ProjectSlice, int, ProjectWindow> _window;
 
+  /// The last page fetch the page function was asked for, as
+  /// `<cursor> <direction>`. Written from inside the page function — before
+  /// the request goes out — and read by the rebuild its answer causes, so no
+  /// `setState` is needed for it.
+  String _lastPage = 'none';
+
   @override
   void initState() {
     super.initState();
@@ -92,7 +111,10 @@ class _MaxPagesScreenState extends State<MaxPagesScreen> {
     final api = context.getInheritedWidgetOfExactType<ShowcaseScope>()!.api;
     _window = InfiniteQueryController<ProjectSlice, int, ProjectWindow>(
       QueryClientProvider.read(context),
-      projectsWindowQuery(api),
+      projectsWindowQuery(
+        api,
+        onPage: (cursor, direction) => _lastPage = '$cursor ${direction.name}',
+      ),
     );
   }
 
@@ -108,7 +130,8 @@ class _MaxPagesScreenState extends State<MaxPagesScreen> {
         children: <Widget>[
           ListenableBuilder(
             listenable: _window,
-            builder: (context, _) => _WindowCard(window: _window),
+            builder: (context, _) =>
+                _WindowCard(window: _window, lastPage: _lastPage),
           ),
           QueryDebugStrip(queryKey: projectsWindowKey, label: 'projects'),
         ],
@@ -117,9 +140,12 @@ class _MaxPagesScreenState extends State<MaxPagesScreen> {
 
 /// The window: its facts, the three buttons, and the rows it holds.
 class _WindowCard extends StatelessWidget {
-  const _WindowCard({required this.window});
+  const _WindowCard({required this.window, required this.lastPage});
 
   final InfiniteQueryController<ProjectSlice, int, ProjectWindow> window;
+
+  /// `<cursor> <direction>` of the last page fetch, off the page context.
+  final String lastPage;
 
   @override
   Widget build(BuildContext context) {
@@ -160,6 +186,7 @@ class _WindowCard extends StatelessWidget {
                 _Fact(
                     'isFetchingPreviousPage=${window.isFetchingPreviousPage}'),
                 _Fact('isFetchingNextPage=${window.isFetchingNextPage}'),
+                _Fact('lastPage=$lastPage'),
               ],
             ),
           ),

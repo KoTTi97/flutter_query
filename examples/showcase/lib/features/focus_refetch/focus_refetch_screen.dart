@@ -16,9 +16,10 @@
 /// an interruption that counts as focused on iOS, Android and Fuchsia, the
 /// window losing focus — unfocused — on macOS, Windows and Linux (the
 /// provider's class doc has the reasoning; `isAppShown` overrides it). A
-/// headless browser never reports a Flutter lifecycle transition, so the
+/// headless browser raises no lifecycle transition of its own, so the
 /// screen's own `App focused` switch calls `setFocused` directly and *is*
-/// the focus source the tests drive.
+/// the focus source most of the tests drive — a `blur` dispatched on the
+/// window is one, though, and entry C's `isAppShown` proof uses it.
 ///
 /// Entry C is the port's own `AppFocusManager(refetchMinBackgroundDuration:)`:
 /// a return to the foreground after an absence *shorter* than the threshold
@@ -27,12 +28,24 @@
 /// touched. The threshold belongs to the focus manager, and a manager belongs
 /// to a client at construction — the app's client is built in `main` before
 /// any screen exists, so it cannot be given one afterwards. Entry C therefore
-/// builds a `QueryClient` of its own and hands it to a nested
-/// `QueryClientProvider`; the knob swaps that client for another built with
-/// the other threshold, and the retired one is cleared after the frame that
-/// drops it. Because the client is its own, so is the cache: entry C counts
-/// its own fetches off `queryCache.subscribe` rather than through the app's
-/// `QueryDebugStrip`, which reads the app client's counters.
+/// runs on a client of its own under a nested `QueryClientProvider.create`:
+/// the provider builds the client, owns it, and clears it when it unmounts,
+/// and a different `key` is a different client — which is how the threshold
+/// knob and the `initialOnlineStatus` knob swap it. Because the client is its
+/// own, so is the cache: entry C counts its own fetches off
+/// `queryCache.subscribe` rather than through the app's `QueryDebugStrip`,
+/// which reads the app client's counters.
+///
+/// The same nested provider carries the two other things a provider decides.
+/// `isAppShown` is the mapping from lifecycle states to focus: `platform` is
+/// the built-in one, `shown` and `hidden` say what `inactive` means outright,
+/// and the mapping given on the latest build is the one in force, without a
+/// new client. `initialOnlineStatus` is what the client assumes before any
+/// connectivity source has spoken: `offline` mounts entry C paused, and its
+/// own `Entry C online` switch is the source that lets the fetch continue.
+/// And `QueryClientProvider.maybeOf` — `of` for a widget that can do without
+/// a provider — answers with the nearest one: the app's client on the screen,
+/// entry C's under the nested provider, as the `nearest=` facts show.
 ///
 /// `shouldRefetchOnFocus` reports what the *most recent* focus notification
 /// permitted, so it is read right after a return: it is `true` again as soon
@@ -56,7 +69,11 @@
 /// `shouldRefetchOnFocus=false` with its fetch count unmoved, the same
 /// sequence under `none` refetches, and an `inactive`-only blip — which maps
 /// to focused on the test binding's default platform, Android, so it is no
-/// absence at all — changes nothing under either.
+/// absence at all — changes nothing under either; under `isAppShown`
+/// `hidden` the same blip *is* an absence and refetches, under `shown` it is
+/// not, whatever the platform; `initialOnlineStatus` `offline` mounts entry C
+/// with its fetch paused and no request sent until its switch puts it online;
+/// and `maybeOf` names the app's client on the screen and entry C's below.
 /// The threshold is measured with `package:clock`, which under a widget test
 /// is real time, not pumped time: the tests use an hour, so every absence
 /// they stage is short, and `Duration.zero` for the other side.
@@ -98,6 +115,31 @@ QueryKey get focusKeyC => QueryKey(const <Object?>['focus', 'c']);
 /// visitor can stage". [Duration.zero] is the library's default and upstream's
 /// behaviour — every return refetches.
 const Duration longBackground = Duration(hours: 1);
+
+/// What `inactive` means: the `isAppShown` knob's choices. [platform] is the
+/// provider's built-in mapping, which reads `inactive` per platform; the
+/// other two say it outright.
+enum InactiveRule { platform, shown, hidden }
+
+/// `inactive` counts as the app being looked at — a phone's notification
+/// shade or an incoming call. A top-level function, like the retry and focus
+/// predicates: the provider re-applies the mapping whenever the function
+/// differs from the last build's, and a closure would differ every build.
+bool inactiveIsShown(AppLifecycleState state) =>
+    state == AppLifecycleState.resumed || state == AppLifecycleState.inactive;
+
+/// Only `resumed` is the app being looked at: `inactive` is an absence, as
+/// the window losing focus is on a desktop.
+bool onlyResumedIsShown(AppLifecycleState state) =>
+    state == AppLifecycleState.resumed;
+
+/// The mapping a rule stands for; `null` is the provider's own.
+bool Function(AppLifecycleState state)? isAppShownFor(InactiveRule rule) =>
+    switch (rule) {
+      InactiveRule.platform => null,
+      InactiveRule.shown => inactiveIsShown,
+      InactiveRule.hidden => onlyResumedIsShown,
+    };
 
 /// Entry C's query, in its own client. `always`, so nothing but the threshold
 /// can decide whether a return to the foreground refetches.
@@ -192,18 +234,32 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
     ('long', longBackground),
   ];
 
+  static const List<(String, InactiveRule)> _inactiveRules =
+      <(String, InactiveRule)>[
+    ('platform', InactiveRule.platform),
+    ('shown', InactiveRule.shown),
+    ('hidden', InactiveRule.hidden),
+  ];
+
+  static const List<(String, bool)> _initialOnlineChoices = <(String, bool)>[
+    ('online', true),
+    ('offline', false),
+  ];
+
   bool _attachedB = true;
 
-  /// Entry C's threshold, and the client carrying the focus manager built
-  /// with it. A manager takes its threshold at construction, so a new
-  /// threshold is a new manager, and a new manager is a new client.
+  /// Entry C's threshold. A manager takes its threshold at construction, so
+  /// a new threshold is a new manager, a new manager is a new client — and
+  /// the nested provider's key carries it, so the provider builds one.
   Duration _minBackground = Duration.zero;
-  QueryClient? _thresholdClient;
 
-  /// Clients the knob has replaced but the tree has not dropped yet. Cleared
-  /// after the frame that swaps them out — and again in [dispose], so nothing
-  /// is left holding a `gcTime` timer if the screen goes first.
-  final List<QueryClient> _retiredClients = <QueryClient>[];
+  /// Entry C's `isAppShown`. Not in the provider's key: a mapping given on a
+  /// later build is applied to the client as it stands.
+  InactiveRule _inactiveRule = InactiveRule.platform;
+
+  /// Entry C's `initialOnlineStatus`. In the key: it is what a client assumes
+  /// at its mount, so showing it again means a new client.
+  bool _initialOnline = true;
 
   late final ShowcaseApi _api;
   late final QueryClient _client;
@@ -220,7 +276,6 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
       _initialised = true;
       _api = ShowcaseScope.apiOf(context);
       _client = QueryClientProvider.of(context);
-      _thresholdClient = _newThresholdClient(_minBackground);
       _readerA = QueryController.create<ServerTime>(_client, _optionsA);
       // The switch shows what the focus manager holds, not what this screen
       // last set: a test that calls `setFocused` straight on the client, or a
@@ -233,17 +288,13 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
   void dispose() {
     _unsubscribeFocus?.call();
     _readerA?.dispose();
-    for (final client in _retiredClients) {
-      client.clear();
-    }
-    _retiredClients.clear();
-    // A client owns `gcTime` timers that outlive the tree, and the test
-    // binding checks for pending timers before any `tearDown` runs.
-    _thresholdClient?.clear();
+    // Entry C's client is the nested provider's to clear: it goes with the
+    // tree, after the observers under it — which is what `create` is for.
     super.dispose();
   }
 
-  /// A client whose focus manager carries [minBackground].
+  /// A client whose focus manager carries [minBackground] — what the nested
+  /// provider's `create` builds, once per key.
   ///
   /// Focused up front: the nested provider's mount reads the app's current
   /// lifecycle state and sets the focus from it, and a manager that starts
@@ -254,31 +305,6 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
           refetchMinBackgroundDuration: minBackground,
         )..setFocused(true),
       );
-
-  /// Swaps entry C's client for one built with [value].
-  ///
-  /// The retired client is cleared after the frame, not inside this call: the
-  /// nested provider unmounts it while rebuilding, and clearing it first
-  /// would leave its still-attached observer to re-create the entry — and the
-  /// `gcTime` timer — the clear had just dropped.
-  void _setMinBackground(Duration value) {
-    if (value == _minBackground) {
-      return;
-    }
-    final retired = _thresholdClient;
-    setState(() {
-      _minBackground = value;
-      _thresholdClient = _newThresholdClient(value);
-    });
-    if (retired == null) {
-      return;
-    }
-    _retiredClients.add(retired);
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      _retiredClients.remove(retired);
-      retired.clear();
-    });
-  }
 
   /// A focus event arrives from wherever the platform raised it, which can be
   /// inside a frame's build phase; a `setState` there has to wait for the
@@ -419,7 +445,6 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
   Widget build(BuildContext context) {
     final small = Theme.of(context).textTheme.bodySmall;
     final readerA = _readerA;
-    final thresholdClient = _thresholdClient;
     return FeatureScaffold(
       feature: focusRefetchFeature,
       children: <Widget>[
@@ -449,7 +474,12 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
               ),
               _Facts(
                 group: 'focus-state',
-                facts: <String>['focused=${_client.focusManager.isFocused()}'],
+                facts: <String>[
+                  'focused=${_client.focusManager.isFocused()}',
+                  // `maybeOf` on the screen's own context: the app's provider
+                  // is the nearest one here.
+                  'nearest=${_nearest(context, appClient: _client)}',
+                ],
               ),
               const Divider(height: 24),
               _knob<StaleTime>(
@@ -586,7 +616,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
         ),
         QueryDebugStrip(queryKey: focusKeyB, label: 'focus-b'),
         SectionCard(
-          title: 'Entry C · minimum background duration',
+          title: 'Entry C · a nested provider of its own',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -594,8 +624,10 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                 'A focus manager takes refetchMinBackgroundDuration at '
                 'construction, and the app\'s client is built before any '
                 'screen exists — so this entry runs on a client of its own, '
-                'under a nested QueryClientProvider. Its query is always, so '
-                'nothing but the threshold decides. none is the library '
+                'under a nested QueryClientProvider.create: the provider '
+                'builds the client, owns it and clears it when it goes, and '
+                'a different key is a different client. Its query is always, '
+                'so nothing but the threshold decides. none is the library '
                 'default: every return refetches. long is an hour, so every '
                 'absence you can stage here is short, the return raises the '
                 'focus event with shouldRefetchOnFocus=false, and no new '
@@ -610,14 +642,62 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
                 semanticsKey: 'min-background',
                 choices: _minBackgrounds,
                 selected: _minBackground,
-                onChanged: _setMinBackground,
+                onChanged: (value) => setState(() => _minBackground = value),
               ),
               const SizedBox(height: 12),
-              if (thresholdClient != null)
-                QueryClientProvider(
-                  client: thresholdClient,
-                  child: _ThresholdEntry(api: _api),
+              _knob<InactiveRule>(
+                context,
+                name: 'Inactive is',
+                semanticsKey: 'inactive-is',
+                choices: _inactiveRules,
+                selected: _inactiveRule,
+                onChanged: (value) => setState(() => _inactiveRule = value),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'isAppShown: which lifecycle states count as the app being '
+                'looked at. platform is the built-in mapping — inactive is '
+                'shown on a phone, hidden on a desktop. shown and hidden say '
+                'it outright: under hidden a notification shade, or a '
+                'browser window losing focus, is an absence like any other. '
+                'The mapping on the latest build is the one in force; the '
+                'client stays.',
+                style: small,
+              ),
+              const SizedBox(height: 12),
+              _knob<bool>(
+                context,
+                name: 'Initial online status',
+                semanticsKey: 'initial-online',
+                choices: _initialOnlineChoices,
+                selected: _initialOnline,
+                onChanged: (value) => setState(() => _initialOnline = value),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'initialOnlineStatus: what the client assumes before any '
+                'connectivity source has spoken — online, unless told '
+                'otherwise. offline mounts a new entry C with its first fetch '
+                'paused and nothing sent; the Entry C online switch below is '
+                'its connectivity source, and turning it on lets the fetch '
+                'continue.',
+                style: small,
+              ),
+              const SizedBox(height: 12),
+              QueryClientProvider.create(
+                // The threshold and the initial online status are read at
+                // the client's construction and mount: a change of either is
+                // a new key, so a new client. The `isAppShown` mapping is
+                // not: it reaches the client as it stands.
+                key: ValueKey<String>(
+                  'entry-c ${_minBackground.inSeconds} '
+                  '${_initialOnline ? 'online' : 'offline'}',
                 ),
+                create: () => _newThresholdClient(_minBackground),
+                initialOnlineStatus: _initialOnline,
+                isAppShown: isAppShownFor(_inactiveRule),
+                child: _ThresholdEntry(api: _api, appClient: _client),
+              ),
             ],
           ),
         ),
@@ -626,17 +706,32 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
   }
 }
 
+/// Which provider is nearest to [context], named: the app's client, the
+/// nested one, or none at all — `QueryClientProvider.maybeOf`, the lookup for
+/// a widget that can do without a provider, where `of` would throw.
+String _nearest(BuildContext context, {required QueryClient appClient}) {
+  final nearest = QueryClientProvider.maybeOf(context);
+  if (nearest == null) {
+    return 'none';
+  }
+  return identical(nearest, appClient) ? 'app' : 'entry C';
+}
+
 /// Entry C: one query on a client of its own, so the focus manager under it
 /// can carry a `refetchMinBackgroundDuration`.
 ///
 /// It counts its own fetches — the app's `CacheStats`, which every
 /// `QueryDebugStrip` reads, listens to the app's client and would show zero
-/// for this one — and rebuilds on its client's focus events, so
-/// `shouldRefetchOnFocus` is what the last notification actually permitted.
+/// for this one — and rebuilds on its client's focus and online events, so
+/// `shouldRefetchOnFocus` is what the last notification actually permitted
+/// and `online=` is what the client believes right now.
 class _ThresholdEntry extends StatefulWidget {
-  const _ThresholdEntry({required this.api});
+  const _ThresholdEntry({required this.api, required this.appClient});
 
   final ShowcaseApi api;
+
+  /// The app's client, so the `nearest=` fact can tell it from this entry's.
+  final QueryClient appClient;
 
   @override
   State<_ThresholdEntry> createState() => _ThresholdEntryState();
@@ -645,6 +740,7 @@ class _ThresholdEntry extends StatefulWidget {
 class _ThresholdEntryState extends State<_ThresholdEntry> {
   QueryClient? _client;
   void Function()? _unsubscribeFocus;
+  void Function()? _unsubscribeOnline;
   void Function()? _unsubscribeCache;
   int _fetches = 0;
   bool _rebuildScheduled = false;
@@ -662,12 +758,15 @@ class _ThresholdEntryState extends State<_ThresholdEntry> {
     // what makes the knob's two sides comparable.
     _fetches = 0;
     _unsubscribeFocus = client.focusManager.subscribe((_) => _rebuild());
+    _unsubscribeOnline = client.onlineManager.subscribe((_) => _rebuild());
     _unsubscribeCache = client.queryCache.subscribe(_onCacheEvent);
   }
 
   void _unsubscribe() {
     _unsubscribeFocus?.call();
     _unsubscribeFocus = null;
+    _unsubscribeOnline?.call();
+    _unsubscribeOnline = null;
     _unsubscribeCache?.call();
     _unsubscribeCache = null;
   }
@@ -726,6 +825,15 @@ class _ThresholdEntryState extends State<_ThresholdEntry> {
           value: focus.isFocused(),
           onChanged: focus.setFocused,
         ),
+        // This client's own connectivity source, like the offline screen's
+        // switch is the app client's; the app's online state is untouched.
+        SwitchListTile(
+          key: const ValueKey<String>('entry-c-online'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Entry C online'),
+          value: client.onlineManager.isOnline(),
+          onChanged: client.onlineManager.setOnline,
+        ),
         QueryBuilder<int>(
           options: thresholdCounterQuery(widget.api),
           builder: (context, result) => _Reading(
@@ -734,6 +842,9 @@ class _ThresholdEntryState extends State<_ThresholdEntry> {
               'focused=${focus.isFocused()}',
               'shouldRefetchOnFocus=${focus.shouldRefetchOnFocus}',
               'fetches=$_fetches',
+              'online=${client.onlineManager.isOnline()}',
+              'fetchStatus=${result.fetchStatus.name}',
+              'nearest=${_nearest(context, appClient: widget.appClient)}',
             ],
             child: switch (result) {
               QueryPending() => const SkeletonBox(width: 200),

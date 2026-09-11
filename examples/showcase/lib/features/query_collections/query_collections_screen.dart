@@ -14,12 +14,22 @@
 /// reordering starts no request, and a second copy of an id gets its own
 /// observer over the one shared cache entry.
 ///
+/// The `Summary reader` switch adds the other shape: a `QueriesController`
+/// over the same ids — the collection as a `ValueListenable`, for a widget
+/// that is not a builder, here a `ready=n/m` line read through a
+/// `ListenableBuilder`. It is a second collection, so every entry gains a
+/// second observer, and `setQueries` follows the ids as the buttons change
+/// them.
+///
 /// Proofs (widget tests in `test/features/query_collections_test.dart`,
 /// end-to-end in `e2e/tests/query_collections.spec.ts`): opening fetches every
 /// id once; `Reverse` reorders the results without a single new request;
 /// adding an id fetches only the new one; removing one releases its observer;
 /// a duplicate id shares the cache entry (`observers=2`, still one fetch);
-/// the missing id fails alone while its neighbours keep their data.
+/// the missing id fails alone while its neighbours keep their data; and the
+/// summary reader, switched on, counts every member ready with a second
+/// observer on each entry, follows an added id with one fetch shared by both
+/// readers, and releases its observers when switched off.
 library;
 
 import 'package:flutter/material.dart';
@@ -65,6 +75,7 @@ class _QueryCollectionsScreenState extends State<QueryCollectionsScreen> {
 
   List<int> _ids = _initial;
   int _nextId = 4;
+  bool _summary = false;
 
   void _reverse() => setState(() => _ids = _ids.reversed.toList());
 
@@ -133,6 +144,26 @@ class _QueryCollectionsScreenState extends State<QueryCollectionsScreen> {
             ),
           ),
         ),
+        SwitchListTile(
+          // No subtitle: it would fold into the switch's accessible name.
+          title: const Text('Summary reader'),
+          value: _summary,
+          onChanged: (value) => setState(() => _summary = value),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            'A QueriesController over the same ids: the collection as a '
+            'ValueListenable, for a widget that is not a builder. A second '
+            'collection is a second observer on every entry — and a second '
+            'observer mounting on a stale entry refetches it once.',
+          ),
+        ),
+        if (_summary)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SummaryReader(ids: _ids),
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: QueriesBuilder<Post, String>(
@@ -165,6 +196,86 @@ class _QueryCollectionsScreenState extends State<QueryCollectionsScreen> {
             label: 'post-$id',
           ),
       ],
+    );
+  }
+}
+
+/// The collection through a `QueriesController`: created once the client is
+/// known, handed the new ids by `setQueries` whenever they change, read
+/// through a `ListenableBuilder`, disposed with the widget.
+class _SummaryReader extends StatefulWidget {
+  const _SummaryReader({required this.ids});
+
+  final List<int> ids;
+
+  @override
+  State<_SummaryReader> createState() => _SummaryReaderState();
+}
+
+class _SummaryReaderState extends State<_SummaryReader> {
+  QueriesController<Post, String>? _controller;
+
+  List<QuerySelectOptions<Post, String>> _queries(BuildContext context) {
+    final api = ShowcaseScope.apiOf(context);
+    return <QuerySelectOptions<Post, String>>[
+      for (final id in widget.ids) postTitleQuery(api, id),
+    ];
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Created here, not in `initState`: the client is an inherited widget.
+    final client = QueryClientProvider.of(context);
+    if (_controller?.client != client) {
+      _controller?.dispose();
+      _controller = QueriesController<Post, String>(client, _queries(context));
+    }
+  }
+
+  @override
+  void didUpdateWidget(_SummaryReader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ids != widget.ids) {
+      _controller!.setQueries(_queries(context));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller!;
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final results = controller.value;
+        final ready = results.where((result) => result.isSuccess).length;
+        final failed = results.where((result) => result.isError).length;
+        return Semantics(
+          container: true,
+          explicitChildNodes: true,
+          label: 'summary',
+          child: Wrap(
+            key: const ValueKey<String>('summary-facts'),
+            spacing: 12,
+            children: <Widget>[
+              Text(
+                'ready=$ready/${results.length}',
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+              Text(
+                'failed=$failed',
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

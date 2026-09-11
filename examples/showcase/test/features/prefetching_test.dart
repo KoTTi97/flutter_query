@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:showcase/features/prefetching/prefetching_screen.dart';
 import 'package:showcase/shared/api.dart';
+import 'package:showcase/shared/models.dart';
 import 'package:showcase/shared/theme.dart';
 
 import '../harness.dart';
@@ -43,6 +44,19 @@ Finder readFact(String text) => find.descendant(
       matching: find.text(text),
     );
 
+/// A view tall enough to reach the infinite-prefetch card and its strip at
+/// the very bottom: 800×1900 logical.
+void tallest(WidgetTester tester) {
+  tester.view.physicalSize = Size(800, 1900) * tester.view.devicePixelRatio;
+  addTearDown(tester.view.resetPhysicalSize);
+}
+
+/// One fact of the infinite-prefetch card, by its exact text.
+Finder infiniteFact(String text) => find.descendant(
+      of: find.byKey(const ValueKey<String>('infinite-prefetch')),
+      matching: find.text(text),
+    );
+
 /// Puts a value in the counter's cache entry, and moves the server's counter
 /// past it: from here a read's answer says whether it came from the cache
 /// (`0`) or from the backend (`1`).
@@ -62,6 +76,7 @@ Future<void> seedThenMoveTheServer(WidgetTester tester, Harness h) async {
 }
 
 void main() {
+  infinitePrefetchTests();
   showcaseTest('a prefetch is one request and marks the row, unobserved',
       (tester, h) async {
     tall(tester);
@@ -278,5 +293,39 @@ void main() {
     expect(readFact('requests=1'), findsOneWidget);
     expect(h.fact('counter', 'updates=1'), findsOneWidget);
     expect(h.requests('GET', '/api/counter'), 1);
+  });
+}
+
+void infinitePrefetchTests() {
+  showcaseTest(
+      'an infinite prefetch is one request for the first page, held by '
+      'nobody, and a second one within staleTime is a no-op',
+      (tester, h) async {
+    tallest(tester);
+    await h.open(tester, '/prefetching');
+    expect(infiniteFact('pages=0'), findsOneWidget);
+    expect(h.fact('projects', 'status=absent'), findsOneWidget);
+
+    await tester.tap(find.text('Prefetch the first page'));
+    await tester.pumpAndSettle();
+
+    expect(infiniteFact('pages=1'), findsOneWidget);
+    expect(infiniteFact('rows=10'), findsOneWidget);
+    expect(h.fact('projects', 'status=success'), findsOneWidget);
+    expect(h.fact('projects', 'observers=0'), findsOneWidget);
+    expect(h.fact('projects', 'fetches=1'), findsOneWidget);
+    expect(h.requests('GET', '/api/projects'), 1);
+    expect(
+      h.client
+          .getInfiniteQueryData<ProjectSlice, int>(projectsPrefetchKey)!
+          .pageParams,
+      <int>[0],
+    );
+
+    // Fresh for five minutes: the same call hands back the cached page.
+    await tester.tap(find.text('Prefetch the first page'));
+    await tester.pumpAndSettle();
+    expect(h.fact('projects', 'fetches=1'), findsOneWidget);
+    expect(h.requests('GET', '/api/projects'), 1);
   });
 }

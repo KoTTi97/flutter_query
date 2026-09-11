@@ -24,9 +24,12 @@ async function setOnline(page: Page, online: boolean) {
   await expect(say(page, `online=${online}`)).toBeVisible()
 }
 
-async function pickMode(page: Page, mode: string) {
-  await page.getByRole('radio', { name: mode, exact: true }).click()
-}
+// A segment of one knob: the network mode and the reconnect knob both have
+// an `always`, so the knob's group comes first.
+const pick = (page: Page, knob: 'network-mode' | 'on-reconnect', label: string) =>
+  page.getByRole('group', { name: knob, exact: true }).getByRole('radio', { name: label, exact: true }).click()
+
+const pickMode = (page: Page, mode: string) => pick(page, 'network-mode', mode)
 
 async function addTodo(page: Page, text: string) {
   const field = page.getByRole('textbox')
@@ -157,4 +160,31 @@ test('offlineFirst: the first attempt goes out offline and the retry after it pa
   // which offline it may not.
   await expect(say(page, 'query fetchStatus=paused')).toBeVisible()
   expect(await scenario.count('GET', TODOS)).toBe(attempts + 1)
+})
+
+test('refetchOnReconnect: never leaves the todos alone on reconnect, always refetches them', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/offline')
+  await expect(fact(page, 'todos', 'fetchStatus=idle')).toBeVisible()
+  expect(await scenario.count('GET', TODOS)).toBe(1)
+
+  // Nothing paused: the reconnect alone decides, and `never` says no.
+  await pick(page, 'on-reconnect', 'never')
+  await setOnline(page, false)
+  await setOnline(page, true)
+  // A negative needs a moment to be worth anything.
+  await page.waitForTimeout(1_000)
+  expect(await scenario.count('GET', TODOS)).toBe(1)
+  await expect(fact(page, 'todos', 'fetches=1')).toBeVisible()
+
+  await pick(page, 'on-reconnect', 'always')
+  await setOnline(page, false)
+  await setOnline(page, true)
+  await expect(fact(page, 'todos', 'fetches=2')).toBeVisible()
+  await expect(fact(page, 'todos', 'fetchStatus=idle')).toBeVisible()
+  expect(await scenario.count('GET', TODOS)).toBe(2)
 })

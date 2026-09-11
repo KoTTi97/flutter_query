@@ -16,7 +16,7 @@ import '../harness.dart';
 /// The strips stack up under the cards, and the test font is a square per
 /// glyph, so the default 600 px surface would leave the later ones unbuilt.
 void tall(WidgetTester tester) {
-  tester.view.physicalSize = const Size(900, 2400);
+  tester.view.physicalSize = const Size(900, 2800);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 }
@@ -121,6 +121,46 @@ void main() {
       expect(h.fact('post-$id', 'status=success'), findsOneWidget);
     }
     expect(find.text('Local development: setup guide'), findsOneWidget);
+  });
+
+  showcaseTest(
+      'a QueriesController reads the same collection as a ValueListenable, '
+      'with a second observer on every entry', (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/query-collections');
+
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ready=3/3'), findsOneWidget);
+    expect(find.text('failed=0'), findsOneWidget);
+    for (final id in <int>[1, 2, 3]) {
+      // A second collection is a second observer, and a second observer on
+      // a stale entry is one refetch of it.
+      expect(h.fact('post-$id', 'observers=2'), findsOneWidget);
+      expect(h.requests('GET', '/api/posts/$id'), 2);
+    }
+
+    // `setQueries` follows the ids: both readers add the newcomer in one
+    // build, and the entry is fetched once for the two of them.
+    await tester.tap(find.text('Add post'));
+    await tester.pumpAndSettle();
+    expect(find.text('ready=4/4'), findsOneWidget);
+    expect(h.fact('post-4', 'observers=2'), findsOneWidget);
+    expect(h.requests('GET', '/api/posts/4'), 1);
+
+    await tester.tap(find.text('Add missing id'));
+    await tester.pumpAndSettle();
+    expect(find.text('ready=4/5'), findsOneWidget);
+    expect(find.text('failed=1'), findsOneWidget);
+
+    // Switched off, the controller is disposed and its observers go.
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('summary-facts')), findsNothing);
+    for (final id in <int>[1, 2, 3, 4]) {
+      expect(h.fact('post-$id', 'observers=1'), findsOneWidget);
+    }
   });
 
   showcaseTest('leaving the screen releases every observer', (tester, h) async {

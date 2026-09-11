@@ -191,3 +191,37 @@ test.describe('imperative reads', () => {
     expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(1)
   })
 })
+
+// The fourth card and its strip sit under everything else.
+test.describe('the infinite twin', () => {
+  test.use({ viewport: { width: 1280, height: 2000 } })
+
+  const infinite = (page: Page, text: string) =>
+    page.getByRole('group', { name: 'infinite prefetch', exact: true }).getByText(text, { exact: true })
+
+  test('an infinite prefetch is one request for the first page, held by nobody; a second is a no-op', async ({
+    page,
+    open,
+    scenario,
+  }) => {
+    await scenario.config({ latency: 0 })
+    await open('/prefetching')
+    await expect(infinite(page, 'pages=0')).toBeVisible()
+    await expect(fact(page, 'projects', 'status=absent')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Prefetch the first page', exact: true }).click()
+
+    await expect(infinite(page, 'pages=1')).toBeVisible()
+    await expect(infinite(page, 'rows=10')).toBeVisible()
+    await expect(fact(page, 'projects', 'status=success')).toBeVisible()
+    await expect(fact(page, 'projects', 'observers=0')).toBeVisible()
+    await expect(fact(page, 'projects', 'fetches=1')).toBeVisible()
+    expect(await scenario.count('GET', /^\/api\/projects$/)).toBe(1)
+
+    // Fresh for five minutes: the same call hands back the cached page.
+    await page.getByRole('button', { name: 'Prefetch the first page', exact: true }).click()
+    await page.waitForTimeout(500)
+    await expect(fact(page, 'projects', 'fetches=1')).toBeVisible()
+    expect(await scenario.count('GET', /^\/api\/projects$/)).toBe(1)
+  })
+})

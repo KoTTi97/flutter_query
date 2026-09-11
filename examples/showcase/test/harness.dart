@@ -14,7 +14,12 @@ import 'fake_backend.dart';
 
 class Harness {
   Harness({DefaultOptions? defaults, this.scenario = 'widget-test'})
-      : client = QueryClient(defaultOptions: defaults) {
+      // On the shared notify manager, as `main.dart` builds the app's: the
+      // `four-call-styles` screen batches through `NotifyManager.shared`.
+      : client = QueryClient(
+          defaultOptions: defaults,
+          notifyManager: NotifyManager.shared,
+        ) {
     api = ShowcaseApi(
       dio: Dio(BaseOptions(baseUrl: 'http://backend.test/api'))
         ..httpClientAdapter = backend,

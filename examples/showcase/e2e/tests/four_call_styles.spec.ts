@@ -2,9 +2,9 @@ import type { Page } from '@playwright/test'
 
 import { expect, fact, holdRequest, test } from './fixtures'
 
-// Seven cards and two strips: taller than the default viewport, and a lazily
-// built list only has what is in view.
-test.use({ viewport: { width: 1280, height: 3400 } })
+// Eight cards and three strips: taller than the default viewport, and a
+// lazily built list only has what is in view.
+test.use({ viewport: { width: 1280, height: 4600 } })
 
 const POSTS = '**/api/posts*'
 
@@ -23,6 +23,11 @@ const listener = (page: Page, text: string) =>
 
 const mutation = (page: Page, name: string, text: string) =>
   page.getByRole('group', { name: `mutation ${name}`, exact: true }).getByText(text, { exact: true })
+
+/// One fact of card 8's reader called `name`: `pages=1` is said by all three
+/// and `status=success` by the strip too.
+const infinite = (page: Page, name: string, text: string) =>
+  page.getByRole('group', { name: `infinite ${name}`, exact: true }).getByText(text, { exact: true })
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 
@@ -183,4 +188,90 @@ test('the listener reacts to a change of the data and never rebuilds its child',
   // the listener — the child it was handed built once, on mount.
   await expect(listener(page, 'child-builds=1')).toBeVisible()
   expect(await scenario.count('GET', /^\/api\/posts$/)).toBe(2)
+})
+
+test('two plain writes are two transitions to the listener, two batched ones are one', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/four-call-styles')
+  await expect(listener(page, 'listener-calls=1')).toBeVisible()
+
+  await button(page, 'Drop two posts').click()
+
+  // Each write was delivered as it happened: 30 -> 29, then 29 -> 28.
+  await expectEveryReader(page, 'posts=28')
+  await expect(listener(page, 'listener-calls=3')).toBeVisible()
+  await expect(listener(page, '#3 success/idle:29->success/idle:28')).toBeVisible()
+
+  await button(page, 'Drop two posts, batched').click()
+
+  // The batch held both notifications, and each carries the latest value:
+  // one transition, straight from 28 to 26.
+  await expectEveryReader(page, 'posts=26')
+  await expect(listener(page, 'listener-calls=4')).toBeVisible()
+  await expect(listener(page, '#4 success/idle:28->success/idle:26')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/posts$/)).toBe(1)
+})
+
+test('the mutation listener hears one call per state change and nothing on mount', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/four-call-styles')
+  await expect(mutation(page, 'controller', 'status=idle')).toBeVisible()
+  await expect(mutation(page, 'controller', 'mutation-listener-calls=0')).toBeVisible()
+  await expect(mutation(page, 'controller', 'mutation-last=none')).toBeVisible()
+
+  const hold = holdRequest(page, '**/api/counter/increment*')
+  await button(page, 'Increment (controller)').click()
+
+  await expect(mutation(page, 'controller', 'status=pending')).toBeVisible()
+  await expect(mutation(page, 'controller', 'mutation-listener-calls=1')).toBeVisible()
+  await expect(mutation(page, 'controller', 'mutation-last=idle->pending')).toBeVisible()
+  await hold.release()
+
+  await expect(mutation(page, 'controller', 'status=success')).toBeVisible()
+  await expect(mutation(page, 'controller', 'data=1')).toBeVisible()
+  await expect(mutation(page, 'controller', 'mutation-listener-calls=2')).toBeVisible()
+  await expect(mutation(page, 'controller', 'mutation-last=pending->success')).toBeVisible()
+  await expect(page.getByText('counter=1', { exact: true })).toBeVisible()
+  await expect(mutation(page, 'builder', 'status=idle')).toBeVisible()
+  await expect(mutation(page, 'context', 'status=idle')).toBeVisible()
+  expect(await scenario.count('POST', /^\/api\/counter\/increment$/)).toBe(1)
+})
+
+test('the infinite shapes: three readers share one entry, and Load next reaches all three', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/four-call-styles')
+
+  for (const name of ['context', 'mixin', 'observer']) {
+    await expect(infinite(page, name, 'pages=1'), name).toBeVisible()
+    await expect(infinite(page, name, 'status=success'), name).toBeVisible()
+  }
+  await expect(fact(page, 'styles', 'observers=3')).toBeVisible()
+  await expect(fact(page, 'styles', 'fetches=1')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/projects$/)).toBe(1)
+  // Nothing on mount; the first page landing is the first call.
+  await expect(infinite(page, 'mixin', 'infinite-listener-calls=1')).toBeVisible()
+  await expect(infinite(page, 'mixin', 'infinite-last=none->1')).toBeVisible()
+
+  await button(page, 'Load next').click()
+
+  for (const name of ['context', 'mixin', 'observer']) {
+    await expect(infinite(page, name, 'pages=2'), name).toBeVisible()
+  }
+  await expect(fact(page, 'styles', 'fetches=2')).toBeVisible()
+  await expect(fact(page, 'styles', 'observers=3')).toBeVisible()
+  await expect(infinite(page, 'mixin', 'infinite-listener-calls=2')).toBeVisible()
+  await expect(infinite(page, 'mixin', 'infinite-last=1->2')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/projects$/)).toBe(2)
 })

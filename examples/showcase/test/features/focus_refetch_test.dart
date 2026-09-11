@@ -325,6 +325,68 @@ void main() {
       expect(facts('reader-c', 'fetches=1'), findsOneWidget);
     });
 
+    showcaseTest(
+        'isAppShown: under hidden an inactive blip is an absence, under shown '
+        'it is not', (tester, h) async {
+      await openThreshold(tester, h, 'none');
+
+      // `hidden`: only `resumed` is the app being looked at, so the blip
+      // drops the focus and the return raises the event — and refetches.
+      await pick(tester, 'inactive-is', 'hidden');
+      // The mapping reached the client as it stands: no new client, so the
+      // count did not start again.
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+      await inactiveBlip(tester);
+      expect(facts('reader-c', 'focused=true'), findsOneWidget);
+      expect(facts('reader-c', 'shouldRefetchOnFocus=true'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=2'), findsOneWidget);
+
+      // `shown`: the same blip is an interruption, not an absence — on any
+      // platform, which is what saying it outright is for.
+      await pick(tester, 'inactive-is', 'shown');
+      await inactiveBlip(tester);
+      expect(facts('reader-c', 'focused=true'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=2'), findsOneWidget);
+    });
+
+    showcaseTest(
+        'initialOnlineStatus offline: entry C mounts paused and fetches once '
+        'its switch puts it online', (tester, h) async {
+      await openThreshold(tester, h, 'none');
+      expect(facts('reader-c', 'online=true'), findsOneWidget);
+      expect(h.requests('GET', '/api/counter'), 1);
+
+      // A new key, a new client, mounted believing it is offline: the fetch
+      // is dispatched and pauses at once, and nothing leaves the app.
+      await pick(tester, 'initial-online', 'offline');
+      expect(facts('reader-c', 'online=false'), findsOneWidget);
+      expect(facts('reader-c', 'fetchStatus=paused'), findsOneWidget);
+      expect(facts('reader-c', 'fetches=1'), findsOneWidget);
+      expect(h.requests('GET', '/api/counter'), 1);
+      // The app's own client was never told anything.
+      expect(h.client.onlineManager.isOnline(), isTrue);
+
+      await tester.tap(find.byKey(const ValueKey<String>('entry-c-online')));
+      await tester.pumpAndSettle();
+      expect(facts('reader-c', 'online=true'), findsOneWidget);
+      expect(facts('reader-c', 'fetchStatus=idle'), findsOneWidget);
+      expect(find.text('Server counter 0'), findsOneWidget);
+      expect(h.requests('GET', '/api/counter'), 2);
+    });
+
+    showcaseTest(
+        'maybeOf names the nearest provider: the app\'s above, '
+        'entry C\'s below', (tester, h) async {
+      await openThreshold(tester, h, 'none');
+
+      expect(facts('focus-state', 'nearest=app'), findsOneWidget);
+      expect(facts('reader-c', 'nearest=entry C'), findsOneWidget);
+      // And still after the knob has swapped the nested client for another.
+      await pick(tester, 'min-background', 'long');
+      expect(facts('reader-c', 'nearest=entry C'), findsOneWidget);
+      expect(facts('focus-state', 'nearest=app'), findsOneWidget);
+    });
+
     showcaseTest('the threshold knob swaps the client entry C runs on',
         (tester, h) async {
       await openThreshold(tester, h, 'none');

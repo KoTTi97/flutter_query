@@ -8,6 +8,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:showcase/features/load_more/load_more_screen.dart';
+import 'package:showcase/shared/models.dart';
 import 'package:showcase/shared/theme.dart';
 
 import '../harness.dart';
@@ -233,6 +235,28 @@ void main() {
     expect(h.fact('projects', 'fetchStatus=idle'), findsOneWidget);
     expect(h.fact('projects', 'fetches=2'), findsOneWidget);
     expect(h.requests('GET', '/api/projects'), 2);
+  });
+
+  showcaseTest(
+      'About reads the pages off the cache with getInfiniteQueryData, no '
+      'observer and no request', (tester, h) async {
+    tall(tester);
+    await h.open(tester, '/load-more');
+    await tapLoadMore(tester);
+    expect(listFact('pages=2'), findsOneWidget);
+
+    await tester.tap(find.text('Go to about'));
+    await tester.pumpAndSettle();
+
+    expect(h.fact('projects', 'observers=0'), findsOneWidget);
+    expect(find.text('cached pages=2'), findsOneWidget);
+    expect(find.text('cached rows=20'), findsOneWidget);
+    expect(h.requests('GET', '/api/projects'), 2);
+    // The same read, typed by hand: two pages, twenty rows.
+    final cached =
+        h.client.getInfiniteQueryData<ProjectSlice, int>(projectsInfiniteKey)!;
+    expect(cached.pageParams, <int>[0, 10]);
+    expect(cached.pages.expand((page) => page.items), hasLength(20));
   });
 
   showcaseTest('a refetch re-requests every held page, first to last',

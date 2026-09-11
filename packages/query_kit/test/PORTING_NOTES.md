@@ -2400,6 +2400,57 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   delete re-seeds every entry and would mask the removal; against the old
   code it fails with the detail key in the removed list.
 
+- **C39 — the showcase's catalogue had gaps: fourteen public members with no
+  screen and no knob** (deep-dive 3.26, architecture review; #46). Re-measured
+  first against the surface the API-shape ticket (#43) left, by `grep` over
+  `examples/showcase/lib/`: two of the list are moot — `RetryDelay.custom` is
+  `RetryDelay.dynamic` now (C23.11) and `queryWidgetTest` is no export any
+  more (ADR-0002, `541ab44`), so it cannot be "used by no example test" —
+  and every other member still exists and still had zero hits. Each got a
+  knob on the screen it is a variant of, with one widget test and one
+  end-to-end test, or, where no screen fit, a screen: `RetryPolicy.always`
+  and `RetryDelay.dynamic` are segments of the `retry` screen's two knobs (a
+  404 waits four seconds, anything else 200 ms, so the delay is provably
+  computed from the error); `refetchOnReconnect` is an `On reconnect` knob on
+  `offline`, whose two segmented buttons now sit in named semantics groups
+  because both have an `always`; `QueryClientProvider.create`, `isAppShown`,
+  `initialOnlineStatus` and `maybeOf` all live on `focus-refetch`'s entry C,
+  which now runs under `QueryClientProvider.create` (the provider builds,
+  owns and clears the client; a new key is a new client — which retired the
+  screen's hand-rolled clear-after-the-frame dance), with an `Inactive is`
+  knob (`platform` / `shown` / `hidden`), an `Initial online status` knob, an
+  `Entry C online` switch and `nearest=` facts at both levels;
+  `InfinitePageContext.direction` is the `lastPage=<cursor> <direction>` fact
+  on `max-pages` (`forward` for the first page, `Load next` and every page of
+  a refetch, `backward` for `Load previous`); `getInfiniteQueryData` is what
+  `load-more`'s About view reads its `cached pages=` from, with no observer;
+  `client.infiniteQuery` is a fourth card on `prefetching` (the first page,
+  held by nobody, a second press a no-op); `watchInfiniteQuery`,
+  `context.infiniteQuery`, `client.observeInfinite` and
+  `InfiniteQueryListener` are `four-call-styles`' eighth card, and
+  `MutationListener` its seventh card's third panel over a
+  `MutationController`; `NotifyManager.shared` is the `Drop two posts,
+  batched` button on the same screen's listener card — the app's client and
+  the widget-test harness's are now built on the shared manager, and the
+  batched pair reaches the listener as one transition to the second value
+  where the plain pair is two, which is C19's promise made visible;
+  `QueriesController` is `query-collections`' `Summary reader` switch, a
+  second collection over the same ids (`observers=2` per entry, `setQueries`
+  following the buttons); and `QueryDataTypeError` with
+  `MissingMutationFunctionError` got the one new screen, `diagnostics` (four
+  widget tests, four end-to-end specs, its own strip, no backend scenario:
+  the counter route serves it, so the contract test is unchanged). Two
+  things the work turned up beyond the list: Flutter web maps a `blur`
+  dispatched on the window to `AppLifecycleState.inactive` and a `focus` to
+  `resumed`, so headless Chromium *can* stage a lifecycle transition — the
+  `isAppShown` end-to-end test uses one, and the focus screen's "reports no
+  transition" wording is softened accordingly; and `InfiniteData.flatten<T>`
+  on a raw cache read throws C20's `ArgumentError` when the pages are not
+  iterables, which the About view and the prefetch card hit before counting
+  `page.items` instead — the guard did its job. Catalogue: 27 screens, 217
+  widget tests (183 `showcaseTest`s plus the 17 fake-side contract cases, the
+  figure the docs count), 163 end-to-end specs.
+
 - **C44 — the showcase's one flaky end-to-end test was a Playwright
   strict-mode double match, not the SnackBar's duration** (release R14
   confirmed; the deep-dive's "30 s SnackBar" explanation refuted; #46).

@@ -62,7 +62,13 @@ class ShowcaseApp extends StatefulWidget {
 }
 
 class _ShowcaseAppState extends State<ShowcaseApp> {
-  late final QueryClient _client = widget.client ?? QueryClient();
+  /// On the process-wide `NotifyManager.shared`, which is not the default —
+  /// a client constructed without one gets a manager of its own — so that a
+  /// `NotifyManager.shared.batch(...)` anywhere in the app holds this
+  /// client's notifications too; the `four-call-styles` screen shows what
+  /// that buys. The widget-test harness builds its client the same way.
+  late final QueryClient _client =
+      widget.client ?? QueryClient(notifyManager: NotifyManager.shared);
   late final CacheStats _stats = CacheStats(_client);
 
   @override

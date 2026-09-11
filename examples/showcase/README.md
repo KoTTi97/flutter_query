@@ -39,27 +39,28 @@ example it mirrors, and how it is proven. Its widget tests are
 | `default-query-function` | `QueryDefaults.queryFn` deriving the path from the key; per-key defaults | `default-query-function` |
 | `dependent-queries` | `Enabled.when`: a query that waits for another's data | — |
 | `parallel-queries` | several queries in one widget; `client.isFetching` | — |
-| `query-collections` | `QueriesBuilder` over a list that grows, shrinks and reorders; duplicate keys; partial failure | — |
-| `prefetching` | `client.query(...).ignore()` before the screen that needs it, and `revalidateIfStale` | `prefetching` |
+| `query-collections` | `QueriesBuilder` over a list that grows, shrinks and reorders; duplicate keys; partial failure; the same collection as a `QueriesController` | — |
+| `prefetching` | `client.query(...).ignore()` before the screen that needs it, `revalidateIfStale`, and `client.infiniteQuery(...).ignore()` for the first page of an infinite one | `prefetching` |
 | `select-and-sharing` | `select`, `QuerySelectBuilder`, `buildWhen`, `structuralSharing`, rebuild counts | — |
 | `initial-and-placeholder` | `InitialData` with `initialDataUpdatedAt` and its lazy `initialDataUpdatedAtCompute`, versus `PlaceholderData`, `isPlaceholderData` | — |
 | `stale-and-gc` | every `StaleTime` and `GcTime` value, watched in the inspector | — |
 | `pagination` | `PlaceholderData.keepPrevious()` keeping the previous page, prefetching the next | `pagination` |
-| `load-more` | an infinite query appending pages on scroll; cache survival across navigation | `load-more-infinite-scroll` |
-| `max-pages` | pages in both directions with `maxPages: 3` | `infinite-query-with-max-pages` |
+| `load-more` | an infinite query appending pages on scroll; cache survival across navigation, read back with `getInfiniteQueryData` | `load-more-infinite-scroll` |
+| `max-pages` | pages in both directions with `maxPages: 3`; the page context's `direction` | `infinite-query-with-max-pages` |
 | `mutations` | `mutate`, `mutateAsync`, `reset`, `isMutating`, per-call callbacks, `MutationScope` | — |
 | `optimistic-updates` | the write shown before the answer, from `variables` and from the cache with rollback | `nextjs-app-optimistic-updates` |
 | `mutation-state` | `MutationStateController`: every running mutation in the cache, read by a widget that owns none | — |
 | `playground` | todos with live stale time, gc time, latency and error rate | `playground` |
 | `invalidation-and-filters` | invalidate, refetch, reset, remove; prefix, exact, `type`, `predicate` | — |
 | `auto-refetching` | `RefetchInterval`, in the foreground and not | `auto-refetching` |
-| `retry` | `RetryPolicy`, `RetryDelay`, `failureCount`, loading versus refetch errors | — |
+| `retry` | every `RetryPolicy` (`never`, `times`, `always`, `when`) and `RetryDelay` (`fixed`, `exponential`, `dynamic`), `failureCount`, loading versus refetch errors | — |
 | `cancellation` | `signal` to the transport, `cancelQueries`, search-as-you-type | — |
-| `offline` | `NetworkMode`, paused mutations, `resumePausedMutations`, `onlineStatus` | `offline` |
-| `focus-refetch` | `RefetchOn` for focus and mount, and `refetchMinBackgroundDuration` | — |
-| `four-call-styles` | the same query through `context.query`, `QueryBuilder`, `QueryMixin`, `QueryController`, plus `QueryListener` for a side effect | — |
+| `offline` | `NetworkMode`, paused mutations, `resumePausedMutations`, `onlineStatus`, `refetchOnReconnect` | `offline` |
+| `focus-refetch` | `RefetchOn` for focus and mount, `refetchMinBackgroundDuration`, and the provider's own knobs on a nested `QueryClientProvider.create`: `isAppShown`, `initialOnlineStatus`, `maybeOf` | — |
+| `four-call-styles` | the same query through `context.query`, `QueryBuilder`, `QueryMixin`, `QueryController`, plus `QueryListener` for a side effect and a batched write through `NotifyManager.shared`; the mutation and infinite counterparts — `MutationListener`, `context.infiniteQuery`, `watchInfiniteQuery`, `InfiniteQueryListener`, `client.observeInfinite` | — |
 | `global-callbacks` | `QueryCache`/`MutationCache` callbacks, `meta` | — |
 | `cache-inspector` | every entry and event of both caches, live | (devtools) |
+| `diagnostics` | what the library throws, and when: `QueryDataTypeError` on a read or write of the wrong type, `MissingMutationFunctionError` and its cure `setMutationDefaults` | — |
 
 Not here, because the port does not have them: hydration and persisters,
 `useQueries`' `combine` step (the homogeneous list is `query-collections`

@@ -54,7 +54,7 @@ Judge it on that basis. The evidence is all in the repository.
 |---|---|
 | [`packages/query_kit/`](packages/query_kit) | The pure-Dart core: queries, mutations, infinite queries, observers, client and caches. No Flutter dependency. Every applicable upstream suite ported case-for-case; the audit is [PORTING_NOTES.md](packages/query_kit/test/PORTING_NOTES.md). |
 | [`packages/query_kit_flutter/`](packages/query_kit_flutter) | The Flutter binding: `QueryClientProvider`, listenable controllers, builder widgets, a `State` mixin and `context.query(...)`. Four equal call styles, no dependency beyond Flutter. |
-| [`examples/showcase/`](examples/showcase) | Every feature of the library as its own screen — 26 of them, on a dummy backend built for it, each with widget tests and Playwright end-to-end tests in a real browser. The catalogue is its README. |
+| [`examples/showcase/`](examples/showcase) | Every feature of the library as its own screen — 27 of them, on a dummy backend built for it, each with widget tests and Playwright end-to-end tests in a real browser. The catalogue is its README. |
 | [`examples/task_manager/`](examples/task_manager) | One whole small app rather than a catalogue: a to-do manager against a deliberately slow backend with scripted failures, and an acceptance test per row of its feature checklist. |
 | [`website/`](website) | The documentation site — Docusaurus, built in CI, deployed nowhere yet. `npm ci && npm start`. |
 | [`examples/doc_snippets/`](examples/doc_snippets) | Every Dart sample on that site, as code the analyzer sees, so a sample that stops compiling fails the build. |

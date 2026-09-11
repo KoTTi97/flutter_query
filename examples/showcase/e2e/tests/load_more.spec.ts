@@ -14,6 +14,10 @@ const listFact = (page: Page, text: string) =>
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 
+// The About view's facts, read off the cache with `getInfiniteQueryData`.
+const aboutFact = (page: Page, text: string) =>
+  page.getByRole('group', { name: 'about facts', exact: true }).getByText(text, { exact: true })
+
 /// How many project requests asked for `cursor` — the path is the same for
 /// every page, only the query string tells them apart.
 const requestsAt = (log: LogEntry[], cursor: number) =>
@@ -143,5 +147,27 @@ test('going to About and back shows the pages from the cache, no request', async
   await hold.release()
 
   await expect(fact(page, 'projects', 'fetches=2')).toBeVisible()
+  expect(await scenario.count('GET', /^\/api\/projects$/)).toBe(2)
+})
+
+test('About reads the pages off the cache with getInfiniteQueryData, no observer and no request', async ({
+  page,
+  open,
+  scenario,
+}) => {
+  await scenario.config({ latency: 0 })
+  await open('/load-more')
+  await expect(listFact(page, 'pages=1')).toBeVisible()
+  await button(page, 'Load more').click()
+  await expect(listFact(page, 'pages=2')).toBeVisible()
+
+  const hold = holdRequest(page, '**/api/projects*')
+  await button(page, 'Go to about').click()
+
+  await expect(fact(page, 'projects', 'observers=0')).toBeVisible()
+  await expect(aboutFact(page, 'cached pages=2')).toBeVisible()
+  await expect(aboutFact(page, 'cached rows=20')).toBeVisible()
+  expect(hold.seen).toBe(0)
+  await hold.release()
   expect(await scenario.count('GET', /^\/api\/projects$/)).toBe(2)
 })
