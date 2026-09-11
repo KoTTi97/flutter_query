@@ -306,16 +306,21 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     }
   }
 
-  /// Emits [QueryObserverAdded]. Called by [Query.addObserver]; not for user
-  /// code.
+  /// Emits [QueryObserverAdded]. Called by [Query.addObserver] through
+  /// [QueryCacheRef]; not for user code.
   @internal
-  void notifyObserverAdded(Query<Object?> query, QueryObserverRef observer) =>
+  @override
+  void onQueryObserverAdded(Query<Object?> query, QueryObserverRef observer) =>
       notify(QueryObserverAdded(query, observer));
 
-  /// Emits [QueryObserverRemoved]. Called by [Query.removeObserver]; not for
-  /// user code.
+  /// Emits [QueryObserverRemoved]. Called by [Query.removeObserver] through
+  /// [QueryCacheRef]; not for user code.
   @internal
-  void notifyObserverRemoved(Query<Object?> query, QueryObserverRef observer) =>
+  @override
+  void onQueryObserverRemoved(
+    Query<Object?> query,
+    QueryObserverRef observer,
+  ) =>
       notify(QueryObserverRemoved(query, observer));
 
   /// Emits [QueryObserverOptionsUpdated]. Called by the observer's `setOptions`

@@ -83,6 +83,14 @@ abstract interface class QueryCacheRef {
     Object error,
     StackTrace stackTrace,
   );
+
+  /// Told when [observer] attached to [query]; the cache turns it into a
+  /// `QueryObserverAdded` event.
+  void onQueryObserverAdded(Query<Object?> query, QueryObserverRef observer);
+
+  /// Told when [observer] detached from [query]; the cache turns it into a
+  /// `QueryObserverRemoved` event.
+  void onQueryObserverRemoved(Query<Object?> query, QueryObserverRef observer);
 }
 
 /// Rewrites how a fetch runs.
@@ -642,7 +650,7 @@ class Query<TQueryData> extends Removable {
     if (!_observers.contains(observer)) {
       _observers.add(observer);
       clearGcTimeout();
-      client.queryCache.notifyObserverAdded(this, observer);
+      _cache.onQueryObserverAdded(this, observer);
     }
   }
 
@@ -674,7 +682,7 @@ class Query<TQueryData> extends Removable {
       scheduleGc();
     }
 
-    client.queryCache.notifyObserverRemoved(this, observer);
+    _cache.onQueryObserverRemoved(this, observer);
   }
 
   /// Marks the data stale, dispatching [QueryInvalidateAction] unless it

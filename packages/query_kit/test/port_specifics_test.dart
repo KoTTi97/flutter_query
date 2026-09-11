@@ -2922,6 +2922,72 @@ void ninthReview() {
     expect('${observer.currentResult}', 'MutationIdle<int, String>()');
     client.clear();
   });
+
+  // C54 — a query held its cache twice: state and fetch events went to the
+  // cache that built it, observer events to `client.queryCache`. The two are
+  // the same object on every path the port takes, but `QueryCache.build` is
+  // public, so one query could send its two kinds of event to two caches.
+  test(
+      'C54 a query built by a foreign cache sends its observer events there '
+      'too, not to its client\'s cache', () {
+    final foreign = QueryCache();
+    final client = testClient();
+    final key = queryKey();
+    final onForeign = <QueryCacheEvent>[];
+    final onClients = <QueryCacheEvent>[];
+    foreign.subscribe(onForeign.add);
+    client.queryCache.subscribe(onClients.add);
+
+    final query = foreign.build<int>(
+      client,
+      client.defaultQueryOptions(QueryOptions<int>(queryKey: key)),
+    );
+    final observer = _StubObserverRef(client, key);
+    query.addObserver(observer);
+    query.removeObserver(observer);
+
+    expect(onForeign.whereType<QueryObserverAdded>(), hasLength(1));
+    expect(onForeign.whereType<QueryObserverRemoved>(), hasLength(1));
+    expect(onClients, isEmpty,
+        reason: 'the client\'s own cache never held this query');
+    foreign.clear();
+    client.clear();
+  });
+}
+
+/// The eight members [Query] asks of an observer, answered with the quietest
+/// value each: enough to attach and detach without the query fetching or
+/// refetching. Only C54's case needs one.
+class _StubObserverRef implements QueryObserverRef {
+  _StubObserverRef(this.client, this.key);
+
+  final QueryClient client;
+  final QueryKey key;
+
+  @override
+  void onQueryUpdate() {}
+
+  @override
+  bool get isEnabledForQuery => false;
+
+  @override
+  bool get isStaticForQuery => false;
+
+  @override
+  bool get currentResultIsStale => false;
+
+  @override
+  bool shouldFetchOnWindowFocus() => false;
+
+  @override
+  bool shouldFetchOnReconnect() => false;
+
+  @override
+  void refetchOnEvent() {}
+
+  @override
+  DefaultedQueryOptions<Object?> get observerQueryOptions =>
+      client.defaultQueryOptions(QueryOptions<int>(queryKey: key));
 }
 
 Duration _oneSecond(int failureCount, Object error) =>

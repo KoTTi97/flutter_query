@@ -2735,3 +2735,41 @@ it has been read as dead weight once and will be again.
 
 **What proves nothing changed:** `dart test` 586, unchanged and unrewritten —
 the edit is one dartdoc.
+
+### C54 — the `*Ref` seams, and `Query`'s two ways to the cache ([#64](https://github.com/KoTTi97/flutter_query/issues/64), [#65](https://github.com/KoTTi97/flutter_query/issues/65))
+
+**The seams stay.** The row is not an unearned abstraction, it is one
+**incomplete interface**, and its twin proves it: `MutationCacheRef` has ten
+members (§8 is right, not nine) including `onMutationObserverAdded` /
+`onMutationObserverRemoved`, and `Mutation` therefore needs no second
+reference to its cache. `QueryCacheRef` had four, was missing exactly that
+pair, and `Query` reached through `client.queryCache` for exactly those two
+calls (`query.dart:645`, `:677`) while sending state, removal and fetch events
+to `_cache`. Same design, one side unfinished.
+
+**What moved.** `QueryCacheRef` gains `onQueryObserverAdded` and
+`onQueryObserverRemoved`; `QueryCache`'s `notifyObserverAdded` /
+`notifyObserverRemoved` are those members now (renamed, `@internal` and
+`@override` like their neighbours — they were `@internal`, so no public
+surface changes); `Query` names `_cache` for all six and `client.queryCache`
+nowhere. `client` stays: it is still how a query reaches
+`defaultQueryOptions`, `focusManager`, `onlineManager`, `notifyManager` and
+`client.query`, and none of those is a cache.
+
+**Why it is a bug and not a tidy-up.** The two references are the same object
+on every path the port takes — the ported `should be able to limit cache size`
+(`query_cache_test.dart:141`) builds a `QueryCache()` and *then* hands it to
+the client, which keeps them equal — but `QueryCache.build` is public, so
+`otherCache.build(client, options)` is expressible and would have split one
+query's events across two caches: its state to the cache that built it, its
+observers to the client's. Nothing would have noticed.
+
+**Refuted, and recorded so nobody re-finds it:** the "unchecked downcast" at
+`query.dart:710-717` casts *options*, not a cache.
+
+**What proves the behaviour did not change:** `dart test` 586 → 587, the one
+new case being the regression `C54 a query built by a foreign cache sends its
+observer events there too, not to its client's cache` in
+`port_specifics_test.dart` — red before the change with
+`Actual: WhereTypeIterable<QueryObserverAdded>:[]`, green after. No ported case
+was touched, and the binding's 98 and the showcase's 217 are unchanged.
