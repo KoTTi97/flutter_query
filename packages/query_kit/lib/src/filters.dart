@@ -86,17 +86,6 @@ class QueryFilters {
   /// be given a useful type parameter.
   final bool Function(Query<Object?> query)? predicate;
 
-  /// This filter, restricted to a different [type].
-  QueryFilters withType(QueryTypeFilter? type) => QueryFilters(
-        queryKey: queryKey,
-        exact: exact,
-        type: type,
-        stale: stale,
-        fetchStatus: fetchStatus,
-        status: status,
-        predicate: predicate,
-      );
-
   /// Whether [query] matches. [exactByDefault] is what an unset [exact]
   /// means to the caller: prefix for the bulk operations, exact for `find`.
   bool matches(Query<Object?> query, {bool exactByDefault = false}) {
@@ -138,6 +127,17 @@ class QueryFilters {
 
     return true;
   }
+
+  @override
+  String toString() => describeFilters('QueryFilters', <String, Object?>{
+        'queryKey': queryKey,
+        'exact': exact,
+        'type': type,
+        'stale': stale,
+        'fetchStatus': fetchStatus,
+        'status': status,
+        'predicate': predicate,
+      });
 }
 
 /// Selects a set of mutations.
@@ -192,4 +192,25 @@ class MutationFilters {
 
     return true;
   }
+
+  @override
+  String toString() => describeFilters('MutationFilters', <String, Object?>{
+        'mutationKey': mutationKey,
+        'exact': exact,
+        'status': status,
+        'predicate': predicate,
+      });
+}
+
+/// `Type(name: value, …)` over the fields of [fields] that are set — what
+/// the two filters' `toString` show, so a failing filter reads as what it
+/// asked for rather than `Instance of 'QueryFilters'` (ninth review,
+/// 2026-09-10, C23).
+@internal
+String describeFilters(String type, Map<String, Object?> fields) {
+  final set = fields.entries
+      .where((field) => field.value != null)
+      .map((field) => '${field.key}: ${field.value}')
+      .join(', ');
+  return '$type($set)';
 }

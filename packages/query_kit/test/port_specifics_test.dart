@@ -509,7 +509,7 @@ void thirdReview() {
       queryKey: queryKey(),
       queryFn: (_) async => throw StateError('fetch'),
       retry: const RetryPolicy.times(1),
-      retryDelay: RetryDelay.custom((_, __) => throw ArgumentError('delay')),
+      retryDelay: RetryDelay.dynamic((_, __) => throw ArgumentError('delay')),
     ));
     await expectLater(delayed, throwsA(isA<ArgumentError>()));
     client.clear();
@@ -2743,7 +2743,192 @@ void ninthReview() {
     await time.flushMicrotasks();
     expect(uncaught.whereType<StateError>(), hasLength(1));
   });
+
+  // C20 — the `InfiniteData` a fetch wrote held two growable lists, so
+  // `getInfiniteQueryData(key)!.pages.add(…)` grew the cache behind the
+  // observers' backs; and `flatten<T>()` cast each page blindly.
+  testFakeAsync(
+      'C20 / P5 the pages and pageParams a fetch writes are unmodifiable',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    await client.infiniteQuery<List<int>, int>(InfiniteQueryOptions(
+      queryKey: key,
+      initialPageParam: 0,
+      getNextPageParam: (page, pages, param, params) => param + 1,
+      pageFn: (context) async => [context.pageParam],
+    ));
+    final data = client.getInfiniteQueryData<List<int>, int>(key)!;
+    expect(() => data.pages.add([99]), throwsUnsupportedError);
+    expect(() => data.pageParams.add(99), throwsUnsupportedError);
+    expect(data.pages, [
+      [0]
+    ]);
+    // `==` is over the two lists' contents, not their identity, so a const
+    // expectation of the ported suites still matches a sealed fetch result
+    // (a page that is itself a list compares by `==`, as it always did).
+    final intKey = queryKey();
+    await client.infiniteQuery<int, int>(InfiniteQueryOptions(
+      queryKey: intKey,
+      initialPageParam: 0,
+      getNextPageParam: (_, __, param, ___) => param < 1 ? param + 1 : null,
+      pageFn: (context) async => context.pageParam,
+      pages: 2,
+    ));
+    expect(client.getInfiniteQueryData<int, int>(intKey),
+        const InfiniteData<int, int>(pages: [0, 1], pageParams: [0, 1]));
+    client.clear();
+  });
+
+  testFakeAsync(
+      'C20 / P5 a structurally shared refetch result is unmodifiable too, '
+      'and an unchanged list keeps its identity', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    await client.infiniteQuery<List<int>, int>(InfiniteQueryOptions(
+      queryKey: key,
+      initialPageParam: 0,
+      getNextPageParam: (_, __, param, ___) => param < 1 ? param + 1 : null,
+      pageFn: (context) async => [context.pageParam],
+      pages: 2,
+    ));
+    final before = client.getInfiniteQueryData<List<int>, int>(key)!;
+    // A growable write with one changed page: the walk copies the pages
+    // list, keeps the params list, and the copy in the cache is sealed.
+    client.setQueryData<InfiniteData<List<int>, int>>(
+      key,
+      InfiniteData(pages: <List<int>>[
+        <int>[0],
+        <int>[7]
+      ], pageParams: <int>[
+        0,
+        1
+      ]),
+    );
+    final after = client.getInfiniteQueryData<List<int>, int>(key)!;
+    expect(after.pages[0], same(before.pages[0]));
+    expect(after.pageParams, same(before.pageParams));
+    expect(() => after.pages.add([99]), throwsUnsupportedError);
+    client.clear();
+  });
+
+  test(
+      'C20 / P5 flatten<T>() over pages that are not Iterable<T> throws an '
+      'ArgumentError naming the page type and the cure', () {
+    const data = InfiniteData<int, int>(pages: [1, 2], pageParams: [0, 1]);
+    expect(
+        () => data.flatten<int>(),
+        throwsA(isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('Iterable<int>'), contains('int'),
+                contains('select')))));
+    const nested = InfiniteData<List<int>, int>(pages: [
+      [1],
+      [2, 3]
+    ], pageParams: [
+      0,
+      1
+    ]);
+    expect(nested.flatten<int>(), [1, 2, 3]);
+    expect(nested.flatten<dynamic>(), [1, 2, 3]);
+    expect(() => nested.flatten<String>(), throwsArgumentError);
+  });
+
+  // C23.2 — `MutationState ==` compared `errorStackTrace`, which never
+  // compares equal by value; `QueryState` had left its traces out.
+  test('C23.2 two MutationStates differing only in errorStackTrace are equal',
+      () {
+    final error = StateError('x');
+    final a = MutationState<int, int, void>(
+        status: MutationStatus.error,
+        error: error,
+        errorStackTrace: StackTrace.current);
+    final b = MutationState<int, int, void>(
+        status: MutationStatus.error,
+        error: error,
+        errorStackTrace: StackTrace.current);
+    expect(a.errorStackTrace, isNot(same(b.errorStackTrace)));
+    expect(a, b);
+    expect(a.hashCode, b.hashCode);
+    expect(a.copyWith(), a);
+  });
+
+  // C23.9 — `setQueryData(key, 'x')` infers `String` against a query holding
+  // `String?`; the error now names the cure.
+  testFakeAsync(
+      'C23.9 setQueryData against a nullable query names the type argument '
+      'to write', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<String?>(key, null);
+    expect(
+        () => client.setQueryData(key, 'x'),
+        throwsA(isA<QueryDataTypeError>().having((e) => e.toString(), 'message',
+            contains('setQueryData<String?>'))));
+    expect(
+        () => client.setQueryData<int>(key, 1),
+        throwsA(isA<QueryDataTypeError>().having(
+            (e) => e.toString(), 'message', isNot(contains('setQueryData<')))),
+        reason: 'only the nullability mismatch has this one cure');
+    client.setQueryData<String?>(key, 'x');
+    expect(client.getQueryData<String?>(key), 'x');
+    client.clear();
+  });
+
+  // C23.1 — the option values, filters, options and mutation results print
+  // as what they were written as, not `Instance of '…'`.
+  test('C23.1 toString reads as the source form, unset fields skipped', () {
+    expect('${StaleTime.duration(const Duration(seconds: 5))}',
+        'StaleTime.duration(0:00:05.000000)');
+    expect('${StaleTime.static}', 'StaleTime.static');
+    expect('${GcTime.never}', 'GcTime.never');
+    expect('${Enabled.no}', 'Enabled.no');
+    expect('${RetryPolicy.times(3)}', 'RetryPolicy.times(3)');
+    expect('${RetryDelay.fixed(const Duration(seconds: 1))}',
+        'RetryDelay.fixed(0:00:01.000000)');
+    expect('${RetryDelay.defaultValue}',
+        'RetryDelay.exponential(base: 0:00:01.000000, maximum: 0:00:30.000000)');
+    expect('${RefetchOn.ifStale}', 'RefetchOn.ifStale');
+    expect('${RefetchInterval.every(const Duration(seconds: 1))}',
+        'RefetchInterval.every(0:00:01.000000)');
+    expect('${InitialData<int>.value(1)}', 'InitialData.value(1)');
+    expect('${PlaceholderData<int>.keepPrevious()}',
+        'PlaceholderData.keepPrevious()');
+    expect(
+        '${RetryDelay.dynamic(_oneSecond)}', contains('RetryDelay.dynamic('));
+
+    final key = queryKey();
+    expect('${QueryOptions<int>(queryKey: key, staleTime: StaleTime.static)}',
+        'QueryOptions<int>($key, staleTime: StaleTime.static)');
+    expect(
+        '${QuerySelectOptions<int, String>(queryKey: key, select: _stringify, retryOnMount: false)}',
+        allOf(startsWith('QuerySelectOptions<int, String>($key, select: '),
+            endsWith(', retryOnMount: false)')));
+    expect(
+        '${InfiniteQueryObserverOptions<int, int>(queryKey: key, pageFn: _page, initialPageParam: 0, getNextPageParam: _next, maxPages: 3)}',
+        allOf(
+            startsWith('InfiniteQueryObserverOptions<int, int>($key, pageFn: '),
+            contains(', initialPageParam: 0, '),
+            endsWith(', maxPages: 3)'),
+            isNot(contains('behavior'))));
+    expect('${const QueryFilters(exact: true, type: QueryTypeFilter.active)}',
+        'QueryFilters(exact: true, type: QueryTypeFilter.active)');
+    expect('${const MutationFilters()}', 'MutationFilters()');
+
+    final client = testClient();
+    final observer = MutationObserver<int, String, void>(
+        client, MutationOptions(mutationFn: (v) => v.length));
+    expect('${observer.currentResult}', 'MutationIdle<int, String>()');
+    client.clear();
+  });
 }
+
+Duration _oneSecond(int failureCount, Object error) =>
+    const Duration(seconds: 1);
+String _stringify(int n) => '$n';
+int _page(InfinitePageContext<int> context) => context.pageParam;
+int? _next(int page, List<int> pages, int param, List<int> params) => null;
 
 class _Selector {
   int calls = 0;

@@ -83,6 +83,8 @@ final class StaleTimeDuration extends StaleTime {
       other is StaleTimeDuration && other.duration == duration;
   @override
   int get hashCode => duration.hashCode;
+  @override
+  String toString() => 'StaleTime.duration($duration)';
 }
 
 /// The [StaleTime.static] variant: never stale, and never refetched by a
@@ -101,6 +103,8 @@ final class StaleTimeStatic extends StaleTime {
   bool operator ==(Object other) => other is StaleTimeStatic;
   @override
   int get hashCode => (StaleTimeStatic).hashCode;
+  @override
+  String toString() => 'StaleTime.static';
 }
 
 /// The [StaleTime.infinite] variant: never stale by time, so nothing refetches
@@ -114,6 +118,8 @@ final class StaleTimeInfinite extends StaleTime {
   bool operator ==(Object other) => other is StaleTimeInfinite;
   @override
   int get hashCode => (StaleTimeInfinite).hashCode;
+  @override
+  String toString() => 'StaleTime.infinite';
 }
 
 /// The [StaleTime.dynamic] variant: a stale time computed from the query each
@@ -132,6 +138,8 @@ final class StaleTimeDynamic extends StaleTime {
       other is StaleTimeDynamic && other.compute == compute;
   @override
   int get hashCode => compute.hashCode;
+  @override
+  String toString() => 'StaleTime.dynamic($compute)';
 }
 
 /// How long unused data stays in the cache.
@@ -175,6 +183,8 @@ final class GcTimeDuration extends GcTime {
       other is GcTimeDuration && other.duration == duration;
   @override
   int get hashCode => duration.hashCode;
+  @override
+  String toString() => 'GcTime.duration($duration)';
 }
 
 /// The [GcTime.never] variant: an unobserved query stays cached until it is
@@ -187,6 +197,8 @@ final class GcTimeNever extends GcTime {
   bool operator ==(Object other) => other is GcTimeNever;
   @override
   int get hashCode => (GcTimeNever).hashCode;
+  @override
+  String toString() => 'GcTime.never';
 }
 
 /// Whether a query may run at all.
@@ -231,6 +243,8 @@ final class EnabledYes extends Enabled {
   bool operator ==(Object other) => other is EnabledYes;
   @override
   int get hashCode => (EnabledYes).hashCode;
+  @override
+  String toString() => 'Enabled.yes';
 }
 
 /// The [Enabled.no] variant.
@@ -242,6 +256,8 @@ final class EnabledNo extends Enabled {
   bool operator ==(Object other) => other is EnabledNo;
   @override
   int get hashCode => (EnabledNo).hashCode;
+  @override
+  String toString() => 'Enabled.no';
 }
 
 /// The [Enabled.when] variant.
@@ -256,6 +272,8 @@ final class EnabledWhen extends Enabled {
       other is EnabledWhen && other.predicate == predicate;
   @override
   int get hashCode => predicate.hashCode;
+  @override
+  String toString() => 'Enabled.when($predicate)';
 }
 
 /// Whether a failed attempt is retried.
@@ -304,6 +322,8 @@ final class RetryNever extends RetryPolicy {
   bool operator ==(Object other) => other is RetryNever;
   @override
   int get hashCode => (RetryNever).hashCode;
+  @override
+  String toString() => 'RetryPolicy.never';
 }
 
 /// The [RetryPolicy.always] variant.
@@ -315,6 +335,8 @@ final class RetryAlways extends RetryPolicy {
   bool operator ==(Object other) => other is RetryAlways;
   @override
   int get hashCode => (RetryAlways).hashCode;
+  @override
+  String toString() => 'RetryPolicy.always';
 }
 
 /// The [RetryPolicy.times] variant.
@@ -322,13 +344,16 @@ final class RetryTimes extends RetryPolicy {
   /// Retries until [count] attempts have failed.
   const RetryTimes(this.count);
 
-  /// How many failures are tolerated before the fetch is an error. `0` is the
-  /// same as [RetryPolicy.never].
+  /// How many failures are tolerated before the fetch is an error. `0`
+  /// behaves like [RetryPolicy.never] — the two are distinct values of a
+  /// sealed type, so they are not `==`.
   final int count;
   @override
   bool operator ==(Object other) => other is RetryTimes && other.count == count;
   @override
   int get hashCode => count.hashCode;
+  @override
+  String toString() => 'RetryPolicy.times($count)';
 }
 
 /// The [RetryPolicy.when] variant.
@@ -345,6 +370,8 @@ final class RetryWhen extends RetryPolicy {
       other is RetryWhen && other.predicate == predicate;
   @override
   int get hashCode => predicate.hashCode;
+  @override
+  String toString() => 'RetryPolicy.when($predicate)';
 }
 
 /// How long to wait before the next attempt.
@@ -368,10 +395,12 @@ sealed class RetryDelay {
 
   /// Computed per failure — upstream's `retryDelay: (attempt, error) => ms`.
   /// `failureCount` is how many attempts had failed before the one that just
-  /// did, so it is `0` before the first retry.
-  const factory RetryDelay.custom(
+  /// did, so it is `0` before the first retry. Named like
+  /// [StaleTime.dynamic] and [RefetchInterval.dynamic], the other values
+  /// computed on demand.
+  const factory RetryDelay.dynamic(
     Duration Function(int failureCount, Object error) compute,
-  ) = RetryDelayCustom;
+  ) = RetryDelayDynamic;
 
   /// The wait before the next attempt, after an attempt threw [error] with
   /// [failureCount] failures before it.
@@ -379,7 +408,7 @@ sealed class RetryDelay {
         RetryDelayFixed(:final delay) => delay,
         RetryDelayExponential(:final base, :final maximum) =>
           _exponential(base, maximum, failureCount),
-        RetryDelayCustom(:final compute) => compute(failureCount, error),
+        RetryDelayDynamic(:final compute) => compute(failureCount, error),
       };
 
   /// `min(base * 2^failureCount, maximum)`, without ever computing the
@@ -408,6 +437,8 @@ final class RetryDelayFixed extends RetryDelay {
       other is RetryDelayFixed && other.delay == delay;
   @override
   int get hashCode => delay.hashCode;
+  @override
+  String toString() => 'RetryDelay.fixed($delay)';
 }
 
 /// The [RetryDelay.exponential] variant: `min(base * 2^failureCount, maximum)`.
@@ -431,21 +462,25 @@ final class RetryDelayExponential extends RetryDelay {
       other.maximum == maximum;
   @override
   int get hashCode => Object.hash(base, maximum);
+  @override
+  String toString() => 'RetryDelay.exponential(base: $base, maximum: $maximum)';
 }
 
-/// The [RetryDelay.custom] variant.
-final class RetryDelayCustom extends RetryDelay {
+/// The [RetryDelay.dynamic] variant.
+final class RetryDelayDynamic extends RetryDelay {
   /// Computes every wait with [compute].
-  const RetryDelayCustom(this.compute);
+  const RetryDelayDynamic(this.compute);
 
   /// Given how many attempts had failed before the latest one and what it
   /// threw, how long to wait before trying again.
   final Duration Function(int failureCount, Object error) compute;
   @override
   bool operator ==(Object other) =>
-      other is RetryDelayCustom && other.compute == compute;
+      other is RetryDelayDynamic && other.compute == compute;
   @override
   int get hashCode => compute.hashCode;
+  @override
+  String toString() => 'RetryDelay.dynamic($compute)';
 }
 
 /// Whether an event (mount, focus, reconnect) triggers a refetch.
@@ -490,6 +525,8 @@ final class RefetchOnNever extends RefetchOn {
   bool operator ==(Object other) => other is RefetchOnNever;
   @override
   int get hashCode => (RefetchOnNever).hashCode;
+  @override
+  String toString() => 'RefetchOn.never';
 }
 
 /// The [RefetchOn.ifStale] variant.
@@ -501,6 +538,8 @@ final class RefetchOnIfStale extends RefetchOn {
   bool operator ==(Object other) => other is RefetchOnIfStale;
   @override
   int get hashCode => (RefetchOnIfStale).hashCode;
+  @override
+  String toString() => 'RefetchOn.ifStale';
 }
 
 /// The [RefetchOn.always] variant.
@@ -512,6 +551,8 @@ final class RefetchOnAlways extends RefetchOn {
   bool operator ==(Object other) => other is RefetchOnAlways;
   @override
   int get hashCode => (RefetchOnAlways).hashCode;
+  @override
+  String toString() => 'RefetchOn.always';
 }
 
 /// The [RefetchOn.when] variant.
@@ -528,6 +569,8 @@ final class RefetchOnWhen extends RefetchOn {
       other is RefetchOnWhen && other.compute == compute;
   @override
   int get hashCode => compute.hashCode;
+  @override
+  String toString() => 'RefetchOn.when($compute)';
 }
 
 /// Polling.
@@ -567,6 +610,8 @@ final class RefetchIntervalOff extends RefetchInterval {
   bool operator ==(Object other) => other is RefetchIntervalOff;
   @override
   int get hashCode => (RefetchIntervalOff).hashCode;
+  @override
+  String toString() => 'RefetchInterval.off';
 }
 
 /// The [RefetchInterval.every] variant.
@@ -581,6 +626,8 @@ final class RefetchIntervalEvery extends RefetchInterval {
       other is RefetchIntervalEvery && other.interval == interval;
   @override
   int get hashCode => interval.hashCode;
+  @override
+  String toString() => 'RefetchInterval.every($interval)';
 }
 
 /// The [RefetchInterval.dynamic] variant.
@@ -595,6 +642,8 @@ final class RefetchIntervalDynamic extends RefetchInterval {
       other is RefetchIntervalDynamic && other.compute == compute;
   @override
   int get hashCode => compute.hashCode;
+  @override
+  String toString() => 'RefetchInterval.dynamic($compute)';
 }
 
 /// How connectivity gates fetching. A closed set of constants, so a plain enum

@@ -24,6 +24,15 @@ import 'query_options.dart';
 ///
 /// The two lists are the same length and in the same order: `pages[i]` was
 /// fetched with `pageParams[i]`.
+///
+/// Every `InfiniteData` the library writes — a fetch result, a structurally
+/// shared refetch, a [copyWith] — holds two unmodifiable lists, so the value
+/// read back from the cache cannot be grown behind the observers' backs:
+/// `getInfiniteQueryData(key)!.pages.add(…)` throws `UnsupportedError`
+/// (ninth review, 2026-09-10, C20). The constructor is `const` and wraps
+/// nothing: a `const [...]` literal is already unmodifiable, and a growable
+/// list handed in through `initialData` or `setQueryData` stays the caller's
+/// own until the next fetch replaces it.
 @immutable
 final class InfiniteData<TPageData, TPageParam> {
   /// Both lists at once; keep them the same length and in the same order.
@@ -41,17 +50,43 @@ final class InfiniteData<TPageData, TPageParam> {
   bool get isEmpty => pages.isEmpty;
 
   /// Every item of every page, for the common case where a page is a list.
-  Iterable<TItem> flatten<TItem>() =>
-      pages.expand<TItem>((page) => page as Iterable<TItem>);
+  ///
+  /// Every page must be an `Iterable<TItem>`; one that is not throws an
+  /// [ArgumentError] naming its runtime type, checked up front rather than
+  /// in the middle of a loop over the result (ninth review, 2026-09-10,
+  /// C20). `flatten()` with no type argument flattens to `Iterable<dynamic>`
+  /// — name the item type, or project the pages with a `select` instead.
+  Iterable<TItem> flatten<TItem>() {
+    for (final page in pages) {
+      if (page is! Iterable<TItem>) {
+        throw ArgumentError.value(
+          page,
+          'pages',
+          'flatten<$TItem>() needs every page to be an Iterable<$TItem>, but '
+              'a page is a ${page.runtimeType}. Name the item type '
+              '(flatten<Item>()), or project the pages with a select.',
+        );
+      }
+    }
+    return pages.expand<TItem>((page) => page as Iterable<TItem>);
+  }
 
-  /// This, with either list replaced.
+  /// This, with either list replaced. A replacement list is copied into an
+  /// unmodifiable one; a list this instance already holds (not passed, or
+  /// passed back as the very same object) is kept as it is, identity
+  /// included — which is what lets structural sharing hand an unchanged
+  /// list through unchanged.
   InfiniteData<TPageData, TPageParam> copyWith({
     List<TPageData>? pages,
     List<TPageParam>? pageParams,
   }) =>
       InfiniteData<TPageData, TPageParam>(
-        pages: pages ?? this.pages,
-        pageParams: pageParams ?? this.pageParams,
+        pages: pages == null || identical(pages, this.pages)
+            ? this.pages
+            : List<TPageData>.unmodifiable(pages),
+        pageParams: pageParams == null || identical(pageParams, this.pageParams)
+            ? this.pageParams
+            : List<TPageParam>.unmodifiable(pageParams),
       );
 
   @override
@@ -285,6 +320,21 @@ class InfiniteQueryOptions<TPageData, TPageParam>
   @override
   FetchBehavior<InfiniteData<TPageData, TPageParam>> get behavior =>
       InfiniteQueryBehavior<TPageData, TPageParam>(this, pages: pages);
+
+  /// [QueryOptions.toStringFields] minus the derived `behavior` and
+  /// `queryFn`, plus the paging fields.
+  @override
+  Map<String, Object?> get toStringFields => <String, Object?>{
+        ...super.toStringFields
+          ..remove('queryFn')
+          ..remove('behavior'),
+        'pageFn': pageFn,
+        'initialPageParam': initialPageParam,
+        'getNextPageParam': getNextPageParam,
+        'getPreviousPageParam': getPreviousPageParam,
+        'maxPages': maxPages,
+        'pages': pages,
+      };
 }
 
 /// [InfiniteQueryOptions] plus the observer-only options.
@@ -357,6 +407,19 @@ sealed class InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>
 
   /// [QueryObserverOptionsBase.retryOnMount].
   final bool? retryOnMount;
+
+  @override
+  Map<String, Object?> get toStringFields => <String, Object?>{
+        ...super.toStringFields,
+        'select': select,
+        'placeholderData': placeholderData,
+        'refetchOnMount': refetchOnMount,
+        'refetchOnWindowFocus': refetchOnWindowFocus,
+        'refetchOnReconnect': refetchOnReconnect,
+        'refetchInterval': refetchInterval,
+        'refetchIntervalInBackground': refetchIntervalInBackground,
+        'retryOnMount': retryOnMount,
+      };
 
   /// This, with the given fields replaced, observer half included; each
   /// shape returns its own type, and only [InfiniteQuerySelectOptions.copyWith]
@@ -840,8 +903,8 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
       if (direction != null && oldPages.isNotEmpty) {
         final previous = direction == FetchDirection.backward;
         final oldData = InfiniteData<TPageData, TPageParam>(
-          pages: List<TPageData>.of(oldPages),
-          pageParams: List<TPageParam>.of(oldPageParams),
+          pages: List<TPageData>.unmodifiable(oldPages),
+          pageParams: List<TPageParam>.unmodifiable(oldPageParams),
         );
         final param = previous
             ? previousPageParam<TPageData, TPageParam>(options, oldData)
@@ -873,23 +936,24 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
 }
 
 /// Appends [item], dropping *one* item from the front when that would exceed
-/// [max].
+/// [max]. The result is unmodifiable: it is what the cache will hold.
 ///
 /// One item, not "down to [max]", because pages arrive one at a time — the same
 /// arithmetic upstream does with `slice(1)`. A `null` or zero [max] keeps
 /// everything, which is why `maxPages: 0` does not mean "keep no pages".
 List<T> addToEnd<T>(List<T> items, T item, [int? max]) {
   final next = <T>[...items, item];
-  return max != null && max > 0 && next.length > max ? next.sublist(1) : next;
+  return List<T>.unmodifiable(
+      max != null && max > 0 && next.length > max ? next.sublist(1) : next);
 }
 
 /// Prepends [item], dropping one item from the back when that would exceed
-/// [max].
+/// [max]. Unmodifiable, like [addToEnd]'s result.
 List<T> addToStart<T>(List<T> items, T item, [int? max]) {
   final next = <T>[item, ...items];
-  return max != null && max > 0 && next.length > max
+  return List<T>.unmodifiable(max != null && max > 0 && next.length > max
       ? next.sublist(0, next.length - 1)
-      : next;
+      : next);
 }
 
 /// The param the next page would be fetched with, or `null` if there is none.

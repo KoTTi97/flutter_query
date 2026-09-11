@@ -283,6 +283,7 @@ class MutationCache
       mutation.schedulingScope?.id;
 
   @override
+  @internal
   bool canRunMutation(Mutation<Object?, Object?, Object?> mutation) {
     final scope = _scopeOf(mutation);
     if (scope == null) {
@@ -302,6 +303,7 @@ class MutationCache
   }
 
   @override
+  @internal
   void onMutationSettled(Mutation<Object?, Object?, Object?> mutation) {
     final scope = _scopeOf(mutation);
     if (scope == null) {
@@ -318,6 +320,7 @@ class MutationCache
   }
 
   @override
+  @internal
   void onMutationStateUpdated(
     Mutation<Object?, Object?, Object?> mutation,
     MutationAction action,
@@ -325,6 +328,7 @@ class MutationCache
       notify(MutationUpdated(mutation, action));
 
   @override
+  @internal
   void onMutationObserverAdded(
     Mutation<Object?, Object?, Object?> mutation,
     MutationObserverRef observer,
@@ -332,6 +336,7 @@ class MutationCache
       notify(MutationObserverAdded(mutation, observer));
 
   @override
+  @internal
   void onMutationObserverRemoved(
     Mutation<Object?, Object?, Object?> mutation,
     MutationObserverRef observer,
@@ -339,12 +344,14 @@ class MutationCache
       notify(MutationObserverRemoved(mutation, observer));
 
   @override
+  @internal
   void onMutationRemovalRequested(
     Mutation<Object?, Object?, Object?> mutation,
   ) =>
       remove(mutation);
 
   @override
+  @internal
   FutureOr<void> onMutationStarting(
     Mutation<Object?, Object?, Object?> mutation,
     Object? variables,
@@ -352,6 +359,7 @@ class MutationCache
       onMutate?.call(variables, mutation);
 
   @override
+  @internal
   FutureOr<void> onMutationSuccess(
     Mutation<Object?, Object?, Object?> mutation,
     Object? data,
@@ -362,6 +370,7 @@ class MutationCache
   }
 
   @override
+  @internal
   FutureOr<void> onMutationSettledCallback(
     Mutation<Object?, Object?, Object?> mutation,
     Object? data,
@@ -381,6 +390,7 @@ class MutationCache
   }
 
   @override
+  @internal
   FutureOr<void> onMutationError(
     Mutation<Object?, Object?, Object?> mutation,
     Object error,

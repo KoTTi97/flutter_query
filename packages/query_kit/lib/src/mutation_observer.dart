@@ -3,6 +3,8 @@ library;
 
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import 'mutation.dart';
 import 'mutation_options.dart';
 import 'mutation_result.dart';
@@ -179,6 +181,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   }
 
   @override
+  @internal
   void onMutationUpdate(MutationAction action) {
     final mutation = _currentMutation;
     if (mutation == null) {

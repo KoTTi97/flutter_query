@@ -25,6 +25,10 @@ import 'package:meta/meta.dart';
 /// `==`/`hashCode` (freezed, Equatable, or written by hand). A debug-only
 /// assertion rejects parts that use identity equality, because such a key can
 /// never match a second, equal key.
+///
+/// Parts compare with `==`, and `1 == 1.0` holds in Dart on every platform,
+/// so `QueryKey([1])` and `QueryKey([1.0])` are the same key — not a web
+/// quirk (ninth review, 2026-09-10, C23).
 @immutable
 final class QueryKey {
   /// A key of [parts], each list, set and map in them deep-copied into an

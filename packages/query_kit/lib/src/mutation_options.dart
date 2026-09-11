@@ -36,6 +36,40 @@ final class MutationScope {
 typedef MutationFn<TData, TVariables> = FutureOr<TData> Function(
     TVariables variables);
 
+/// [MutationOptions.onMutate]: runs before the mutation function, and what
+/// it returns is the `onMutateResult` the other callbacks receive.
+typedef OnMutate<TVariables, TOnMutateResult> = FutureOr<TOnMutateResult?>
+    Function(TVariables variables);
+
+/// [MutationOptions.onSuccess] and [MutateCallbacks.onSuccess]: the data,
+/// the variables, and what `onMutate` returned.
+typedef OnMutationSuccess<TData, TVariables, TOnMutateResult> = FutureOr<void>
+    Function(
+  TData data,
+  TVariables variables,
+  TOnMutateResult? onMutateResult,
+);
+
+/// [MutationOptions.onError] and [MutateCallbacks.onError]: the error and
+/// where it was thrown, the variables, and what `onMutate` returned.
+typedef OnMutationError<TVariables, TOnMutateResult> = FutureOr<void> Function(
+  Object error,
+  StackTrace stackTrace,
+  TVariables variables,
+  TOnMutateResult? onMutateResult,
+);
+
+/// [MutationOptions.onSettled] and [MutateCallbacks.onSettled]: whichever of
+/// `data` and `error` applies, the variables, and what `onMutate` returned.
+typedef OnMutationSettled<TData, TVariables, TOnMutateResult> = FutureOr<void>
+    Function(
+  TData? data,
+  Object? error,
+  StackTrace? stackTrace,
+  TVariables variables,
+  TOnMutateResult? onMutateResult,
+);
+
 /// Callbacks a caller can attach to a single `mutate` call, on top of the ones
 /// in the options.
 @immutable
@@ -47,31 +81,16 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
   /// what `onMutate` returned. Like the other two, it is skipped when the
   /// observer has stopped listening before the mutation settled — upstream's
   /// per-call `onSuccess`.
-  final FutureOr<void> Function(
-    TData data,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onSuccess;
+  final OnMutationSuccess<TData, TVariables, TOnMutateResult>? onSuccess;
 
   /// Runs after the options' `onError`, once retries are spent — upstream's
   /// per-call `onError`.
-  final FutureOr<void> Function(
-    Object error,
-    StackTrace stackTrace,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onError;
+  final OnMutationError<TVariables, TOnMutateResult>? onError;
 
   /// Runs after the options' `onSettled`, on success and error alike, with
   /// whichever of `data` and `error` applies — upstream's per-call
   /// `onSettled`.
-  final FutureOr<void> Function(
-    TData? data,
-    Object? error,
-    StackTrace? stackTrace,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onSettled;
+  final OnMutationSettled<TData, TVariables, TOnMutateResult>? onSettled;
 }
 
 /// Everything that describes a mutation.
@@ -122,24 +141,9 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
   static MutationOptions<TData, TVariables, void> simple<TData, TVariables>({
     QueryKey? mutationKey,
     MutationFn<TData, TVariables>? mutationFn,
-    FutureOr<void> Function(
-      TData data,
-      TVariables variables,
-      void onMutateResult,
-    )? onSuccess,
-    FutureOr<void> Function(
-      Object error,
-      StackTrace stackTrace,
-      TVariables variables,
-      void onMutateResult,
-    )? onError,
-    FutureOr<void> Function(
-      TData? data,
-      Object? error,
-      StackTrace? stackTrace,
-      TVariables variables,
-      void onMutateResult,
-    )? onSettled,
+    OnMutationSuccess<TData, TVariables, void>? onSuccess,
+    OnMutationError<TVariables, void>? onError,
+    OnMutationSettled<TData, TVariables, void>? onSettled,
     RetryPolicy? retry,
     RetryDelay? retryDelay,
     NetworkMode? networkMode,
@@ -173,35 +177,20 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
 
   /// Runs before the mutation function; its result is handed to [onError] and
   /// [onSettled] so an optimistic update can be rolled back.
-  final FutureOr<TOnMutateResult?> Function(TVariables variables)? onMutate;
+  final OnMutate<TVariables, TOnMutateResult>? onMutate;
 
   /// Runs when the mutation function succeeds, before the result reports
   /// success. Throwing here turns the success into an error, as upstream
   /// does.
-  final FutureOr<void> Function(
-    TData data,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onSuccess;
+  final OnMutationSuccess<TData, TVariables, TOnMutateResult>? onSuccess;
 
   /// Runs when the mutation fails for good, retries spent, with what
   /// [onMutate] returned so an optimistic update can be rolled back.
-  final FutureOr<void> Function(
-    Object error,
-    StackTrace stackTrace,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onError;
+  final OnMutationError<TVariables, TOnMutateResult>? onError;
 
   /// Runs after [onSuccess] or [onError], with whichever of `data` and
   /// `error` applies.
-  final FutureOr<void> Function(
-    TData? data,
-    Object? error,
-    StackTrace? stackTrace,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onSettled;
+  final OnMutationSettled<TData, TVariables, TOnMutateResult>? onSettled;
 
   /// Whether a failed attempt is retried. Default [RetryPolicy.never] —
   /// upstream's `retry: 0` for mutations, which are rarely safe to repeat.
@@ -265,7 +254,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
   /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
   /// review, 2026-09-10).
-  final FutureOr<TOnMutateResult?> Function(TVariables variables)? onMutate;
+  final OnMutate<TVariables, TOnMutateResult>? onMutate;
 
   /// [MutationOptions.onSuccess], carried through as given.
   ///
@@ -273,11 +262,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
   /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
   /// review, 2026-09-10).
-  final FutureOr<void> Function(
-    TData data,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onSuccess;
+  final OnMutationSuccess<TData, TVariables, TOnMutateResult>? onSuccess;
 
   /// [MutationOptions.onError], carried through as given.
   ///
@@ -285,12 +270,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
   /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
   /// review, 2026-09-10).
-  final FutureOr<void> Function(
-    Object error,
-    StackTrace stackTrace,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onError;
+  final OnMutationError<TVariables, TOnMutateResult>? onError;
 
   /// [MutationOptions.onSettled], carried through as given.
   ///
@@ -298,13 +278,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
   /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
   /// review, 2026-09-10).
-  final FutureOr<void> Function(
-    TData? data,
-    Object? error,
-    StackTrace? stackTrace,
-    TVariables variables,
-    TOnMutateResult? onMutateResult,
-  )? onSettled;
+  final OnMutationSettled<TData, TVariables, TOnMutateResult>? onSettled;
 
   /// [MutationOptions.retry], with the default applied.
   final RetryPolicy retry;

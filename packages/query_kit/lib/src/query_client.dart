@@ -83,7 +83,7 @@ class QueryDefaults {
   final RetryDelay? retryDelay;
 
   /// Default for `retryOnMount`: whether a query in error state is retried
-  /// when a new observer subscribes.
+  /// when a new observer subscribes. `true` when unset here too.
   final bool? retryOnMount;
 
   /// Default for `networkMode`: when a fetch may run relative to the online
@@ -474,6 +474,12 @@ class QueryClient {
   // ------------------------------------------------------------- writing
 
   /// Writes [data] into the cache, creating the entry if needed.
+  ///
+  /// The type argument is inferred from [data], and a value infers its
+  /// non-nullable type: `setQueryData(key, 'x')` is a `String` write, which
+  /// a query holding `String?` refuses with [QueryDataTypeError]. Name the
+  /// query's type — `setQueryData<String?>(key, 'x')` (ninth review,
+  /// 2026-09-10, C23).
   TQueryData setQueryData<TQueryData>(
     QueryKey queryKey,
     TQueryData data, {

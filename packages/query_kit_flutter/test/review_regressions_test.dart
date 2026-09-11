@@ -7,6 +7,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 // The core reads staleness from `package:clock`, so shifting that clock is
 // how a test makes data go stale between two reads.
@@ -1418,6 +1419,30 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       expect(client.mutationCache.mutations, isEmpty);
     }, createClient: newClient);
+  });
+
+  group('C23.7 the barrel hides the seam between builders and controllers', () {
+    // `ObservedState` / `observedStateOf` are how a builder asks a controller
+    // what its readers can see; a custom controller overrides the member
+    // without naming the interface. Read from the source: Flutter has no
+    // `dart:mirrors`, and the positive half — every name a consumer may
+    // write — is this file's import compiling.
+    test('ObservedState and observedStateOf are not exported', () {
+      final barrel = File('lib/query_kit_flutter.dart').readAsStringSync();
+      Set<String> hidden(String file) {
+        final export =
+            RegExp("export 'src/$file.dart'(?:\\s+hide\\s+([^;]+))?;")
+                .firstMatch(barrel);
+        expect(export, isNotNull, reason: 'src/$file.dart is exported');
+        final list = export!.group(1);
+        return list == null
+            ? const {}
+            : list.split(',').map((name) => name.trim()).toSet();
+      }
+
+      expect(hidden('query_controller'), {'ObservedState', 'observedStateOf'});
+      expect(hidden('query_context'), {'QueryScope', 'QueryScopeElement'});
+    });
   });
 }
 

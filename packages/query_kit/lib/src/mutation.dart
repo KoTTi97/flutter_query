@@ -36,10 +36,12 @@ enum MutationStatus {
 ///
 /// Exported because the cache's `MutationObserverAdded` and friends name
 /// their observer through it; implementing it yourself is not supported —
-/// `MutationObserver` is the one implementation.
+/// `MutationObserver` is the one implementation, and the one member is
+/// `@internal` there and here (ninth review, 2026-09-10, C21).
 abstract interface class MutationObserverRef {
   /// The mutation's state changed by [action]. The observer recomputes its
   /// result and, for a success or error, runs the per-call callbacks.
+  @internal
   void onMutationUpdate(MutationAction action);
 }
 
@@ -310,7 +312,10 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
   // Value equality like `QueryState`'s: a persistence layer compares the
   // state it restored with the one it is about to write (fifth review,
   // 2026-09-09). `data` and `variables` by `==`, so typed models need their
-  // own.
+  // own. `errorStackTrace` is left out, as `QueryState` leaves its traces
+  // out: a stack trace never compares equal by value, so including it made
+  // every rebuilt error state unequal to the one it copied (ninth review,
+  // 2026-09-10, C23).
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -319,7 +324,6 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
           other.hasData == hasData &&
           other.data == data &&
           other.error == error &&
-          other.errorStackTrace == errorStackTrace &&
           other.variables == variables &&
           other.hasVariables == hasVariables &&
           other.onMutateResult == onMutateResult &&
@@ -334,7 +338,6 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
         hasData,
         data,
         error,
-        errorStackTrace,
         variables,
         hasVariables,
         onMutateResult,

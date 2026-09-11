@@ -108,7 +108,11 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
         previous is T) {
       return previous as T;
     }
-    return next.copyWith(pages: pages, pageParams: pageParams) as T;
+    // Built on `previous`, whose `copyWith` keeps a list handed back
+    // unchanged (identity included) and copies a changed one into an
+    // unmodifiable list — the cache never holds a growable page list
+    // (ninth review, 2026-09-10, C20).
+    return previous.copyWith(pages: pages, pageParams: pageParams) as T;
   }
 
   if (previous is Map && next is Map) {

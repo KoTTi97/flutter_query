@@ -22,32 +22,43 @@ import 'structural_sharing.dart';
 /// Exported because the cache's `QueryObserverAdded` and friends name their
 /// observer through it, so a cache listener can hold and compare one. That is
 /// the whole public use: implementing it yourself is not supported, and
-/// `QueryObserver` is the one implementation.
+/// `QueryObserver` is the one implementation. Its members are the plumbing
+/// between a query and its observer, `@internal` on the interface and on
+/// `QueryObserver`'s overrides alike — calling one from outside the package
+/// is an analyzer warning (ninth review, 2026-09-10, C21).
 abstract interface class QueryObserverRef {
   /// The query's state changed.
+  @internal
   void onQueryUpdate();
 
   /// Whether this observer's `enabled` currently resolves to true.
+  @internal
   bool get isEnabledForQuery;
 
   /// Whether this observer's own `staleTime` is [StaleTimeStatic].
+  @internal
   bool get isStaticForQuery;
 
   /// Whether this observer's current result considers the data stale.
+  @internal
   bool get currentResultIsStale;
 
   /// Whether this observer's `refetchOnWindowFocus` asks for a refetch when the
   /// app returns to the foreground, given the data it currently sees.
+  @internal
   bool shouldFetchOnWindowFocus();
 
   /// Whether this observer's `refetchOnReconnect` asks for a refetch when the
   /// device comes back online, given the data it currently sees.
+  @internal
   bool shouldFetchOnReconnect();
 
   /// Refetch without cancelling a fetch that is already running.
+  @internal
   void refetchOnEvent();
 
   /// The options this observer contributes when the query itself has none.
+  @internal
   DefaultedQueryOptions<Object?> get observerQueryOptions;
 }
 

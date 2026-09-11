@@ -8,6 +8,7 @@ library;
 import 'package:meta/meta.dart';
 
 import 'mutation.dart';
+import 'mutation_options.dart';
 
 /// The result of observing one mutation — upstream's
 /// `MutationObserverResult`, as a sealed hierarchy.
@@ -66,6 +67,11 @@ sealed class MutationResult<TData, TVariables> {
   final DateTime? submittedAt;
 
   /// Fire and forget: errors go to the callbacks and to this result.
+  ///
+  /// The plain form, deliberately: upstream's per-call callbacks are not a
+  /// second parameter here. They are `MutationObserver.mutate(variables,
+  /// callbacks)` — `MutationController.mutate(variables, callbacks)` in the
+  /// binding — with a [MutateCallbacks] (ninth review, 2026-09-10, C23).
   final void Function(TVariables variables) mutate;
 
   /// Completes with the data, or throws.
@@ -136,6 +142,25 @@ sealed class MutationResult<TData, TVariables> {
         dataOrNull,
         errorOrNull,
       );
+
+  /// The variant, then the variables once a run has set them, the data or
+  /// the error, and `paused` while the run waits — `MutationSuccess<int,
+  /// String>(variables: draft, data: 1)`.
+  @override
+  String toString() {
+    final parts = <String?>[
+      if (hasVariables) 'variables: $variables',
+      switch (this) {
+        MutationSuccess<TData, TVariables>(:final data) => 'data: $data',
+        MutationError<TData, TVariables>(:final error) => 'error: $error',
+        MutationIdle<TData, TVariables>() ||
+        MutationPending<TData, TVariables>() =>
+          null,
+      },
+      if (isPaused) 'paused',
+    ].nonNulls;
+    return '$runtimeType(${parts.join(', ')})';
+  }
 }
 
 /// Nothing has been submitted yet.

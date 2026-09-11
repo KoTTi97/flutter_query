@@ -122,11 +122,23 @@ final class QueryDataTypeError implements Exception {
   final Type actual;
 
   @override
-  String toString() => queryKey == null
-      ? 'A default produced $actual where $expected was expected. One '
-          'default is being used with two data types.'
-      : 'Query $queryKey holds $actual but was read as $expected. One key is '
-          'being used with two data types.';
+  String toString() {
+    final key = queryKey;
+    if (key == null) {
+      return 'A default produced $actual where $expected was expected. One '
+          'default is being used with two data types.';
+    }
+    // `setQueryData(key, 'x')` against a `Query<String?>`: the argument
+    // inferred the non-nullable type, and naming the query's type is the
+    // cure (ninth review, 2026-09-10, C23).
+    final cure = '$actual' == '$expected?'
+        ? " The query's type is nullable and the type argument inferred the "
+            'non-nullable one: name it, as in setQueryData<$actual>(key, '
+            'value).'
+        : '';
+    return 'Query $key holds $actual but was read as $expected. One key is '
+        'being used with two data types.$cure';
+  }
 }
 
 /// Every query, keyed by [QueryKey].
@@ -332,13 +344,16 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   }
 
   @override
+  @internal
   void onQueryStateUpdated(Query<Object?> query, QueryAction action) =>
       notify(QueryUpdated(query, action));
 
   @override
+  @internal
   void onQueryRemovalRequested(Query<Object?> query) => remove(query);
 
   @override
+  @internal
   void onQueryFetchSuccess(Query<Object?> query, Object? data) {
     onSuccess?.call(data, query);
     onSettled?.call(
@@ -346,6 +361,7 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   }
 
   @override
+  @internal
   void onQueryFetchError(
     Query<Object?> query,
     Object error,

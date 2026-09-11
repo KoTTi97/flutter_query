@@ -247,8 +247,9 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   }
 }
 
-/// Same as [hasNextPage] on the observer, for callers holding only options and
-/// data (a binding rendering from a cache snapshot, say).
+/// The top-level `hasNextPage` under a name the observer can reach from
+/// inside its class, where `hasNextPage` is its own getter. Not exported:
+/// nothing outside the package needs it (ninth review, 2026-09-10, C24).
 bool hasNextPageOf<TPageData, TPageParam>(
   InfiniteQueryOptions<TPageData, TPageParam> options,
   InfiniteData<TPageData, TPageParam>? data,

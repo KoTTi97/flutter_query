@@ -110,7 +110,13 @@ cached. Upstream's `skipToken` is `Enabled.no`.
 | `RetryPolicy.when((failureCount, error, stackTrace) => …)` | |
 | `RetryDelay.exponential()` | the default backoff: 1 s, 2 s, 4 s, … capped |
 | `RetryDelay.fixed(d)` | |
-| `RetryDelay.custom((failureCount, error) => …)` | |
+| `RetryDelay.dynamic((failureCount, error) => …)` | computed per failure |
+
+The computed forms come in three families, named by what they compute:
+`.when(predicate)` decides yes or no (`Enabled`, `RetryPolicy`, `RefetchOn`),
+`.dynamic(fn)` computes the value itself from the query or the attempt
+(`StaleTime`, `RefetchInterval`, `RetryDelay`), and `.compute(fn)` produces
+data (`InitialData`, `PlaceholderData`).
 
 While a query is retrying, `failureCount` and `failureReason` are on the
 result, so the UI can say "attempt 2 of 3" without owning a counter. A

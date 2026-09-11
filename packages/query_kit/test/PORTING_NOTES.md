@@ -737,7 +737,7 @@ Core, fixed:
     cancelled and re-armed on every rebuild — a widget rebuilding faster than
     its interval never polled (1 fetch in a second instead of 11). Upstream
     compares the *resolved* values; so does the port now.
-15. **A throwing `RetryPolicy.when` or `RetryDelay.custom` hung the fetch
+15. **A throwing `RetryPolicy.when` or `RetryDelay.dynamic` (then `.custom`) hung the fetch
     forever.** The throw escaped the retryer's catch block into an `.ignore()`d
     future, and the completer was never settled: `pending`/`fetching` after a
     minute, no error anywhere. Upstream has the same hole (an unhandled
@@ -2199,6 +2199,131 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   `serialize-javascript` and `image-size` with no fix at all), all in the
   build tooling of the documentation site; both example backends audit clean.
 
+- **C20 — the `InfiniteData` a fetch wrote held two growable lists, and
+  `flatten<T>()` cast each page blindly** (deep-dive api-design P5; #40,
+  #43). Reproduced with the probe: `getInfiniteQueryData(key)!.pages.add(…)`
+  threw nothing and the cache read back two pages after one fetch — a
+  mutation behind every observer's back, which #16's "an infinite query is
+  an ordinary `Query<InfiniteData>`" had promised could not happen; and
+  `InfiniteData<int, int>(pages: [1, 2]).flatten<int>()` failed on `_TypeError:
+  type 'int' is not a subtype of type 'Iterable<int>' in type cast`, naming
+  neither the page nor a way out. **Decision** (#40): every `InfiniteData`
+  the library writes seals its lists — `addToEnd`/`addToStart` return
+  `List.unmodifiable` (that covers the fetch result and the `maxPages`
+  drop), `copyWith` copies a *replacement* list into an unmodifiable one and
+  keeps a list the instance already holds as it is, identity included, and
+  the structural-sharing walk builds its result on `previous.copyWith`
+  rather than `next.copyWith`, so an unchanged list keeps its identity (the
+  fourth review's `C-M1 … shared structurally on refetch` went red when the
+  first cut wrapped unconditionally — `same(before.pageParams)` — and is
+  what pinned that rule). The `const` constructor is untouched and wraps
+  nothing: a `const [...]` literal is already unmodifiable, and a growable
+  list handed in through `initialData`/`setQueryData` is the caller's own,
+  one sentence in the class doc says so. `flatten<TItem>()` checks every
+  page `is Iterable<TItem>` up front and throws an `ArgumentError` naming
+  the page's runtime type and the two cures (a type argument, or a `select`
+  over the pages). Value equality is unchanged — over the two lists'
+  contents — so the ported suites' `const InfiniteData(...)` expectations
+  still match a sealed result; a page that is itself a `List` compares by
+  `==` as it always did. Alternative not taken: dropping `const` to wrap in
+  the constructor, which would break every literal in tests and docs for a
+  guarantee the cache boundary gives anyway. Regressions: `C20 / P5 the
+  pages and pageParams a fetch writes are unmodifiable`, `C20 / P5 a
+  structurally shared refetch result is unmodifiable too, and an unchanged
+  list keeps its identity`, `C20 / P5 flatten<T>() over pages that are not
+  Iterable<T> throws an ArgumentError naming the page type and the cure`.
+
+- **C21 — the `*ObserverRef` interfaces were implementable and the cache
+  plumbing callable from any package** (deep-dive api-design; #40, #43). The
+  probe implemented `QueryObserverRef` from a consumer package and it
+  compiled. **Decision** (#40): the two refs stay `abstract interface class`
+  and exported — a cache event names its observer through them, and Dart
+  cannot say "implementable inside the package only" across libraries
+  without `part` files — and their *members* are `@internal`: the eight of
+  `QueryObserverRef` (`onQueryUpdate`, `isEnabledForQuery`,
+  `isStaticForQuery`, `currentResultIsStale`, `shouldFetchOnWindowFocus`,
+  `shouldFetchOnReconnect`, `refetchOnEvent`, `observerQueryOptions`),
+  `MutationObserverRef.onMutationUpdate`, the same members' overrides on
+  `QueryObserver` and `MutationObserver` — the analyzer flags a call through
+  the override only when the override itself carries the annotation, which
+  a throwaway consumer file confirmed — and the cache-side overrides
+  `QueryCache.onQueryStateUpdated` / `onQueryRemovalRequested` /
+  `onQueryFetchSuccess` / `onQueryFetchError` and `MutationCache`'s
+  `canRunMutation`, `onMutationSettled`, `onMutationStateUpdated`,
+  `onMutationObserverAdded`, `onMutationObserverRemoved`,
+  `onMutationRemovalRequested`, `onMutationStarting`, `onMutationSuccess`,
+  `onMutationSettledCallback`, `onMutationError`. `Query`/`Mutation`'s own
+  plumbing (`addObserver`, `removeObserver`, `setOptions`, `setData`,
+  `destroy`, `markRemoved`, `onFocus`, `onOnline`) was `@internal` already;
+  `Mutation.execute` stays public because the binding's disposed-controller
+  path (C18) runs a mutation through it. `dart analyze --fatal-infos` over
+  the binding, both examples and the snippets is clean, so nothing outside
+  the core called any of them. No runtime regression is possible for an
+  analyzer diagnostic; the barrel's `hide` lists are asserted by
+  `barrel_test.dart` (VM only — it reads the source, since the Flutter-bundled
+  SDK ships no `dart:mirrors` and the binding has none either).
+
+- **C23 — the shape nits, decided one by one** (deep-dive api-design P4/P6,
+  release review; #40, #43). Changed: (1) `toString` on every sealed option
+  value (`StaleTime`, `GcTime`, `Enabled`, `RetryPolicy`, `RetryDelay`,
+  `RefetchOn`, `RefetchInterval`, `InitialData`, `PlaceholderData`) reads as
+  the source form — `StaleTime.duration(0:00:05.000000)`,
+  `RetryPolicy.times(3)` — and `QueryOptions`, both observer shapes and the
+  three infinite shapes print the key plus the fields that are set, through
+  a `@protected` `toStringFields` map each subclass extends (the infinite
+  shapes drop the derived `behavior` and `queryFn` for the paging fields);
+  `QueryFilters`/`MutationFilters` the same through a hidden
+  `describeFilters`; a `MutationResult` prints its variant, the variables
+  once set, the data or the error, and `paused`. (2) `MutationState`'s
+  `==`/`hashCode` no longer include `errorStackTrace`, aligned on
+  `QueryState`, whose traces were never compared: a trace never compares
+  equal by value, so every rebuilt error state was unequal to the one it
+  copied. No ported mutation case depended on it — the suite passed
+  unchanged. (6) `FetchBehavior` and `FetchContext` are exported: the type
+  of `QueryOptions.behavior` was in a public signature but not nameable,
+  which broke `dart doc` links and forced `dynamic` on anyone holding one;
+  `QueryCacheRef`/`MutationCacheRef` stay hidden, and building a
+  `FetchContext` stays `@internal`. (7) The binding hides `ObservedState`
+  and `observedStateOf`, the seam between its builders and controllers,
+  as it already hid `QueryScope`/`QueryScopeElement`. (9) `setQueryData(key,
+  'x')` against a query holding `String?` infers `String` and throws
+  `QueryDataTypeError`; the error now names the cure when the two types
+  differ only in nullability — `setQueryData<String?>(key, value)` — and
+  the method's doc says so. (10) The mutation callback types are typedefs
+  — `OnMutate`, `OnMutationSuccess`, `OnMutationError`,
+  `OnMutationSettled` — used by `MutationOptions`, `MutationOptions.simple`,
+  `MutateCallbacks` and `DefaultedMutationOptions`; the binding repeated
+  none. (11) `RetryDelay.custom` is `RetryDelay.dynamic`
+  (`RetryDelayCustom` → `RetryDelayDynamic`), the one outlier among three
+  consistent families — `.when(predicate)` decides, `.dynamic(fn)` computes
+  the value from the query or the attempt, `.compute(fn)` produces data —
+  named in the options guide. Doc only: (3) `RetryTimes(0)` "behaves like"
+  `RetryPolicy.never`, the two being distinct values of a sealed type; (4)
+  `retryOnMount` defaults to `true`, on the field and on `QueryDefaults`;
+  (5) `QueryKey` parts compare with `==`, so `QueryKey([1]) ==
+  QueryKey([1.0])` on every platform; (8) `MutationResult.mutate` has no
+  per-call callbacks — a divergence row below, and the field's doc points
+  at `MutationObserver.mutate(variables, callbacks)` /
+  `MutationController.mutate`. Kept: `QueryClient.infiniteObserverOptions`,
+  `QueriesObserver`'s eager validation, the refs as `abstract interface
+  class` (C21). Regressions: `C23.2 two MutationStates differing only in
+  errorStackTrace are equal`, `C23.9 setQueryData against a nullable query
+  names the type argument to write`, `C23.1 toString reads as the source
+  form, unset fields skipped`; `barrel_test.dart`'s `C23.6 …`; the
+  binding's `C23.7 the barrel hides the seam between builders and
+  controllers`.
+
+- **C24 — vestigial surface** (deep-dive api-design A9; #40, #43).
+  `QueryFilters.withType` is gone: zero callers, a one-field copy of a
+  `const`-constructible type. `hasNextPageOf`/`hasPreviousPageOf` are
+  hidden from the barrel: they exist so `InfiniteQueryObserver` can reach
+  the top-level `hasNextPage`/`hasPreviousPage` from inside a class whose
+  own getters shadow the names, and a grep of the binding, both examples
+  and the site found no caller outside `lib/`. `infiniteObserverOptions`
+  and `QueriesObserver`'s discarded `defaultQueryObserverOptions` call stay
+  as their docs describe. Regression: `barrel_test.dart`'s `C24 the
+  observer-internal paging aliases are hidden`.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -2283,4 +2408,5 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | `keepPreviousData` / `placeholderData: (prev) => prev` | `const PlaceholderData.keepPrevious()` — identical to `.compute((previous, _) => previous)` including its "a previous `null` means no placeholder" rule, but `const`, so it survives the observer's placeholder memoisation | functional improvements plan, `competitor-deep-dive.md` §6 #4 |
 | the binding: a provider always borrows its client | `QueryClientProvider.create` owns the client it builds and `clear()`s it once, after the inner provider unmounted; the `client:` form still borrows and never clears | functional improvements plan, `competitor-deep-dive.md` §6 #7 |
 | the binding: side effects need a builder that also rebuilds | `QueryListener` / `InfiniteQueryListener` / `MutationListener` borrow a controller, deliver each accepted transition off the build phase and never rebuild their `child`; a rejected `listenWhen` still advances the comparison state | functional improvements plan, `competitor-deep-dive.md` §6 #8 |
+| `mutate(variables, { onSuccess, onError, onSettled })` on the result: per-call callbacks ride on the result's own `mutate` | `MutationResult.mutate` takes the variables only; per-call callbacks are `MutationObserver.mutate(variables, MutateCallbacks(…))` — `MutationController.mutate(variables, callbacks)` in the binding | ninth review, 2026-09-10 (C23.8) |
 | `mutate` on a forgotten `useMutation` observer re-attaches it to the new mutation, which is then never collected | the binding: `mutate`/`mutateAsync` on a disposed `MutationController` run the mutation through the cache without attaching anything — the options' callbacks run, the per-call ones are dropped as for any unlistened run, `value` stays idle, and the settled mutation is collected after its `gcTime` | ninth review, 2026-09-10 (C18) |

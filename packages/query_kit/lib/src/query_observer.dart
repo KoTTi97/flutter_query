@@ -695,6 +695,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   // -------------------------------------------------- QueryObserverRef
 
   @override
+  @internal
   void onQueryUpdate() {
     updateResult();
     if (hasListeners) {
@@ -703,26 +704,33 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   }
 
   @override
+  @internal
   bool get isEnabledForQuery => _options.enabled.resolve(_currentQuery);
 
   @override
+  @internal
   bool get isStaticForQuery => _options.staleTime.isStaticFor(_currentQuery);
 
   @override
+  @internal
   bool get currentResultIsStale => _currentResult.isStale;
 
   @override
+  @internal
   bool shouldFetchOnWindowFocus() =>
       _shouldFetchOn(_currentQuery, _options, _options.refetchOnWindowFocus);
 
   @override
+  @internal
   bool shouldFetchOnReconnect() =>
       _shouldFetchOn(_currentQuery, _options, _options.refetchOnReconnect);
 
   @override
+  @internal
   void refetchOnEvent() => executeFetch(cancelRefetch: false).ignore();
 
   @override
+  @internal
   DefaultedQueryOptions<Object?> get observerQueryOptions =>
       _options.queryOptions;
 }

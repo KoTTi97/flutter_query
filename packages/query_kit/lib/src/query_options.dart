@@ -157,6 +157,8 @@ final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
       other is InitialDataValue<TQueryData> && other.data == data;
   @override
   int get hashCode => Object.hash(InitialDataValue<TQueryData>, data);
+  @override
+  String toString() => 'InitialData.value($data)';
 }
 
 /// The [InitialData.compute] variant: a seed computed lazily, once, when the
@@ -178,6 +180,8 @@ final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
       other is InitialDataCompute<TQueryData> && other.compute == compute;
   @override
   int get hashCode => Object.hash(InitialDataCompute<TQueryData>, compute);
+  @override
+  String toString() => 'InitialData.compute($compute)';
 }
 
 /// Data shown while the real data is missing. Never written to the cache.
@@ -240,6 +244,8 @@ final class PlaceholderDataKeepPrevious<TQueryData>
 
   @override
   int get hashCode => (PlaceholderDataKeepPrevious<TQueryData>).hashCode;
+  @override
+  String toString() => 'PlaceholderData.keepPrevious()';
 }
 
 /// The [PlaceholderData.value] variant: a fixed placeholder, shown whenever
@@ -257,6 +263,8 @@ final class PlaceholderDataValue<TQueryData>
       other is PlaceholderDataValue<TQueryData> && other.data == data;
   @override
   int get hashCode => Object.hash(PlaceholderDataValue<TQueryData>, data);
+  @override
+  String toString() => 'PlaceholderData.value($data)';
 }
 
 /// The [PlaceholderData.compute] variant: a placeholder computed from what
@@ -282,6 +290,8 @@ final class PlaceholderDataCompute<TQueryData>
       other is PlaceholderDataCompute<TQueryData> && other.compute == compute;
   @override
   int get hashCode => Object.hash(PlaceholderDataCompute<TQueryData>, compute);
+  @override
+  String toString() => 'PlaceholderData.compute($compute)';
 }
 
 /// Everything that describes a query, at the cache layer.
@@ -412,6 +422,37 @@ class QueryOptions<TQueryData> {
         meta: meta ?? this.meta,
         behavior: behavior ?? this.behavior,
       );
+
+  /// What [toString] shows after the key: every field, in declaration order,
+  /// with the unset (`null`) ones skipped — so a test failure or a debug
+  /// print reads `QueryOptions<int>(QueryKey(["a"]), staleTime: …)` rather
+  /// than `Instance of 'QueryOptions<int>'` (ninth review, 2026-09-10, C23).
+  /// A subclass adds its own fields after these.
+  @protected
+  Map<String, Object?> get toStringFields => <String, Object?>{
+        'queryFn': queryFn,
+        'enabled': enabled,
+        'staleTime': staleTime,
+        'gcTime': gcTime,
+        'retry': retry,
+        'retryDelay': retryDelay,
+        'networkMode': networkMode,
+        'initialData': initialData,
+        'initialDataUpdatedAt': initialDataUpdatedAt,
+        'initialDataUpdatedAtCompute': initialDataUpdatedAtCompute,
+        'structuralSharing': structuralSharing,
+        'meta': meta,
+        'behavior': behavior,
+      };
+
+  @override
+  String toString() {
+    final fields = toStringFields.entries
+        .where((field) => field.value != null)
+        .map((field) => ', ${field.key}: ${field.value}')
+        .join();
+    return '$runtimeType($queryKey$fields)';
+  }
 }
 
 /// Query options plus everything only an observer cares about.
@@ -494,7 +535,23 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
   final bool? refetchIntervalInBackground;
 
   /// Whether a query that ended in an error retries when an observer mounts.
+  /// Default `true`, as upstream: the mount refetches, and only
+  /// `retryOnMount: false` leaves the error standing until something else
+  /// asks.
   final bool? retryOnMount;
+
+  @override
+  Map<String, Object?> get toStringFields => <String, Object?>{
+        ...super.toStringFields,
+        'select': select,
+        'placeholderData': placeholderData,
+        'refetchOnMount': refetchOnMount,
+        'refetchOnWindowFocus': refetchOnWindowFocus,
+        'refetchOnReconnect': refetchOnReconnect,
+        'refetchInterval': refetchInterval,
+        'refetchIntervalInBackground': refetchIntervalInBackground,
+        'retryOnMount': retryOnMount,
+      };
 
   /// This, with the given fields replaced; each shape returns its own type.
   /// `select` is not a field here — it is what tells the two shapes apart —
