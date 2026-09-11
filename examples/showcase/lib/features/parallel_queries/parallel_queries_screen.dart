@@ -41,12 +41,12 @@ const Feature parallelQueriesFeature = Feature(
 
 /// One post's query. [delay] is the backend's per-request knob, so one of the
 /// three can be made to finish visibly later than the others.
-QueryObserverOptions<Post, Post> postQuery(
+QueryObserverOptions<Post> postQuery(
   ShowcaseApi api,
   int id, {
   Duration? delay,
 }) =>
-    QueryObserverOptions<Post, Post>(
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) => api.post(id, signal: context.signal, delay: delay),
     );

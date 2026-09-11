@@ -71,22 +71,22 @@ QueryKey get addTodoKey => QueryKey(const <Object?>['todos', 'create']);
 /// [readerStaleTime], while a `Load` button asks for zero so that
 /// `QueryClient.query` always fetches instead of deciding the cached data is
 /// still fresh.
-QueryObserverOptions<List<Post>, List<Post>> inspectorPostsQuery(
+QueryObserverOptions<List<Post>> inspectorPostsQuery(
   ShowcaseApi api, {
   required StaleTime staleTime,
 }) =>
-    QueryObserverOptions<List<Post>, List<Post>>(
+    QueryObserverOptions<List<Post>>(
       queryKey: ShowcaseKeys.posts,
       queryFn: (context) => api.posts(signal: context.signal),
       staleTime: staleTime,
       gcTime: inspectorGcTime,
     );
 
-QueryObserverOptions<List<Todo>, List<Todo>> inspectorTodosQuery(
+QueryObserverOptions<List<Todo>> inspectorTodosQuery(
   ShowcaseApi api, {
   required StaleTime staleTime,
 }) =>
-    QueryObserverOptions<List<Todo>, List<Todo>>(
+    QueryObserverOptions<List<Todo>>(
       queryKey: ShowcaseKeys.todos,
       queryFn: (context) => api.todos(signal: context.signal),
       staleTime: staleTime,
@@ -95,11 +95,11 @@ QueryObserverOptions<List<Todo>, List<Todo>> inspectorTodosQuery(
 
 /// Post 999. No retries: the point is to watch an error land in the cache,
 /// and a reader counting requests should see exactly one.
-QueryObserverOptions<Post, Post> inspectorMissingPostQuery(
+QueryObserverOptions<Post> inspectorMissingPostQuery(
   ShowcaseApi api, {
   required StaleTime staleTime,
 }) =>
-    QueryObserverOptions<Post, Post>(
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(missingPostId),
       queryFn: (context) => api.post(missingPostId, signal: context.signal),
       staleTime: staleTime,
@@ -264,7 +264,7 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen> {
   /// The imperative read: no observer, no refetch triggers, and nobody
   /// waiting on the future — a refused one (the missing post) is meant to
   /// land in the cache as an error, not to be thrown at the widget tree.
-  void _load<T>(QueryObserverOptions<T, T> options) =>
+  void _load<T>(QueryObserverOptions<T> options) =>
       _client.query<T>(options).ignore();
 
   void _addATodo() {
@@ -513,7 +513,7 @@ class _Action extends StatelessWidget {
 class _Reader<T> extends StatelessWidget {
   const _Reader({required this.options, required this.describe});
 
-  final QueryObserverOptions<T, T> options;
+  final QueryObserverOptions<T> options;
   final String Function(T data) describe;
 
   @override

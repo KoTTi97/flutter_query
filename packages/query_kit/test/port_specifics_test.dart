@@ -327,7 +327,7 @@ void main() {
     client.setQueryData<int>(key, 3);
     final observer = QueryObserver<int, int>(
       client,
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         select: (_) => throw StateError('selector'),
@@ -348,7 +348,7 @@ void main() {
     final placeholder = PlaceholderData<int>.value(2);
     final observer = QueryObserver<int, int>(
       client,
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         placeholderData: placeholder,
@@ -356,7 +356,7 @@ void main() {
       ),
     );
     expect(observer.currentResult.dataOrNull, 4);
-    observer.setOptions(QueryObserverOptions(
+    observer.setOptions(QuerySelectOptions(
       queryKey: key,
       enabled: Enabled.no,
       placeholderData: placeholder,
@@ -466,7 +466,7 @@ void thirdReview() {
     final client = testClient();
     final key = queryKey();
     var fetches = 0;
-    QueryObserverOptions<int, int> options() => QueryObserverOptions<int, int>(
+    QueryObserverOptions<int> options() => QueryObserverOptions<int>(
           queryKey: key,
           queryFn: (_) async => ++fetches,
           // A new closure every call, as a widget's `build` produces.
@@ -565,8 +565,8 @@ void thirdReview() {
     final client = testClient();
     final key = queryKey();
     client.setQueryData<List<int>>(key, <int>[1, 2, 3, 4]);
-    QueryObserverOptions<List<int>, List<int>> options() =>
-        QueryObserverOptions<List<int>, List<int>>(
+    QuerySelectOptions<List<int>, List<int>> options() =>
+        QuerySelectOptions<List<int>, List<int>>(
           queryKey: key,
           enabled: Enabled.no,
           // A fresh list on every call — the canonical selector.
@@ -792,7 +792,7 @@ void thirdReview() {
     final key = queryKey();
     Future<int> page(InfinitePageContext<int> context) async => 0;
     int? next(int page, List<int> pages, int param, List<int> params) => null;
-    InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>> options() =>
+    InfiniteQueryObserverOptions<int, int> options() =>
         InfiniteQueryObserverOptions(
           queryKey: key,
           initialPageParam: 0,
@@ -825,7 +825,7 @@ void thirdReview() {
     );
     expect(
       () => observer.setOptions(
-        QueryObserverOptions<InfiniteData<int, int>, InfiniteData<int, int>>(
+        QueryObserverOptions<InfiniteData<int, int>>(
           queryKey: key,
         ),
       ),
@@ -1078,7 +1078,7 @@ void fourthReview() {
     final client = testClient();
     final key = queryKey();
     client.setQueryData<int>(key, 1);
-    QueryObserverOptions<int, int> options() => QueryObserverOptions(
+    QuerySelectOptions<int, int> options() => QuerySelectOptions(
         queryKey: key, enabled: Enabled.no, select: _throwingSelect);
     final observer = QueryObserver<int, int>(client, options());
     final failedAt = observer.currentResult.errorUpdatedAt;
@@ -1372,7 +1372,7 @@ void fourthReview() {
       (time) async {
     final client = testClient();
     final key = queryKey();
-    InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>> options(
+    InfiniteQueryObserverOptions<int, int> options(
       int? Function(int page, List<int> pages, int param, List<int> params)
           next,
     ) =>
@@ -1436,8 +1436,7 @@ void fourthReview() {
       throwsArgumentError,
     );
 
-    final observerOptions =
-        InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>>(
+    final observerOptions = InfiniteQueryObserverOptions<int, int>(
       queryKey: key,
       pageFn: page,
       initialPageParam: 0,
@@ -1447,7 +1446,7 @@ void fourthReview() {
     final observerCopy = observerOptions.copyWith(maxPages: 4);
     expect(
       observerCopy,
-      isA<InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>>>(),
+      isA<InfiniteQueryObserverOptions<int, int>>(),
     );
     expect(observerCopy.maxPages, 4);
     expect(observerCopy.pageFn, same(page));
@@ -1538,7 +1537,7 @@ void fourthReview() {
     final params = <int?>[];
     final observer = InfiniteQueryObserver<int, int?, InfiniteData<int, int?>>(
       client,
-      InfiniteQueryObserverOptions<int, int?, InfiniteData<int, int?>>(
+      InfiniteQueryObserverOptions<int, int?>(
         queryKey: key,
         initialPageParam: 0,
         pageFn: (context) async {
@@ -1600,7 +1599,7 @@ void fourthReview() {
     );
     final observer = QueryObserver<String, String>(
       client,
-      QueryObserverOptions<String, String>(
+      QueryObserverOptions<String>(
         queryKey: queryKey(),
         retry: RetryPolicy.times(3),
         retryDelay: RetryDelay.fixed(ms(100)),
@@ -1739,7 +1738,7 @@ void fifthReviewObserver() {
       (time) async {
     final client = testClient();
     var calls = 0;
-    final observer = client.observe<List<int>, Uint8List>(QueryObserverOptions(
+    final observer = client.observe<List<int>, Uint8List>(QuerySelectOptions(
       queryKey: queryKey(),
       queryFn: (_) => [1, ++calls],
       select: Uint8List.fromList,
@@ -1863,9 +1862,14 @@ void fifthReviewObserver() {
     final key = queryKey();
     final good = client.observe<int, int>(
         QueryObserverOptions(queryKey: key, queryFn: (_) => 1));
+    // Since ADR-0001 a plain shape has one slot, so `QueryObserver<int,
+    // String>` without a select is a compile error at every natural call
+    // site; the one way past the types is covariance — a
+    // `QueryObserverOptions<Never>` is a `QueryObserverOptionsBase<int,
+    // String>` — and the observer still refuses it at the door.
     expect(
-      () => client.observe<int, String>(
-          QueryObserverOptions(queryKey: key, queryFn: (_) => 1)),
+      () => client
+          .observe<int, String>(QueryObserverOptions<Never>(queryKey: key)),
       throwsArgumentError,
     );
     good.subscribe((_) {});
@@ -1889,7 +1893,7 @@ void fifthReviewObserver() {
       (time) async {
     final client = testClient();
     final key = queryKey();
-    final observer = client.observe<int, String>(QueryObserverOptions(
+    final observer = client.observe<int, String>(QuerySelectOptions(
       queryKey: key,
       queryFn: (_) => 1,
       select: (value) => '$value',
@@ -1897,15 +1901,16 @@ void fifthReviewObserver() {
     observer.subscribe((_) {});
     await time.flushMicrotasks();
     expect(observer.currentResult.dataOrNull, '1');
+    // The plain shape reaches an `<int, String>` observer only as
+    // `QueryObserverOptions<Never>` (see D3/F10 above).
     expect(
-      () => observer
-          .setOptions(QueryObserverOptions(queryKey: key, queryFn: (_) => 2)),
+      () => observer.setOptions(QueryObserverOptions<Never>(queryKey: key)),
       throwsArgumentError,
     );
     expect(observer.options.select, isNotNull);
     expect(
-      () => observer.getOptimisticResult(
-          QueryObserverOptions(queryKey: key, queryFn: (_) => 2)),
+      () => observer
+          .getOptimisticResult(QueryObserverOptions<Never>(queryKey: key)),
       throwsArgumentError,
     );
     expect(observer.currentResult.dataOrNull, '1');
@@ -1919,8 +1924,7 @@ void fifthReviewObserver() {
       (time) async {
     final client = testClient();
     final key = queryKey();
-    InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>> options(
-            {required bool more}) =>
+    InfiniteQueryObserverOptions<int, int> options({required bool more}) =>
         InfiniteQueryObserverOptions(
           queryKey: key,
           pageFn: (context) => context.pageParam,
@@ -2042,7 +2046,7 @@ void eighthReview() {
     final query = client.queryCache.build<String>(
       client,
       client.defaultQueryOptions(
-        QueryObserverOptions<String, String>(queryKey: queryKey()),
+        QueryObserverOptions<String>(queryKey: queryKey()),
       ),
     );
     // The other half of the persistence door, `QueryCache.build`, has always
@@ -2211,6 +2215,44 @@ class _CacheWatcher {
 // fix. C4's cases are in `port_lifecycle_test.dart`.
 
 void ninthReview() {
+  // C1 — one type slot for a plain query, two for a select (ADR-0001). The
+  // old `QueryObserverOptions<TQueryData, TData>` carried `TData` only in its
+  // optional `select`, so a literal without one inferred `TData` to `dynamic`
+  // and put a `Query<dynamic>` in the cache. Now the plain shape has one
+  // slot, anchored by `queryFn`, and the select shape's `select` is required
+  // — a `QuerySelectOptions` without one is a compile error
+  // (`missing_required_argument`), which is documented rather than tested.
+  testFakeAsync('C1: a plain literal makes a QueryObserver<int, int>',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final observer = QueryObserver(
+        client, QueryObserverOptions(queryKey: key, queryFn: (_) async => 1));
+    expect(observer, isA<QueryObserver<int, int>>());
+    expect(client.queryCache.find(filters: QueryFilters(queryKey: key)),
+        isA<Query<int>>());
+    observer.destroy();
+    client.clear();
+  });
+
+  testFakeAsync('C1: a select literal makes a QueryObserver<int, String>',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final observer = QueryObserver(
+        client,
+        QuerySelectOptions(
+            queryKey: key, queryFn: (_) async => 1, select: (n) => '$n'));
+    expect(observer, isA<QueryObserver<int, String>>());
+    expect(client.queryCache.find(filters: QueryFilters(queryKey: key)),
+        isA<Query<int>>());
+    observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(observer.currentResult.dataOrNull, '1');
+    observer.destroy();
+    client.clear();
+  });
+
   // C3 — a throwing cache `onError`/`onSettled` left every caller of the
   // fetch pending forever: the hook ran before the operation was completed
   // and `_settle`'s own future is nobody's.
@@ -2589,7 +2631,7 @@ void ninthReview() {
         updatedAt: stamp);
     final observer = InfiniteQueryObserver<int, int, int>(
       client,
-      InfiniteQueryObserverOptions(
+      InfiniteQuerySelectOptions(
         queryKey: key,
         pageFn: (_) => 1,
         initialPageParam: 0,
@@ -2626,7 +2668,7 @@ void ninthReview() {
         updatedAt: stamp);
     final observer = InfiniteQueryObserver<int, int, int>(
       client,
-      InfiniteQueryObserverOptions(
+      InfiniteQuerySelectOptions(
         queryKey: key,
         pageFn: (_) => 1,
         initialPageParam: 0,
@@ -2662,8 +2704,8 @@ void ninthReview() {
     final key = queryKey();
     client.setQueryData(key, <int>[1, 2, 3]);
     final selector = _Selector();
-    QueryObserverOptions<List<int>, int> options() =>
-        QueryObserverOptions<List<int>, int>(
+    QuerySelectOptions<List<int>, int> options() =>
+        QuerySelectOptions<List<int>, int>(
           queryKey: key,
           enabled: Enabled.no,
           select: selector.length,

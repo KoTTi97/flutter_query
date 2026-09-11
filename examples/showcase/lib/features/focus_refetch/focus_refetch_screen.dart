@@ -103,8 +103,8 @@ const Duration longBackground = Duration(hours: 1);
 /// entry that mounts with the screen would move every one of those totals.
 /// The reading itself is not the point here — `fetches` and
 /// `shouldRefetchOnFocus` are.
-QueryObserverOptions<int, int> thresholdCounterQuery(ShowcaseApi api) =>
-    QueryObserverOptions<int, int>(
+QueryObserverOptions<int> thresholdCounterQuery(ShowcaseApi api) =>
+    QueryObserverOptions<int>(
       queryKey: focusKeyC,
       queryFn: (context) => api.counter(signal: context.signal),
       staleTime: StaleTime.zero,
@@ -130,14 +130,14 @@ RefetchOn _olderThanTenSeconds(Query<Object?> query) =>
         : RefetchOn.never;
 
 /// One entry's query: the same server time, under the knobs the screen turns.
-QueryObserverOptions<ServerTime, ServerTime> focusTimeQuery(
+QueryObserverOptions<ServerTime> focusTimeQuery(
   ShowcaseApi api, {
   required QueryKey queryKey,
   required RefetchOn onFocus,
   required RefetchOn onMount,
   required StaleTime staleTime,
 }) =>
-    QueryObserverOptions<ServerTime, ServerTime>(
+    QueryObserverOptions<ServerTime>(
       queryKey: queryKey,
       queryFn: (context) => api.time(signal: context.signal),
       staleTime: staleTime,
@@ -298,7 +298,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
     }
   }
 
-  QueryObserverOptions<ServerTime, ServerTime> get _optionsA => focusTimeQuery(
+  QueryObserverOptions<ServerTime> get _optionsA => focusTimeQuery(
         _api,
         queryKey: focusKeyA,
         onFocus: _onFocusA,
@@ -308,7 +308,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen> {
         staleTime: _staleTime,
       );
 
-  QueryObserverOptions<ServerTime, ServerTime> get _optionsB => focusTimeQuery(
+  QueryObserverOptions<ServerTime> get _optionsB => focusTimeQuery(
         _api,
         queryKey: focusKeyB,
         onFocus: _onFocusB,

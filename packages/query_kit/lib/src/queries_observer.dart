@@ -17,12 +17,12 @@ import 'query_result.dart';
 class QueriesObserver<TQueryData, TData> {
   /// Builds the queries without fetching until the first subscription.
   QueriesObserver(
-      this._client, List<QueryObserverOptions<TQueryData, TData>> queries) {
+      this._client, List<QueryObserverOptionsBase<TQueryData, TData>> queries) {
     setQueries(queries);
   }
 
   final QueryClient _client;
-  List<QueryObserverOptions<TQueryData, TData>> _queries = [];
+  List<QueryObserverOptionsBase<TQueryData, TData>> _queries = [];
   List<QueryObserver<TQueryData, TData>> _observers = [];
   final Map<QueryObserver<TQueryData, TData>, void Function()> _subscriptions =
       Map.identity();
@@ -91,9 +91,9 @@ class QueriesObserver<TQueryData, TData> {
 
   /// Reuses observers by key and occurrence, preserving result order. New
   /// queries subscribe immediately when this collection is being observed.
-  void setQueries(List<QueryObserverOptions<TQueryData, TData>> queries) {
+  void setQueries(List<QueryObserverOptionsBase<TQueryData, TData>> queries) {
     final nextQueries =
-        List<QueryObserverOptions<TQueryData, TData>>.of(queries);
+        List<QueryObserverOptionsBase<TQueryData, TData>>.of(queries);
     final available = <QueryKey, Queue<QueryObserver<TQueryData, TData>>>{};
     for (final observer in _observers) {
       available.putIfAbsent(observer.options.queryKey, Queue.new).add(observer);

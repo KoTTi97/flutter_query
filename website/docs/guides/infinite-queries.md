@@ -11,7 +11,7 @@ is that the function is `pageFn` rather than `queryFn`, and it receives a typed
 page context.
 
 ```dart
-InfiniteQueryObserverOptions<List<Post>, int, InfiniteData<List<Post>, int>>(
+InfiniteQueryObserverOptions<List<Post>, int>(
   queryKey: QueryKey(<Object?>['feed']),
   pageFn: (context) => api.feed(cursor: context.pageParam),
   initialPageParam: 0,
@@ -20,12 +20,18 @@ InfiniteQueryObserverOptions<List<Post>, int, InfiniteData<List<Post>, int>>(
 )
 ```
 
-:::note Two options types, as with plain queries
-`InfiniteQueryObserverOptions<TPageData, TPageParam, TData>` is what a
-*reader* takes — the third argument is `select`'s output, and its default is
-the whole `InfiniteData`. `InfiniteQueryOptions<TPageData, TPageParam>` is the
-two-argument form `QueryClient.query` takes, where there is no observer and so
-no `select`.
+:::note Two shapes, as with plain queries
+A *reader* takes one of two observer shapes, mirroring
+[`QueryObserverOptions` and `QuerySelectOptions`](options.md#two-shapes):
+`InfiniteQueryObserverOptions<TPageData, TPageParam>`, above, has no
+`select` and its data is the whole `InfiniteData<TPageData, TPageParam>`;
+`InfiniteQuerySelectOptions<TPageData, TPageParam, TData>` has a required
+`select` over it, the place to flatten pages into one list. The infinite entry
+points — `InfiniteQueryBuilder`, `context.infiniteQuery`,
+`watchInfiniteQuery`, `InfiniteQueryController` — take either and read every
+type argument off the options, so `InfiniteQueryBuilder(options: feedQuery(),
+…)` names none. `InfiniteQueryOptions<TPageData, TPageParam>` is what
+`QueryClient.query` takes, where there is no observer and so no `select`.
 :::
 
 - **`initialPageParam`** is where the first page starts.

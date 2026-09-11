@@ -141,8 +141,8 @@ class _CancellationScreenState extends State<CancellationScreen> {
 
   // --- the slow query ------------------------------------------------------
 
-  QueryObserverOptions<List<Post>, List<Post>> get _slowQuery =>
-      QueryObserverOptions<List<Post>, List<Post>>(
+  QueryObserverOptions<List<Post>> get _slowQuery =>
+      QueryObserverOptions<List<Post>>(
         queryKey: slowKey,
         queryFn: (context) {
           if (_ignoreSignal) {
@@ -174,8 +174,8 @@ class _CancellationScreenState extends State<CancellationScreen> {
 
   // --- search as you type --------------------------------------------------
 
-  QueryObserverOptions<List<Post>, List<Post>> _searchQuery(String needle) =>
-      QueryObserverOptions<List<Post>, List<Post>>(
+  QueryObserverOptions<List<Post>> _searchQuery(String needle) =>
+      QueryObserverOptions<List<Post>>(
         queryKey: searchKey(needle),
         // An empty box asks the backend nothing.
         enabled: needle.isEmpty ? Enabled.no : Enabled.yes,

@@ -194,7 +194,7 @@ class InfiniteQueryOptions<TPageData, TPageParam>
   /// pages, or to refetch a fixed number of them.
   ///
   /// Read only on the options handed to `QueryClient.infiniteQuery` (or
-  /// `query`). On an [InfiniteQueryObserverOptions] it is always `null`: an
+  /// `query`). On an [InfiniteQueryObserverOptionsBase] it is always `null`: an
   /// observer refetches as many pages as the query already holds, as
   /// upstream's observer does, and a fixed count there would throw away the
   /// pages the user had paged to on the next refetch.
@@ -288,11 +288,19 @@ class InfiniteQueryOptions<TPageData, TPageParam>
 }
 
 /// [InfiniteQueryOptions] plus the observer-only options.
+///
+/// Sealed over exactly two shapes, as [QueryObserverOptionsBase] is:
+/// [InfiniteQueryObserverOptions], which has no `select` and whose data is
+/// the [InfiniteData] the query holds, and [InfiniteQuerySelectOptions],
+/// which requires a `select` over it (ADR-0001). `InfiniteQueryObserver`
+/// and the binding's infinite entry points take this base: either shape
+/// carries all three type arguments, so inference reads them off the
+/// options and a call site names none.
 @immutable
-class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
+sealed class InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>
     extends InfiniteQueryOptions<TPageData, TPageParam> {
   /// The paging fields, the cache-layer options, and the observer's own.
-  const InfiniteQueryObserverOptions({
+  const InfiniteQueryObserverOptionsBase({
     required super.queryKey,
     required super.pageFn,
     required super.initialPageParam,
@@ -314,7 +322,6 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
     super.initialDataUpdatedAtCompute,
     super.structuralSharing,
     super.meta,
-    this.select,
     this.placeholderData,
     this.refetchOnMount,
     this.refetchOnWindowFocus,
@@ -324,36 +331,39 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
     this.retryOnMount,
   });
 
-  /// [QueryObserverOptions.select], over the whole [InfiniteData] — the place
-  /// to flatten pages into one list.
-  final TData Function(InfiniteData<TPageData, TPageParam> data)? select;
+  /// [QuerySelectOptions.select], over the whole [InfiniteData] — the place
+  /// to flatten pages into one list. `null` on an
+  /// [InfiniteQueryObserverOptions], never on an [InfiniteQuerySelectOptions].
+  SelectFn<InfiniteData<TPageData, TPageParam>, TData>? get select;
 
-  /// [QueryObserverOptions.placeholderData], as an [InfiniteData].
+  /// [QueryObserverOptionsBase.placeholderData], as an [InfiniteData].
   final PlaceholderData<InfiniteData<TPageData, TPageParam>>? placeholderData;
 
-  /// [QueryObserverOptions.refetchOnMount]. A refetch re-requests every held
-  /// page, first to last.
+  /// [QueryObserverOptionsBase.refetchOnMount]. A refetch re-requests every
+  /// held page, first to last.
   final RefetchOn? refetchOnMount;
 
-  /// [QueryObserverOptions.refetchOnWindowFocus].
+  /// [QueryObserverOptionsBase.refetchOnWindowFocus].
   final RefetchOn? refetchOnWindowFocus;
 
-  /// [QueryObserverOptions.refetchOnReconnect].
+  /// [QueryObserverOptionsBase.refetchOnReconnect].
   final RefetchOn? refetchOnReconnect;
 
-  /// [QueryObserverOptions.refetchInterval].
+  /// [QueryObserverOptionsBase.refetchInterval].
   final RefetchInterval? refetchInterval;
 
-  /// [QueryObserverOptions.refetchIntervalInBackground].
+  /// [QueryObserverOptionsBase.refetchIntervalInBackground].
   final bool? refetchIntervalInBackground;
 
-  /// [QueryObserverOptions.retryOnMount].
+  /// [QueryObserverOptionsBase.retryOnMount].
   final bool? retryOnMount;
 
-  /// This, with the given fields replaced, observer half included. `pages`
-  /// is not accepted either: see [InfiniteQueryOptions.pages].
+  /// This, with the given fields replaced, observer half included; each
+  /// shape returns its own type, and only [InfiniteQuerySelectOptions.copyWith]
+  /// accepts a `select`. `pages` is not accepted either: see
+  /// [InfiniteQueryOptions.pages].
   @override
-  InfiniteQueryObserverOptions<TPageData, TPageParam, TData> copyWith({
+  InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> copyWith({
     QueryKey? queryKey,
     QueryFn<InfiniteData<TPageData, TPageParam>>? queryFn,
     Enabled? enabled,
@@ -374,7 +384,109 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
     PageParamFn<TPageData, TPageParam>? getPreviousPageParam,
     int? maxPages,
     int? pages,
-    TData Function(InfiniteData<TPageData, TPageParam> data)? select,
+    PlaceholderData<InfiniteData<TPageData, TPageParam>>? placeholderData,
+    RefetchOn? refetchOnMount,
+    RefetchOn? refetchOnWindowFocus,
+    RefetchOn? refetchOnReconnect,
+    RefetchInterval? refetchInterval,
+    bool? refetchIntervalInBackground,
+    bool? retryOnMount,
+  });
+
+  /// These options as the plain observer options an `InfiniteQueryObserver`
+  /// runs on: the paging half folded into `behavior`, the observer half
+  /// carried over, the shape kept — `QueryClient.infiniteObserverOptions` is
+  /// the public way to this.
+  @internal
+  QueryObserverOptionsBase<InfiniteData<TPageData, TPageParam>, TData>
+      toObserverOptions();
+
+  static void _rejectPages(int? pages) {
+    if (pages != null) {
+      throw ArgumentError.value(
+        pages,
+        'pages',
+        'An observer refetches as many pages as the query holds.',
+      );
+    }
+  }
+}
+
+/// Observer options for a plain infinite query: no `select`, so the observer
+/// reports the [InfiniteData] the query holds, and two type arguments — the
+/// page and its param — name everything.
+///
+/// ```dart
+/// InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
+///     InfiniteQueryObserverOptions(
+///       queryKey: const QueryKey(['feed']),
+///       pageFn: (page) => api.feed(page: page.pageParam),
+///       initialPageParam: 1,
+///       getNextPageParam: (last) => last.page.isEmpty ? null : last.pageParam + 1,
+///     );
+/// ```
+///
+/// To flatten or otherwise project the pages, use
+/// [InfiniteQuerySelectOptions].
+@immutable
+class InfiniteQueryObserverOptions<TPageData, TPageParam>
+    extends InfiniteQueryObserverOptionsBase<TPageData, TPageParam,
+        InfiniteData<TPageData, TPageParam>> {
+  /// The paging fields, the cache-layer options, and the observer's own.
+  const InfiniteQueryObserverOptions({
+    required super.queryKey,
+    required super.pageFn,
+    required super.initialPageParam,
+    required super.getNextPageParam,
+    super.getPreviousPageParam,
+    super.maxPages,
+    super.enabled,
+    super.staleTime,
+    super.gcTime,
+    super.retry,
+    super.retryDelay,
+    super.networkMode,
+    super.initialData,
+    super.initialDataUpdatedAt,
+    super.initialDataUpdatedAtCompute,
+    super.structuralSharing,
+    super.meta,
+    super.placeholderData,
+    super.refetchOnMount,
+    super.refetchOnWindowFocus,
+    super.refetchOnReconnect,
+    super.refetchInterval,
+    super.refetchIntervalInBackground,
+    super.retryOnMount,
+  });
+
+  /// Always `null`: a plain infinite query has no projection.
+  @override
+  SelectFn<InfiniteData<TPageData, TPageParam>,
+      InfiniteData<TPageData, TPageParam>>? get select => null;
+
+  @override
+  InfiniteQueryObserverOptions<TPageData, TPageParam> copyWith({
+    QueryKey? queryKey,
+    QueryFn<InfiniteData<TPageData, TPageParam>>? queryFn,
+    Enabled? enabled,
+    StaleTime? staleTime,
+    GcTime? gcTime,
+    RetryPolicy? retry,
+    RetryDelay? retryDelay,
+    NetworkMode? networkMode,
+    InitialData<InfiniteData<TPageData, TPageParam>>? initialData,
+    DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
+    StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
+    Object? meta,
+    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
+    InfinitePageFn<TPageData, TPageParam>? pageFn,
+    TPageParam? initialPageParam,
+    PageParamFn<TPageData, TPageParam>? getNextPageParam,
+    PageParamFn<TPageData, TPageParam>? getPreviousPageParam,
+    int? maxPages,
+    int? pages,
     PlaceholderData<InfiniteData<TPageData, TPageParam>>? placeholderData,
     RefetchOn? refetchOnMount,
     RefetchOn? refetchOnWindowFocus,
@@ -384,14 +496,8 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
     bool? retryOnMount,
   }) {
     InfiniteQueryOptions._rejectQueryFnAndBehavior(queryFn, behavior);
-    if (pages != null) {
-      throw ArgumentError.value(
-        pages,
-        'pages',
-        'An observer refetches as many pages as the query holds.',
-      );
-    }
-    return InfiniteQueryObserverOptions<TPageData, TPageParam, TData>(
+    InfiniteQueryObserverOptionsBase._rejectPages(pages);
+    return InfiniteQueryObserverOptions<TPageData, TPageParam>(
       queryKey: queryKey ?? this.queryKey,
       pageFn: pageFn ?? this.pageFn,
       initialPageParam: initialPageParam ?? this.initialPageParam,
@@ -415,7 +521,6 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
               : null),
       structuralSharing: structuralSharing ?? this.structuralSharing,
       meta: meta ?? this.meta,
-      select: select ?? this.select,
       placeholderData: placeholderData ?? this.placeholderData,
       refetchOnMount: refetchOnMount ?? this.refetchOnMount,
       refetchOnWindowFocus: refetchOnWindowFocus ?? this.refetchOnWindowFocus,
@@ -426,6 +531,184 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam, TData>
       retryOnMount: retryOnMount ?? this.retryOnMount,
     );
   }
+
+  @internal
+  @override
+  QueryObserverOptions<InfiniteData<TPageData, TPageParam>>
+      toObserverOptions() =>
+          QueryObserverOptions<InfiniteData<TPageData, TPageParam>>(
+            queryKey: queryKey,
+            queryFn: null,
+            behavior: behavior,
+            enabled: enabled,
+            staleTime: staleTime,
+            gcTime: gcTime,
+            retry: retry,
+            retryDelay: retryDelay,
+            networkMode: networkMode,
+            initialData: initialData,
+            initialDataUpdatedAt: initialDataUpdatedAt,
+            initialDataUpdatedAtCompute: initialDataUpdatedAtCompute,
+            structuralSharing: structuralSharing,
+            meta: meta,
+            placeholderData: placeholderData,
+            refetchOnMount: refetchOnMount,
+            refetchOnWindowFocus: refetchOnWindowFocus,
+            refetchOnReconnect: refetchOnReconnect,
+            refetchInterval: refetchInterval,
+            refetchIntervalInBackground: refetchIntervalInBackground,
+            retryOnMount: retryOnMount,
+          );
+}
+
+/// Observer options for an infinite query whose observers see a projection
+/// of the pages: [select] is required and anchors [TData].
+///
+/// ```dart
+/// InfiniteQuerySelectOptions<List<Post>, int, List<Post>> flatFeed() =>
+///     InfiniteQuerySelectOptions(
+///       queryKey: const QueryKey(['feed']),
+///       pageFn: (page) => api.feed(page: page.pageParam),
+///       initialPageParam: 1,
+///       getNextPageParam: (last) => last.page.isEmpty ? null : last.pageParam + 1,
+///       select: (data) => [for (final page in data.pages) ...page],
+///     );
+/// ```
+@immutable
+class InfiniteQuerySelectOptions<TPageData, TPageParam, TData>
+    extends InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> {
+  /// The paging fields, the cache-layer options, and the observer's own,
+  /// [select] required.
+  const InfiniteQuerySelectOptions({
+    required super.queryKey,
+    required super.pageFn,
+    required super.initialPageParam,
+    required super.getNextPageParam,
+    required this.select,
+    super.getPreviousPageParam,
+    super.maxPages,
+    super.enabled,
+    super.staleTime,
+    super.gcTime,
+    super.retry,
+    super.retryDelay,
+    super.networkMode,
+    super.initialData,
+    super.initialDataUpdatedAt,
+    super.initialDataUpdatedAtCompute,
+    super.structuralSharing,
+    super.meta,
+    super.placeholderData,
+    super.refetchOnMount,
+    super.refetchOnWindowFocus,
+    super.refetchOnReconnect,
+    super.refetchInterval,
+    super.refetchIntervalInBackground,
+    super.retryOnMount,
+  });
+
+  /// [QuerySelectOptions.select], over the whole [InfiniteData] — the place
+  /// to flatten pages into one list.
+  @override
+  final SelectFn<InfiniteData<TPageData, TPageParam>, TData> select;
+
+  @override
+  InfiniteQuerySelectOptions<TPageData, TPageParam, TData> copyWith({
+    QueryKey? queryKey,
+    QueryFn<InfiniteData<TPageData, TPageParam>>? queryFn,
+    Enabled? enabled,
+    StaleTime? staleTime,
+    GcTime? gcTime,
+    RetryPolicy? retry,
+    RetryDelay? retryDelay,
+    NetworkMode? networkMode,
+    InitialData<InfiniteData<TPageData, TPageParam>>? initialData,
+    DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
+    StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
+    Object? meta,
+    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
+    InfinitePageFn<TPageData, TPageParam>? pageFn,
+    TPageParam? initialPageParam,
+    PageParamFn<TPageData, TPageParam>? getNextPageParam,
+    PageParamFn<TPageData, TPageParam>? getPreviousPageParam,
+    int? maxPages,
+    int? pages,
+    PlaceholderData<InfiniteData<TPageData, TPageParam>>? placeholderData,
+    RefetchOn? refetchOnMount,
+    RefetchOn? refetchOnWindowFocus,
+    RefetchOn? refetchOnReconnect,
+    RefetchInterval? refetchInterval,
+    bool? refetchIntervalInBackground,
+    bool? retryOnMount,
+    SelectFn<InfiniteData<TPageData, TPageParam>, TData>? select,
+  }) {
+    InfiniteQueryOptions._rejectQueryFnAndBehavior(queryFn, behavior);
+    InfiniteQueryObserverOptionsBase._rejectPages(pages);
+    return InfiniteQuerySelectOptions<TPageData, TPageParam, TData>(
+      queryKey: queryKey ?? this.queryKey,
+      pageFn: pageFn ?? this.pageFn,
+      initialPageParam: initialPageParam ?? this.initialPageParam,
+      getNextPageParam: getNextPageParam ?? this.getNextPageParam,
+      select: select ?? this.select,
+      getPreviousPageParam: getPreviousPageParam ?? this.getPreviousPageParam,
+      maxPages: maxPages ?? this.maxPages,
+      enabled: enabled ?? this.enabled,
+      staleTime: staleTime ?? this.staleTime,
+      gcTime: gcTime ?? this.gcTime,
+      retry: retry ?? this.retry,
+      retryDelay: retryDelay ?? this.retryDelay,
+      networkMode: networkMode ?? this.networkMode,
+      initialData: initialData ?? this.initialData,
+      initialDataUpdatedAt: initialDataUpdatedAt ??
+          (initialDataUpdatedAtCompute == null
+              ? this.initialDataUpdatedAt
+              : null),
+      initialDataUpdatedAtCompute: initialDataUpdatedAtCompute ??
+          (initialDataUpdatedAt == null
+              ? this.initialDataUpdatedAtCompute
+              : null),
+      structuralSharing: structuralSharing ?? this.structuralSharing,
+      meta: meta ?? this.meta,
+      placeholderData: placeholderData ?? this.placeholderData,
+      refetchOnMount: refetchOnMount ?? this.refetchOnMount,
+      refetchOnWindowFocus: refetchOnWindowFocus ?? this.refetchOnWindowFocus,
+      refetchOnReconnect: refetchOnReconnect ?? this.refetchOnReconnect,
+      refetchInterval: refetchInterval ?? this.refetchInterval,
+      refetchIntervalInBackground:
+          refetchIntervalInBackground ?? this.refetchIntervalInBackground,
+      retryOnMount: retryOnMount ?? this.retryOnMount,
+    );
+  }
+
+  @internal
+  @override
+  QuerySelectOptions<InfiniteData<TPageData, TPageParam>, TData>
+      toObserverOptions() =>
+          QuerySelectOptions<InfiniteData<TPageData, TPageParam>, TData>(
+            queryKey: queryKey,
+            select: select,
+            queryFn: null,
+            behavior: behavior,
+            enabled: enabled,
+            staleTime: staleTime,
+            gcTime: gcTime,
+            retry: retry,
+            retryDelay: retryDelay,
+            networkMode: networkMode,
+            initialData: initialData,
+            initialDataUpdatedAt: initialDataUpdatedAt,
+            initialDataUpdatedAtCompute: initialDataUpdatedAtCompute,
+            structuralSharing: structuralSharing,
+            meta: meta,
+            placeholderData: placeholderData,
+            refetchOnMount: refetchOnMount,
+            refetchOnWindowFocus: refetchOnWindowFocus,
+            refetchOnReconnect: refetchOnReconnect,
+            refetchInterval: refetchInterval,
+            refetchIntervalInBackground: refetchIntervalInBackground,
+            retryOnMount: retryOnMount,
+          );
 }
 
 /// Which end of an infinite query a fetch is extending. Travels in

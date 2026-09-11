@@ -61,8 +61,8 @@ they are released when the widget stops reading the key or unmounts. A widget
 that stops calling `context.query` *altogether* gives no signal Flutter can
 see, so its last observers stay until it unmounts — put a conditional read in
 its own small widget. Read in `build`, not in a handler: the read is reconciled
-against the previous build. `context.selectQuery` is the form with a `select`
-whose output type differs from the cache's. `context.query` always reads the
+against the previous build. `context.selectQuery` is the form with a `select`;
+it takes a `QuerySelectOptions`. `context.query` always reads the
 provider's client and takes no `client:` — a `BuildContext` names exactly one
 provider; for a client that is not the provider's, use the builders (`client:`)
 or the controllers, or override `queryClient` on a `QueryMixin` State.
@@ -80,7 +80,7 @@ The `StreamBuilder` shape. The most explicit and the most predictable —
 everything is visible in the tree — and the natural fit inside a list or a
 sliver. Several queries on one screen means several nested builders.
 `QuerySelectBuilder<TQueryData, TData>` is the same widget for a query with a
-`select` whose output type differs from the cache's.
+`select` — a `QuerySelectOptions<TQueryData, TData>`.
 
 ### `QueryMixin`
 
@@ -116,8 +116,9 @@ final task = QueryController.create(client, taskQuery(id));   // no select
 task.dispose();
 ```
 
-`QueryController<TQueryData, TData>(client, options)` is the form with a
-`select` whose output type differs from the cache's.
+`QueryController<TQueryData, TData>(client, options)` is the general form:
+it takes either options shape, and with a `QuerySelectOptions` it is the
+select form.
 
 A `ValueListenable<QueryResult<T>>`. Nothing hidden, testable without widgets,
 and the foundation the other three stand on. Its `value` before the first
@@ -125,6 +126,29 @@ listener is the optimistic result — `fetching` for a query that will fetch on
 subscribe — the same thing a widget sees on its first build. Because it is a plain listenable,
 it also drops into `ValueListenableBuilder`, `ListenableBuilder`,
 `Listenable.merge`, `provider`, `riverpod` and `bloc` unchanged.
+
+### The type argument
+
+Options come in two shapes, and every entry point above takes one of them
+(ADR-0001). `QueryObserverOptions<TData>` has no `select`; its one type
+argument is the query's data type, and it comes from `queryFn`'s return type
+or is written out — `QueryObserverOptions<Task>(…)`, `QueryBuilder<Task>(…)`,
+`QueryController.create<Task>(…)`. `QuerySelectOptions<TQueryData, TData>`
+has a **required** `select`, which anchors the second argument; it is what
+`QuerySelectBuilder`, `context.selectQuery`, `watchSelectQuery` and the
+general `QueryController(client, options)` take. A `select` that keeps the
+type is still a select and goes through those.
+
+The one literal neither shape can type is a key-only one with neither a
+`queryFn` nor a type argument. The controllers refuse it in debug builds with
+a message naming the cure, and the analyzer reports it at the literal once
+your `analysis_options.yaml` says so — recommended:
+
+```yaml
+analyzer:
+  language:
+    strict-inference: true
+```
 
 ## Infinite queries and mutations
 
@@ -190,7 +214,7 @@ and duplicate keys share one cache entry while keeping their own options:
 QueriesBuilder<Task, String>(
   queries: [
     for (final id in visibleIds)
-      QueryObserverOptions<Task, String>(
+      QuerySelectOptions<Task, String>(
         queryKey: QueryKey(<Object?>['tasks', id]),
         queryFn: (context) => api.getTask(id, signal: context.signal),
         select: (task) => task.name,

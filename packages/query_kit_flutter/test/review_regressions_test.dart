@@ -6,6 +6,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 // The core reads staleness from `package:clock`, so shifting that clock is
 // how a test makes data go stale between two reads.
@@ -25,7 +26,7 @@ QueryClient newClient() => QueryClient(
       ),
     );
 
-QueryObserverOptions<String, String> seeded() => QueryObserverOptions(
+QueryObserverOptions<String> seeded() => QueryObserverOptions(
       queryKey: key,
       enabled: Enabled.no,
       staleTime: StaleTime.infinite,
@@ -90,7 +91,7 @@ class _TwoSelects extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final upper = context.selectQuery<String, String>(
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         select: (v) => v.toUpperCase(),
@@ -98,7 +99,7 @@ class _TwoSelects extends StatelessWidget {
       id: 'upper',
     );
     final reversed = context.selectQuery<String, String>(
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         select: (v) => v.split('').reversed.join(),
@@ -507,7 +508,7 @@ void main() {
             const _ContextReader(),
             Builder(builder: (context) {
               final length = context.selectQuery<String, int>(
-                QueryObserverOptions(
+                QuerySelectOptions(
                   queryKey: key,
                   enabled: Enabled.no,
                   select: (v) => v.length,
@@ -989,7 +990,7 @@ void main() {
       );
       expect(
         () => controller.setOptions(
-          QueryObserverOptions<InfiniteData<int, int>, InfiniteData<int, int>>(
+          QueryObserverOptions<InfiniteData<int, int>>(
             queryKey: key,
           ),
         ),
@@ -1036,8 +1037,7 @@ void main() {
       final client = newClient();
       final builds = <String>[];
       final fetches = <String, Completer<String>>{};
-      QueryObserverOptions<String, String> pending(String id) =>
-          QueryObserverOptions(
+      QueryObserverOptions<String> pending(String id) => QueryObserverOptions(
             queryKey: QueryKey(<Object?>['r4', id]),
             queryFn: (_) =>
                 fetches.putIfAbsent(id, Completer<String>.new).future,
@@ -1211,7 +1211,7 @@ void main() {
   group('A3 InfiniteQueryController.setOptions', () {
     test('accepts options that carry the paging behaviour', () async {
       final client = newClient();
-      InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>> options(
+      InfiniteQueryObserverOptions<int, int> options(
         int? Function(int page, List<int> pages, int param, List<int> params)
             next,
       ) =>
@@ -1272,6 +1272,171 @@ void main() {
   // Each case keeps the probe's name (deep-dive `P`, release-review `R`) next
   // to the consolidated id; the core's ninth-review rows are in
   // `port_specifics_test.dart` and `port_lifecycle_test.dart`.
+
+  group(
+      'C1 (B1, B3, B6) one type slot: an inline literal without select or '
+      'type argument', () {
+    // Before ADR-0001 `QueryObserverOptions<TQueryData, TData>` carried
+    // `TData` only in its optional `select`, so every one of these put a
+    // `Query<dynamic>` in the cache and a later typed reader threw. The plain
+    // shape now has one slot, anchored by `queryFn`.
+    Query<Object?>? cached(QueryClient client) =>
+        client.queryCache.find(filters: QueryFilters(queryKey: key));
+
+    testWidgets('QueryController.create', (tester) async {
+      final client = QueryClient();
+      final controller = QueryController.create(
+        client,
+        QueryObserverOptions(queryKey: key, queryFn: (_) async => 1),
+      );
+      try {
+        expect(controller, isA<QueryController<int, int>>());
+        expect(cached(client), isA<Query<int>>());
+      } finally {
+        controller.dispose();
+        client.clear();
+      }
+    });
+
+    testWidgets('QueryBuilder', (tester) async {
+      final client = QueryClient();
+      try {
+        await tester.pumpWidget(app(
+          client,
+          QueryBuilder(
+            options:
+                QueryObserverOptions(queryKey: key, queryFn: (_) async => 1),
+            builder: (_, result) => Text('v:${result.dataOrNull}'),
+          ),
+        ));
+        expect(cached(client), isA<Query<int>>());
+        await tester.pump();
+        expect(find.text('v:1'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        client.clear();
+      }
+    });
+
+    testWidgets('context.query', (tester) async {
+      final client = QueryClient();
+      try {
+        await tester.pumpWidget(app(
+          client,
+          Builder(
+            builder: (context) => Text(
+              'v:${context.query(QueryObserverOptions(queryKey: key, queryFn: (_) async => 1)).dataOrNull}',
+            ),
+          ),
+        ));
+        expect(cached(client), isA<Query<int>>());
+        await tester.pump();
+        expect(find.text('v:1'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        client.clear();
+      }
+    });
+
+    testWidgets('QueryMixin.watchQuery', (tester) async {
+      final client = QueryClient();
+      try {
+        await tester.pumpWidget(app(client, const _C1MixinReader()));
+        expect(cached(client), isA<Query<int>>());
+        await tester.pump();
+        expect(find.text('v:1'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        client.clear();
+      }
+    });
+
+    testWidgets(
+        'InfiniteQueryBuilder needs no type arguments, for a helper and for '
+        'an inline plain literal', (tester) async {
+      final client = QueryClient();
+      try {
+        await tester.pumpWidget(app(
+          client,
+          Column(children: <Widget>[
+            InfiniteQueryBuilder(
+              options: _c1Feed(),
+              builder: (_, feed) => Text('a:${feed.value.dataOrNull?.pages}'),
+            ),
+            InfiniteQueryBuilder(
+              options: InfiniteQueryObserverOptions(
+                queryKey: QueryKey(<Object?>['c1', 'inline']),
+                pageFn: (context) async => 'p${context.pageParam}',
+                initialPageParam: 0,
+                getNextPageParam: (_, __, param, ___) => param + 1,
+              ),
+              builder: (_, feed) {
+                // The slots are read off the options: TData is InfiniteData.
+                expect(
+                    feed,
+                    isA<
+                        InfiniteQueryController<String, int,
+                            InfiniteData<String, int>>>());
+                return Text('b:${feed.value.dataOrNull?.pages}');
+              },
+            ),
+          ]),
+        ));
+        await tester.pump();
+        expect(find.text('a:[[1]]'), findsOneWidget);
+        expect(find.text('b:[p0]'), findsOneWidget);
+        expect(client.queryCache.find(filters: QueryFilters(queryKey: key)),
+            isA<Query<InfiniteData<List<int>, int>>>());
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        client.clear();
+      }
+    });
+
+    testWidgets('the backstop names the cure for a key-only literal',
+        (tester) async {
+      final client = QueryClient();
+      try {
+        // The residue no shape can type: neither a queryFn nor a type
+        // argument. `strict-inference` would report the literal; the debug
+        // backstop refuses it at runtime (compiled out of release).
+        expect(
+          // ignore: inference_failure_on_instance_creation
+          () => QueryController(client, QueryObserverOptions(queryKey: key)),
+          throwsA(isA<AssertionError>().having(
+            (e) => e.message.toString(),
+            'message',
+            allOf(contains('top type'), contains('dynamic'),
+                contains('QueryController.create<Task>')),
+          )),
+        );
+        // A plain infinite shape's data is always an `InfiniteData`, never a
+        // top type; the infinite backstop is reachable only through a select
+        // whose return type is one — `jsonDecode` returns `dynamic`.
+        expect(
+          () => InfiniteQueryController(
+            client,
+            InfiniteQuerySelectOptions(
+              queryKey: key,
+              pageFn: (_) async => 1,
+              initialPageParam: 0,
+              getNextPageParam: (_, __, ___, ____) => null,
+              select: (data) => jsonDecode('${data.pages.length}'),
+            ),
+          ),
+          throwsA(isA<AssertionError>().having(
+            (e) => e.message.toString(),
+            'message',
+            allOf(contains('top type'), contains('select')),
+          )),
+        );
+        // Neither refusal touched the cache.
+        expect(cached(client), isNull);
+      } finally {
+        client.clear();
+      }
+    });
+  });
 
   group('C17 (P1, R8) a changed isAppShown on the same client', () {
     Widget tree(QueryClient client, bool shown) => QueryClientProvider(
@@ -1459,7 +1624,7 @@ Widget _provided(QueryClient client, Stream<bool> online) =>
 class _R4ContextReader extends StatelessWidget {
   const _R4ContextReader(this.options, this.builds);
 
-  final QueryObserverOptions<String, String> options;
+  final QueryObserverOptions<String> options;
   final List<String> builds;
 
   @override
@@ -1472,7 +1637,7 @@ class _R4ContextReader extends StatelessWidget {
 class _R4MixinReader extends StatefulWidget {
   const _R4MixinReader(this.options, this.builds);
 
-  final QueryObserverOptions<String, String> options;
+  final QueryObserverOptions<String> options;
   final List<String> builds;
 
   @override
@@ -1523,7 +1688,7 @@ class _R4MixinKeyedMutationsState extends State<_R4MixinKeyedMutations>
 
 /// Fresh for a second, and never fetched: the two reads differ only in what
 /// the clock says.
-QueryObserverOptions<String, String> _shortlyStale() => QueryObserverOptions(
+QueryObserverOptions<String> _shortlyStale() => QueryObserverOptions(
       queryKey: key,
       queryFn: (_) => Completer<String>().future,
       refetchOnMount: RefetchOn.never,
@@ -1617,7 +1782,7 @@ class _MixinTwoSelectsState extends State<_MixinTwoSelects> with QueryMixin {
   @override
   Widget build(BuildContext context) {
     final upper = watchSelectQuery<String, String>(
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         select: (v) => v.toUpperCase(),
@@ -1625,7 +1790,7 @@ class _MixinTwoSelectsState extends State<_MixinTwoSelects> with QueryMixin {
       id: 'upper',
     );
     final reversed = watchSelectQuery<String, String>(
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         select: (v) => v.split('').reversed.join(),
@@ -1645,7 +1810,7 @@ class _R3ListSelect extends StatelessWidget {
   Widget build(BuildContext context) {
     builds.add(builds.length);
     final evens = context.selectQuery<List<int>, List<int>>(
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         // The canonical selector: a fresh list every call.
@@ -1671,7 +1836,7 @@ class _R3MixinListSelectState extends State<_R3MixinListSelect>
   Widget build(BuildContext context) {
     widget.builds.add(widget.builds.length);
     final evens = watchSelectQuery<List<int>, List<int>>(
-      QueryObserverOptions(
+      QuerySelectOptions(
         queryKey: key,
         enabled: Enabled.no,
         select: (list) => list.where((e) => e.isEven).toList(),
@@ -1686,12 +1851,12 @@ class _R3TwoSelectsNoId extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final upper = context.selectQuery<String, String>(QueryObserverOptions(
+    final upper = context.selectQuery<String, String>(QuerySelectOptions(
       queryKey: key,
       enabled: Enabled.no,
       select: (v) => v.toUpperCase(),
     ));
-    final lower = context.selectQuery<String, String>(QueryObserverOptions(
+    final lower = context.selectQuery<String, String>(QuerySelectOptions(
       queryKey: key,
       enabled: Enabled.no,
       select: (v) => v.toLowerCase(),
@@ -1732,7 +1897,7 @@ class _R3MixinById extends StatefulWidget {
 class _R3MixinByIdState extends State<_R3MixinById> with QueryMixin {
   @override
   Widget build(BuildContext context) {
-    final task = watchQuery(QueryObserverOptions<String, String>(
+    final task = watchQuery(QueryObserverOptions<String>(
       queryKey: QueryKey(<Object?>['m4', widget.id]),
       // Closes over the widget, as real code does.
       queryFn: (_) => widget.fetch(widget.id),
@@ -1757,7 +1922,7 @@ class _R01OverrideState extends State<_R01Override> with QueryMixin {
 
   @override
   Widget build(BuildContext context) {
-    final result = watchQuery(QueryObserverOptions<String, String>(
+    final result = watchQuery(QueryObserverOptions<String>(
       queryKey: key,
       queryFn: (_) async => 'fetched',
       staleTime: StaleTime.infinite,
@@ -1773,6 +1938,32 @@ class _R01Bare extends StatefulWidget {
   @override
   State<_R01Bare> createState() => _R01BareState();
 }
+
+/// C1: reads an inline plain literal through `watchQuery`.
+class _C1MixinReader extends StatefulWidget {
+  const _C1MixinReader();
+
+  @override
+  State<_C1MixinReader> createState() => _C1MixinReaderState();
+}
+
+class _C1MixinReaderState extends State<_C1MixinReader> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final result = watchQuery(
+        QueryObserverOptions(queryKey: key, queryFn: (_) async => 1));
+    return Text('v:${result.dataOrNull}');
+  }
+}
+
+/// C1: a plain infinite helper, as a screen would write one.
+InfiniteQueryObserverOptions<List<int>, int> _c1Feed() =>
+    InfiniteQueryObserverOptions(
+      queryKey: key,
+      pageFn: (context) async => <int>[context.pageParam + 1],
+      initialPageParam: 0,
+      getNextPageParam: (_, __, ___, ____) => null,
+    );
 
 class _R01BareState extends State<_R01Bare> with QueryMixin {
   @override

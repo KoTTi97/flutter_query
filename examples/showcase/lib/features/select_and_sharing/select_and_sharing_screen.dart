@@ -97,16 +97,29 @@ List<String> todoTexts(List<Todo> todos) =>
 List<Todo> keepNext(List<Todo>? previous, List<Todo> next) => next;
 
 /// The one query every reader shares. They differ only in what they select
-/// and in whether the cache write shares structure.
-QueryObserverOptions<List<Todo>, T> todosQuery<T>(
+/// and in whether the cache write shares structure. A select is its own
+/// options shape (ADR-0001), so the raw reader has [rawTodosQuery].
+QuerySelectOptions<List<Todo>, T> todosQuery<T>(
   ShowcaseApi api, {
-  T Function(List<Todo> todos)? select,
+  required T Function(List<Todo> todos) select,
   bool sharing = true,
 }) =>
-    QueryObserverOptions<List<Todo>, T>(
+    QuerySelectOptions<List<Todo>, T>(
       queryKey: ShowcaseKeys.todos,
       queryFn: (context) => api.todos(signal: context.signal),
       select: select,
+      structuralSharing: sharing ? null : keepNext,
+    );
+
+/// [todosQuery] without a select: the same key, the same fetch, the list as
+/// the cache holds it.
+QueryObserverOptions<List<Todo>> rawTodosQuery(
+  ShowcaseApi api, {
+  bool sharing = true,
+}) =>
+    QueryObserverOptions<List<Todo>>(
+      queryKey: ShowcaseKeys.todos,
+      queryFn: (context) => api.todos(signal: context.signal),
       structuralSharing: sharing ? null : keepNext,
     );
 
@@ -475,7 +488,7 @@ class _ControllerReaderState extends State<_ControllerReader> {
   final _Counter _counter = _Counter();
   QueryController<List<Todo>, List<String>>? _controller;
 
-  QueryObserverOptions<List<Todo>, List<String>> get _options => todosQuery(
+  QuerySelectOptions<List<Todo>, List<String>> get _options => todosQuery(
         ShowcaseScope.apiOf(context),
         select: todoTexts,
         sharing: widget.sharing,
@@ -544,7 +557,7 @@ class _RawReaderState extends State<_RawReader> {
 
   @override
   Widget build(BuildContext context) => QueryBuilder<List<Todo>>(
-        options: todosQuery<List<Todo>>(
+        options: rawTodosQuery(
           ShowcaseScope.apiOf(context),
           sharing: widget.sharing,
         ),

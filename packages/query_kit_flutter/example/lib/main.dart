@@ -25,8 +25,7 @@ final tasksKey = QueryKey(<Object?>['tasks']);
 
 Future<List<String>> fetchTasks(QueryFunctionContext context) => api.list();
 
-QueryObserverOptions<List<String>, List<String>> tasksQuery() =>
-    QueryObserverOptions(
+QueryObserverOptions<List<String>> tasksQuery() => QueryObserverOptions(
       queryKey: tasksKey,
       queryFn: fetchTasks,
       staleTime: const StaleTime.duration(Duration(seconds: 30)),
@@ -34,8 +33,7 @@ QueryObserverOptions<List<String>, List<String>> tasksQuery() =>
 
 /// The same entry, reduced to one flag — a `select` shares the cache entry
 /// and only rebuilds its reader when the selected value changes.
-QueryObserverOptions<List<String>, bool> fetchingQuery() =>
-    QueryObserverOptions(
+QuerySelectOptions<List<String>, bool> fetchingQuery() => QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: fetchTasks,
       staleTime: const StaleTime.duration(Duration(seconds: 30)),

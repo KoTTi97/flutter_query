@@ -68,8 +68,8 @@ const Feature initialAndPlaceholderFeature = Feature(
 const Duration seededPostStaleTime = Duration(seconds: 30);
 
 /// The posts list card A seeds its details from.
-QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Post>, List<Post>>(
+QueryObserverOptions<List<Post>> postsQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Post>>(
       queryKey: ShowcaseKeys.posts,
       queryFn: (context) => api.posts(signal: context.signal),
     );
@@ -82,13 +82,13 @@ QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
 /// and the detail fetches like any other query. With a seed, the entry starts
 /// in `success` dated [seededAt], and [seededPostStaleTime] decides whether
 /// the mount refetches.
-QueryObserverOptions<Post, Post> seededPostQuery(
+QueryObserverOptions<Post> seededPostQuery(
   ShowcaseApi api,
   int id, {
   required Post? Function() seed,
   required DateTime? seededAt,
 }) =>
-    QueryObserverOptions<Post, Post>(
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) => api.post(id, signal: context.signal),
       staleTime: const StaleTime.duration(seededPostStaleTime),
@@ -98,8 +98,8 @@ QueryObserverOptions<Post, Post> seededPostQuery(
 
 /// Card B: post 4 behind a fixed placeholder. The request is slowed on
 /// purpose so the placeholder is on screen long enough to see.
-QueryObserverOptions<Post, Post> placeholderPostQuery(ShowcaseApi api) =>
-    QueryObserverOptions<Post, Post>(
+QueryObserverOptions<Post> placeholderPostQuery(ShowcaseApi api) =>
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(4),
       queryFn: (context) => api.post(
         4,
@@ -148,12 +148,12 @@ Post? lazySeedFor(LazySeedMode mode) => switch (mode) {
 /// never again: not on a rebuild, and not when the entry is met a second time
 /// with data already in it. Returning `null` is "no opinion", and the library
 /// falls back to `clock.now()`.
-QueryObserverOptions<Post, Post> lazySeededPostQuery(
+QueryObserverOptions<Post> lazySeededPostQuery(
   ShowcaseApi api, {
   required Post seed,
   required DateTime? Function() seededAt,
 }) =>
-    QueryObserverOptions<Post, Post>(
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(seed.id),
       queryFn: (context) => api.post(seed.id, signal: context.signal),
       staleTime: const StaleTime.duration(seededPostStaleTime),
@@ -169,8 +169,8 @@ Post? keepPreviousPost(Post? previousData, Query<Post>? previousQuery) =>
 
 /// Card C: post [id], with the previous post as its placeholder. Slowed a
 /// little for the same reason as card B.
-QueryObserverOptions<Post, Post> previousPostQuery(ShowcaseApi api, int id) =>
-    QueryObserverOptions<Post, Post>(
+QueryObserverOptions<Post> previousPostQuery(ShowcaseApi api, int id) =>
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) => api.post(
         id,

@@ -81,11 +81,11 @@ QueryFilters get _todosFilter => QueryFilters(queryKey: ShowcaseKeys.todos);
 /// through it: the first attempt runs offline, and it is the *retry* that
 /// pauses. A fixed, short delay keeps that pause a second away rather than
 /// the default backoff's one, two and four.
-QueryObserverOptions<List<Todo>, List<Todo>> todosQuery(
+QueryObserverOptions<List<Todo>> todosQuery(
   ShowcaseApi api,
   NetworkMode mode,
 ) =>
-    QueryObserverOptions<List<Todo>, List<Todo>>(
+    QueryObserverOptions<List<Todo>>(
       queryKey: ShowcaseKeys.todos,
       queryFn: (context) => api.todos(signal: context.signal),
       networkMode: mode,

@@ -2055,6 +2055,59 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   each of those, a rejected one still advances the comparison, and a batch
   of writes is one transition to the last value. Doc only; no regression.
 
+- **C1 — an options literal without `select` inferred its data type to
+  `dynamic`** (deep-dive B1/B3/B6, api-design probe; #35, #41; ADR-0001).
+  `QueryObserverOptions<TQueryData, TData>` carried `TData` only in its
+  optional `select`, so an inline literal without one — through any of the
+  four plain call styles — became `QueryObserverOptions<int, dynamic>`, the
+  controller a `QueryController<int, dynamic>`, and the cache entry a
+  `Query<dynamic>` that every typed reader of the key then threw on
+  (`QueryDataTypeError`). Reproduced with the deep-dive's probe on `f6a9ddd`:
+  `QueryController.create`, `QueryBuilder`, `context.query` and `watchQuery`
+  all put `Query<dynamic>` in the cache. The research
+  (`docs/research/dynamic-inference-guards.md`) found no library-side guard:
+  the one analyzer diagnostic needs `strict-inference` in the *consumer's*
+  options, a bound silences it, an `assert` is compiled out. The fix is
+  structural: the observer options are two shapes over a sealed
+  `QueryObserverOptionsBase<TQueryData, TData>` — `QueryObserverOptions<TData>`
+  with no `select` and one slot, anchored by `queryFn`, and
+  `QuerySelectOptions<TQueryData, TData>` with `select` **required**
+  (`SelectFn<TQueryData, TData>`), so a literal without one is a compile
+  error. Mirrored for infinite queries
+  (`InfiniteQueryObserverOptions<TPageData, TPageParam>` /
+  `InfiniteQuerySelectOptions<TPageData, TPageParam, TData>` over
+  `InfiniteQueryObserverOptionsBase`). `QueryObserver`, `QueriesObserver`,
+  `InfiniteQueryObserver`, `QueryClient.defaultQueryObserverOptions` /
+  `infiniteObserverOptions` / `observe` / `observeInfinite` take the base;
+  `DefaultedQueryObserverOptions` is unchanged. In the binding the plain entry
+  points take the one-slot shape, the select entry points the two-slot one,
+  the general `QueryController(client, options)` and the infinite entry
+  points the base (inference reads every slot off either shape, so
+  `InfiniteQueryBuilder(options: feedQuery(), …)` names no type argument).
+  The residue — a key-only literal with neither `queryFn` nor a type
+  argument — is caught by a debug backstop in `QueryController`'s and
+  `InfiniteQueryController`'s generative constructors, `assert(<Object?>[]
+  is! List<TData>, …)`, a top-type test that names the cure; it is
+  **compiled out of release**, which is why it is a backstop and not the
+  answer, and why the docs recommend `strict-inference` to consumers. Not in
+  the core: the ported suites build key-only observers on purpose, and
+  `QueriesObserver` may legitimately be `<dynamic, dynamic>`. The observer's
+  own `_checkDataType` stays as defence in depth; after the split it is
+  reachable only through covariance (`QueryObserverOptions<Never>` is a
+  `QueryObserverOptionsBase<int, String>`), which is how D3/F10 now reach
+  it. The sweep touched every options literal and every explicit type
+  argument in core, binding, both examples, the snippets and the site
+  (`<X, X>` → `<X>`; a literal with `select:` → the select shape; three
+  `copyWith(select: …)` test sites became select literals, since a plain
+  `copyWith` cannot change shape; the showcase's `todosQuery` split into a
+  select helper and `rawTodosQuery`). Regressions: `C1: a plain literal makes
+  a QueryObserver<int, int>` and `C1: a select literal makes a
+  QueryObserver<int, String>` here; in the binding's
+  `review_regressions_test.dart`, `C1 (B1, B3, B6) one type slot` — an inline
+  literal without `select` or type argument through each plain style yields
+  a `Query<int>`, the infinite builder and an inline infinite literal infer
+  every slot, and the backstop's message for a key-only literal.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported
@@ -2077,6 +2130,7 @@ suite does not have to go looking:
 | `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` — and a *subtype* is a mismatch: one key, one exact type | [#7](https://github.com/KoTTi97/flutter_query/issues/7), fourth review 2026-09-09 |
+| one observer options object with an optional `select` | two shapes over a sealed base: `QueryObserverOptions<TData>` without `select`, `QuerySelectOptions<TQueryData, TData>` with `select` required (infinite: `InfiniteQueryObserverOptions` / `InfiniteQuerySelectOptions`); the binding's controllers refuse a top-typed `TData` in debug builds only — the backstop is compiled out of release | [ADR-0001](../../../docs/adr/0001-one-type-slot-for-plain-queries.md), ninth review 2026-09-11 |
 
 ### A `Set` of listeners does not port
 

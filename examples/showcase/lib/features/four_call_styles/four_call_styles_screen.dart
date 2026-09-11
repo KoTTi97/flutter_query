@@ -69,8 +69,8 @@ const TextStyle _mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
 /// data is in joins it instead of starting a refetch of its own. It does not
 /// stand in the way of the buttons — `refetch()` ignores staleness, and
 /// `invalidateQueries` marks the entry stale explicitly.
-QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Post>, List<Post>>(
+QueryObserverOptions<List<Post>> postsQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Post>>(
       queryKey: ShowcaseKeys.posts,
       queryFn: (context) => api.posts(signal: context.signal),
       staleTime: const StaleTime.duration(Duration(minutes: 5)),
@@ -79,8 +79,8 @@ QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
 /// The entry the mutation writes to, and the one it invalidates.
 QueryKey get counterKey => QueryKey(const <Object?>['counter']);
 
-QueryObserverOptions<int, int> counterQuery(ShowcaseApi api) =>
-    QueryObserverOptions<int, int>(
+QueryObserverOptions<int> counterQuery(ShowcaseApi api) =>
+    QueryObserverOptions<int>(
       queryKey: counterKey,
       queryFn: (context) => api.counter(signal: context.signal),
     );

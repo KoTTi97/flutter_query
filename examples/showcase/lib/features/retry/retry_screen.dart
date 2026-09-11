@@ -64,13 +64,13 @@ const RetryPolicy _when5xx = RetryPolicy.when(_retryServerErrors);
 const RetryDelay _fixed300 = RetryDelay.fixed(Duration(milliseconds: 300));
 
 /// The screen's one query, with the three knobs the screen turns.
-QueryObserverOptions<ServerTime, ServerTime> retryTimeQuery(
+QueryObserverOptions<ServerTime> retryTimeQuery(
   ShowcaseApi api, {
   required RetryPolicy retry,
   required RetryDelay retryDelay,
   required bool retryOnMount,
 }) =>
-    QueryObserverOptions<ServerTime, ServerTime>(
+    QueryObserverOptions<ServerTime>(
       queryKey: retryTimeKey,
       queryFn: (context) => api.time(signal: context.signal),
       retry: retry,
@@ -142,7 +142,7 @@ class _RetryScreenState extends State<RetryScreen> {
     super.dispose();
   }
 
-  QueryObserverOptions<ServerTime, ServerTime> get _options => retryTimeQuery(
+  QueryObserverOptions<ServerTime> get _options => retryTimeQuery(
         _api,
         retry: _retry,
         retryDelay: _delay,

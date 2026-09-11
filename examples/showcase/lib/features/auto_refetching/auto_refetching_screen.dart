@@ -64,12 +64,12 @@ const RefetchInterval _dynamicInterval =
     RefetchInterval.dynamic(_whileTheListIsShort);
 
 /// The screen's one query, with the two knobs it turns.
-QueryObserverOptions<List<Tick>, List<Tick>> ticksQuery(
+QueryObserverOptions<List<Tick>> ticksQuery(
   ShowcaseApi api, {
   required RefetchInterval refetchInterval,
   required bool refetchIntervalInBackground,
 }) =>
-    QueryObserverOptions<List<Tick>, List<Tick>>(
+    QueryObserverOptions<List<Tick>>(
       queryKey: ticksKey,
       queryFn: (context) => api.ticks(signal: context.signal),
       refetchInterval: refetchInterval,

@@ -29,6 +29,8 @@ typedef BuildWhen<T> = bool Function(T previous, T current);
 /// )
 /// ```
 ///
+/// The one type argument is the query's data type; it comes from `queryFn`'s
+/// return type, or is written out as `QueryBuilder<Task>(…)` (ADR-0001).
 /// Use [QuerySelectBuilder] when the query needs a `select`.
 ///
 /// [options] built inline are re-applied on every build of this widget, as
@@ -47,7 +49,7 @@ class QueryBuilder<TData> extends StatefulWidget {
   });
 
   /// The query. Re-applied every build; the observer decides what changed.
-  final QueryObserverOptions<TData, TData> options;
+  final QueryObserverOptions<TData> options;
 
   /// Builds this widget's subtree from the query's current result — a sealed
   /// [QueryResult], so a `switch` over `QueryPending`, `QuerySuccess` and
@@ -146,8 +148,19 @@ bool _shouldRebuild<T>(
   return buildWhen == null || buildWhen(built, current);
 }
 
-/// [QueryBuilder] for a query with a `select`, where what the cache holds and
-/// what the widget sees are different types.
+/// [QueryBuilder] for a query with a `select`: what the cache holds and what
+/// the widget sees are two types, both anchored by a [QuerySelectOptions].
+///
+/// ```dart
+/// QuerySelectBuilder<Task, String>(
+///   options: QuerySelectOptions(
+///     queryKey: QueryKey(['tasks', id]),
+///     queryFn: (_) => api.task(id),
+///     select: (task) => task.name,
+///   ),
+///   builder: (context, result) => Text(result.dataOrNull ?? '…'),
+/// )
+/// ```
 class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget {
   /// Observes [options]'s query, `select` included, on [client] or else the
   /// nearest [QueryClientProvider]'s, and hands [builder] the selected result.
@@ -160,7 +173,7 @@ class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget {
   });
 
   /// See [QueryBuilder.options].
-  final QueryObserverOptions<TQueryData, TData> options;
+  final QuerySelectOptions<TQueryData, TData> options;
 
   /// See [QueryBuilder.builder]. Sees the *selected* result — `TData`, not the
   /// `TQueryData` the cache holds.
@@ -224,7 +237,7 @@ class _QuerySelectBuilderState<TQueryData, TData>
 /// page.
 ///
 /// ```dart
-/// InfiniteQueryBuilder<List<Post>, int, InfiniteData<List<Post>, int>>(
+/// InfiniteQueryBuilder(
 ///   options: feedQuery(),
 ///   builder: (context, feed) => ListView(
 ///     children: [
@@ -236,6 +249,10 @@ class _QuerySelectBuilderState<TQueryData, TData>
 ///   ),
 /// )
 /// ```
+///
+/// No type arguments at the call site: either options shape —
+/// [InfiniteQueryObserverOptions] or [InfiniteQuerySelectOptions] — carries
+/// all three, and inference reads them off it (ADR-0001).
 class InfiniteQueryBuilder<TPageData, TPageParam, TData>
     extends StatefulWidget {
   /// Observes [options]'s infinite query on [client] or else the nearest
@@ -250,7 +267,7 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData>
   });
 
   /// See [QueryBuilder.options].
-  final InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options;
+  final InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options;
 
   /// Builds this widget's subtree from the infinite query, given its
   /// controller rather than a bare result: the pages are in `query.value`,

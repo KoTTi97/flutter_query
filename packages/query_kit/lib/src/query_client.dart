@@ -988,7 +988,7 @@ class QueryClient {
   /// Resolves observer options against the client and key defaults.
   DefaultedQueryObserverOptions<TQueryData, TData>
       defaultQueryObserverOptions<TQueryData, TData>(
-    QueryObserverOptions<TQueryData, TData> options,
+    QueryObserverOptionsBase<TQueryData, TData> options,
   ) {
     final queryKey = options.queryKey;
     // Resolved once: the scan over the registered defaults, with its deep key
@@ -1077,34 +1077,15 @@ class QueryClient {
   /// nothing outside the package may take is not a path (seventh review,
   /// 2026-09-10). [InfiniteQueryObserver.setInfiniteOptions] is the shorter
   /// way to the same thing.
-  QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>
+  QueryObserverOptionsBase<InfiniteData<TPageData, TPageParam>, TData>
       infiniteObserverOptions<TPageData, TPageParam, TData>(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) =>
-          QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData>(
-            queryKey: options.queryKey,
-            queryFn: null,
-            behavior: options.behavior,
-            enabled: options.enabled,
-            staleTime: options.staleTime,
-            gcTime: options.gcTime,
-            retry: options.retry,
-            retryDelay: options.retryDelay,
-            networkMode: options.networkMode,
-            initialData: options.initialData,
-            initialDataUpdatedAt: options.initialDataUpdatedAt,
-            initialDataUpdatedAtCompute: options.initialDataUpdatedAtCompute,
-            structuralSharing: options.structuralSharing,
-            meta: options.meta,
-            select: options.select,
-            placeholderData: options.placeholderData,
-            refetchOnMount: options.refetchOnMount,
-            refetchOnWindowFocus: options.refetchOnWindowFocus,
-            refetchOnReconnect: options.refetchOnReconnect,
-            refetchInterval: options.refetchInterval,
-            refetchIntervalInBackground: options.refetchIntervalInBackground,
-            retryOnMount: options.retryOnMount,
-          );
+          // The shape is kept: plain stays `QueryObserverOptions`, select stays
+          // `QuerySelectOptions`, each built by the options themselves so no
+          // cast is needed to say that a plain shape's TData is its
+          // InfiniteData.
+          options.toObserverOptions();
 
   /// Fetches and caches an infinite query, completing with its pages.
   ///
@@ -1127,7 +1108,7 @@ class QueryClient {
 
   /// A one-off observer for [options]. The caller owns its lifetime.
   QueryObserver<TQueryData, TData> observe<TQueryData, TData>(
-    QueryObserverOptions<TQueryData, TData> options,
+    QueryObserverOptionsBase<TQueryData, TData> options,
   ) =>
       QueryObserver<TQueryData, TData>(this, options);
 
@@ -1135,7 +1116,7 @@ class QueryClient {
   /// [infiniteQuery] is of [query]. The caller owns its lifetime.
   InfiniteQueryObserver<TPageData, TPageParam, TData>
       observeInfinite<TPageData, TPageParam, TData>(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) =>
           InfiniteQueryObserver<TPageData, TPageParam, TData>(this, options);
 }

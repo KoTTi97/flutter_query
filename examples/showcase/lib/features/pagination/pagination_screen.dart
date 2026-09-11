@@ -58,11 +58,11 @@ const StaleTime projectsPageStaleTime =
 /// The screen's read. The placeholder is the previous page's data, whatever
 /// it was, so the rows never blank out between pages — and it is the `const`
 /// variant, so a rebuild hands the observer a value equal to the last one.
-QueryObserverOptions<ProjectPage, ProjectPage> projectsPageQuery(
+QueryObserverOptions<ProjectPage> projectsPageQuery(
   ShowcaseApi api,
   int page,
 ) =>
-    QueryObserverOptions<ProjectPage, ProjectPage>(
+    QueryObserverOptions<ProjectPage>(
       queryKey: projectsPageKey(page),
       queryFn: (context) => api.projectsPage(page, signal: context.signal),
       staleTime: projectsPageStaleTime,

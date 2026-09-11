@@ -46,7 +46,7 @@ the same query readable from several widgets without drift:
 ```dart
 final tasksKey = QueryKey(<Object?>['tasks']);
 
-QueryObserverOptions<List<Task>, List<Task>> tasksQuery() =>
+QueryObserverOptions<List<Task>> tasksQuery() =>
     QueryObserverOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
@@ -54,7 +54,23 @@ QueryObserverOptions<List<Task>, List<Task>> tasksQuery() =>
     );
 ```
 
-Three things are worth noticing here.
+Four things are worth noticing here.
+
+**The one type argument is the data type.** It comes from `queryFn`'s return
+type, or is written out as here — `QueryObserverOptions<List<Task>>`. A query
+whose widgets see a projection of the data is the other shape,
+`QuerySelectOptions<TQueryData, TData>`, with `select` required; see
+[options](../guides/options.md#two-shapes). The one literal neither shape can
+type is a key-only one with neither a `queryFn` nor a type argument. The
+binding's controllers refuse that in debug builds with a message naming the
+cure, and the analyzer reports it at the literal once your
+`analysis_options.yaml` asks it to — recommended:
+
+```yaml
+analyzer:
+  language:
+    strict-inference: true
+```
 
 **`QueryKey` is a value type**, deep-frozen with structural equality — not a
 hashed string. Two keys built from equal contents *are* the same key.

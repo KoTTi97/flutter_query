@@ -24,7 +24,7 @@ void main() {
       final observer =
           InfiniteQueryObserver<int, int, InfiniteData<String, int>>(
         queryClient,
-        InfiniteQueryObserverOptions<int, int, InfiniteData<String, int>>(
+        InfiniteQuerySelectOptions<int, int, InfiniteData<String, int>>(
           queryKey: key,
           pageFn: (_) async {
             await sleep(ms(10));
@@ -62,7 +62,7 @@ void main() {
       final observer =
           InfiniteQueryObserver<int, int, InfiniteData<String, int>>(
         queryClient,
-        InfiniteQueryObserverOptions<int, int, InfiniteData<String, int>>(
+        InfiniteQuerySelectOptions<int, int, InfiniteData<String, int>>(
           meta: meta,
           queryKey: key,
           pageFn: (context) async {
@@ -103,7 +103,7 @@ void main() {
       final observer =
           InfiniteQueryObserver<String, int, InfiniteData<String, int>>(
         queryClient,
-        InfiniteQueryObserverOptions<String, int, InfiniteData<String, int>>(
+        InfiniteQueryObserverOptions<String, int>(
           queryKey: key,
           pageFn: (context) async {
             await sleep(ms(10));
@@ -168,7 +168,7 @@ void main() {
       final observer =
           InfiniteQueryObserver<String, int, InfiniteData<String, int>>(
         queryClient,
-        InfiniteQueryObserverOptions<String, int, InfiniteData<String, int>>(
+        InfiniteQueryObserverOptions<String, int>(
           queryKey: key,
           pageFn: (context) async {
             await sleep(ms(10));
@@ -212,7 +212,7 @@ void main() {
       final observer =
           InfiniteQueryObserver<String, int, InfiniteData<String, int>>(
         queryClient,
-        InfiniteQueryObserverOptions<String, int, InfiniteData<String, int>>(
+        InfiniteQueryObserverOptions<String, int>(
           queryKey: key,
           pageFn: (context) async {
             calls++;
@@ -247,8 +247,7 @@ void main() {
         'should set infinite query behavior via getOptimisticResult and return '
         'the initial state', (time) async {
       final key = queryKey();
-      final options =
-          InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>>(
+      final options = InfiniteQueryObserverOptions<int, int>(
         queryKey: key,
         pageFn: (_) async {
           await sleep(ms(10));

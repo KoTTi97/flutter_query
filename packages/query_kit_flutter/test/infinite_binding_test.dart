@@ -11,10 +11,10 @@ final feedKey = QueryKey(<Object?>['feed']);
 
 typedef Feed = InfiniteData<List<int>, int>;
 
-InfiniteQueryObserverOptions<List<int>, int, Feed> feedQuery(
+InfiniteQueryObserverOptions<List<int>, int> feedQuery(
   List<int> fetched,
 ) =>
-    InfiniteQueryObserverOptions<List<int>, int, Feed>(
+    InfiniteQueryObserverOptions<List<int>, int>(
       queryKey: feedKey,
       initialPageParam: 0,
       pageFn: (context) async {

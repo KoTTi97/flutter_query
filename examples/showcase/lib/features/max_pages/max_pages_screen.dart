@@ -59,20 +59,20 @@ typedef ProjectWindow = InfiniteData<ProjectSlice, int>;
 
 /// The window's options. The cursors come back with every slice, so the
 /// paging functions read them off the page rather than counting.
-InfiniteQueryObserverOptions<ProjectSlice, int, ProjectWindow>
-    projectsWindowQuery(ShowcaseApi api) =>
-        InfiniteQueryObserverOptions<ProjectSlice, int, ProjectWindow>(
-          queryKey: projectsWindowKey,
-          initialPageParam: startCursor,
-          pageFn: (context) => api.projectsFrom(
-            context.pageParam,
-            limit: pageSize,
-            signal: context.signal,
-          ),
-          getNextPageParam: (page, _, __, ___) => page.nextId,
-          getPreviousPageParam: (page, _, __, ___) => page.previousId,
-          maxPages: windowSize,
-        );
+InfiniteQueryObserverOptions<ProjectSlice, int> projectsWindowQuery(
+        ShowcaseApi api) =>
+    InfiniteQueryObserverOptions<ProjectSlice, int>(
+      queryKey: projectsWindowKey,
+      initialPageParam: startCursor,
+      pageFn: (context) => api.projectsFrom(
+        context.pageParam,
+        limit: pageSize,
+        signal: context.signal,
+      ),
+      getNextPageParam: (page, _, __, ___) => page.nextId,
+      getPreviousPageParam: (page, _, __, ___) => page.previousId,
+      maxPages: windowSize,
+    );
 
 class MaxPagesScreen extends StatefulWidget {
   const MaxPagesScreen({super.key});

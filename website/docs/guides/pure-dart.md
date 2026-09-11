@@ -29,7 +29,7 @@ final tasks = await client.query<List<Task>>(
 
 ```dart
 final observer = client.observe<Task, Task>(
-  QueryObserverOptions<Task, Task>(
+  QueryObserverOptions<Task>(
     queryKey: QueryKey(<Object?>['tasks', id]),
     queryFn: (context) => api.getTask(id, signal: context.signal),
   ),

@@ -49,7 +49,7 @@ Future<void> main() async {
   // Reactive: an observer reports every change under its key as a sealed
   // result, so the switch is exhaustive and the data needs no `!`.
   final observer = client.observe<List<String>, int>(
-    QueryObserverOptions<List<String>, int>(
+    QuerySelectOptions<List<String>, int>(
       queryKey: tasksKey,
       queryFn: fetchTasks,
       staleTime: const StaleTime.duration(Duration(seconds: 30)),

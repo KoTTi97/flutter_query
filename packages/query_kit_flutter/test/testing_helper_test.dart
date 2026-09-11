@@ -65,7 +65,7 @@ void main() {
   queryWidgetTest('createClient carries defaults through',
       (tester, client) async {
     final defaulted = client.defaultQueryOptions(
-      QueryObserverOptions<String, String>(
+      QueryObserverOptions<String>(
         queryKey: QueryKey(<Object?>['defaults']),
       ),
     );

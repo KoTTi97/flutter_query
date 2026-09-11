@@ -16,7 +16,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 QueryKey pageKey(int n) => QueryKey(<Object?>['page', n]);
 
-QueryObserverOptions<String, String> pageQuery(int n) => QueryObserverOptions(
+QueryObserverOptions<String> pageQuery(int n) => QueryObserverOptions(
       queryKey: pageKey(n),
       queryFn: (_) => Future<String>.delayed(
         const Duration(milliseconds: 100),

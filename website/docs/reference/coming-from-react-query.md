@@ -93,7 +93,7 @@ alternatives — there is no recommended default, pick per situation:
 | `initialDataUpdatedAt: () => number` | `initialDataUpdatedAtCompute: () => DateTime?` — evaluated only when data is actually seeded; `null` means now. Give one form or the other, never both |
 | `placeholderData: value` / `(previous) => …` | `PlaceholderData.value(…)` / `PlaceholderData.compute(…)` |
 | `placeholderData: keepPreviousData` | `const PlaceholderData.keepPrevious()` |
-| `select: (data) => …` | `select: (data) => …` — the observer's second type parameter |
+| `select: (data) => …` | its own options shape: `QuerySelectOptions<TQueryData, TData>`, `select` required. Without one, `QueryObserverOptions<TData>` has a single type argument |
 | `notifyOnChangeProps` | gone: `select` narrows what is reported, and the builders take `buildWhen` |
 | `throwOnError` | gone: errors are the `QueryError` case of the sealed result |
 | `structuralSharing` | on by default: lists are shared element by element, maps and sets whole when deep-equal, everything else by `==`, so typed models need `==`/`hashCode`; `structuralSharing: (previous, next) => …` replaces it for the cache write |

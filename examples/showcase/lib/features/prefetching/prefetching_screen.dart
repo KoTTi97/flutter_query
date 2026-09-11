@@ -64,15 +64,15 @@ const Feature prefetchingFeature = Feature(
 /// the whole point is that the open within this window costs nothing.
 const StaleTime postStaleTime = StaleTime.duration(Duration(seconds: 10));
 
-QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Post>, List<Post>>(
+QueryObserverOptions<List<Post>> postsQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Post>>(
       queryKey: ShowcaseKeys.posts,
       queryFn: (context) => api.posts(signal: context.signal),
     );
 
 /// The detail's options: an observer's, since a `QueryBuilder` reads them.
-QueryObserverOptions<Post, Post> postQuery(ShowcaseApi api, int id) =>
-    QueryObserverOptions<Post, Post>(
+QueryObserverOptions<Post> postQuery(ShowcaseApi api, int id) =>
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) => api.post(id, signal: context.signal),
       staleTime: postStaleTime,
@@ -327,7 +327,7 @@ class _PostList extends StatelessWidget {
     required this.onOpen,
   });
 
-  final QueryObserverOptions<List<Post>, List<Post>> options;
+  final QueryObserverOptions<List<Post>> options;
   final void Function(int id) onPrefetch;
   final void Function(int id) onOpen;
 
@@ -440,7 +440,7 @@ class _PostDetail extends StatelessWidget {
   });
 
   final int id;
-  final QueryObserverOptions<Post, Post> options;
+  final QueryObserverOptions<Post> options;
   final VoidCallback onBack;
 
   @override

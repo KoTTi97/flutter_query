@@ -18,7 +18,7 @@ among them, because none of them is a way of *reading* one query.
 QueriesBuilder<Task, String>(
   queries: [
     for (final id in visibleIds)
-      QueryObserverOptions<Task, String>(
+      QuerySelectOptions<Task, String>(
         queryKey: QueryKey(<Object?>['tasks', id]),
         queryFn: (context) => api.getTask(id, signal: context.signal),
         select: (task) => task.name,

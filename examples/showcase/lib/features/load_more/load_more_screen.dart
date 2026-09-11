@@ -75,9 +75,9 @@ typedef ProjectRows = InfiniteData<List<Project>, int>;
 /// `About` would be a mount over stale data, and that refetches every held
 /// page — ten requests to show that the cache survived. Upstream's example
 /// does exactly that; here the survival is what the screen is about.
-InfiniteQueryObserverOptions<ProjectSlice, int, ProjectRows>
+InfiniteQuerySelectOptions<ProjectSlice, int, ProjectRows>
     projectsInfiniteQuery(ShowcaseApi api) =>
-        InfiniteQueryObserverOptions<ProjectSlice, int, ProjectRows>(
+        InfiniteQuerySelectOptions<ProjectSlice, int, ProjectRows>(
           queryKey: projectsInfiniteKey,
           initialPageParam: 0,
           pageFn: (context) => api.projectsFrom(

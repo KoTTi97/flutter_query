@@ -45,8 +45,8 @@ const int missingPostId = 999;
 
 /// One member of the collection. `select` is what makes the collection
 /// homogeneous in `String` while the cache still holds whole `Post`s.
-QueryObserverOptions<Post, String> postTitleQuery(ShowcaseApi api, int id) =>
-    QueryObserverOptions<Post, String>(
+QuerySelectOptions<Post, String> postTitleQuery(ShowcaseApi api, int id) =>
+    QuerySelectOptions<Post, String>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) => api.post(id, signal: context.signal),
       select: (post) => post.title,
@@ -136,7 +136,7 @@ class _QueryCollectionsScreenState extends State<QueryCollectionsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: QueriesBuilder<Post, String>(
-            queries: <QueryObserverOptions<Post, String>>[
+            queries: <QuerySelectOptions<Post, String>>[
               for (final id in _ids) postTitleQuery(api, id),
             ],
             builder: (context, results) {

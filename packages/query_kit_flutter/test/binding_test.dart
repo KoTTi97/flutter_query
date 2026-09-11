@@ -14,11 +14,11 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 QueryKey taskKey(String id) => QueryKey(<Object?>['task', id]);
 
-QueryObserverOptions<String, String> taskQuery(
+QueryObserverOptions<String> taskQuery(
   String id, {
   required Future<String> Function(String id) fetch,
 }) =>
-    QueryObserverOptions<String, String>(
+    QueryObserverOptions<String>(
       queryKey: taskKey(id),
       queryFn: (_) => fetch(id),
       staleTime: const StaleTime.duration(Duration(minutes: 5)),

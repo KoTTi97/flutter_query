@@ -54,8 +54,15 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// Call [dispose] when done; it destroys the observer.
   QueryController(
     this.client,
-    QueryObserverOptions<TQueryData, TData> options,
-  )   : _observer = QueryObserver<TQueryData, TData>(client, options),
+    QueryObserverOptionsBase<TQueryData, TData> options,
+  )   : assert(
+          _debugDataTypeIsAnchored<TData>(),
+          'QueryController<$TQueryData, $TData>: the data type is a top type '
+          '($TData) — give the options a queryFn whose return type names it, '
+          'or an explicit type argument (QueryController.create<Task>(…), '
+          'QueryBuilder<Task>(…)).',
+        ),
+        _observer = QueryObserver<TQueryData, TData>(client, options),
         _options = options;
 
   /// Wraps an observer built elsewhere — how [InfiniteQueryController] brings
@@ -68,10 +75,17 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// [InfiniteQueryController] does.
   QueryController.observing(
       this.client, QueryObserver<TQueryData, TData> observer)
-      : _observer = observer,
+      : assert(
+          _debugDataTypeIsAnchored<TData>(),
+          'QueryController<$TQueryData, $TData>: the data type is a top type '
+          '($TData) — give the observer an explicit type argument.',
+        ),
+        _observer = observer,
         _options = null;
 
-  /// The common case: no `select`, so the query's data type is what you get.
+  /// The common case: no `select`, so the query's data type is what you get,
+  /// and one type argument names it — from `queryFn`'s return type, or
+  /// written out as `QueryController.create<Task>(…)` (ADR-0001).
   ///
   /// A static method rather than a named constructor because it drops a type
   /// parameter, which a constructor cannot. It *creates* a controller — and
@@ -83,7 +97,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// [QueryClientProvider.of] alone.
   static QueryController<TData, TData> create<TData>(
     QueryClient client,
-    QueryObserverOptions<TData, TData> options,
+    QueryObserverOptions<TData> options,
   ) =>
       QueryController<TData, TData>(client, options);
 
@@ -91,7 +105,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   final QueryClient client;
 
   final QueryObserver<TQueryData, TData> _observer;
-  QueryObserverOptions<TQueryData, TData>? _options;
+  QueryObserverOptionsBase<TQueryData, TData>? _options;
   void Function()? _unsubscribe;
   bool _disposed = false;
 
@@ -140,7 +154,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// Deliberately does not notify: the observer notifies by itself when the
   /// *result* changes, and notifying here would rebuild the widget that just
   /// called this from its own `build`.
-  void setOptions(QueryObserverOptions<TQueryData, TData> options) {
+  void setOptions(QueryObserverOptionsBase<TQueryData, TData> options) {
     _options = options;
     _observer.setOptions(options);
   }
@@ -215,13 +229,15 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
 /// (https://github.com/KoTTi97/flutter_query/issues/16).
 ///
 /// ```dart
-/// final feed = InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>(
-///   client,
-///   feedQuery(),
-/// );
+/// final feed = InfiniteQueryController(client, feedQuery());
 /// // …
 /// if (feed.hasNextPage) feed.fetchNextPage();
 /// ```
+///
+/// No type arguments at the call site: either options shape carries all
+/// three, and inference reads them off it — `InfiniteQueryObserverOptions<List<Post>, int>`
+/// makes an `InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>`
+/// (ADR-0001).
 class InfiniteQueryController<TPageData, TPageParam, TData>
     extends QueryController<InfiniteData<TPageData, TPageParam>, TData> {
   /// Creates an [InfiniteQueryObserver] for [options] on [client], with the
@@ -229,8 +245,16 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
   /// first listener, and [dispose] destroys the observer.
   InfiniteQueryController(
     QueryClient client,
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
-  )   : _infiniteOptions = options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
+  )   : assert(
+          _debugDataTypeIsAnchored<TData>(),
+          'InfiniteQueryController<$TPageData, $TPageParam, $TData>: the data '
+          'type is a top type ($TData) — a plain infinite query never is, so '
+          'give the select a return type that names it, or explicit type '
+          'arguments (InfiniteQuerySelectOptions<List<Post>, int, '
+          'List<Post>>(…)).',
+        ),
+        _infiniteOptions = options,
         super.observing(
           client,
           InfiniteQueryObserver<TPageData, TPageParam, TData>(client, options),
@@ -238,7 +262,8 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
 
   /// The typed options last applied, or `null` once [setOptions] applied
   /// untyped ones; then the base class's copy is the current one.
-  InfiniteQueryObserverOptions<TPageData, TPageParam, TData>? _infiniteOptions;
+  InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>?
+      _infiniteOptions;
 
   /// The observer underneath, typed.
   InfiniteQueryObserver<TPageData, TPageParam, TData> get infiniteObserver =>
@@ -269,7 +294,7 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
   /// Replaces the options, paging half included. See
   /// [QueryController.setOptions] on why this does not notify.
   void setInfiniteOptions(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) {
     _infiniteOptions = options;
     _options = null;
@@ -286,7 +311,8 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
   /// refuses.
   @override
   void setOptions(
-    QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
+    QueryObserverOptionsBase<InfiniteData<TPageData, TPageParam>, TData>
+        options,
   ) {
     infiniteObserver.setOptions(options);
     _infiniteOptions = null;
@@ -472,3 +498,13 @@ class MutationController<TData, TVariables, TOnMutateResult>
     super.dispose();
   }
 }
+
+/// Whether [TData] is a real type rather than a top type — `dynamic`,
+/// `Object?` or `void` — which is what a plain options literal written inline
+/// with neither a `queryFn` nor a type argument leaves an observer with. A
+/// `List<Object?>` is a `List<TData>` exactly for the top types, so the test
+/// survives the question whether such a slot is inferred as `dynamic` or
+/// `Object?`. The controllers assert it: a debug backstop for the one
+/// residue the options shapes cannot remove (ADR-0001), compiled out of
+/// release.
+bool _debugDataTypeIsAnchored<TData>() => <Object?>[] is! List<TData>;

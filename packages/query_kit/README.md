@@ -64,7 +64,7 @@ final tasks = await client.query<List<Task>>(
 
 // Reactive: an observer that keeps a widget (or anything) up to date.
 final observer = client.observe<Task, Task>(
-  QueryObserverOptions<Task, Task>(
+  QueryObserverOptions<Task>(
     queryKey: QueryKey(<Object?>['tasks', id]),
     queryFn: (context) => api.getTask(id, signal: context.signal),
   ),

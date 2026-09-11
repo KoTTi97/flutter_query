@@ -30,8 +30,8 @@ const Feature simpleFeature = Feature(
 
 /// The screen's one query. The options are a function, not a constant, so
 /// the `queryFn` can close over the api; the key is what the cache goes by.
-QueryObserverOptions<Post, Post> firstPostQuery(ShowcaseApi api) =>
-    QueryObserverOptions<Post, Post>(
+QueryObserverOptions<Post> firstPostQuery(ShowcaseApi api) =>
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(1),
       queryFn: (context) => api.post(1, signal: context.signal),
     );

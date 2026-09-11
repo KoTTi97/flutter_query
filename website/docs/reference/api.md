@@ -39,7 +39,7 @@ The output lands in `doc/api/` (gitignored). Open `doc/api/index.html`.
 |---|---|
 | the whole imperative surface | `QueryClient` |
 | what a widget is handed | `QueryResult`, and its `QueryPending` / `QuerySuccess` / `QueryError` cases |
-| every option and what unset means | `QueryObserverOptions`, then `option_values.dart` for the sealed types |
+| every option and what unset means | `QueryObserverOptions` and `QuerySelectOptions`, then `option_values.dart` for the sealed types |
 | paging | `InfiniteQueryOptions`, `InfiniteData`, `InfiniteQueryObserver` |
 | writes | `MutationOptions`, `MutationResult`, `MutationObserver` |
 | the Flutter side | `QueryClientProvider`, `QueryController`, `QueryBuilder`, `QueryMixin`, and the `context.query` extension |

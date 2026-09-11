@@ -104,6 +104,10 @@ typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
 typedef StructuralSharing<TQueryData> = TQueryData Function(
     TQueryData? previous, TQueryData next);
 
+/// Projects a query's data into what an observer reports — the `select` of a
+/// [QuerySelectOptions].
+typedef SelectFn<TQueryData, TData> = TData Function(TQueryData data);
+
 /// Seed data written into the cache, as if it had been fetched.
 @immutable
 sealed class InitialData<TQueryData> {
@@ -412,15 +416,28 @@ class QueryOptions<TQueryData> {
 
 /// Query options plus everything only an observer cares about.
 ///
+/// Sealed over exactly two shapes — [QueryObserverOptions], which has no
+/// `select`, and [QuerySelectOptions], which requires one — so that the
+/// data type an observer reports is always anchored by a required
+/// parameter: `queryFn` on the plain shape, `select` on the select shape. A
+/// single options type with an optional `select` carried [TData] only in
+/// that one optional field, and an options literal written inline without
+/// it inferred `TData` to `dynamic` — a `Query<dynamic>` in the cache that
+/// every typed reader of the key then tripped over (ninth review, C1;
+/// ADR-0001). This is what `QueryObserver`, `QueryClient`'s defaulting and
+/// the binding's general controller accept; the entry points a widget calls
+/// take one of the two shapes.
+///
 /// Like [QueryOptions], deliberately without value equality: an observer is
 /// handed the options a widget built on every build and compares what they
 /// resolve to, so a `select` or `placeholderData` written inline is not a
 /// change by itself.
 @immutable
-class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
+sealed class QueryObserverOptionsBase<TQueryData, TData>
+    extends QueryOptions<TQueryData> {
   /// The cache-layer fields plus the observer's own. Every field but
   /// [queryKey] is optional and takes the client's default.
-  const QueryObserverOptions({
+  const QueryObserverOptionsBase({
     required super.queryKey,
     super.queryFn,
     super.enabled,
@@ -435,7 +452,6 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
     super.structuralSharing,
     super.meta,
     super.behavior,
-    this.select,
     this.placeholderData,
     this.refetchOnMount,
     this.refetchOnWindowFocus,
@@ -446,8 +462,9 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
   });
 
   /// Narrows what the observer reports — and therefore what a change in the
-  /// cached data has to touch before a listener is notified.
-  final TData Function(TQueryData data)? select;
+  /// cached data has to touch before a listener is notified. `null` on a
+  /// [QueryObserverOptions], never on a [QuerySelectOptions].
+  SelectFn<TQueryData, TData>? get select;
 
   /// Data shown while the query has none of its own. Never written to the
   /// cache: a result built from it reports `isPlaceholderData`, and it gives
@@ -479,8 +496,11 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
   /// Whether a query that ended in an error retries when an observer mounts.
   final bool? retryOnMount;
 
+  /// This, with the given fields replaced; each shape returns its own type.
+  /// `select` is not a field here — it is what tells the two shapes apart —
+  /// so only [QuerySelectOptions.copyWith] accepts one.
   @override
-  QueryObserverOptions<TQueryData, TData> copyWith({
+  QueryObserverOptionsBase<TQueryData, TData> copyWith({
     QueryKey? queryKey,
     QueryFn<TQueryData>? queryFn,
     Enabled? enabled,
@@ -495,7 +515,6 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
     StructuralSharing<TQueryData>? structuralSharing,
     Object? meta,
     FetchBehavior<TQueryData>? behavior,
-    TData Function(TQueryData data)? select,
     PlaceholderData<TQueryData>? placeholderData,
     RefetchOn? refetchOnMount,
     RefetchOn? refetchOnWindowFocus,
@@ -503,8 +522,84 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
     RefetchInterval? refetchInterval,
     bool? refetchIntervalInBackground,
     bool? retryOnMount,
+  });
+}
+
+/// Observer options for a plain query: no `select`, so the observer reports
+/// the query's data as its own, and one type argument names both.
+///
+/// The type comes from `queryFn`'s return type or an explicit argument —
+/// `QueryObserverOptions<Task>(…)`. Written inline with neither, [TData] has
+/// nothing to infer from; the binding's controllers refuse that in debug
+/// mode, and the analyzer's `strict-inference` reports it at the literal.
+///
+/// ```dart
+/// QueryObserverOptions<Task> taskQuery(int id) => QueryObserverOptions(
+///       queryKey: QueryKey(['tasks', id]),
+///       queryFn: (_) => api.task(id),
+///     );
+/// ```
+///
+/// For a query whose observers see a projection of the cached data, use
+/// [QuerySelectOptions].
+@immutable
+class QueryObserverOptions<TData>
+    extends QueryObserverOptionsBase<TData, TData> {
+  /// The cache-layer fields plus the observer's own. Every field but
+  /// [queryKey] is optional and takes the client's default.
+  const QueryObserverOptions({
+    required super.queryKey,
+    super.queryFn,
+    super.enabled,
+    super.staleTime,
+    super.gcTime,
+    super.retry,
+    super.retryDelay,
+    super.networkMode,
+    super.initialData,
+    super.initialDataUpdatedAt,
+    super.initialDataUpdatedAtCompute,
+    super.structuralSharing,
+    super.meta,
+    super.behavior,
+    super.placeholderData,
+    super.refetchOnMount,
+    super.refetchOnWindowFocus,
+    super.refetchOnReconnect,
+    super.refetchInterval,
+    super.refetchIntervalInBackground,
+    super.retryOnMount,
+  });
+
+  /// Always `null`: a plain query has no projection.
+  @override
+  SelectFn<TData, TData>? get select => null;
+
+  @override
+  QueryObserverOptions<TData> copyWith({
+    QueryKey? queryKey,
+    QueryFn<TData>? queryFn,
+    Enabled? enabled,
+    StaleTime? staleTime,
+    GcTime? gcTime,
+    RetryPolicy? retry,
+    RetryDelay? retryDelay,
+    NetworkMode? networkMode,
+    InitialData<TData>? initialData,
+    DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
+    StructuralSharing<TData>? structuralSharing,
+    Object? meta,
+    FetchBehavior<TData>? behavior,
+    PlaceholderData<TData>? placeholderData,
+    RefetchOn? refetchOnMount,
+    RefetchOn? refetchOnWindowFocus,
+    RefetchOn? refetchOnReconnect,
+    RefetchInterval? refetchInterval,
+    bool? refetchIntervalInBackground,
+    bool? retryOnMount,
   }) =>
-      QueryObserverOptions<TQueryData, TData>(
+      QueryObserverOptions<TData>(
         queryKey: queryKey ?? this.queryKey,
         queryFn: queryFn ?? this.queryFn,
         enabled: enabled ?? this.enabled,
@@ -525,7 +620,116 @@ class QueryObserverOptions<TQueryData, TData> extends QueryOptions<TQueryData> {
         structuralSharing: structuralSharing ?? this.structuralSharing,
         meta: meta ?? this.meta,
         behavior: behavior ?? this.behavior,
+        placeholderData: placeholderData ?? this.placeholderData,
+        refetchOnMount: refetchOnMount ?? this.refetchOnMount,
+        refetchOnWindowFocus: refetchOnWindowFocus ?? this.refetchOnWindowFocus,
+        refetchOnReconnect: refetchOnReconnect ?? this.refetchOnReconnect,
+        refetchInterval: refetchInterval ?? this.refetchInterval,
+        refetchIntervalInBackground:
+            refetchIntervalInBackground ?? this.refetchIntervalInBackground,
+        retryOnMount: retryOnMount ?? this.retryOnMount,
+      );
+}
+
+/// Observer options for a query whose observers see a projection of the
+/// cached data: what the cache holds ([TQueryData]) and what [select] makes
+/// of it ([TData]) — two type arguments, both anchored, [TData] by the
+/// required [select].
+///
+/// ```dart
+/// QuerySelectOptions<Task, String> taskName(int id) => QuerySelectOptions(
+///       queryKey: QueryKey(['tasks', id]),
+///       queryFn: (_) => api.task(id),
+///       select: (task) => task.name,
+///     );
+/// ```
+///
+/// A `select` that keeps the type (`List<Task>` → `List<Task>`) is still a
+/// select and still goes here; the shape is about *whether* there is a
+/// projection, not about the types being different.
+@immutable
+class QuerySelectOptions<TQueryData, TData>
+    extends QueryObserverOptionsBase<TQueryData, TData> {
+  /// The cache-layer fields plus the observer's own, [select] required.
+  /// Every other field but [queryKey] is optional and takes the client's
+  /// default.
+  const QuerySelectOptions({
+    required super.queryKey,
+    required this.select,
+    super.queryFn,
+    super.enabled,
+    super.staleTime,
+    super.gcTime,
+    super.retry,
+    super.retryDelay,
+    super.networkMode,
+    super.initialData,
+    super.initialDataUpdatedAt,
+    super.initialDataUpdatedAtCompute,
+    super.structuralSharing,
+    super.meta,
+    super.behavior,
+    super.placeholderData,
+    super.refetchOnMount,
+    super.refetchOnWindowFocus,
+    super.refetchOnReconnect,
+    super.refetchInterval,
+    super.refetchIntervalInBackground,
+    super.retryOnMount,
+  });
+
+  /// Narrows what the observer reports — and therefore what a change in the
+  /// cached data has to touch before a listener is notified.
+  @override
+  final SelectFn<TQueryData, TData> select;
+
+  @override
+  QuerySelectOptions<TQueryData, TData> copyWith({
+    QueryKey? queryKey,
+    QueryFn<TQueryData>? queryFn,
+    Enabled? enabled,
+    StaleTime? staleTime,
+    GcTime? gcTime,
+    RetryPolicy? retry,
+    RetryDelay? retryDelay,
+    NetworkMode? networkMode,
+    InitialData<TQueryData>? initialData,
+    DateTime? initialDataUpdatedAt,
+    DateTime? Function()? initialDataUpdatedAtCompute,
+    StructuralSharing<TQueryData>? structuralSharing,
+    Object? meta,
+    FetchBehavior<TQueryData>? behavior,
+    PlaceholderData<TQueryData>? placeholderData,
+    RefetchOn? refetchOnMount,
+    RefetchOn? refetchOnWindowFocus,
+    RefetchOn? refetchOnReconnect,
+    RefetchInterval? refetchInterval,
+    bool? refetchIntervalInBackground,
+    bool? retryOnMount,
+    SelectFn<TQueryData, TData>? select,
+  }) =>
+      QuerySelectOptions<TQueryData, TData>(
+        queryKey: queryKey ?? this.queryKey,
         select: select ?? this.select,
+        queryFn: queryFn ?? this.queryFn,
+        enabled: enabled ?? this.enabled,
+        staleTime: staleTime ?? this.staleTime,
+        gcTime: gcTime ?? this.gcTime,
+        retry: retry ?? this.retry,
+        retryDelay: retryDelay ?? this.retryDelay,
+        networkMode: networkMode ?? this.networkMode,
+        initialData: initialData ?? this.initialData,
+        initialDataUpdatedAt: initialDataUpdatedAt ??
+            (initialDataUpdatedAtCompute == null
+                ? this.initialDataUpdatedAt
+                : null),
+        initialDataUpdatedAtCompute: initialDataUpdatedAtCompute ??
+            (initialDataUpdatedAt == null
+                ? this.initialDataUpdatedAtCompute
+                : null),
+        structuralSharing: structuralSharing ?? this.structuralSharing,
+        meta: meta ?? this.meta,
+        behavior: behavior ?? this.behavior,
         placeholderData: placeholderData ?? this.placeholderData,
         refetchOnMount: refetchOnMount ?? this.refetchOnMount,
         refetchOnWindowFocus: refetchOnWindowFocus ?? this.refetchOnWindowFocus,
@@ -746,29 +950,30 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
     required this.retryOnMount,
   }) : super._();
 
-  /// [QueryObserverOptions.select]; there is no default.
-  final TData Function(TQueryData data)? select;
+  /// [QuerySelectOptions.select], or `null` for a [QueryObserverOptions];
+  /// there is no default.
+  final SelectFn<TQueryData, TData>? select;
 
-  /// [QueryObserverOptions.placeholderData]; there is no default.
+  /// [QueryObserverOptionsBase.placeholderData]; there is no default.
   final PlaceholderData<TQueryData>? placeholderData;
 
-  /// [QueryObserverOptions.refetchOnMount], with the default applied.
+  /// [QueryObserverOptionsBase.refetchOnMount], with the default applied.
   final RefetchOn refetchOnMount;
 
-  /// [QueryObserverOptions.refetchOnWindowFocus], with the default applied.
+  /// [QueryObserverOptionsBase.refetchOnWindowFocus], with the default applied.
   final RefetchOn refetchOnWindowFocus;
 
-  /// [QueryObserverOptions.refetchOnReconnect], with the default applied.
+  /// [QueryObserverOptionsBase.refetchOnReconnect], with the default applied.
   final RefetchOn refetchOnReconnect;
 
-  /// [QueryObserverOptions.refetchInterval], with the default applied.
+  /// [QueryObserverOptionsBase.refetchInterval], with the default applied.
   final RefetchInterval refetchInterval;
 
-  /// [QueryObserverOptions.refetchIntervalInBackground], with the default
+  /// [QueryObserverOptionsBase.refetchIntervalInBackground], with the default
   /// applied.
   final bool refetchIntervalInBackground;
 
-  /// [QueryObserverOptions.retryOnMount], with the default applied.
+  /// [QueryObserverOptionsBase.retryOnMount], with the default applied.
   final bool retryOnMount;
 
   /// The cache-layer view of these options. Built on first read and kept:

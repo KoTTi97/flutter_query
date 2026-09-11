@@ -69,20 +69,20 @@ MutationDefaults createTodoDefaults(ShowcaseApi api) => MutationDefaults(
 // built on every build compare equal and the parsed list is kept, not
 // re-parsed into a fresh one per rebuild.
 
-QueryObserverOptions<Object?, List<Post>> postsQuery() =>
-    QueryObserverOptions<Object?, List<Post>>(
+QuerySelectOptions<Object?, List<Post>> postsQuery() =>
+    QuerySelectOptions<Object?, List<Post>>(
       queryKey: apiKey('/posts'),
       select: _parsePosts,
     );
 
-QueryObserverOptions<Object?, Post> postQuery(int id) =>
-    QueryObserverOptions<Object?, Post>(
+QuerySelectOptions<Object?, Post> postQuery(int id) =>
+    QuerySelectOptions<Object?, Post>(
       queryKey: apiKey('/posts/$id'),
       select: _parsePost,
     );
 
-QueryObserverOptions<Object?, List<Comment>> commentsQuery(int postId) =>
-    QueryObserverOptions<Object?, List<Comment>>(
+QuerySelectOptions<Object?, List<Comment>> commentsQuery(int postId) =>
+    QuerySelectOptions<Object?, List<Comment>>(
       queryKey: apiKey('/posts/$postId/comments'),
       select: _parseComments,
     );
@@ -90,8 +90,8 @@ QueryObserverOptions<Object?, List<Comment>> commentsQuery(int postId) =>
 /// A key whose path has no post behind it. Every other option is still the
 /// query's own: what the backend's 404 means is settled here, once, rather
 /// than after the default backoff.
-QueryObserverOptions<Object?, Post> missingPostQuery() =>
-    QueryObserverOptions<Object?, Post>(
+QuerySelectOptions<Object?, Post> missingPostQuery() =>
+    QuerySelectOptions<Object?, Post>(
       queryKey: apiKey('/posts/999'),
       select: _parsePost,
       retry: RetryPolicy.never,

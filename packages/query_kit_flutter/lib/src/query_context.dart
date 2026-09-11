@@ -71,16 +71,23 @@ extension QueryContext on BuildContext {
   /// upstream re-applies them on every render; the observer decides what, if
   /// anything, actually changed.
   QueryResult<TData> query<TData>(
-    QueryObserverOptions<TData, TData> options, {
+    QueryObserverOptions<TData> options, {
     Object? id,
   }) =>
-      selectQuery<TData, TData>(options, id: id);
+      _read<TData, TData>(options, id);
 
-  /// [query] for a query with a `select`.
+  /// [query] for a query with a `select`: a [QuerySelectOptions], whose
+  /// required `select` anchors [TData] (ADR-0001).
   QueryResult<TData> selectQuery<TQueryData, TData>(
-    QueryObserverOptions<TQueryData, TData> options, {
+    QuerySelectOptions<TQueryData, TData> options, {
     Object? id,
-  }) {
+  }) =>
+      _read<TQueryData, TData>(options, id);
+
+  QueryResult<TData> _read<TQueryData, TData>(
+    QueryObserverOptionsBase<TQueryData, TData> options,
+    Object? id,
+  ) {
     final element = _scopeElement(this);
     final result = element.readQuery<TQueryData, TData>(
       options,
@@ -100,7 +107,7 @@ extension QueryContext on BuildContext {
   /// ```
   InfiniteQueryController<TPageData, TPageParam, TData>
       infiniteQuery<TPageData, TPageParam, TData>(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options, {
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options, {
     Object? id,
   }) {
     final element = _scopeElement(this);
@@ -266,7 +273,7 @@ class QueryScopeElement extends InheritedElement {
   /// Creates or reuses [reader]'s observer for [options] and returns its
   /// current result.
   QueryResult<TData> readQuery<TQueryData, TData>(
-    QueryObserverOptions<TQueryData, TData> options,
+    QueryObserverOptionsBase<TQueryData, TData> options,
     Element reader,
     Object? id,
   ) {
@@ -293,7 +300,7 @@ class QueryScopeElement extends InheritedElement {
   /// The infinite twin of [readQuery].
   InfiniteQueryController<TPageData, TPageParam, TData>
       readInfiniteQuery<TPageData, TPageParam, TData>(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
     Element reader,
     Object? id,
   ) {

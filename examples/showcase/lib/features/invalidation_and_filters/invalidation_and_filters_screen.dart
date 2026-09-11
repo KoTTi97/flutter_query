@@ -53,11 +53,11 @@ const StaleTime todosStaleTime = StaleTime.duration(Duration(seconds: 30));
 
 /// The list. [nextDelay] is asked on every fetch, so the screen can make one
 /// fetch slow enough to cancel without changing the options.
-QueryObserverOptions<List<Post>, List<Post>> postsQuery(
+QueryObserverOptions<List<Post>> postsQuery(
   ShowcaseApi api, {
   Duration? Function()? nextDelay,
 }) =>
-    QueryObserverOptions<List<Post>, List<Post>>(
+    QueryObserverOptions<List<Post>>(
       queryKey: ShowcaseKeys.posts,
       queryFn: (context) =>
           api.posts(signal: context.signal, delay: nextDelay?.call()),
@@ -66,13 +66,13 @@ QueryObserverOptions<List<Post>, List<Post>> postsQuery(
 /// One post. [prepare] runs before each request — how the screen scripts the
 /// backend's next answer for post 2 — and [retry] is what post 2 sets to
 /// `never`, so that answer is an error at once.
-QueryObserverOptions<Post, Post> postQuery(
+QueryObserverOptions<Post> postQuery(
   ShowcaseApi api,
   int id, {
   RetryPolicy? retry,
   Future<void> Function()? prepare,
 }) =>
-    QueryObserverOptions<Post, Post>(
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) async {
         await prepare?.call();
@@ -82,8 +82,8 @@ QueryObserverOptions<Post, Post> postQuery(
     );
 
 /// The todos, fresh for [todosStaleTime].
-QueryObserverOptions<List<Todo>, List<Todo>> todosQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Todo>, List<Todo>>(
+QueryObserverOptions<List<Todo>> todosQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Todo>>(
       queryKey: ShowcaseKeys.todos,
       queryFn: (context) => api.todos(signal: context.signal),
       staleTime: todosStaleTime,
@@ -144,7 +144,7 @@ class _InvalidationAndFiltersScreenState
     super.dispose();
   }
 
-  QueryObserverOptions<Post, Post> get _post2Options => postQuery(
+  QueryObserverOptions<Post> get _post2Options => postQuery(
         _api,
         2,
         retry: RetryPolicy.never,

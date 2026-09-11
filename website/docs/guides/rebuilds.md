@@ -20,7 +20,7 @@ A `select` runs at the observer. A fetch that brings back data whose
 rebuilds.
 
 ```dart
-QueryObserverOptions<List<Task>, int>(
+QuerySelectOptions<List<Task>, int>(
   queryKey: tasksKey,
   queryFn: (context) => api.listTasks(signal: context.signal),
   select: (tasks) => tasks.where((s) => s.done).length,

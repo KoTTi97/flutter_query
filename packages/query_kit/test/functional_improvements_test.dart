@@ -11,7 +11,7 @@ void main() {
       (time) async {
     final client = testClient();
     final options =
-        QueryObserverOptions<int, int>(queryKey: queryKey(), queryFn: (_) => 1);
+        QueryObserverOptions<int>(queryKey: queryKey(), queryFn: (_) => 1);
     final observer = QueriesObserver<int, int>(client, [options]);
     var changed = false;
     final unsubscribe = observer.subscribe((_) {
@@ -414,7 +414,7 @@ void main() {
     final key = queryKey();
     var calls = 0;
     final timestamp = time.now.subtract(const Duration(minutes: 2));
-    final options = QueryObserverOptions<int, int>(
+    final options = QueryObserverOptions<int>(
         queryKey: key,
         enabled: Enabled.no,
         initialData: const InitialData.value(1),
@@ -453,19 +453,18 @@ void main() {
     final client = testClient();
     final key = queryKey();
     var calls = 0;
-    final options =
-        InfiniteQueryObserverOptions<int, int, InfiniteData<int, int>>(
-            queryKey: key,
-            pageFn: (_) => 1,
-            initialPageParam: 0,
-            getNextPageParam: (_, __, ___, ____) => null,
-            initialData:
-                InitialData.value(InfiniteData(pages: [1], pageParams: [0])),
-            initialDataUpdatedAtCompute: () {
-              calls++;
-              return null;
-            },
-            enabled: Enabled.no);
+    final options = InfiniteQueryObserverOptions<int, int>(
+        queryKey: key,
+        pageFn: (_) => 1,
+        initialPageParam: 0,
+        getNextPageParam: (_, __, ___, ____) => null,
+        initialData:
+            InitialData.value(InfiniteData(pages: [1], pageParams: [0])),
+        initialDataUpdatedAtCompute: () {
+          calls++;
+          return null;
+        },
+        enabled: Enabled.no);
     final observer = InfiniteQueryObserver<int, int, InfiniteData<int, int>>(
         client, options.copyWith());
     expect(calls, 1);

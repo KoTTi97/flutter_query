@@ -9,8 +9,8 @@ import 'test_utils.dart';
 
 void main() {
   late QueryClient client;
-  late QueryObserverOptions<int, int> first;
-  late QueryObserverOptions<int, int> second;
+  late QueryObserverOptions<int> first;
+  late QueryObserverOptions<int> second;
 
   void observerTest(String name, Future<void> Function(FakeTime) body) {
     testFakeAsync(name, (time) async {
@@ -188,9 +188,17 @@ void main() {
     final results = [observer.currentResult];
     final unsubscribe = observer.subscribe(results.add);
     final baseline = results.length;
+    // A select is its own shape (ADR-0001), so a plain `copyWith` cannot add
+    // one; the selecting twins are built from the plain options' fields.
     observer.setQueries([
-      first.copyWith(select: (d) => d + 100),
-      second.copyWith(select: (d) => d + 100),
+      QuerySelectOptions<int, int>(
+          queryKey: first.queryKey,
+          queryFn: first.queryFn,
+          select: (d) => d + 100),
+      QuerySelectOptions<int, int>(
+          queryKey: second.queryKey,
+          queryFn: second.queryFn,
+          select: (d) => d + 100),
     ]);
     await time.flushMicrotasks();
     expect(results.length, greaterThan(baseline));

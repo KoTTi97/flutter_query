@@ -42,16 +42,16 @@ const Feature basicFeature = Feature(
 const Duration postGcTime = Duration(seconds: 10);
 
 /// The list's query, with the client's defaults for everything else.
-QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Post>, List<Post>>(
+QueryObserverOptions<List<Post>> postsQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Post>>(
       queryKey: ShowcaseKeys.posts,
       queryFn: (context) => api.posts(signal: context.signal),
     );
 
 /// One post's query. The default `staleTime` is what makes a reopened post
 /// refetch in the background; [postGcTime] is what lets it go.
-QueryObserverOptions<Post, Post> postQuery(ShowcaseApi api, int id) =>
-    QueryObserverOptions<Post, Post>(
+QueryObserverOptions<Post> postQuery(ShowcaseApi api, int id) =>
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) => api.post(id, signal: context.signal),
       gcTime: const GcTime.duration(postGcTime),

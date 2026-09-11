@@ -36,12 +36,12 @@ const DefaultOptions appDefaultOptions = DefaultOptions(
 /// one key with two different query functions is a coin flip over which one
 /// actually runs, and the seeding below would silently stop happening depending
 /// on which widget built first.
-QueryObserverOptions<TaskListResponse, TaskListResponse> taskListQuery(
+QueryObserverOptions<TaskListResponse> taskListQuery(
   QueryClient client,
   TaskApi api,
   TaskFilters filters,
 ) =>
-    QueryObserverOptions<TaskListResponse, TaskListResponse>(
+    QueryObserverOptions<TaskListResponse>(
       queryKey: TaskKeys.list(filters),
       queryFn: (context) async {
         final result = await api.listTasks(filters, signal: context.signal);
@@ -65,10 +65,10 @@ QueryObserverOptions<TaskListResponse, TaskListResponse> taskListQuery(
 /// Used by the header. Same key and same options as the overview's unfiltered
 /// list, so this costs no extra request — `select` derives from the cache entry
 /// that is already there. Two widgets, two shapes of the same data, one fetch.
-QueryObserverOptions<TaskListResponse, ({int synced, int total})>
+QuerySelectOptions<TaskListResponse, ({int synced, int total})>
     syncedTasksQuery(QueryClient client, TaskApi api) {
   final list = taskListQuery(client, api, TaskFilters.all);
-  return QueryObserverOptions<TaskListResponse, ({int synced, int total})>(
+  return QuerySelectOptions<TaskListResponse, ({int synced, int total})>(
     queryKey: list.queryKey,
     queryFn: list.queryFn,
     staleTime: list.staleTime,
@@ -80,7 +80,7 @@ QueryObserverOptions<TaskListResponse, ({int synced, int total})>
 }
 
 /// Used by both the overview rows and the detail screen.
-QueryObserverOptions<Task, Task> taskQuery(
+QueryObserverOptions<Task> taskQuery(
   QueryClient client,
   TaskApi api,
   String id,
@@ -100,7 +100,7 @@ QueryObserverOptions<Task, Task> taskQuery(
 
   final seed = findInLists();
 
-  return QueryObserverOptions<Task, Task>(
+  return QueryObserverOptions<Task>(
     queryKey: TaskKeys.detail(id),
     queryFn: (context) => api.getTask(id, signal: context.signal),
     staleTime: const StaleTime.duration(Duration(seconds: 45)),

@@ -62,7 +62,7 @@ void main() {
         });
 
         final observer = queryClient.observe<String, String>(
-          QueryObserverOptions<String, String>(
+          QueryObserverOptions<String>(
             queryKey: key,
             queryFn: (_) => 'data',
             staleTime: StaleTime.duration(ms(10)),

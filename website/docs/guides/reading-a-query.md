@@ -44,8 +44,8 @@ Things to know:
 - A widget that stops calling `context.query` *altogether* gives no signal
   Flutter can see, so its last observers stay until it unmounts. Put a
   conditional read in its own small widget.
-- `context.selectQuery` is the form with a `select` whose output type differs
-  from the cache's.
+- `context.selectQuery` is the form with a `select`; it takes a
+  `QuerySelectOptions` (see [options](options.md#two-shapes)).
 - `context.query` always reads the provider's client and takes no `client:` —
   a `BuildContext` names exactly one provider. For a different client, use a
   builder (`client:`), a controller, or override `queryClient` on a
@@ -65,7 +65,7 @@ everything is visible in the tree — and the natural fit inside a list or a
 sliver. Several queries on one screen means several nested builders.
 
 `QuerySelectBuilder<TQueryData, TData>` is the same widget for a query with a
-`select` whose output type differs from the cache's. Builders are also the only
+`select` — a `QuerySelectOptions<TQueryData, TData>`. Builders are also the only
 style that takes [`buildWhen`](rebuilds.md#buildwhen).
 
 ## `QueryMixin`

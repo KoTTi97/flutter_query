@@ -122,7 +122,7 @@ class _MutationStateScreenState extends State<MutationStateScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: QueryBuilder<List<Todo>>(
-              options: QueryObserverOptions<List<Todo>, List<Todo>>(
+              options: QueryObserverOptions<List<Todo>>(
                 queryKey: ShowcaseKeys.todos,
                 queryFn: (context) => _api.todos(signal: context.signal),
               ),

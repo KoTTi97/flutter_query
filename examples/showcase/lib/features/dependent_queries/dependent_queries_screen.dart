@@ -37,8 +37,8 @@ const Feature dependentQueriesFeature = Feature(
 );
 
 /// The post the comments depend on.
-QueryObserverOptions<Post, Post> postQuery(ShowcaseApi api, int id) =>
-    QueryObserverOptions<Post, Post>(
+QueryObserverOptions<Post> postQuery(ShowcaseApi api, int id) =>
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(id),
       queryFn: (context) => api.post(id, signal: context.signal),
     );
@@ -46,12 +46,12 @@ QueryObserverOptions<Post, Post> postQuery(ShowcaseApi api, int id) =>
 /// The comments of a post. [enabled] is the whole point of the screen: the
 /// caller decides when this query may run, and until then it sits
 /// `pending`/`idle` without a request.
-QueryObserverOptions<List<Comment>, List<Comment>> commentsQuery(
+QueryObserverOptions<List<Comment>> commentsQuery(
   ShowcaseApi api,
   int postId, {
   required Enabled enabled,
 }) =>
-    QueryObserverOptions<List<Comment>, List<Comment>>(
+    QueryObserverOptions<List<Comment>>(
       queryKey: ShowcaseKeys.comments(postId),
       queryFn: (context) => api.comments(postId, signal: context.signal),
       enabled: enabled,

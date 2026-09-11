@@ -53,8 +53,8 @@ const Feature optimisticUpdatesFeature = Feature(
 
 /// The list both variants read. One key, so a write through either variant
 /// is seen by whichever is on screen.
-QueryObserverOptions<List<Todo>, List<Todo>> todosQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Todo>, List<Todo>>(
+QueryObserverOptions<List<Todo>> todosQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Todo>>(
       queryKey: ShowcaseKeys.todos,
       queryFn: (context) => api.todos(signal: context.signal),
     );

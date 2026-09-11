@@ -59,8 +59,8 @@ const int missingPostId = 999;
 /// by this screen alone, so it lives here rather than in `ShowcaseKeys`.
 QueryKey get metaKey => QueryKey(const <Object?>['meta']);
 
-QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Post>, List<Post>>(
+QueryObserverOptions<List<Post>> postsQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Post>>(
       queryKey: ShowcaseKeys.posts,
       queryFn: (context) => api.posts(signal: context.signal),
     );
@@ -68,11 +68,11 @@ QueryObserverOptions<List<Post>, List<Post>> postsQuery(ShowcaseApi api) =>
 /// Post 999, tagged for the cache's `onError`. No retries: the point is the
 /// error, and a reader counting requests should see one. Disabled until
 /// [wanted], so the entry sits idle in the cache until the button.
-QueryObserverOptions<Post, Post> missingPostQuery(
+QueryObserverOptions<Post> missingPostQuery(
   ShowcaseApi api, {
   required bool wanted,
 }) =>
-    QueryObserverOptions<Post, Post>(
+    QueryObserverOptions<Post>(
       queryKey: ShowcaseKeys.post(missingPostId),
       queryFn: (context) => api.post(missingPostId, signal: context.signal),
       enabled: wanted ? Enabled.yes : Enabled.no,
@@ -91,11 +91,11 @@ class MetaEcho {
   final int serial;
 }
 
-QueryObserverOptions<MetaEcho, MetaEcho> metaQuery(
+QueryObserverOptions<MetaEcho> metaQuery(
   ShowcaseApi api, {
   required bool wanted,
 }) =>
-    QueryObserverOptions<MetaEcho, MetaEcho>(
+    QueryObserverOptions<MetaEcho>(
       queryKey: metaKey,
       queryFn: (context) async {
         final meta = context.meta as Map<String, Object?>?;

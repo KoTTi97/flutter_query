@@ -61,12 +61,12 @@ StaleTime _freshWhileOdd(Query<Object?> query) {
 }
 
 /// The screen's one query, with the two knobs the screen turns.
-QueryObserverOptions<ServerTime, ServerTime> serverTimeQuery(
+QueryObserverOptions<ServerTime> serverTimeQuery(
   ShowcaseApi api, {
   required StaleTime staleTime,
   required GcTime gcTime,
 }) =>
-    QueryObserverOptions<ServerTime, ServerTime>(
+    QueryObserverOptions<ServerTime>(
       queryKey: ShowcaseKeys.time,
       queryFn: (context) => api.time(signal: context.signal),
       staleTime: staleTime,
@@ -122,7 +122,7 @@ class _StaleAndGcScreenState extends State<StaleAndGcScreen> {
     super.dispose();
   }
 
-  QueryObserverOptions<ServerTime, ServerTime> get _options =>
+  QueryObserverOptions<ServerTime> get _options =>
       serverTimeQuery(_api, staleTime: _staleTime, gcTime: _gcTime);
 
   void _attach() {

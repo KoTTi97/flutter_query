@@ -34,7 +34,7 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   /// fetch behaviour; otherwise exactly [QueryObserver.new].
   InfiniteQueryObserver(
     QueryClient client,
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) : super(client, client.infiniteObserverOptions(options));
 
   /// The paging half of the current options.
@@ -48,7 +48,7 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
 
   /// Replaces the options — the typed convenience over [setOptions].
   void setInfiniteOptions(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) =>
       setOptions(client.infiniteObserverOptions(options));
 
@@ -60,7 +60,8 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   /// so they are refused with an [UnsupportedError].
   @override
   void setOptions(
-    QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
+    QueryObserverOptionsBase<InfiniteData<TPageData, TPageParam>, TData>
+        options,
   ) {
     _pagingOptionsOf(options.behavior);
     super.setOptions(options);
@@ -69,7 +70,8 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   /// See [setOptions]; [getOptimisticInfiniteResult] is the typed form.
   @override
   QueryResult<TData> getOptimisticResult(
-    QueryObserverOptions<InfiniteData<TPageData, TPageParam>, TData> options,
+    QueryObserverOptionsBase<InfiniteData<TPageData, TPageParam>, TData>
+        options,
   ) {
     _pagingOptionsOf(options.behavior);
     return super.getOptimisticResult(options);
@@ -84,7 +86,8 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
     }
     throw UnsupportedError(
       'An InfiniteQueryObserver takes options with a paging behaviour — '
-      'InfiniteQueryObserverOptions via setInfiniteOptions / '
+      'InfiniteQueryObserverOptions or InfiniteQuerySelectOptions via '
+      'setInfiniteOptions / '
       'getOptimisticInfiniteResult, or what QueryClient.infiniteObserverOptions '
       'produces; plain observer options have no paging half.',
     );
@@ -218,7 +221,7 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   /// The result these options would produce right now — the infinite twin of
   /// [QueryObserver.getOptimisticResult], for a binding's first build.
   QueryResult<TData> getOptimisticInfiniteResult(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options,
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) =>
       getOptimisticResult(client.infiniteObserverOptions(options));
 

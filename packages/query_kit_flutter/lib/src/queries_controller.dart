@@ -9,7 +9,7 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
     implements ValueListenable<List<QueryResult<TData>>> {
   /// Creates the collection. Enabled queries start with the first listener.
   QueriesController(
-      this.client, List<QueryObserverOptions<TQueryData, TData>> queries)
+      this.client, List<QueryObserverOptionsBase<TQueryData, TData>> queries)
       : _observer = QueriesObserver<TQueryData, TData>(client, queries);
 
   /// The client all queries in this collection use.
@@ -28,7 +28,7 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
   QueriesObserver<TQueryData, TData> get observer => _observer;
 
   /// Replaces the query list, reusing existing observers by key occurrence.
-  void setQueries(List<QueryObserverOptions<TQueryData, TData>> queries) =>
+  void setQueries(List<QueryObserverOptionsBase<TQueryData, TData>> queries) =>
       _observer.setQueries(queries);
 
   @override

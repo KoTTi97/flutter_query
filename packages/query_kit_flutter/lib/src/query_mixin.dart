@@ -107,16 +107,23 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// previous key's data while the next loads. [id] also tells apart two
   /// reads of one key in the same widget.
   QueryResult<TData> watchQuery<TData>(
-    QueryObserverOptions<TData, TData> options, {
+    QueryObserverOptions<TData> options, {
     Object? id,
   }) =>
-      watchSelectQuery<TData, TData>(options, id: id);
+      _watch<TData, TData>(options, id);
 
-  /// [watchQuery] for a query with a `select`.
+  /// [watchQuery] for a query with a `select`: a [QuerySelectOptions], whose
+  /// required `select` anchors [TData] (ADR-0001).
   QueryResult<TData> watchSelectQuery<TQueryData, TData>(
-    QueryObserverOptions<TQueryData, TData> options, {
+    QuerySelectOptions<TQueryData, TData> options, {
     Object? id,
-  }) {
+  }) =>
+      _watch<TQueryData, TData>(options, id);
+
+  QueryResult<TData> _watch<TQueryData, TData>(
+    QueryObserverOptionsBase<TQueryData, TData> options,
+    Object? id,
+  ) {
     final identity = id == null
         ? (options.queryKey, TQueryData, TData)
         : (#query, TQueryData, TData, id);
@@ -140,7 +147,7 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// the result, because paging lives on it.
   InfiniteQueryController<TPageData, TPageParam, TData>
       watchInfiniteQuery<TPageData, TPageParam, TData>(
-    InfiniteQueryObserverOptions<TPageData, TPageParam, TData> options, {
+    InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options, {
     Object? id,
   }) {
     final identity = id == null

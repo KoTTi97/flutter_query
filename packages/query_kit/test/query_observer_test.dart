@@ -25,7 +25,7 @@ void main() {
       final key = queryKey();
       var calls = 0;
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             calls++;
@@ -44,7 +44,7 @@ void main() {
       final key = queryKey();
       var calls = 0;
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             calls++;
@@ -75,7 +75,7 @@ void main() {
       final key = queryKey();
       queryClient.setQueryData<String>(key, 'data');
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
         ),
@@ -96,7 +96,7 @@ void main() {
 
       QueryObserver<String, String> makeObserver() =>
           queryClient.observe<String, String>(
-            QueryObserverOptions<String, String>(
+            QueryObserverOptions<String>(
               queryKey: key,
               staleTime: StaleTime.infinite,
               enabled: Enabled.when((_) => enabled),
@@ -303,7 +303,7 @@ void main() {
       final key = queryKey();
       var count = 0;
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           staleTime: StaleTime.infinite,
           queryFn: (_) async {
@@ -340,12 +340,12 @@ void main() {
       final key2 = queryKey();
       final results = <QueryResult<int>>[];
       final observer = queryClient.observe<int, int>(
-        QueryObserverOptions<int, int>(queryKey: key1, queryFn: (_) => 1),
+        QueryObserverOptions<int>(queryKey: key1, queryFn: (_) => 1),
       );
       final unsubscribe = observer.subscribe(results.add);
       await time.flushMicrotasks();
       observer.setOptions(
-        QueryObserverOptions<int, int>(queryKey: key2, queryFn: (_) => 2),
+        QueryObserverOptions<int>(queryKey: key2, queryFn: (_) => 2),
       );
       await time.flushMicrotasks();
       unsubscribe();
@@ -363,7 +363,7 @@ void main() {
     testFakeAsync('should be able to fetch with a selector', (time) async {
       final key = queryKey();
       final observer = queryClient.observe<Counted, int>(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: (_) => (count: 1),
           select: (data) => data.count,
@@ -383,7 +383,7 @@ void main() {
         (time) async {
       final key = queryKey();
       final observer = queryClient.observe<Counted, int>(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: (_) => (count: 1),
           select: (data) => data.count,
@@ -398,7 +398,7 @@ void main() {
       final key = queryKey();
       var count = 0;
       final observer = queryClient.observe<Counted, int>(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: (_) => (count: count),
           select: (data) {
@@ -431,7 +431,7 @@ void main() {
       }
 
       final observer = queryClient.observe<Counted, int>(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: queryFn,
           select: select1,
@@ -440,7 +440,7 @@ void main() {
       final unsubscribe = observer.subscribe(results.add);
       await time.flushMicrotasks();
       observer.setOptions(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: queryFn,
           select: select2,
@@ -480,7 +480,7 @@ void main() {
       }
 
       final observer = queryClient.observe<Counted, int>(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: queryFn,
           select: select,
@@ -489,7 +489,7 @@ void main() {
       final unsubscribe = observer.subscribe(results.add);
       await time.flushMicrotasks();
       observer.setOptions(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: queryFn,
           select: select,
@@ -519,7 +519,7 @@ void main() {
       final key = queryKey();
       var count = 0;
       final observer = queryClient.observe<Counted, int>(
-        QueryObserverOptions<Counted, int>(
+        QuerySelectOptions<Counted, int>(
           queryKey: key,
           queryFn: (_) => (count: 1),
           select: (data) {
@@ -541,7 +541,7 @@ void main() {
       final key = queryKey();
       final results = <QueryResult<Counted>>[];
       final observer = queryClient.observe<Counted, Counted>(
-        QueryObserverOptions<Counted, Counted>(
+        QuerySelectOptions<Counted, Counted>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -574,7 +574,7 @@ void main() {
         (time) async {
       final key = queryKey();
       final observer = queryClient.observe<Counted, Counted>(
-        QueryObserverOptions<Counted, Counted>(
+        QuerySelectOptions<Counted, Counted>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -599,7 +599,7 @@ void main() {
       var shouldError = false;
       final error = Exception('select error');
       final observer = queryClient.observe<int, String>(
-        QueryObserverOptions<int, String>(
+        QuerySelectOptions<int, String>(
           queryKey: key,
           retry: RetryPolicy.never,
           queryFn: (_) async {
@@ -643,7 +643,7 @@ void main() {
       final key1 = queryKey();
       final key2 = queryKey();
       final observer = queryClient.observe<Counted, Counted>(
-        QueryObserverOptions<Counted, Counted>(
+        QuerySelectOptions<Counted, Counted>(
           queryKey: key1,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -657,7 +657,7 @@ void main() {
       expect(observer.currentResult.status, QueryStatus.error);
 
       observer.setOptions(
-        QueryObserverOptions<Counted, Counted>(
+        QuerySelectOptions<Counted, Counted>(
           queryKey: key2,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -685,7 +685,7 @@ void main() {
       final keyC = queryKey();
       const placeholder = PlaceholderData<Counted>.value((count: 0));
       final observer = queryClient.observe<Counted, ({int selected})>(
-        QueryObserverOptions<Counted, ({int selected})>(
+        QuerySelectOptions<Counted, ({int selected})>(
           queryKey: keyA,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -701,7 +701,7 @@ void main() {
       expect(observer.currentResult.dataOrNull, (selected: 1));
 
       observer.setOptions(
-        QueryObserverOptions<Counted, ({int selected})>(
+        QuerySelectOptions<Counted, ({int selected})>(
           queryKey: keyB,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -714,7 +714,7 @@ void main() {
       expect(observer.currentResult.status, QueryStatus.error);
 
       observer.setOptions(
-        QueryObserverOptions<Counted, ({int selected})>(
+        QuerySelectOptions<Counted, ({int selected})>(
           queryKey: keyC,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -740,7 +740,7 @@ void main() {
       final key = queryKey();
       var shouldThrow = true;
       final observer = queryClient.observe<Counted, Counted>(
-        QueryObserverOptions<Counted, Counted>(
+        QuerySelectOptions<Counted, Counted>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -775,7 +775,7 @@ void main() {
       final key = queryKey();
       var count = 0;
       final observer = queryClient.observe<Map<String, int>, Map<String, int>>(
-        QueryObserverOptions(
+        QuerySelectOptions(
           queryKey: key,
           queryFn: (_) => <String, int>{'count': ++count},
           select: (_) => <String, int>{'myCount': 1},
@@ -792,7 +792,7 @@ void main() {
       final key = queryKey();
       var calls = 0;
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             calls++;
@@ -813,7 +813,7 @@ void main() {
       final key = queryKey();
       var calls = 0;
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             calls++;
@@ -833,7 +833,7 @@ void main() {
       final key = queryKey();
       var calls = 0;
       queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             calls++;
@@ -857,7 +857,7 @@ void main() {
 
       final results = <QueryResult<String>>[];
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
         ),
@@ -881,7 +881,7 @@ void main() {
       }
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
         ),
@@ -889,7 +889,7 @@ void main() {
       final results = <QueryResult<String>>[];
       final unsubscribe = observer.subscribe(results.add);
       observer.setOptions(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
           staleTime: StaleTime.duration(ms(10)),
@@ -917,7 +917,7 @@ void main() {
       }
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
         ),
@@ -944,7 +944,7 @@ void main() {
       final key = queryKey();
       var count = 0;
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             count++;
@@ -968,7 +968,7 @@ void main() {
       var count = 0;
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             count++;
@@ -995,7 +995,7 @@ void main() {
       final key = queryKey();
       var count = 0;
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             count++;
@@ -1017,7 +1017,7 @@ void main() {
       final key = queryKey();
       final seen = <Query<Object?>>[];
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -1047,7 +1047,7 @@ void main() {
         (time) async {
       final key = queryKey();
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
           placeholderData: const PlaceholderData<String>.value('placeholder'),
@@ -1099,7 +1099,7 @@ void main() {
       final key = queryKey();
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
         ),
@@ -1116,7 +1116,7 @@ void main() {
 
       queryClient.focusManager.setFocused(false);
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             calls++;
@@ -1156,7 +1156,7 @@ void main() {
           });
 
       final observer = queryClient.observe<({String value}), String>(
-        QueryObserverOptions<({String value}), String>(
+        QuerySelectOptions<({String value}), String>(
           queryKey: key1,
           queryFn: (_) => data1,
           placeholderData: placeholder(),
@@ -1169,7 +1169,7 @@ void main() {
       await time.flushMicrotasks();
 
       observer.setOptions(
-        QueryObserverOptions<({String value}), String>(
+        QuerySelectOptions<({String value}), String>(
           queryKey: key2,
           queryFn: (_) => data2,
           placeholderData: placeholder(),
@@ -1213,7 +1213,7 @@ void main() {
       var selectCount = 0;
 
       final observer = queryClient.observe<({String value}), String>(
-        QueryObserverOptions<({String value}), String>(
+        QuerySelectOptions<({String value}), String>(
           queryKey: key1,
           queryFn: (_) => data1,
           placeholderData:
@@ -1230,7 +1230,7 @@ void main() {
       await time.flushMicrotasks();
 
       observer.setOptions(
-        QueryObserverOptions<({String value}), String>(
+        QuerySelectOptions<({String value}), String>(
           queryKey: key2,
           queryFn: (_) => data2,
           placeholderData:
@@ -1273,7 +1273,7 @@ void main() {
       }
 
       final observer = queryClient.observe<({String value}), String>(
-        QueryObserverOptions<({String value}), String>(
+        QuerySelectOptions<({String value}), String>(
           queryKey: key1,
           queryFn: (_) => data1,
           placeholderData:
@@ -1287,7 +1287,7 @@ void main() {
       await time.flushMicrotasks();
 
       observer.setOptions(
-        QueryObserverOptions<({String value}), String>(
+        QuerySelectOptions<({String value}), String>(
           queryKey: key2,
           queryFn: (_) => data2,
           placeholderData:
@@ -1313,7 +1313,7 @@ void main() {
       final key = queryKey();
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
         ),
@@ -1322,7 +1322,7 @@ void main() {
       final events = <QueryCacheEvent>[];
       final unsubscribe = queryClient.queryCache.subscribe(events.add);
       observer.setOptions(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
           refetchInterval: RefetchInterval.every(ms(10)),
@@ -1344,7 +1344,7 @@ void main() {
       final key = queryKey();
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
         ),
@@ -1363,7 +1363,7 @@ void main() {
       );
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           enabled: Enabled.no,
           staleTime: StaleTime.duration(ms(10)),
@@ -1386,8 +1386,7 @@ void main() {
       final key = queryKey();
       final observer = queryClient.observe<({String data, Duration staleTime}),
           ({String data, Duration staleTime})>(
-        QueryObserverOptions<({String data, Duration staleTime}),
-            ({String data, Duration staleTime})>(
+        QueryObserverOptions<({String data, Duration staleTime})>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(5));
@@ -1421,7 +1420,7 @@ void main() {
         (time) async {
       final key = queryKey();
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(5));
@@ -1451,7 +1450,7 @@ void main() {
       final key = queryKey();
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
           refetchOnWindowFocus: RefetchOn.ifStale,
@@ -1467,7 +1466,7 @@ void main() {
       final key = queryKey();
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
           refetchOnWindowFocus: RefetchOn.never,
@@ -1495,7 +1494,7 @@ void main() {
       await time.advance(ms(10));
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -1516,7 +1515,7 @@ void main() {
       final seen = <Query<Object?>>[];
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
           refetchOnWindowFocus: RefetchOn.when((query) {
@@ -1544,7 +1543,7 @@ void main() {
       final seen = <Query<Object?>>[];
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
           refetchOnWindowFocus: RefetchOn.when((query) {
@@ -1577,7 +1576,7 @@ void main() {
       await time.advance(ms(10));
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) async {
             await sleep(ms(10));
@@ -1607,7 +1606,7 @@ void main() {
 
       // First observer causes query to fail
       final firstObserver = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: queryFn,
           retry: RetryPolicy.never,
@@ -1624,7 +1623,7 @@ void main() {
 
       // New observer with retryOnMount: false should not refetch
       final secondObserver = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: queryFn,
           retry: RetryPolicy.never,
@@ -1648,7 +1647,7 @@ void main() {
       var calls = 0;
       queryClient.setQueryData<String>(key, 'initial');
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) {
             calls++;
@@ -1678,7 +1677,7 @@ void main() {
       }
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: queryFn,
           staleTime: StaleTime.static,
@@ -1724,7 +1723,7 @@ void main() {
       }
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: queryFn,
           staleTime: StaleTime.duration(ms(1000)),
@@ -1757,7 +1756,7 @@ void main() {
         (time) async {
       final key = queryKey();
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
           enabled: Enabled.when((_) => false),
@@ -1770,7 +1769,7 @@ void main() {
     testFakeAsync('should return isEnabled as true per default', (time) async {
       final key = queryKey();
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
         ),
@@ -1785,13 +1784,13 @@ void main() {
       final key = queryKey();
 
       final observer = queryClient.observe<String, String>(
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (_) => 'data',
         ),
       );
 
-      final options = QueryObserverOptions<String, String>(
+      final options = QueryObserverOptions<String>(
         queryKey: key,
         queryFn: (_) => 'data',
       );
@@ -1813,7 +1812,7 @@ void main() {
         final key = queryKey();
         var calls = 0;
         final observer = queryClient.observe<String, String>(
-          QueryObserverOptions<String, String>(
+          QueryObserverOptions<String>(
             queryKey: key,
             queryFn: (_) async {
               calls++;
@@ -1848,7 +1847,7 @@ void main() {
         final key = queryKey();
         var calls = 0;
         final observer = queryClient.observe<String, String>(
-          QueryObserverOptions<String, String>(
+          QueryObserverOptions<String>(
             queryKey: key,
             queryFn: (context) async {
               context.signal;

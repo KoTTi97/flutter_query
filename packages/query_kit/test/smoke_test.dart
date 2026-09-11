@@ -87,7 +87,7 @@ void main() {
 
       final observer = QueryObserver<String, String>(
         client,
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           queryFn: (context) async {
             await sleep(ms(10));
@@ -122,7 +122,7 @@ void main() {
 
       final observer = QueryObserver<String, String>(
         client,
-        QueryObserverOptions<String, String>(
+        QueryObserverOptions<String>(
           queryKey: key,
           retry: RetryPolicy.never,
           staleTime: StaleTime.zero,
@@ -159,7 +159,7 @@ void main() {
 
       final observer = QueryObserver<Map<String, Object?>, String>(
         client,
-        QueryObserverOptions<Map<String, Object?>, String>(
+        QuerySelectOptions<Map<String, Object?>, String>(
           queryKey: key,
           queryFn: (context) async => <String, Object?>{'name': 'website'},
           select: (data) => data['name']! as String,

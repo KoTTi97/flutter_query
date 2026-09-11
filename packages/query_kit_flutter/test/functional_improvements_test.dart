@@ -61,7 +61,7 @@ void main() {
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: QueryBuilder<int>(
-            options: QueryObserverOptions<int, int>(
+            options: QueryObserverOptions<int>(
                 queryKey: QueryKey(const ['inactive']),
                 queryFn: (_) => ++calls,
                 refetchOnWindowFocus: RefetchOn.always),
@@ -193,7 +193,7 @@ void main() {
       final key = QueryKey([id]);
       client.setQueryData(key, 1);
       return QueryController.create(client,
-          QueryObserverOptions<int, int>(queryKey: key, enabled: Enabled.no));
+          QueryObserverOptions<int>(queryKey: key, enabled: Enabled.no));
     }
 
     final first = make('first');
@@ -223,8 +223,8 @@ void main() {
       (tester) async {
     final key = QueryKey(['build']);
     client.setQueryData(key, 1);
-    final controller = QueryController.create(client,
-        QueryObserverOptions<int, int>(queryKey: key, enabled: Enabled.no));
+    final controller = QueryController.create(
+        client, QueryObserverOptions<int>(queryKey: key, enabled: Enabled.no));
     var effect = 0;
     var changed = false;
     await tester.pumpWidget(app(StatefulBuilder(
@@ -331,7 +331,7 @@ void main() {
       'queries builder handles list changes and isolates partial failures',
       (tester) async {
     var calls = 0;
-    QueryObserverOptions<int, int> options(int id) => QueryObserverOptions(
+    QueryObserverOptions<int> options(int id) => QueryObserverOptions(
         queryKey: QueryKey(['query', id]),
         retry: RetryPolicy.never,
         queryFn: (_) {
@@ -375,14 +375,19 @@ void main() {
       (tester) async {
     final key = QueryKey(['duplicate']);
     var calls = 0;
-    final first = QueryObserverOptions<int, int>(
+    final first = QueryObserverOptions<int>(
         queryKey: key,
         queryFn: (_) {
           calls++;
           return 2;
         });
+    // A select is its own shape (ADR-0001): the selecting twin is built from
+    // the plain options' fields rather than by `copyWith`.
+    QuerySelectOptions<int, int> selecting(int Function(int) select) =>
+        QuerySelectOptions<int, int>(
+            queryKey: key, queryFn: first.queryFn, select: select);
     final controller = QueriesController<int, int>(
-        client, [first, first.copyWith(select: (value) => value * 10)]);
+        client, [first, selecting((value) => value * 10)]);
     expect(calls, 0);
     await tester.pumpWidget(app(ValueListenableBuilder<List<QueryResult<int>>>(
         valueListenable: controller,
@@ -392,7 +397,7 @@ void main() {
     expect(find.text('2,20'), findsOneWidget);
     expect(calls, 1);
     final original = controller.observer.observers;
-    controller.setQueries([first.copyWith(select: (v) => v + 1), first]);
+    controller.setQueries([selecting((v) => v + 1), first]);
     await tester.pump();
     expect(find.text('3,2'), findsOneWidget);
     expect(controller.observer.observers, original);

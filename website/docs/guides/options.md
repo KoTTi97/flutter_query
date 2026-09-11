@@ -17,6 +17,43 @@ number, string or boolean. `staleTime: 0`, `staleTime: Infinity` and
 one field; here they are three constructors on one sealed class, and a
 `switch` over them is exhaustive.
 
+## Two shapes
+
+Observer options — what every reading style takes — come in two shapes over
+one sealed base (ADR-0001):
+
+| | type arguments | `select` |
+|---|---|---|
+| `QueryObserverOptions<TData>` | one: the query's data | none — the observer reports the query's data |
+| `QuerySelectOptions<TQueryData, TData>` | two: the cache's data and the selection | **required** — it is what anchors `TData` |
+
+Each argument is anchored by a required parameter, so an options literal
+written inline infers its types: from `queryFn` on the plain shape, from
+`queryFn` and `select` on the select shape. A single type with an optional
+`select` carried `TData` only in that one optional field, and a literal
+without it silently became `Query<dynamic>` in the cache. A `select` that
+keeps the type is still a select and still goes on `QuerySelectOptions`.
+
+```dart
+QueryObserverOptions<Task> taskQuery(String id) => QueryObserverOptions(
+      queryKey: taskKey(id),
+      queryFn: (context) => api.getTask(id, signal: context.signal),
+    );
+
+QuerySelectOptions<Task, String> taskNameQuery(String id) =>
+    QuerySelectOptions(
+      queryKey: taskKey(id),
+      queryFn: (context) => api.getTask(id, signal: context.signal),
+      select: (task) => task.name,
+    );
+```
+
+The plain entry points (`QueryBuilder`, `context.query`, `watchQuery`,
+`QueryController.create`) take the first; the select ones
+(`QuerySelectBuilder`, `context.selectQuery`, `watchSelectQuery`) the second;
+the general `QueryController(client, options)` takes either. Infinite queries
+mirror this — see [infinite queries](infinite-queries.md).
+
 ## Staleness
 
 `StaleTime` decides whether cached data counts as fresh. Fresh data is
@@ -54,7 +91,7 @@ A client owns its gc timers, which is why a widget test has to
 | `Enabled.when((query) => …)` | computed — this is the dependent-query tool |
 
 ```dart
-QueryObserverOptions<List<Comment>, List<Comment>>(
+QueryObserverOptions<List<Comment>>(
   queryKey: QueryKey(<Object?>['posts', postId, 'comments']),
   queryFn: (context) => api.comments(postId!),
   enabled: postId == null ? Enabled.no : Enabled.yes,

@@ -28,7 +28,7 @@ void main() {
 
       final observer = InfiniteQueryObserver<int, int, IntPages>(
         queryClient,
-        InfiniteQueryObserverOptions<int, int, IntPages>(
+        InfiniteQueryObserverOptions<int, int>(
           queryKey: key,
           pageFn: (context) {
             calls.add((context.pageParam, context.direction));
@@ -105,7 +105,7 @@ void main() {
 
       final observer = InfiniteQueryObserver<int, int, IntPages>(
         queryClient,
-        InfiniteQueryObserverOptions<int, int, IntPages>(
+        InfiniteQueryObserverOptions<int, int>(
           queryKey: key,
           pageFn: (context) async {
             calls.add(context.pageParam);
@@ -148,7 +148,7 @@ void main() {
 
       final observer = InfiniteQueryObserver<int, int, IntPages>(
         queryClient,
-        InfiniteQueryObserverOptions<int, int, IntPages>(
+        InfiniteQueryObserverOptions<int, int>(
           queryKey: key,
           pageFn: (context) async {
             calls.add(context.pageParam);
@@ -210,7 +210,7 @@ void main() {
 
       final observer = InfiniteQueryObserver<int, int, IntPages>(
         queryClient,
-        InfiniteQueryObserverOptions<int, int, IntPages>(
+        InfiniteQueryObserverOptions<int, int>(
           queryKey: key,
           pageFn: (context) async {
             calls.add(context.pageParam);
@@ -268,8 +268,7 @@ void main() {
       final observer = InfiniteQueryObserver<(List<String>, int?), int,
           InfiniteData<(List<String>, int?), int>>(
         queryClient,
-        InfiniteQueryObserverOptions<(List<String>, int?), int,
-            InfiniteData<(List<String>, int?), int>>(
+        InfiniteQueryObserverOptions<(List<String>, int?), int>(
           retry: const RetryTimes(5),
           staleTime: StaleTime.zero,
           retryDelay: const RetryDelay.fixed(Duration(milliseconds: 10)),
@@ -310,8 +309,7 @@ void main() {
       final observer =
           InfiniteQueryObserver<String, Object?, InfiniteData<String, Object?>>(
         queryClient,
-        InfiniteQueryObserverOptions<String, Object?,
-            InfiniteData<String, Object?>>(
+        InfiniteQueryObserverOptions<String, Object?>(
           queryKey: key,
           pageFn: (_) => 'data',
           getNextPageParam: (_, __, ___, ____) => null,
@@ -344,7 +342,7 @@ void main() {
 
       final observer = InfiniteQueryObserver<int, int, IntPages>(
         queryClient,
-        InfiniteQueryObserverOptions<int, int, IntPages>(
+        InfiniteQueryObserverOptions<int, int>(
           queryKey: key,
           pageFn: (context) async {
             await sleep(Duration.zero);

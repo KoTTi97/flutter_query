@@ -46,8 +46,8 @@ QueryKey get counterKey => QueryKey(const <Object?>['counter']);
 /// fields are equal — the observer compares `variables` by value.
 typedef Increment = ({int by, int? fail});
 
-QueryObserverOptions<int, int> counterQuery(ShowcaseApi api) =>
-    QueryObserverOptions<int, int>(
+QueryObserverOptions<int> counterQuery(ShowcaseApi api) =>
+    QueryObserverOptions<int>(
       queryKey: counterKey,
       queryFn: (context) => api.counter(signal: context.signal),
     );

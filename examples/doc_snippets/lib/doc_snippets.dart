@@ -88,14 +88,13 @@ QueryKey taskKey(String id) => QueryKey(<Object?>['tasks', id]);
 // getting-started/first-query.md
 // ---------------------------------------------------------------------------
 
-QueryObserverOptions<List<Task>, List<Task>> tasksQuery() =>
-    QueryObserverOptions(
+QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
       staleTime: const StaleTime.duration(Duration(seconds: 30)),
     );
 
-QueryObserverOptions<Task, Task> taskQuery(String id) => QueryObserverOptions(
+QueryObserverOptions<Task> taskQuery(String id) => QueryObserverOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
     );
@@ -240,8 +239,7 @@ class _PagedReaderState extends State<PagedReader> with QueryMixin {
   }
 }
 
-QueryObserverOptions<List<Post>, List<Post>> pageQuery(int page) =>
-    QueryObserverOptions(
+QueryObserverOptions<List<Post>> pageQuery(int page) => QueryObserverOptions(
       queryKey: QueryKey(<Object?>['posts', page]),
       queryFn: (context) => api.feed(cursor: page),
       placeholderData: PlaceholderData.compute((previous, _) => previous),
@@ -257,7 +255,14 @@ QueryController<Task, Task> controllerStyle(QueryClient client, String id) {
 // guides/options.md
 // ---------------------------------------------------------------------------
 
-QueryObserverOptions<List<Comment>, List<Comment>> commentsQuery(
+/// The two shapes side by side; `taskQuery` above is the plain one.
+QuerySelectOptions<Task, String> taskNameQuery(String id) => QuerySelectOptions(
+      queryKey: taskKey(id),
+      queryFn: (context) => api.getTask(id, signal: context.signal),
+      select: (task) => task.name,
+    );
+
+QueryObserverOptions<List<Comment>> commentsQuery(
   String? postId,
 ) =>
     QueryObserverOptions(
@@ -266,7 +271,7 @@ QueryObserverOptions<List<Comment>, List<Comment>> commentsQuery(
       enabled: postId == null ? Enabled.no : Enabled.yes,
     );
 
-QueryObserverOptions<Task, Task> withoutStructuralSharing(String id) =>
+QueryObserverOptions<Task> withoutStructuralSharing(String id) =>
     QueryObserverOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id),
@@ -277,7 +282,7 @@ QueryObserverOptions<Task, Task> withoutStructuralSharing(String id) =>
 // guides/rebuilds.md
 // ---------------------------------------------------------------------------
 
-QueryObserverOptions<List<Task>, int> doneCountQuery() => QueryObserverOptions(
+QuerySelectOptions<List<Task>, int> doneCountQuery() => QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
       select: (tasks) => tasks.where((s) => s.done).length,
@@ -285,8 +290,8 @@ QueryObserverOptions<List<Task>, int> doneCountQuery() => QueryObserverOptions(
 
 /// A record has value equality already, which makes it the easy pick for a
 /// `select` output.
-QueryObserverOptions<List<Task>, ({int done, int total})> doneRecordQuery() =>
-    QueryObserverOptions(
+QuerySelectOptions<List<Task>, ({int done, int total})> doneRecordQuery() =>
+    QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
       select: (data) => (
@@ -358,17 +363,17 @@ MutationOptions<void, String, void> serialisedWrite(String id) =>
 // guides/infinite-queries.md
 // ---------------------------------------------------------------------------
 
-/// What an *observer* takes: a third type argument, for `select`. Its default
-/// is the whole `InfiniteData`.
-InfiniteQueryObserverOptions<List<Post>, int, InfiniteData<List<Post>, int>>
-    feedQuery() => InfiniteQueryObserverOptions<List<Post>, int,
-            InfiniteData<List<Post>, int>>(
-          queryKey: QueryKey(<Object?>['feed']),
-          pageFn: (context) => api.feed(cursor: context.pageParam),
-          initialPageParam: 0,
-          getNextPageParam: (page, pages, pageParam, pageParams) =>
-              page.isEmpty ? null : pageParam + page.length,
-        );
+/// What an *observer* takes: the plain shape, whose data is the whole
+/// `InfiniteData<List<Post>, int>`. `InfiniteQuerySelectOptions` is the
+/// shape with a required `select` over it.
+InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
+    InfiniteQueryObserverOptions<List<Post>, int>(
+      queryKey: QueryKey(<Object?>['feed']),
+      pageFn: (context) => api.feed(cursor: context.pageParam),
+      initialPageParam: 0,
+      getNextPageParam: (page, pages, pageParam, pageParams) =>
+          page.isEmpty ? null : pageParam + page.length,
+    );
 
 /// What `QueryClient.query` takes: no observer, so no `select`, so two type
 /// arguments.
@@ -483,9 +488,9 @@ QueryClient clientWithDefaults() {
 
 Widget queriesBuilderSample(List<String> visibleIds) =>
     QueriesBuilder<Task, String>(
-      queries: <QueryObserverOptions<Task, String>>[
+      queries: <QuerySelectOptions<Task, String>>[
         for (final id in visibleIds)
-          QueryObserverOptions<Task, String>(
+          QuerySelectOptions<Task, String>(
             queryKey: taskKey(id),
             queryFn: (context) => api.getTask(id, signal: context.signal),
             select: (task) => task.name,
@@ -521,7 +526,7 @@ MutationStateController<int> writesInFlight(QueryClient client) =>
 
 void Function() observeWithoutFlutter(QueryClient client, String id) {
   final observer = client.observe<Task, Task>(
-    QueryObserverOptions<Task, Task>(
+    QueryObserverOptions<Task>(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
     ),

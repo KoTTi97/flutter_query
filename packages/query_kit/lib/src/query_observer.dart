@@ -24,14 +24,17 @@ typedef QueryObserverListener<TData> = void Function(QueryResult<TData> result);
 ///
 /// Two type parameters, not upstream's five: what the cache holds
 /// ([TQueryData]) and what the consumer sees after `select` ([TData]).
-/// See https://github.com/KoTTi97/flutter_query/issues/7.
+/// See https://github.com/KoTTi97/flutter_query/issues/7. Takes either
+/// options shape — a `QueryObserverOptions<T>` makes a `QueryObserver<T, T>`,
+/// a `QuerySelectOptions<TQueryData, TData>` a `QueryObserver<TQueryData,
+/// TData>` — through their sealed base (ADR-0001).
 class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// Creates an observer for [options], resolved against the client's
   /// defaults, and builds — or joins — the query for its key. No fetch happens
   /// until the first [subscribe]; [currentResult] is readable at once.
   QueryObserver(
     this._client,
-    QueryObserverOptions<TQueryData, TData> options,
+    QueryObserverOptionsBase<TQueryData, TData> options,
   ) {
     _checkDataType(options);
     _options = _client.defaultQueryObserverOptions<TQueryData, TData>(options);
@@ -174,7 +177,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   ///
   /// Throws an [ArgumentError] before touching anything if the options have
   /// no `select` and [TQueryData] is not a [TData] — see [QueryObserver.new].
-  void setOptions(QueryObserverOptions<TQueryData, TData> options) {
+  void setOptions(QueryObserverOptionsBase<TQueryData, TData> options) {
     _checkDataType(options);
     final prevOptions = _options;
     final prevQuery = _currentQuery;
@@ -232,7 +235,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// shows `isLoading` rather than a stale idle state
   /// (https://github.com/KoTTi97/flutter_query/issues/15).
   QueryResult<TData> getOptimisticResult(
-    QueryObserverOptions<TQueryData, TData> options,
+    QueryObserverOptionsBase<TQueryData, TData> options,
   ) {
     _checkDataType(options);
     final defaulted = _client.defaultQueryObserverOptions<TQueryData, TData>(
@@ -289,7 +292,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// `QueryObserver<int, String>` is not; on every platform the reified
   /// `List<TQueryData>` is a `List<TData>` exactly when that holds.
   static void _checkDataType<TQueryData, TData>(
-    QueryObserverOptions<TQueryData, TData> options,
+    QueryObserverOptionsBase<TQueryData, TData> options,
   ) {
     if (options.select == null && <TQueryData>[] is! List<TData>) {
       throw ArgumentError.value(

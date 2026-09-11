@@ -82,8 +82,8 @@ typedef TodoPatch = ({int id, String? text, bool? done});
 
 /// The list. Stale time and gc time are left unset on purpose: they come
 /// from the client's defaults, which is what the knobs change.
-QueryObserverOptions<List<Todo>, List<Todo>> todosQuery(ShowcaseApi api) =>
-    QueryObserverOptions<List<Todo>, List<Todo>>(
+QueryObserverOptions<List<Todo>> todosQuery(ShowcaseApi api) =>
+    QueryObserverOptions<List<Todo>>(
       queryKey: ShowcaseKeys.todos,
       queryFn: (context) => api.todos(signal: context.signal),
       retryDelay: playgroundRetryDelay,
@@ -93,13 +93,13 @@ QueryObserverOptions<List<Todo>, List<Todo>> todosQuery(ShowcaseApi api) =>
 /// when the list is not there, which means "no seed" — and [seededAt] is
 /// the list's own `dataUpdatedAt`, so the seed is exactly as old as the
 /// list it came from.
-QueryObserverOptions<Todo, Todo> todoQuery(
+QueryObserverOptions<Todo> todoQuery(
   ShowcaseApi api,
   int id, {
   required Todo? Function() seed,
   required DateTime? seededAt,
 }) =>
-    QueryObserverOptions<Todo, Todo>(
+    QueryObserverOptions<Todo>(
       queryKey: todoKey(id),
       queryFn: (context) async {
         final todos = await api.todos(signal: context.signal);

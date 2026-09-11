@@ -18,7 +18,7 @@ class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
   });
 
   /// Queries to observe. Duplicate keys retain independent observer options.
-  final List<QueryObserverOptions<TQueryData, TData>> queries;
+  final List<QueryObserverOptionsBase<TQueryData, TData>> queries;
 
   /// Builds initially and whenever a result or the list changes.
   final Widget Function(BuildContext context, List<QueryResult<TData>> results)
