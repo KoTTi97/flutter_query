@@ -1508,6 +1508,117 @@ void main() {
       }, createClient: newClient);
     }
   });
+
+  // The rebuild decision — "read the value and its `observedStateOf`, rebuild
+  // only if it moved, then ask `buildWhen`" — was written once per builder
+  // until C48 (https://github.com/KoTTi97/flutter_query/issues/57). Three of
+  // the four copies were counted somewhere (B3 and R02 above, and
+  // `buildWhen on every builder` for the infinite and the mutation one);
+  // these are the gaps that probing the four copies with the branch disabled
+  // exposed, written and run green against them first:
+  //
+  // * `QuerySelectBuilder`'s copy was reached by nothing at all;
+  // * `buildWhen` was reached on the infinite and the mutation builder only.
+  //   `buildWhen` above passes with the predicate disabled: a disabled query
+  //   with `StaleTime.infinite` invalidated with `RefetchType.none` does not
+  //   move its result, so the equality above it answers first and the
+  //   predicate is never asked. A refetch that returns the same data is what
+  //   moves the result (`dataUpdatedAt`) and leaves the data alone.
+  group('C48 the rebuild decision in the builders the suite did not count', () {
+    queryWidgetTest('a builder asks buildWhen about a result that moved',
+        (tester, client) async {
+      var builds = 0;
+      var fetches = 0;
+      await tester.pumpWidget(app(
+        client,
+        QueryBuilder<String>(
+          options: QueryObserverOptions(
+            queryKey: key,
+            queryFn: (_) async {
+              fetches++;
+              return 'a';
+            },
+          ),
+          buildWhen: (previous, current) =>
+              previous.dataOrNull != current.dataOrNull,
+          builder: (_, result) {
+            builds++;
+            return Text(result.dataOrNull ?? 'none');
+          },
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(builds, 2);
+
+      // The same data, fetched again: `dataUpdatedAt` moved, the data did
+      // not.
+      await client.refetchQueries(filters: QueryFilters(queryKey: key));
+      await tester.pumpAndSettle();
+      expect(fetches, 2);
+      expect(builds, 2);
+    }, createClient: newClient);
+
+    queryWidgetTest(
+        'a select builder does not rebuild for the fetch it '
+        'started', (tester, client) async {
+      final builds = <String>[];
+      final fetch = Completer<String>();
+      await tester.pumpWidget(app(
+        client,
+        QuerySelectBuilder<String, int>(
+          options: QuerySelectOptions(
+            queryKey: key,
+            queryFn: (_) => fetch.future,
+            select: (value) => value.length,
+          ),
+          builder: (_, result) {
+            builds.add('${result.dataOrNull}');
+            return const SizedBox();
+          },
+        ),
+      ));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump();
+      }
+      expect(builds, ['null']);
+
+      fetch.complete('abcd');
+      await tester.pumpAndSettle();
+      expect(builds, ['null', '4']);
+    }, createClient: newClient);
+
+    queryWidgetTest('a select builder skips what its buildWhen rejects',
+        (tester, client) async {
+      var builds = 0;
+      var fetches = 0;
+      await tester.pumpWidget(app(
+        client,
+        QuerySelectBuilder<String, int>(
+          options: QuerySelectOptions(
+            queryKey: key,
+            queryFn: (_) async => 'ab-${fetches++}',
+            select: (value) => value.length,
+          ),
+          buildWhen: (previous, current) =>
+              previous.dataOrNull != current.dataOrNull,
+          builder: (_, result) {
+            builds++;
+            return Text('${result.dataOrNull}');
+          },
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(builds, 2);
+      expect(find.text('4'), findsOneWidget);
+
+      // Different data of the same selected length: the result moved, what
+      // this widget shows did not.
+      await client.refetchQueries(filters: QueryFilters(queryKey: key));
+      await tester.pumpAndSettle();
+      expect(fetches, 2);
+      expect(builds, 2);
+    }, createClient: newClient);
+  });
 }
 
 class _A21Reader extends StatelessWidget {

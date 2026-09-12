@@ -2876,3 +2876,97 @@ already asks "did `observedStateOf` move?", passed down through
 marking the spot is in the code. The rebuild-decision copies in
 `query_builder.dart` are [#57](https://github.com/KoTTi97/flutter_query/issues/57)
 and were not touched.
+
+### C48, C59 — the rebuild decision, once instead of six times ([#57](https://github.com/KoTTi97/flutter_query/issues/57))
+
+**Measured** on `78ad692`, after [#56](https://github.com/KoTTi97/flutter_query/issues/56)
+had already turned two of C48's three sites into one. §8's line numbers had
+drifted; the ticket's restatement had not. The `_built` / `_builtState` /
+`_record()` trio is at `query_builder.dart:83-94`, `:197-208`, `:323-334` and
+`:429-440`, each with a `shouldRebuild()` override at `:112-114`, `:228-230`,
+`:336-338` and `:442-444` calling the shared compare at `:120-149` (its
+`observedStateOf` test on `:137`). Counting *code* lines: the trio is **6 lines
+× 4 copies, four of the six byte-identical across all four and all six
+identical once the result type name is normalised**; the override is **3 lines
+× 4, byte-identical in all four** — 36 lines saying one thing. Beside them,
+`explicitClient` / `clientChanged` / `optionsChanged` are another **36 lines
+across the four** that say `widget.client`, `old.client != widget.client` and
+`old.options != widget.options` and nothing else. C59 is exact: with the state
+name, the widget type and the controller type substituted,
+`_QueryBuilderState` and `_QuerySelectBuilderState` differ **in one line
+wrap** and in nothing else.
+
+**One claim of the ticket did not survive the measurement.** "Two of the four
+call `_record()` from `build`, the other two from a notification" is not so:
+all four record in `build` and all four decide in the notification. What
+differs is what `build` does with the recorded value — two hand it to the
+`builder`, two hand over the controller and drop it — which is a line of each
+`build`, not a difference in the decision. The keyless entry is the same
+shape (`read` from a build, `_onChanged` from a notification). That uniformity
+is why one class fits all five readers.
+
+**What moved.** One new module,
+`packages/query_kit_flutter/lib/src/read_entry.dart`: `ReadEntry<T>`, *one
+controller a reader watches and what its last build read from it* — four
+members (`controller`, `read`, `dispose`, the `rebuild` callback), and behind
+them the listener registration, `built`/`builtState`/`buildWhen`, the decision
+and the disposal. `ReadSet`'s `_Entry` **is** it now (`typedef _Entry =
+ReadEntry<Object?>`, its only remaining trace in that file), and
+`_ControllerBuilderState` watches its one controller through it. The decision
+each side had written separately turned out to be the same decision: with no
+predicate, the builders' four-branch `_shouldRebuild` reduces to the entry's
+one-line `observedStateOf(controller) != builtState`, so the merged version is
+the builders' and the keyless readers are unchanged by construction.
+
+Two private mixins on the widget side carry the rest: `_BuilderWidget<T>`
+(`options`, `buildWhen`, `client`) and `_QueryBuilderWidget<TQueryData, TData>`
+(the options narrowed, plus `builder`). Mixins rather than a shared superclass
+because a superclass would have to *hold* the fields and would widen
+`QueryBuilder.options` to a base type and `MutationBuilder.options` to
+`Object`; abstract getters let every widget keep its own field types, so the
+public surface is byte-for-byte what it was. `_ControllerBuilderState` gained
+the value type and lost four of its six abstract members — a subclass now says
+only `createController`, `applyOptions` and what its `build` does with
+`record()`. `_QuerySelectBuilderState` is gone: both query builders are
+`_QueryBuilderState<W, TQueryData, TData>`, which is what keeps each
+`createState`'s return type its own widget's.
+
+Across the three files: **443 code lines became 397**, with the four state
+classes falling from 133 to 51 and `read_set.dart` from 157 to 137. The
+typedef `BuildWhen` moved to the new module and is re-exported from
+`query_builder.dart`, so the barrel's public surface is unchanged.
+
+**What was deliberately left.** `QueriesBuilder` keeps its own state class and
+rebuilds on every notification: its value is a `List<QueryResult>`, which has
+no value equality, so the decision would never fire, and it takes no
+`buildWhen` (a list of queries has no one result to filter on). Bringing it in
+would have meant a fifth shape and a branch for it.
+
+**Coverage came first.** Probing the four copies — the equality branch
+disabled, then the predicate ignored — named exactly which of them the suite
+was counting: the equality branch by `B3` (`QueryBuilder`) and by
+`buildWhen on every builder` (the infinite one); the predicate by that same
+case (infinite and mutation). **`QuerySelectBuilder`'s copy was reached by
+nothing at all, and `buildWhen` was reached on neither plain-query builder.**
+The existing `buildWhen` case passes with the predicate disabled and its
+comment says why it should not: a disabled query with `StaleTime.infinite`
+invalidated with `RefetchType.none` does not move its result, so the equality
+above answers first and the predicate is never asked. A refetch returning the
+same data is what moves the result (`dataUpdatedAt`) and leaves the data
+alone. Three cases — `C48 the rebuild decision in the builders the suite did
+not count` in `query_kit_flutter/test/review_regressions_test.dart` — were
+written and run **green against the four copies first**, then each was checked
+against the branch it names, disabled: all three failed, so they bite.
+
+**What proves the behaviour did not change:** the binding's 104 widget tests
+(107 with the three new ones), the showcase's 217, the task manager's 16 and
+the doc snippets' 2, all green and **none rewritten** — the commit touches no
+existing test, only appends. `dart doc` is 0 warnings, 0 errors, and the
+generated page for every builder shows the same inheritance it did (dartdoc
+elides the private mixins). The core is untouched (587).
+
+**What #58 does here.** Nothing new: `buildWhen:` for the two keyless reads is
+`ReadEntry.read`'s existing named argument, threaded through `ReadSet`'s three
+`read*` methods. The predicate, the equality that answers before it and the
+paging-flags exception are now one implementation for all four call styles, so
+#58 writes the wiring rather than the decision.

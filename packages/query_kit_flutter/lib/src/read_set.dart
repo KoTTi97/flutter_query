@@ -29,58 +29,26 @@
 ///   elements Flutter said stopped depending on the scope — not about one, and
 ///   a `State` has no equivalent signal at all. It stayed on
 ///   `QueryScopeElement`.
+/// * **The rebuild decision.** What a read records and when a notification is
+///   worth a frame is [ReadEntry], which the builder widgets watch their one
+///   controller through as well (C48,
+///   https://github.com/KoTTi97/flutter_query/issues/57). #58's `buildWhen:`
+///   for the keyless styles is `ReadEntry.read`'s existing argument, threaded
+///   through the three `read*` methods below.
 library;
 
 import 'package:flutter/foundation.dart';
 import 'package:query_kit/query_kit.dart';
 
 import 'query_controller.dart';
+import 'read_entry.dart';
 import 'repeat_read.dart';
 
 /// One controller a reader holds — a query's or a mutation's — and the value
-/// its last build read.
-class _Entry {
-  _Entry(this.controller, this.rebuild) {
-    controller.addListener(_onChanged);
-  }
-
-  final ValueListenable<Object?> controller;
-
-  /// What to call when this entry's controller moved: the owner's rebuild,
-  /// which is also where "is the reader still there?" is answered.
-  final VoidCallback rebuild;
-
-  /// The value the last build read. A notification that carries the same
-  /// value is not worth a rebuild: the first build reads the result straight
-  /// after the subscribe started the fetch, and the observer's notification
-  /// about that very fetch lands after the frame (fourth review, 2026-09-09).
-  Object? built;
-
-  /// What [observedStateOf] said when [built] was recorded: the result for
-  /// every controller but an infinite query's, which keeps its paging flags
-  /// beside the result (third review, 2026-09-10).
-  Object? builtState;
-
-  /// Reads the current value and remembers it as this build's, both halves.
-  T read<T>() {
-    builtState = observedStateOf(controller);
-    return (built = controller.value) as T;
-  }
-
-  void _onChanged() {
-    // Where the rebuild decision for a keyless read lives, and the one place
-    // #58's `buildWhen:` predicate goes — as a further condition on this
-    // branch, not as a second mechanism.
-    if (observedStateOf(controller) != builtState) {
-      rebuild();
-    }
-  }
-
-  void dispose() {
-    controller.removeListener(_onChanged);
-    (controller as ChangeNotifier).dispose();
-  }
-}
+/// its last build read. The value type is [Object] here because one set holds
+/// a query's, an infinite query's and a mutation's side by side; every read
+/// knows the type it asked for.
+typedef _Entry = ReadEntry<Object?>;
 
 /// Everything one reader — a `State` with `QueryMixin`, or one `Element`
 /// reading through `context.query` — holds between builds.
@@ -156,7 +124,7 @@ class ReadSet {
     // observer itself decides whether anything actually changed, and options
     // built inline carry a fresh closure every build anyway.
     controller.setOptions(options);
-    final result = entry.read<QueryResult<TData>>();
+    final result = entry.read() as QueryResult<TData>;
     debugCheckRepeatRead(repeat, before, result, identity, who);
     return result;
   }
@@ -187,7 +155,7 @@ class ReadSet {
     debugCheckRepeatRead(
       repeat,
       before,
-      entry.read<QueryResult<TData>>(),
+      entry.read() as QueryResult<TData>,
       identity,
       who,
     );
@@ -245,7 +213,7 @@ class ReadSet {
     if (existed) {
       controller.setOptions(options);
     }
-    entry.read<Object?>();
+    entry.read();
     return controller;
   }
 
