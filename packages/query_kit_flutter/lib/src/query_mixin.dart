@@ -139,15 +139,25 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// together with its three types; without either, by the types alone — so
   /// pass [id] when one widget runs two mutations of the same shape. Released
   /// after the frame once a build stops reading it, the way a query is.
+  ///
+  /// [buildWhen] narrows *when* this `State` rebuilds, the same predicate
+  /// [MutationBuilder.buildWhen] takes: given the result the last build
+  /// showed and the one just reported, whether this read is worth a frame.
+  /// A mutation has no `select`, so this is the only filter a reader has —
+  /// and it is asked about every notification, because a `MutationObserver`
+  /// has already dropped the ones carrying an equal result
+  /// (https://github.com/KoTTi97/flutter_query/issues/67).
   MutationController<TData, TVariables, TOnMutateResult>
       watchMutation<TData, TVariables, TOnMutateResult>(
     MutationOptions<TData, TVariables, TOnMutateResult> options, {
     Object? id,
+    BuildWhen<MutationResult<TData, TVariables>>? buildWhen,
   }) =>
           _beginRead().readMutation<TData, TVariables, TOnMutateResult>(
             _currentClient,
             options,
             id,
+            buildWhen: buildWhen,
           );
 
   /// Every read goes through here: the client is reconciled, this frame's

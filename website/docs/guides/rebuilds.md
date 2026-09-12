@@ -61,9 +61,10 @@ select: (data) => (
 ## `buildWhen`
 
 On every builder — `QueryBuilder`, `QuerySelectBuilder`,
-`InfiniteQueryBuilder`, `MutationBuilder` — and on the two keyless reads:
-`watchQuery`, `watchSelectQuery`, `watchInfiniteQuery`, `context.query`,
-`context.selectQuery`, `context.infiniteQuery`.
+`InfiniteQueryBuilder`, `MutationBuilder` — and on every keyless read:
+`watchQuery`, `watchSelectQuery`, `watchInfiniteQuery`, `watchMutation`,
+`context.query`, `context.selectQuery`, `context.infiniteQuery`,
+`context.mutation`.
 
 ```dart
 QueryBuilder<Task>(
@@ -81,12 +82,12 @@ final task = context.query(
 ```
 
 It is upstream's `notifyOnChangeProps`, expressed as a function of two results.
-The same predicate, the same semantics and the same implementation in all six
-places — the difference is only *whose* rebuild it decides. A builder's is its
-own subtree, because a builder reads exactly one query. A keyless read's is
-per read, and its reader is the whole widget or the whole `State`: several
-reads each filter their own query, and a change any one of them lets through
-rebuilds the reader.
+The same predicate, the same semantics and the same implementation in all
+twelve places — the difference is only *whose* rebuild it decides. A builder's
+is its own subtree, because a builder reads exactly one query or one mutation.
+A keyless read's is per read, and its reader is the whole widget or the whole
+`State`: several reads each filter their own query, and a change any one of
+them lets through rebuilds the reader.
 
 :::note `previous` is what was built, not what was seen
 `previous` is the result the reader last **built**, not the last one it saw. A
@@ -104,11 +105,33 @@ paging flags live beside the result: a fetch that moves only those rebuilds
 regardless, because there is nothing there for a predicate over results to
 compare and the reader is showing the stale half.
 
+### On a mutation
+
+The same predicate over a `MutationResult`, and it is the *only* narrowing a
+mutation reader has: there is no `select` on a mutation.
+
+```dart
+final rename = context.mutation(
+  renameTask(id),
+  // A retrying run moves `failureCount` while it stays pending; a spinner
+  // does not care which attempt it is on.
+  buildWhen: (previous, current) => previous.status != current.status,
+);
+```
+
+It is also asked more often than a query's. A `MutationObserver` drops a
+notification whose result is equal before it sends one at all, so the equality
+above never answers first for a mutation — every notification a mutation
+reader gets reaches its predicate. Across the binding, showcase and task
+manager suites that is 91 questions the mutation reads would be asked, against
+zero notifications the equality has ever had to drop.
+
 ### A controller has none, on purpose
 
-`QueryController` takes no `buildWhen`, and that is not a fourth exception to
-the four styles being equal. A controller **is** the notifier: a predicate on
-it would impose one listener's filter on every listener of it. What it gives
+No controller takes a `buildWhen` — not `QueryController`,
+`InfiniteQueryController` or `MutationController` — and that is not a fourth
+exception to the four styles being equal. A controller **is** the notifier: a
+predicate on it would impose one listener's filter on every listener of it. What it gives
 instead is the guarantee underneath — it notifies only when something a reader
 can see has actually moved, so a `ValueListenableBuilder` over one never
 rebuilds for a notification carrying what it is already showing, not even for

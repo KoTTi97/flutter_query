@@ -19,7 +19,7 @@ description: What is here, what is deliberately not, and where the reason for ea
 | Mutation scopes (serialised writes) | `MutationScope` |
 | Infinite queries, both directions, `maxPages` | `InfiniteQueryOptions` |
 | `initialData` and `placeholderData` | including `keepPrevious` |
-| `select` and structural sharing | `QuerySelectOptions`, a second options shape with `select` required ([ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md)); plus `buildWhen` on the builders |
+| `select` and structural sharing | `QuerySelectOptions`, a second options shape with `select` required ([ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md)); plus `buildWhen` on the builders and the keyless reads |
 | A list of queries | `QueriesObserver` / `QueriesBuilder` |
 | Cache-wide mutation state | `MutationStateObserver` / `MutationStateController` |
 | Cache events and global callbacks | `queryCache.subscribe`, `mutationCache.subscribe`, `meta` |
@@ -37,7 +37,7 @@ No omission is silent.
 | Upstream | Here |
 |---|---|
 | Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 0.1; `Query.setState` is the door a persister would use |
-| `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders |
+| `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders and the keyless reads, mutations included |
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |
 | `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else, plus an optional `structuralSharing` hook |

@@ -46,9 +46,10 @@ Things to know:
   conditional read in its own small widget.
 - `context.selectQuery` is the form with a `select`; it takes a
   `QuerySelectOptions` (see [options](options.md#two-shapes)).
-- `context.query`, `context.selectQuery` and `context.infiniteQuery` take
-  [`buildWhen`](rebuilds.md#buildwhen), exactly as the builders do. It is per
-  read; a change any read lets through rebuilds the whole widget.
+- `context.query`, `context.selectQuery`, `context.infiniteQuery` and
+  `context.mutation` take [`buildWhen`](rebuilds.md#buildwhen), exactly as the
+  builders do. It is per read; a change any read lets through rebuilds the
+  whole widget.
 - `context.query` always reads the provider's client and takes no `client:` —
   a `BuildContext` names exactly one provider. For a different client, use a
   builder (`client:`), a controller, or override `queryClient` on a
@@ -69,7 +70,8 @@ sliver. Several queries on one screen means several nested builders.
 
 `QuerySelectBuilder<TQueryData, TData>` is the same widget for a query with a
 `select` — a `QuerySelectOptions<TQueryData, TData>`. Builders take
-[`buildWhen`](rebuilds.md#buildwhen), and so do the two keyless reads.
+[`buildWhen`](rebuilds.md#buildwhen), and so do the two keyless reads —
+mutations included.
 
 ## `QueryMixin`
 
@@ -93,10 +95,10 @@ Two reads of one key with different selectors of the same output type, or two
 mutations of the same shape, are told apart by an `id:` argument — and reading
 two of them *without* one is caught by an assertion in debug builds.
 
-`watchQuery`, `watchSelectQuery` and `watchInfiniteQuery` also take
-[`buildWhen`](rebuilds.md#buildwhen), exactly as the builders do. It is per
-read; a change any of them lets through rebuilds the whole `State`, because a
-`State` is one reader.
+`watchQuery`, `watchSelectQuery`, `watchInfiniteQuery` and `watchMutation`
+also take [`buildWhen`](rebuilds.md#buildwhen), exactly as the builders do. It
+is per read; a change any of them lets through rebuilds the whole `State`,
+because a `State` is one reader.
 
 An `id:` is then the read's identity, which matters when the key changes:
 
@@ -130,10 +132,11 @@ sees on its first build. It notifies only when something a reader can see has
 moved since the last time it said anything, so a `ValueListenableBuilder` over
 one does not rebuild for the fetch its own subscription started.
 
-A controller takes no `buildWhen`, and that is not a fourth exception: a
-controller **is** the notifier, and a predicate on it would impose one
-listener's filter on every listener. Its equivalent is the guarantee just
-named, plus composition — which is what a `ValueListenable` is for.
+A controller takes no `buildWhen` — nor does a `MutationController` — and that
+is not a fourth exception: a controller **is** the notifier, and a predicate on
+it would impose one listener's filter on every listener. Its equivalent is the
+guarantee just named, plus composition — which is what a `ValueListenable` is
+for.
 
 Because it is a plain listenable, it drops into `ValueListenableBuilder`,
 `ListenableBuilder`, `Listenable.merge`, `provider`, `riverpod` and `bloc`

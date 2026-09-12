@@ -35,8 +35,10 @@
 ///   https://github.com/KoTTi97/flutter_query/issues/57). The `buildWhen:`
 ///   the two keyless styles gained with C49
 ///   (https://github.com/KoTTi97/flutter_query/issues/55) is that entry's own
-///   argument: the two query reads below take one and hand it over, so all
-///   four call styles filter through one implementation.
+///   argument: all three reads below take one and hand it over, so every call
+///   style — a query's four and a mutation's four
+///   (https://github.com/KoTTi97/flutter_query/issues/67) — filters through
+///   one implementation.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -172,8 +174,9 @@ class ReadSet {
       readMutation<TData, TVariables, TOnMutateResult>(
     QueryClient client,
     MutationOptions<TData, TVariables, TOnMutateResult> options,
-    Object? id,
-  ) {
+    Object? id, {
+    BuildWhen<MutationResult<TData, TVariables>>? buildWhen,
+  }) {
     // Never the function itself: a closure built in `build` is a new object
     // every build, and a controller keyed on it would be replaced — idle
     // again — by the very rebuild its own result caused. The types are part
@@ -218,7 +221,13 @@ class ReadSet {
     if (existed) {
       controller.setOptions(options);
     }
-    entry.read();
+    // The predicate is the only filter a mutation read has, and unlike a
+    // query's it is asked about every notification: a `MutationController`
+    // has no `observedState` beside its value, so [ReadEntry]'s equality
+    // gate is the same comparison `MutationObserver` already made before it
+    // notified at all (C49 follow-on,
+    // https://github.com/KoTTi97/flutter_query/issues/67).
+    entry.read(buildWhen: _erased(buildWhen));
     return controller;
   }
 

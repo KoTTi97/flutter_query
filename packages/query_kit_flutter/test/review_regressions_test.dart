@@ -1940,6 +1940,49 @@ void main() {
     }, createClient: newClient);
   });
 
+  group('C67 the mutation reads made equal', () {
+    // `MutationBuilder` took a `buildWhen` and the two keyless mutation reads
+    // did not — C49's asymmetry, one surface over
+    // (https://github.com/KoTTi97/flutter_query/issues/67). Unlike the query
+    // side there is no `select` to offer instead, and unlike the mutation
+    // half of `NotifyGate` — which fires zero times across these three suites
+    // — the predicate is asked about *every* notification: a
+    // `MutationController` has no `observedState` beside its value, so
+    // `ReadEntry`'s equality gate is the comparison `MutationObserver`
+    // already made before it notified at all.
+    for (final (name, reader) in <(String, _C67MutationReader)>[
+      ('QueryMixin.watchMutation', _C67MixinMutation.new),
+      ('context.mutation', _C67ContextMutation.new),
+    ]) {
+      queryWidgetTest('$name skips what its buildWhen rejects',
+          (tester, client) async {
+        final builds = <String>[];
+        final asked = <String>[];
+        final run = Completer<int>();
+        await tester.pumpApp(client, reader(builds, asked, run.future));
+        await tester.pump();
+        expect(builds, <String>['idle:null']);
+
+        await tester.tap(find.byType(TextButton));
+        await tester.pump();
+        // Pending is a real change — the variant, `variables` and
+        // `submittedAt` all moved — so nothing but the predicate can reject
+        // it, and nothing did before this ticket.
+        expect(asked, <String>['idle->pending']);
+        expect(builds, <String>['idle:null']);
+
+        run.complete(2);
+        await tester.pumpAndSettle();
+        expect(builds, <String>['idle:null', 'success:2']);
+
+        // Both notifications reached the predicate, and `previous` is what
+        // was last *built*: the rejected pending result is not remembered, so
+        // the second question is asked against the idle result on screen.
+        expect(asked, <String>['idle->pending', 'idle->success']);
+      }, createClient: newClient);
+    }
+  });
+
   group('C51 one OnlineStatus instead of a pair', () {
     // The `Stream<bool>` + `initialOnlineStatus` pair became one sealed value
     // (https://github.com/KoTTi97/flutter_query/issues/60). The stream form's
@@ -2246,6 +2289,76 @@ class _C49MixinInfiniteState extends State<_C49MixinInfinite> with QueryMixin {
     widget.builds.add('${feed.value.dataOrNull?.pages}');
     return Text('${feed.value.dataOrNull?.pages}');
   }
+}
+
+/// The two keyless styles reading one mutation with a `buildWhen`: what each
+/// build showed, and every pair the predicate was asked about.
+typedef _C67MutationReader = Widget Function(
+  List<String> builds,
+  List<String> asked,
+  Future<int> run,
+);
+
+/// `MutationOptions.simple` fixes the third type argument, so the read's
+/// three types come off `mutationFn` alone — and so does the predicate's
+/// `MutationResult<int, int>`. [run] is what the mutation waits on, so the
+/// pending state is a state the test can stop in.
+MutationOptions<int, int, void> _c67Options(Future<int> run) =>
+    MutationOptions.simple(mutationFn: (int _) => run);
+
+/// Rebuild for a finished run, never for the pending one, recording what it
+/// was asked.
+BuildWhen<MutationResult<int, int>> _c67Finished(List<String> asked) =>
+    (previous, current) {
+      asked.add('${previous.status.name}->${current.status.name}');
+      return current.isSuccess;
+    };
+
+Widget _c67Tile(
+  MutationController<int, int, void> add,
+  List<String> builds,
+) {
+  builds.add('${add.value.status.name}:${add.value.dataOrNull}');
+  return TextButton(
+    onPressed: () => add.mutate(1),
+    child: Text('${add.value.dataOrNull}'),
+  );
+}
+
+class _C67ContextMutation extends StatelessWidget {
+  const _C67ContextMutation(this.builds, this.asked, this.run);
+
+  final List<String> builds;
+  final List<String> asked;
+  final Future<int> run;
+
+  @override
+  Widget build(BuildContext context) => _c67Tile(
+        context.mutation(_c67Options(run), buildWhen: _c67Finished(asked)),
+        builds,
+      );
+}
+
+class _C67MixinMutation extends StatefulWidget {
+  const _C67MixinMutation(this.builds, this.asked, this.run);
+
+  final List<String> builds;
+  final List<String> asked;
+  final Future<int> run;
+
+  @override
+  State<_C67MixinMutation> createState() => _C67MixinMutationState();
+}
+
+class _C67MixinMutationState extends State<_C67MixinMutation> with QueryMixin {
+  @override
+  Widget build(BuildContext context) => _c67Tile(
+        watchMutation(
+          _c67Options(widget.run),
+          buildWhen: _c67Finished(widget.asked),
+        ),
+        widget.builds,
+      );
 }
 
 class _A21Reader extends StatelessWidget {

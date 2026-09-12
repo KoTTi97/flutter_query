@@ -124,6 +124,27 @@ Widget build(BuildContext context) {
 The cache work has to happen either way. The client is the right thing to close
 over; the `BuildContext` is not.
 
+## Narrowing rebuilds
+
+All four styles take [`buildWhen`](rebuilds.md#buildwhen) — the builder and,
+since [#67](https://github.com/KoTTi97/flutter_query/issues/67), the two
+keyless reads. It is the only narrowing a mutation reader has: there is no
+`select` on a mutation.
+
+```dart
+final rename = context.mutation(
+  renameTask(id),
+  // A retrying run moves `failureCount` while it stays pending; a spinner
+  // does not care which attempt it is on.
+  buildWhen: (previous, current) => previous.status != current.status,
+);
+```
+
+A `MutationObserver` never reports a result equal to the one before it, so —
+unlike a query's — this predicate is asked about every notification the reader
+gets. A `MutationController` takes none, for the reason every controller takes
+none: it *is* the notifier.
+
 ## Identity
 
 In the context and mixin styles a mutation is identified by `id:` if you give

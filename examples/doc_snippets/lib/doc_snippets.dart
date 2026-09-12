@@ -329,8 +329,9 @@ Widget buildWhenSample(String id) => QueryBuilder<Task>(
       builder: (context, result) => Text(result.dataOrNull?.name ?? '…'),
     );
 
-/// The same predicate on a keyless read: one implementation for all six places
-/// that take one (C49, https://github.com/KoTTi97/flutter_query/issues/55).
+/// The same predicate on a keyless read: one implementation for all twelve
+/// places that take one (C49, https://github.com/KoTTi97/flutter_query/issues/55,
+/// and its mutation follow-on, https://github.com/KoTTi97/flutter_query/issues/67).
 QueryResult<Task> keylessBuildWhenSample(BuildContext context, String id) {
   final task = context.query(
     taskQuery(id),
@@ -372,6 +373,21 @@ MutationOptions<Task, String, Task?> renameOptimistically(
         filters: QueryFilters(queryKey: taskKey(id)),
       ),
     );
+
+/// The mutation reads take the same predicate, and it is the only narrowing a
+/// mutation reader has (https://github.com/KoTTi97/flutter_query/issues/67).
+MutationController<void, String, void> mutationBuildWhenSample(
+  BuildContext context,
+  String id,
+) {
+  final rename = context.mutation(
+    renameTask(id),
+    // A retrying run moves `failureCount` while it stays pending; a spinner
+    // does not care which attempt it is on.
+    buildWhen: (previous, current) => previous.status != current.status,
+  );
+  return rename;
+}
 
 void mutateWithPerCallCallbacks(
   MutationController<void, String, void> add,

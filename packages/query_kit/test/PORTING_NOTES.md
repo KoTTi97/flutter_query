@@ -3637,3 +3637,100 @@ expected). `QueriesBuilder`'s existing explicit-client swap, list reorder and
 partial-failure case and the F03 replaced-provider-client group are untouched
 and green. No showcase screen or spec changed, so no end-to-end leg was
 affected. `dart analyze --fatal-infos` and `dart format` clean.
+
+### C49, follow-on — the mutation reads made equal ([#67](https://github.com/KoTTi97/flutter_query/issues/67))
+
+The one thing [#58](https://github.com/KoTTi97/flutter_query/issues/58)
+deliberately left: `MutationBuilder` took a `buildWhen` and `watchMutation` /
+`context.mutation` did not, which is C49's asymmetry one surface over. The
+question was whether [#55](https://github.com/KoTTi97/flutter_query/issues/55)'s
+answer carries across, and it does — **more strongly than on the query side.**
+
+**Options.** (a) Give the two mutation reads a `buildWhen`. (b) Record the
+mutation reads as a fifth honest exception, the way `QueriesBuilder` was
+recorded. (c) Take `buildWhen` off `MutationBuilder`, equal by subtraction.
+**(a)**, and the two arguments that decide it are the ones a query cannot
+make:
+
+- **There is no substitute, not even a false one.** #55 had to refute the
+  claim that `select` stands in for `buildWhen`; a mutation has no `select` at
+  all, so a keyless mutation reader has had *nothing* — while the builder
+  beside it has had the predicate since the beginning.
+- **The predicate is not the rare path the gate was.** #58 measured the two
+  mutation-side `NotifyGate`s firing **zero** times across three suites, and
+  this ticket was asked to check whether a predicate would be as unreachable.
+  It is the opposite: instrumented over the same three suites, a mutation read
+  would be asked **91** times — 74 in the showcase, 9 in the task manager, 8
+  in the binding — and `MutationBuilder`'s existing predicate a further 24
+  (8 / 12 / 4). **Every** mutation notification reached the point where the
+  predicate is asked; the equality above it dropped none of them, in any
+  suite.
+
+**Why the equality never answers first for a mutation, which is the same fact
+that makes the gate zero.** `ReadEntry` compares `observedStateOf(controller)`
+and then the value; a `MutationController` does not implement `ObservedState`,
+so those are one comparison, and `MutationObserver` has already made it —
+`mutation_observer.dart:186` (`final changed = next != _currentResult`) and
+`:277` — before it notifies at all. So the entry's pre-filter is dead code for
+a mutation and the predicate is the *only* filter a mutation reader has. That
+is the line the two dartdocs and the site now carry.
+
+**What `MutationResult ==` actually covers**, checked before deciding rather
+than assumed: `runtimeType` (hence the variant and both type arguments),
+`variables`, `hasVariables`, `failureCount`, `failureReason`, `isPaused`,
+`submittedAt`, `dataOrNull` and `errorOrNull` — everything but the three
+closures `mutate` / `mutateAsync` / `reset`, which belong to the observer and
+never move. And the ticket's premise that a result carries an
+`onMutateResult` is **wrong**: `MutationResult<TData, TVariables>` has two
+type arguments, not three; `TOnMutateResult` lives on `MutationOptions`, the
+observer, the controller and `MutateCallbacks`, and the rollback handle never
+appears in what the observer reports. So "an equal value is skipped before the
+predicate is asked" means exactly what it means for a query — total over the
+observable state — it is simply a clause that can never fire here.
+
+**What moved.** `ReadSet.readMutation` takes a
+`BuildWhen<MutationResult<TData, TVariables>>` and hands it to `ReadEntry.read`
+through the same `ReadSet._erased` adapter the query reads use;
+`QueryMixin.watchMutation` and `context.mutation` pass it through. Three
+named parameters and one argument; no new mechanism, because C48 made the
+decision one implementation and C49 built the adapter.
+
+**Coverage came first.** `C67 the mutation reads made equal` in
+`query_kit_flutter/test/review_regressions_test.dart`, two cases — one per
+keyless style — driving a mutation that stops in `pending` on a `Completer`
+with `buildWhen: (previous, current) => current.isSuccess`, and recording
+every pair the predicate was asked about. Each case asserts three things: the
+pending result is not built, the success result is, and the questions were
+`idle->pending` then `idle->success` — which pins both that every
+notification reaches the predicate and that `previous` is what was last
+*built*, not what was last seen. Each of the three branches was disabled in
+turn: breaking the hand-over in `ReadSet.readMutation` fails both cases,
+breaking `watchMutation`'s pass-through fails only the mixin case, breaking
+`context.mutation`'s fails only the context case.
+
+**What proves the behaviour did not change:** core **589**, binding **126 →
+128**, showcase **231**, task manager **31**, doc snippets **2** — all green,
+with no existing case touched anywhere. The parameter is optional and every
+existing call site omits it, so nothing that did not ask for filtering can be
+filtered. `dart analyze --fatal-infos` and `dart format` clean, `dart doc` 0
+warnings / 0 errors, and the documentation site builds.
+
+**Documentation.** `rebuilds.md` now names **twelve** places that take a
+predicate rather than six — four builders and eight keyless reads — and gains
+an "On a mutation" section carrying the measurement and the no-`select` point;
+its controller section is widened from `QueryController` to every controller,
+`MutationController` included, which is the list this asymmetry's other half
+belongs in. `mutations.md` gains a "Narrowing rebuilds" section with the
+sample, `reading-a-query.md`'s two keyless-read notes and its controller
+paragraph name the mutation read, and the `notifyOnChangeProps` rows in
+`feature-matrix.md` and `coming-from-react-query.md` no longer say "the
+builders". The new sample is compiled in `examples/doc_snippets/` as
+`mutationBuildWhenSample`.
+
+**On the tag.** 0.1.0 is still unpublished, so an added optional named
+parameter is free. Had the tag gone out it would still have been additive and
+source-compatible, and the changelog line would read *"Added: `watchMutation`
+and `context.mutation` take a `buildWhen`, the predicate `MutationBuilder`
+already took. A mutation has no `select`, so this is the only way a keyless
+mutation reader can ignore a change it does not show — the pending state of a
+run, or a retry's `failureCount`."*

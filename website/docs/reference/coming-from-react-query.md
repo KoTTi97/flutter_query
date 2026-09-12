@@ -94,7 +94,7 @@ alternatives — there is no recommended default, pick per situation:
 | `placeholderData: value` / `(previous) => …` | `PlaceholderData.value(…)` / `PlaceholderData.compute(…)` |
 | `placeholderData: keepPreviousData` | `const PlaceholderData.keepPrevious()` |
 | `select: (data) => …` | its own options shape: `QuerySelectOptions<TQueryData, TData>`, `select` required. Without one, `QueryObserverOptions<TData>` has a single type argument |
-| `notifyOnChangeProps` | gone: `select` narrows what is reported, and the builders take `buildWhen` |
+| `notifyOnChangeProps` | gone: `select` narrows what is reported, and every builder and keyless read takes `buildWhen` — a mutation's too, where there is no `select` |
 | `throwOnError` | gone: errors are the `QueryError` case of the sealed result |
 | `structuralSharing` | on by default: lists are shared element by element, maps and sets whole when deep-equal, everything else by `==`, so typed models need `==`/`hashCode`; `structuralSharing: (previous, next) => …` replaces it for the cache write |
 | `structuralSharing: false` | `structuralSharing: (_, next) => next` |
