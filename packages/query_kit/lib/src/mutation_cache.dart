@@ -90,6 +90,13 @@ class MutationCache
     implements MutationCacheRef {
   /// Creates an empty cache. All four hooks are optional and cache-wide; a
   /// [QueryClient] constructs one of these when none is passed to it.
+  ///
+  /// Final, with no setter, for the reason `QueryCache`'s constructor gives at
+  /// length
+  /// (C59, https://github.com/KoTTi97/flutter_query/issues/66): upstream's
+  /// `config` field is reassignable and nothing reassigns it, a hook that has
+  /// to change closes over something its owner can swap, and [subscribe] is
+  /// how you watch a cache without handling for it.
   MutationCache({this.onMutate, this.onSuccess, this.onError, this.onSettled});
 
   /// Cache-wide hooks. They run *before* the per-mutation callbacks, which is

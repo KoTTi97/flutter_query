@@ -32,6 +32,12 @@ Each feature lives in `lib/features/<id>/`, imports only the package and
 example it mirrors, and how it is proven. Its widget tests are
 `test/features/<id>_test.dart`, its end-to-end tests `e2e/tests/<id>.spec.ts`.
 
+**A feature therefore exists five times** — that directory, a row of
+`featureEntries` in `lib/routes.dart`, the widget-test file, the spec, and a
+row of the table below — and `test/catalogue_test.dart` compares the five,
+plus which screen each route actually reaches. Adding a feature means adding
+it everywhere; the test says where you stopped.
+
 **`lib/shared/` is the deliberate exception to "self-contained".** Self-
 contained means a feature never reaches into another feature's directory, not
 that it re-types the app's own furniture: the backend client (`api.dart`), the

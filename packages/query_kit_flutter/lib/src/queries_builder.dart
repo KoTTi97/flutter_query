@@ -46,39 +46,94 @@ class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
       _QueriesBuilderState<TQueryData, TData>();
 }
 
+/// The lifetime the other four builders keep in `didUpdateWidget` and
+/// `didChangeDependencies`, kept here too (C59,
+/// https://github.com/KoTTi97/flutter_query/issues/66): a controller created
+/// on the first build, thrown away when the client it belongs to changes —
+/// whether it was passed in or came from the provider above — and given the
+/// new list in place otherwise.
+///
+/// It reconciled inside `build` until then, behind an `_updating` flag that
+/// swallowed a notification arriving mid-build. Both are gone: what the flag
+/// stood in for is a rebuild request made during this widget's own build,
+/// which Flutter already handles — the build reads the controller's value
+/// after the reconciliation, so it shows the new state anyway — and moving
+/// the work out means a rebuild caused by a notification no longer re-applies
+/// the same list to the observer.
+///
+/// It is *not* the builders' shared state class (`query_builder.dart`'s
+/// `_ControllerBuilderState`) for a reason
+/// this widget's doc gives from the other side: that class watches its
+/// controller through a `ReadEntry`, whose rebuild decision is `==` on the
+/// value, and this controller's value is a `List` — identity, not value,
+/// equality, so every notification would look like news. The collection's
+/// decision is element-wise and is made once, in [QueriesController]
+/// (https://github.com/KoTTi97/flutter_query/issues/58). Two lifetimes that
+/// look alike, one rebuild decision each; sharing the shape would mean
+/// re-deciding the rebuild.
 class _QueriesBuilderState<TQueryData, TData>
     extends State<QueriesBuilder<TQueryData, TData>> {
   QueriesController<TQueryData, TData>? _controller;
-  bool _updating = false;
+  QueryClient? _controllerClient;
+
+  QueryClient get _client => widget.client ?? QueryClientProvider.of(context);
+
+  /// This widget's controller, created on its first build.
+  QueriesController<TQueryData, TData> get _collection {
+    final existing = _controller;
+    if (existing != null) {
+      return existing;
+    }
+    final client = _client;
+    _controllerClient = client;
+    return _controller =
+        QueriesController<TQueryData, TData>(client, widget.queries)
+          ..addListener(_onResult);
+  }
 
   void _onResult() {
-    if (mounted && !_updating) setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
-  Widget build(BuildContext context) {
-    final client = widget.client ?? QueryClientProvider.of(context);
-    _updating = true;
-    try {
-      if (_controller?.client != client) {
-        _controller?.removeListener(_onResult);
-        _controller?.dispose();
-        _controller =
-            QueriesController<TQueryData, TData>(client, widget.queries)
-              ..addListener(_onResult);
-      } else {
-        _controller!.setQueries(widget.queries);
-      }
-    } finally {
-      _updating = false;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The provider above handed out a different client: every observer in the
+    // collection belongs to the old one.
+    if (_controller != null && _controllerClient != _client) {
+      _disposeController();
     }
-    return widget.builder(context, _controller!.value);
+  }
+
+  @override
+  void didUpdateWidget(QueriesBuilder<TQueryData, TData> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client) {
+      _disposeController();
+    } else if (_controller != null) {
+      // Unconditionally, where the single-query builders compare their
+      // options first: a `List` compares by identity, so a caller who fills
+      // the same list object again would silently stop being heard. The
+      // observer reuses what it can by key occurrence and re-applying an
+      // unchanged list moves nothing.
+      _controller!.setQueries(widget.queries);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, _collection.value);
+
+  void _disposeController() {
+    _controller?.removeListener(_onResult);
+    _controller?.dispose();
+    _controller = null;
+    _controllerClient = null;
   }
 
   @override
   void dispose() {
-    _controller?.removeListener(_onResult);
-    _controller?.dispose();
+    _disposeController();
     super.dispose();
   }
 }

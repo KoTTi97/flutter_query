@@ -2636,6 +2636,7 @@ suite does not have to go looking:
 | `initialDataUpdatedAt` as a function | additive `initialDataUpdatedAtCompute`, exclusive with the existing timestamp value | functional improvements plan |
 | `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
 | an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
+| `QueryCacheConfig` / `MutationCacheConfig` behind a reassignable `config` field | the hooks are final constructor arguments, with no setter; nothing upstream reassigns one, and a handler that has to change closes over a variable its owner swaps | C59, [#66](https://github.com/KoTTi97/flutter_query/issues/66) |
 | a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` — and a *subtype* is a mismatch: one key, one exact type | [#7](https://github.com/KoTTi97/flutter_query/issues/7), fourth review 2026-09-09 |
 | one observer options object with an optional `select` | two shapes over a sealed base: `QueryObserverOptions<TData>` without `select`, `QuerySelectOptions<TQueryData, TData>` with `select` required (infinite: `InfiniteQueryObserverOptions` / `InfiniteQuerySelectOptions`); the binding's controllers refuse a top-typed `TData` in debug builds only — the backstop is compiled out of release | [ADR-0001](../../../docs/adr/0001-one-type-slot-for-plain-queries.md), ninth review 2026-09-11 |
 
@@ -3467,3 +3468,85 @@ screen that calls `configureScenario` or `clearRequests` (`retry`,
 `playground`, `invalidation_and_filters`, `cancellation`, `max_pages`) were
 run against the real backend and are green. `dart analyze --fatal-infos` and
 `dart format` clean.
+
+### C59 — the four smaller structural points ([#66](https://github.com/KoTTi97/flutter_query/issues/66))
+
+C59's fifth row, `_QueryBuilderState` ≡ `_QuerySelectBuilderState`, was closed
+by [#57](https://github.com/KoTTi97/flutter_query/issues/57); these are the
+other four. Two are moves, two are decisions, and the one the row called cheap
+turned out to be the one worth having.
+
+**The showcase's sets are five, not four, and they are 27** (§8 counted
+26/26/26/26 by hand and `dbe4ea6` has since made it 27 — the drift the row
+predicted). A feature exists as a directory under `lib/features/`, a row of
+`featureEntries` in `lib/routes.dart`, `test/features/<id>_test.dart`,
+`e2e/tests/<id>.spec.ts`, and a row of the README's table.
+`examples/showcase/test/catalogue_test.dart` compares all five — read off the
+filesystem, not generated from one list, because generating them would make
+them agree by construction and say nothing about the two written in TypeScript
+and Markdown — and pins two more things no set can express: that every route
+reaches *its own* screen class, and what an unknown name does. **Negative
+check**: dropping one `FeatureEntry` and pointing another at the wrong screen
+fails five of the seven cases, naming the missing directory, test file, spec
+and README row, and the mis-routed screen. Nothing was found misaligned today,
+which is what a test written after the fact looks like when it is honest.
+
+**`onGenerateRoute`'s fallback stays, and is now documented as a decision.**
+What the row objected to is that a silent fallback makes a missing catalogue
+entry look like a working app; that is the test's job now, and with every
+in-app route pinned to a screen the only name that can reach the fallback comes
+from outside — a typed or stale deep link. The catalogue is the honest answer
+to one, and the settings are kept so the navigator still reports the route that
+was asked for. Asserting instead was refused: it turns a human's URL typo into
+a red screen in debug, which is every `flutter run`, and proves nothing the
+test does not.
+
+**`QueriesBuilder` no longer reconciles in `build`.** Its controller's lifetime
+moved to `didChangeDependencies` (the provider handed out a different client)
+and `didUpdateWidget` (an explicit `client:` changed, else the list is
+re-applied), which is where the other four builders have kept theirs since
+C48 — the `_updating` flag is gone with it. The flag stood in for a rebuild
+request made during this widget's own build, which Flutter already handles: the
+build reads the controller's value *after* the reconciliation, so the frame
+shows the new state either way. `setQueries` is called unconditionally on a
+widget update, where the single-query builders compare their options first: a
+`List` compares by identity, so a caller who refills the same list object would
+otherwise silently stop being heard. It is **not** folded into the builders'
+shared `_ControllerBuilderState`, and the class doc says why: that class
+watches its controller through a `ReadEntry`, whose rebuild decision is `==` on
+the value, and this controller's value is a `List` — identity equality, so
+every notification would look like news. The collection's decision is
+element-wise and is made once, in `QueriesController`
+([#58](https://github.com/KoTTi97/flutter_query/issues/58)). Two lifetimes that
+look alike, one rebuild decision each.
+
+**One `InheritedWidget` for one client.** `_QueryClientScope` — private, above
+`QueryScope`, with the same `client` field, the same `updateShouldNotify` and
+exactly the same lifetime — is gone; `QueryClientProvider.of`, `maybeOf` and
+`read` look up `QueryScope`, which is one element and one dependency set
+instead of two. A widget that only asks for the client is a dependent that
+never reads: it is notified when the client changes, which is what `of`
+promises, and `QueryScopeElement.removeDependent` already returns early for an
+element it holds no reads for.
+
+**The cache hooks stay final, and say so.** Upstream's are reachable through a
+`public config` field, which is TypeScript's default rather than a decision —
+nothing in `query-core` or its tests reassigns one. Final arguments keep "which
+handler ran for this fetch" from becoming a question about when it was set; a
+handler that has to change closes over a variable its owner swaps, a subtree
+that wants its own handling wants its own client, and watching rather than
+handling is `subscribe`. Both constructors document it and the divergence table
+above has the row.
+
+**What proves the behaviour did not change.** Core **589**, binding **123 →
+126**, showcase **224 → 231** (200 widget + 7 catalogue + 24 contract), task
+manager **31** — no existing case rewritten, and the three new binding cases
+are branches the suite had never reached. Each was verified red against the
+branch it names: dropping `QueriesBuilder`'s `didChangeDependencies` leaves the
+collection on the old client (the replaced-client case fails, showing `A` where
+`B` is expected), and making `of` a non-subscribing lookup drops the reader's
+second `didChangeDependencies` (the scope case fails, `1` where `2` is
+expected). `QueriesBuilder`'s existing explicit-client swap, list reorder and
+partial-failure case and the F03 replaced-provider-client group are untouched
+and green. No showcase screen or spec changed, so no end-to-end leg was
+affected. `dart analyze --fatal-infos` and `dart format` clean.

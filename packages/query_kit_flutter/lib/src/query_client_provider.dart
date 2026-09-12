@@ -130,8 +130,7 @@ class QueryClientProvider extends StatefulWidget {
   /// Throws when there is none: a missing provider is a wiring mistake, and a
   /// nullable return would only move the crash somewhere less helpful.
   static QueryClient of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<_QueryClientScope>();
+    final scope = context.dependOnInheritedWidgetOfExactType<QueryScope>();
     if (scope == null) {
       throw _missingProvider();
     }
@@ -148,16 +147,16 @@ class QueryClientProvider extends StatefulWidget {
   /// The nearest client above [context], or `null` when there is none — for
   /// a widget that can do without one. Subscribes like [of].
   static QueryClient? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_QueryClientScope>()?.client;
+      context.dependOnInheritedWidgetOfExactType<QueryScope>()?.client;
 
   /// Like [of], but without subscribing the calling element to changes.
   static QueryClient read(BuildContext context) {
     final element =
-        context.getElementForInheritedWidgetOfExactType<_QueryClientScope>();
+        context.getElementForInheritedWidgetOfExactType<QueryScope>();
     if (element == null) {
       throw _missingProvider();
     }
-    return (element.widget as _QueryClientScope).client;
+    return (element.widget as QueryScope).client;
   }
 
   @override
@@ -476,19 +475,12 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     super.dispose();
   }
 
+  // One scope, not two. There were a private `_QueryClientScope` for `of` and
+  // a `QueryScope` for `context.query`, with the same field, the same
+  // `updateShouldNotify` and the same lifetime, nested one inside the other —
+  // two elements and two dependency sets for one fact (C59,
+  // https://github.com/KoTTi97/flutter_query/issues/66).
   @override
-  Widget build(BuildContext context) => _QueryClientScope(
-        client: widget.client,
-        child: QueryScope(client: widget.client, child: widget.child),
-      );
-}
-
-class _QueryClientScope extends InheritedWidget {
-  const _QueryClientScope({required this.client, required super.child});
-
-  final QueryClient client;
-
-  @override
-  bool updateShouldNotify(_QueryClientScope oldWidget) =>
-      oldWidget.client != client;
+  Widget build(BuildContext context) =>
+      QueryScope(client: widget.client, child: widget.child);
 }

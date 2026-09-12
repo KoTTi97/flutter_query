@@ -149,6 +149,25 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     implements QueryCacheRef {
   /// Creates an empty cache. The three hooks are optional and cache-wide; a
   /// [QueryClient] constructs one of these when none is passed to it.
+  ///
+  /// **The hooks are final, and that is the decision** (C59,
+  /// https://github.com/KoTTi97/flutter_query/issues/66). Upstream keeps them
+  /// in a `public config` field a caller could reassign; nothing in
+  /// `query-core` or its tests does, and a settable hook would make "which
+  /// handler ran for this fetch" a question about *when* it was set. A handler
+  /// that has to change while the app runs is a hook that closes over
+  /// something you own —
+  ///
+  /// ```dart
+  /// void Function(Object)? report;
+  /// final cache = QueryCache(onError: (error, _, __) => report?.call(error));
+  /// ```
+  ///
+  /// — which keeps the swap where its owner can see it. A cache built for a
+  /// *scope* rather than for the app is the other answer: a `QueryClient` is
+  /// cheap, and a second one with its own cache is what a subtree with its own
+  /// error handling wants. For watching rather than handling, there is
+  /// [subscribe], which needs no hook at all.
   QueryCache({this.onSuccess, this.onError, this.onSettled});
 
   /// Cache-wide hooks, upstream's `QueryCacheConfig`.

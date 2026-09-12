@@ -81,6 +81,19 @@ final List<FeatureEntry> featureEntries = <FeatureEntry>[
 
 /// Serves `/` and every feature route. Unknown names get the home screen, so
 /// a mistyped deep link never strands the app on an empty navigator.
+///
+/// **The fallback is deliberate, and it no longer hides anything** (C59,
+/// https://github.com/KoTTi97/flutter_query/issues/66). What the review named
+/// is that a silent fallback makes a missing catalogue entry look like a
+/// working app; that is now `test/catalogue_test.dart`'s job — it compares the
+/// five sets a feature exists in and pins every route to its own screen, so
+/// the only name that can reach this branch comes from *outside* the app: a
+/// typed or stale deep link. Answering one with the catalogue is the honest
+/// 404 for an app whose home screen is an index, and the settings are kept so
+/// the navigator still reports the route that was asked for. Asserting instead
+/// was considered and refused: it would turn a human's URL typo into a red
+/// screen in debug — which is every `flutter run` — while proving nothing the
+/// test does not already prove.
 Route<Object?> onGenerateRoute(RouteSettings settings) {
   final name = settings.name ?? '/';
   final entry = featureEntries

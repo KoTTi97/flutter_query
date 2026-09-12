@@ -2043,6 +2043,122 @@ void main() {
       expect(status.toString(), contains('initial: false'));
     });
   });
+
+  group('C59 the smaller structural points', () {
+    // `QueriesBuilder` reconciled inside `build` behind an `_updating` flag
+    // and now keeps its controller's lifetime where the other four builders
+    // keep theirs; `QueryClientProvider` installed two InheritedWidgets for
+    // one client and now installs one
+    // (https://github.com/KoTTi97/flutter_query/issues/66). Behaviour is the
+    // invariant, and these are the branches the suite had never reached.
+
+    Widget collection(QueryClient? client) => QueriesBuilder<String, String>(
+          client: client,
+          queries: <QueryObserverOptions<String>>[seeded()],
+          builder: (_, results) => Text(results.single.dataOrNull ?? 'none'),
+        );
+
+    queryWidgetTest('a QueriesBuilder follows a replaced provider client',
+        (tester, a) async {
+      final b = tester.adopt(newClient()..setQueryData<String>(key, 'B'));
+      // F03 proved this for the context read, the builder and the mixin; the
+      // collection was the one reader whose client came from `build` alone,
+      // so nothing exercised the dependency change at all.
+      await tester.pumpWidget(app(a, collection(null)));
+      await tester.pump();
+      expect(find.text('A'), findsOneWidget);
+
+      await tester.pumpWidget(app(b, collection(null)));
+      await tester.pump();
+      expect(find.text('B'), findsOneWidget);
+      expect(a.queryCache.get<String>(key)!.observersCount, 0);
+      expect(b.queryCache.get<String>(key)!.observersCount, 1);
+    }, createClient: () => newClient()..setQueryData<String>(key, 'A'));
+
+    queryWidgetTest(
+        'a QueriesBuilder keeps its controller while the client does not move',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, collection(null)));
+      await tester.pump();
+      final observer = client.queryCache.get<String>(key)!.observers.single;
+
+      // A rebuild of the same widget with an equal client is not a new
+      // collection: the observers outlive it, which is what makes the list
+      // reconciliation in `setQueries` worth anything.
+      await tester.pumpWidget(app(client, collection(null)));
+      await tester.pump();
+      expect(
+          client.queryCache.get<String>(key)!.observers.single, same(observer));
+      expect(client.queryCache.get<String>(key)!.observersCount, 1);
+    }, createClient: () => newClient()..setQueryData<String>(key, 'A'));
+
+    // Without the `app` scaffold: `MaterialApp` rebuilds what is under it on
+    // every pump, which would hide the very difference these two cases are
+    // about. Under a bare provider the child is the same `const` widget, so
+    // Flutter skips it and only a dependent is rebuilt.
+    Widget provided(QueryClient client, Widget child) => QueryClientProvider(
+          client: client,
+          observeAppLifecycle: false,
+          child: child,
+        );
+
+    queryWidgetTest('one scope: `of` subscribes to it, `read` does not',
+        (tester, a) async {
+      for (final read in <bool>[false, true]) {
+        final b = tester.adopt(newClient());
+        _c59Dependencies = 0;
+        _c59Seen = null;
+        // Told by `didChangeDependencies`, not by a build: the reader is
+        // rebuilt either way when the provider above it is, and what the two
+        // lookups differ in is whether the scope *notifies* them. `of`
+        // subscribed to the private `_QueryClientScope`, which is gone.
+        await tester.pumpWidget(provided(a, _C59ClientReader(read: read)));
+        expect(_c59Dependencies, 1, reason: 'read: $read');
+        expect(_c59Seen, same(a), reason: 'read: $read');
+
+        await tester.pumpWidget(provided(b, _C59ClientReader(read: read)));
+        await tester.pump();
+        expect(_c59Dependencies, read ? 1 : 2, reason: 'read: $read');
+        // Either way it reads the new client: what `read` gives up is being
+        // told, not being right.
+        expect(_c59Seen, same(b), reason: 'read: $read');
+
+        await tester.pumpWidget(const SizedBox());
+      }
+    }, createClient: newClient);
+  });
+}
+
+/// What [_C59ClientReader] last read, and how often the scope told it its
+/// dependencies changed.
+int _c59Dependencies = 0;
+QueryClient? _c59Seen;
+
+class _C59ClientReader extends StatefulWidget {
+  const _C59ClientReader({required this.read});
+
+  /// `QueryClientProvider.read`, which does not subscribe, rather than `of`,
+  /// which does.
+  final bool read;
+
+  @override
+  State<_C59ClientReader> createState() => _C59ClientReaderState();
+}
+
+class _C59ClientReaderState extends State<_C59ClientReader> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _c59Dependencies++;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _c59Seen = widget.read
+        ? QueryClientProvider.read(context)
+        : QueryClientProvider.of(context);
+    return const SizedBox();
+  }
 }
 
 /// The two keyless styles reading one query with a `buildWhen`.

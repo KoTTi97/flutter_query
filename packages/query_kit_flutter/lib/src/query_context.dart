@@ -177,17 +177,30 @@ extension QueryContext on BuildContext {
   }
 }
 
-/// The scope `context.query` reads through. Installed by
-/// `QueryClientProvider`; you never place one yourself. Not public API: the
-/// package barrel hides it (an `@internal` annotation would need `meta`,
-/// which Flutter 3.27's `foundation` does not yet re-export).
+/// The client's place in the widget tree: what `QueryClientProvider.of`,
+/// `maybeOf` and `read` find, and what `context.query` reads through.
+/// Installed by `QueryClientProvider`; you never place one yourself. Not
+/// public API: the package barrel hides it (an `@internal` annotation would
+/// need `meta`, which Flutter 3.27's `foundation` does not yet re-export).
+///
+/// **Both jobs, in one widget.** There was a second, private
+/// `_QueryClientScope` above this one for the three lookups, with the same
+/// `client` field, the same `updateShouldNotify` and exactly the same
+/// lifetime — two elements and two dependency sets asserting one fact (C59,
+/// https://github.com/KoTTi97/flutter_query/issues/66). The element under
+/// this widget carries more than the field, but what it carries is per
+/// *reader* ([QueryScopeElement]) and a widget that only asks for the client
+/// is simply a dependent that never reads: it registers a dependency, is
+/// notified when the client changes — which is what `of` promises — and its
+/// `removeDependent` finds nothing to release.
 class QueryScope extends InheritedWidget {
   /// Placed by `QueryClientProvider` around its child; nothing else
   /// constructs one.
   const QueryScope({super.key, required this.client, required super.child});
 
-  /// The provider's client, on which every observer read through this scope
-  /// is created. A new client is what makes the scope notify its readers.
+  /// The provider's client: what the three lookups return, and what every
+  /// observer read through this scope is created on. A new client is what
+  /// makes the scope notify everyone who asked.
   final QueryClient client;
 
   @override
