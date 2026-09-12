@@ -107,20 +107,35 @@ or a `refetchInterval` is a timer, stepped with `tester.pump(duration)`.
 
 ## The wayfinder map
 
-The plan of record is [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1)
-(label `wayfinder:map`); its decision tickets are the map's sub-issues, and the
-frontier (open, unblocked, unassigned) is visible in GitHub's UI through native
-blocked-by edges. **Start there.** The map's Notes are the standing rules for
-every session; the wayfinding operations are in
-[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). Its successor,
-[issue #33](https://github.com/KoTTi97/flutter_query/issues/33) (release
-0.1.0), worked off the ninth review's findings C1–C46 — two of them as ADRs
-under [`docs/adr/`](docs/adr/) — and ended at the wizard's door with the
-release commit (#47). Its own successor,
-[issue #49](https://github.com/KoTTi97/flutter_query/issues/49), took the
-structural findings **C47–C59** that #33 had ruled out of its scope and worked
-all nineteen of its tickets through on 2026-09-12, ending at `60173bb`. The
-Notes and Decisions of all three remain in force.
+Work is planned as **wayfinder maps** — one issue labelled `wayfinder:map`,
+its decision tickets as sub-issues, the frontier (open, unblocked, unassigned)
+visible in GitHub's UI through native blocked-by edges. The wayfinding
+operations are in
+[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+
+**Three maps have been charted and all three reached their destination**, so
+**all three are closed** — a map is closed when its last ticket is, the same
+as any other issue, and `gh issue list --state open --label wayfinder:map`
+is therefore the honest answer to "is a map running". Closed does not mean
+spent: **the Notes and Decisions of all three remain in force**, they are
+cited by number throughout this file, and a closed issue reads and links
+exactly like an open one.
+
+- [#1](https://github.com/KoTTi97/flutter_query/issues/1) — the fresh port.
+  Its Notes are the oldest standing rules (AFK, the upstream pin, no
+  third-party dependency, the four equal call styles); **start there** when
+  you need to know why something is the way it is.
+- [#33](https://github.com/KoTTi97/flutter_query/issues/33) — release 0.1.0.
+  Worked off the ninth review's findings C1–C46, two of them as ADRs under
+  [`docs/adr/`](docs/adr/), and ended at the wizard's door with the release
+  commit (#47).
+- [#49](https://github.com/KoTTi97/flutter_query/issues/49) — the structural
+  findings **C47–C59** that #33 ruled out of its own scope. Nineteen tickets,
+  all worked through on 2026-09-12 (`60173bb`, state docs in `15dd9a0`). Its
+  *Not yet specified* section holds the seeds for the next map.
+
+**Charting the next one** starts from #49's fog, not from a reopened map: a
+new map is a new issue, as #33 was to #1 and #49 to #33.
 
 **What map #49 changed, in one paragraph**, because it touched almost every
 module: the binding's two reader registries are one `ReadSet` and its six
