@@ -3,6 +3,18 @@
 ///
 /// Every request carries the scenario id in `x-scenario`, so the backend keeps
 /// a world of this app's own; the end-to-end suite mints one per test.
+///
+/// **The dio plumbing here is also in the task manager, and that is
+/// deliberate.** [defaultBackendBaseUrl], [BackendException], the
+/// `BaseOptions`, the cancellation bridge and the error unwrapping are near
+/// enough line for line `examples/task_manager/lib/src/api.dart`. An example
+/// is read, not depended on, and "how do I wire dio to this?" is the part a
+/// reader most wants to lift out whole — putting it in a package both
+/// examples import would hide it behind a workspace row and an import. What
+/// keeps each copy honest is not a common ancestor but
+/// `test/backend_contract_test.dart`: one list of cases, run against this
+/// app's fake *and* against its real server
+/// (https://github.com/KoTTi97/flutter_query/issues/52).
 library;
 
 import 'dart:convert';

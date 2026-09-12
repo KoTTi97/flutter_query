@@ -3288,3 +3288,89 @@ and `online_manager_test` case unmodified; core **589**, binding **118 → 123**
 snippets 2, all green; `dart analyze --fatal-infos` and `dart format` clean.
 The showcase's `focus_refetch` e2e spec changed only in a test *title* — no
 locator, no step, no backend scenario.
+
+### C58 — the task manager's transport, and the five drifts under it ([#52](https://github.com/KoTTi97/flutter_query/issues/52), [#54](https://github.com/KoTTi97/flutter_query/issues/54))
+
+**Nothing was extracted, on purpose.** #52 measured the two examples'
+`api.dart` at **119 shared lines, 85 of them substantial** — not §8's "135/203
+identical" — and every one of them is the dio plumbing
+(`defaultBackendBaseUrl`, `BackendException`, the `BaseOptions`, the
+cancellation bridge, the error unwrapping) a reader most wants to lift out of
+an example whole. An example is read, not depended on, so the duplication
+stays and **both `api.dart` files now say so at the top**, naming the other
+copy and naming what keeps each honest instead: a contract test. A shared
+package would not have touched the actual defect either — all five of C58's
+drifts are between *one* example's server and its *own* fake.
+
+**What was added.** `examples/task_manager/test/backend_contract_test.dart`,
+the showcase's proven shape: one list of **14 cases**, run against
+`FakeBackend` always and against the express server when
+`TASK_MANAGER_SERVER` names one (absent, the server group skips, so a plain
+`flutter test` still passes). Plus one case outside the list, for the thing
+only the fake has — a lifetime inside the test process.
+
+**Reproduced before fixed, and the list had teeth.** Against the fake as it
+stood, **12 of the 14 cases were red**; the fake-only case made 13. The five
+named drifts, in order, and what each turned out to be:
+
+1. **The 404's wording** — the fake said `Task $id not found`, the server's
+   `requireTask` says `Task not found`. Fixed in the fake: an id in the text
+   is a message no screen can match on.
+2. **A `reminder` that is not a boolean** — 400
+   `Field "value" is missing or not a boolean` on the server; in the fake
+   `body['value']! as bool` threw, which dio reports as a transport failure
+   and `TaskApi` turns into *"The server is unreachable"*. Fixed: the fake
+   checks the type and answers 400 with the same sentence.
+3. **An empty or missing `name`** — 400 `Field "name" is missing or empty` on
+   both `POST /tasks` and `PUT /tasks/:id/name`; the fake accepted an empty
+   name and threw a null check on a missing one. Fixed by a `_name(body)`
+   that mirrors `requireName`, validation on the trimmed value and the
+   *untrimmed* name stored — which was itself a drift (the fake trimmed, the
+   server does not).
+4. **The seed, 5 rows against 3 — deliberate, and now recorded as such.** The
+   server's five are the demo's shop window (four projects, spread progress,
+   one unsynced row so the header's count is not "all of them"); the fake's
+   three are a fixture whose every row is named for the case that uses it and
+   short enough that a `find.text` is unambiguous in a test viewport. Aligning
+   them would mean rewriting sixteen widget tests or shrinking the demo, and
+   nothing depends on the two agreeing: no screen, query or end-to-end spec
+   names a seed row, which is why the e2e suite creates its own tasks. The
+   case takes the expected rows per target and asserts what both *do*
+   guarantee — distinct ids, at least one unsynced row, more than one project.
+5. **A bare `Timer` with an empty `close()`** — the reminder scheduler's timer
+   was owned by nobody, so it outlived the adapter and fired into whatever
+   came next. Fixed: the fake keeps its outstanding confirmations and `close()`
+   cancels them. This is the one hazard the documented widget-test teardown
+   (ADR-0002) cannot reach, because the timer is not the client's.
+
+**The sixth the test found, which nobody had named: every write to an id the
+backend does not have.** The server runs `requireTask` first, so a rename, a
+reminder or a delete against a missing id is a 404 and nothing else happens.
+The fake broke on the first two (`tasks[id]!`, reported as *"The server is
+unreachable"*), and on the third it **answered as though the task had been
+there and consumed an attempt of the every-second-delete script** — flipping
+the parity the demo, its widget tests and its e2e specs all rely on being
+deterministic. Three more came out of the same pass: a created task's
+server-owned fields (`progress` 0 / `estimate` 1 on the server, 40 / 1.5 in
+the fake, which seeded and created through one helper), an unknown `priority`
+(normalised to `normal` on the server, echoed back by the fake), and a search
+needle with surrounding space (the server trims, the fake did not). All fixed
+in the fake; the server was not touched.
+
+**Proven against the real server, not only the fake.** The server leg was run
+locally on a fresh `examples/task_manager/server` — green with the shipped
+latencies (37 s) and with them zeroed — and CI now runs it: a second step in
+the `e2e` job's `task_manager` leg, on port 5177 because Playwright starts its
+own backend on 5174 two steps later. A negative check for the leg's worth:
+changing the server's `Task not found` to `Task missing` fails **five** server
+cases.
+
+**What proves the behaviour did not change.** The task manager's **16** widget
+tests pass unmodified — not one line of `acceptance_test.dart` moved — and
+each fake change was checked against them rather than assumed: none asserts on
+a 404's text, a created task's progress or estimate, a search with spaces, or
+a delete of an id that is not there, and the detail screen already trimmed a
+rename before sending it. The 9 Playwright specs talk to the express server
+only, which this ticket did not touch. Suite counts: task manager 16 → **16 +
+15** (the contract test's fake leg; 29 with a server), showcase 217, core 589,
+binding 123, all green; `dart analyze --fatal-infos` and `dart format` clean.

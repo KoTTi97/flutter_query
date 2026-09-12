@@ -128,8 +128,9 @@ jobs:
   # against its real express backend, driven by Playwright. The task manager
   # (examples/task_manager/e2e) runs against its own express backend; the
   # showcase (examples/showcase/e2e) against its own scenario-isolated
-  # backend, and that leg also runs the backend contract test against the
-  # real server, which is what proves the widget tests' fake mirrors it.
+  # backend. Both legs also run their app's backend contract test against the
+  # real server, which is what proves the widget tests' fake mirrors it — the
+  # `gates` job runs the same file against the fake alone.
   e2e:
     runs-on: ubuntu-latest
     strategy:
@@ -167,6 +168,17 @@ jobs:
           for i in $(seq 1 50); do curl -sf localhost:5176/api/__scenario/probe/requests > /dev/null && break; sleep 0.2; done
           SHOWCASE_SERVER=http://localhost:5176/api flutter test test/backend_contract_test.dart
         working-directory: examples/showcase
+      # On a port of its own: Playwright starts the demo's backend on 5174
+      # itself two steps down, and in CI it refuses to reuse a running one.
+      # The latency knobs exist for exactly this — the contract is what the
+      # routes answer, not how long they take about it.
+      - name: backend contract against the real server
+        if: matrix.app == 'task_manager'
+        run: |
+          (cd server && PORT=5177 LIST_LATENCY=0 DETAIL_LATENCY=0 WRITE_LATENCY=0 CONFIRM_AFTER=300 node server.ts &)
+          for i in $(seq 1 50); do curl -sf localhost:5177/api/tasks > /dev/null && break; sleep 0.2; done
+          TASK_MANAGER_SERVER=http://localhost:5177/api flutter test test/backend_contract_test.dart
+        working-directory: examples/task_manager
       - name: playwright
         run: npm ci && npx playwright install --with-deps chromium
         working-directory: examples/${{ matrix.app }}/e2e

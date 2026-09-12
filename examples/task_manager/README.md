@@ -123,6 +123,31 @@ its JSON, its error handling and its cancellation are all exercised. Pointing
 the same app at the express backend is then a smoke test rather than a leap of
 faith.
 
+### The contract test
+
+"An in-memory stand-in for the server" is a claim, and
+[`test/backend_contract_test.dart`](test/backend_contract_test.dart) is what
+checks it: fourteen cases, run against the fake, and — with the server running
+and `TASK_MANAGER_SERVER` naming it — against the server too.
+
+```bash
+cd server && npm ci && npm run dev          # port 5174
+```
+
+```bash
+TASK_MANAGER_SERVER=http://localhost:5174/api flutter test test/backend_contract_test.dart
+```
+
+Without the variable the server leg skips, so a plain `flutter test` still
+passes; CI runs both legs in the `e2e` job. It exists because the two had
+drifted apart in six places — a 404's wording, a non-boolean `reminder`, an
+empty or missing `name`, a new task's server-owned fields, a search's
+whitespace, and every write to an id the backend does not have — and every
+widget test that touched one of those was asserting fiction
+([#54](https://github.com/KoTTi97/flutter_query/issues/54)). Where the two
+differ *deliberately* — the seed is three rows here and five on the server, for
+reasons the case gives — the case asserts the difference instead of hiding it.
+
 ### End-to-end, in the browser
 
 [`e2e/`](e2e/) is a [Playwright](https://playwright.dev) project. It starts the

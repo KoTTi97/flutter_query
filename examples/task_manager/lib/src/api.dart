@@ -4,6 +4,17 @@
 /// The key factory below is the other half of it: every query key in this app
 /// is minted there, so "which keys exist" has one answer and prefix
 /// invalidation has stable anchors.
+///
+/// **The dio plumbing here is also in the showcase, and that is deliberate.**
+/// [defaultBackendBaseUrl], [BackendException], the `BaseOptions`, the
+/// cancellation bridge and the error unwrapping are near enough line for line
+/// `examples/showcase/lib/shared/api.dart`. An example is read, not depended
+/// on, and "how do I wire dio to this?" is the part a reader most wants to
+/// lift out whole — putting it in a package both examples import would hide
+/// it behind a workspace row and an import. What keeps each copy honest is
+/// not a common ancestor but `test/backend_contract_test.dart`: one list of
+/// cases, run against this app's fake *and* against its real server
+/// (https://github.com/KoTTi97/flutter_query/issues/52).
 library;
 
 import 'dart:convert';
