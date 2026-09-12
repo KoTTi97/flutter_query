@@ -61,7 +61,9 @@ select: (data) => (
 ## `buildWhen`
 
 On every builder — `QueryBuilder`, `QuerySelectBuilder`,
-`InfiniteQueryBuilder`, `MutationBuilder`:
+`InfiniteQueryBuilder`, `MutationBuilder` — and on the two keyless reads:
+`watchQuery`, `watchSelectQuery`, `watchInfiniteQuery`, `context.query`,
+`context.selectQuery`, `context.infiniteQuery`.
 
 ```dart
 QueryBuilder<Task>(
@@ -71,10 +73,23 @@ QueryBuilder<Task>(
 )
 ```
 
+```dart
+final task = context.query(
+  taskQuery(id),
+  buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
+);
+```
+
 It is upstream's `notifyOnChangeProps`, expressed as a function of two results.
+The same predicate, the same semantics and the same implementation in all six
+places — the difference is only *whose* rebuild it decides. A builder's is its
+own subtree, because a builder reads exactly one query. A keyless read's is
+per read, and its reader is the whole widget or the whole `State`: several
+reads each filter their own query, and a change any one of them lets through
+rebuilds the reader.
 
 :::note `previous` is what was built, not what was seen
-`previous` is the result the builder last **built**, not the last one it saw. A
+`previous` is the result the reader last **built**, not the last one it saw. A
 result `buildWhen` skipped is not remembered, so the next comparison is against
 what is actually on screen.
 
@@ -83,8 +98,35 @@ That is the documented semantics of the field, and it is the **opposite** of
 it was built.
 :::
 
-The other three call styles have no `buildWhen`. With them, `select` is the
-tool.
+An equal result is skipped before the predicate is even asked, so `buildWhen`
+only ever sees a real change. The one exception is an infinite query, whose
+paging flags live beside the result: a fetch that moves only those rebuilds
+regardless, because there is nothing there for a predicate over results to
+compare and the reader is showing the stale half.
+
+### A controller has none, on purpose
+
+`QueryController` takes no `buildWhen`, and that is not a fourth exception to
+the four styles being equal. A controller **is** the notifier: a predicate on
+it would impose one listener's filter on every listener of it. What it gives
+instead is the guarantee underneath — it notifies only when something a reader
+can see has actually moved, so a `ValueListenableBuilder` over one never
+rebuilds for a notification carrying what it is already showing, not even for
+the fetch its own subscription started. Past that, a controller is a
+`ValueListenable`, so filtering is composition: hold the last value your
+listener acted on and compare, or wrap it in whatever your state-management
+package offers for a listenable.
+
+### `QueriesBuilder` has none either
+
+A collection has no one result to filter on: a predicate over a whole
+`List<QueryResult>` would fire for any query in the list and say nothing about
+which. `QueriesBuilder` is not one of the four call styles and has no keyless
+twin, so there is no inequality to close — and a reader who wants per-query
+filtering has it already, by reading each query with its own `QueryBuilder` or
+`context.query`, each with its own `buildWhen`. It makes the other half of the
+guarantee: the collection notifies only when a result in it actually moved,
+compared element by element.
 
 ## Why not upstream's trick
 

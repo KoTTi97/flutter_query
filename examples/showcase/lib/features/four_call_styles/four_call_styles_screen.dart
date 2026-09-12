@@ -318,9 +318,9 @@ class _BuilderCard extends StatelessWidget {
       builder: (context, posts) => _ReaderCard(
         title: '2. QueryBuilder',
         code: 'QueryBuilder<List<Post>>(options: …, builder: …)',
-        note: 'The only style with buildWhen, the port\'s answer to '
-            'notifyOnChangeProps. This one does not use it, so it rebuilds '
-            'like the rest.',
+        note: 'Takes buildWhen, the port\'s answer to notifyOnChangeProps — '
+            'as context.query and watchQuery do since C49. This one does not '
+            'use it, so it rebuilds like the rest.',
         name: 'builder',
         result: posts,
         builds: builds.next(),

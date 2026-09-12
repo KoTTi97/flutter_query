@@ -69,6 +69,20 @@ class _BuilderReader extends StatelessWidget {
       );
 }
 
+/// Two loops, on purpose: they are two *documented* behaviours, not one
+/// behaviour the styles disagree about.
+///
+/// A keyless read has no identity of its own — upstream's `useQuery` takes one
+/// from hook call order, and map #1 ruled `flutter_hooks` out as a
+/// requirement — so a read is identified by its key and types unless the
+/// caller supplies an `id:`. That is the same trade that makes `watchQuery`
+/// inside an `if` legal, and C49 kept it
+/// (https://github.com/KoTTi97/flutter_query/issues/55, item 2): the loop
+/// below with an `id:` pins that the observer *follows* the key, so
+/// `PlaceholderData.compute((previous, _) => previous)` has a previous; the
+/// second loop pins that without one, a new key is a new read. A builder and a
+/// controller need no `id:` because the widget and the object *are* the
+/// identity, which is why `QueryBuilder` appears only in the first loop.
 void main() {
   for (final (name, reader) in <(String, Widget Function(int))>[
     ('context.query with an id', (n) => _ContextReader(n, id: 'page')),

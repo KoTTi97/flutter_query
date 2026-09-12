@@ -16,6 +16,8 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:query_kit/query_kit.dart';
 
+import 'notify_gate.dart';
+
 /// A controller whose readers have to compare more than its `value`.
 ///
 /// A `QueryResult` is the whole of what a plain query shows, so every reading
@@ -113,6 +115,9 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// inside that subscription's own notification does not make a second one.
   bool _subscribing = false;
 
+  /// What the listeners have already seen; see [NotifyGate].
+  final NotifyGate<Object?> _gate = NotifyGate<Object?>.byValue();
+
   /// The observer underneath, for the operations the controller does not
   /// mirror (`refetch`, `currentQuery`).
   QueryObserver<TQueryData, TData> get observer => _observer;
@@ -176,6 +181,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
       return;
     }
     _subscribing = true;
+    _gate.seed(observedStateOf(this));
     final void Function() unsubscribe;
     try {
       unsubscribe = _observer.subscribe(
@@ -204,11 +210,13 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   }
 
   /// Delivered through the notify manager, so it can land after the frame
-  /// that was building — or after the controller went away.
+  /// that was building — or after the controller went away. Dropped when it
+  /// carries the state the listeners already have ([NotifyGate]).
   void _notify() {
-    if (!_disposed && hasListeners) {
-      notifyListeners();
+    if (_disposed || !hasListeners || !_gate.moved(observedStateOf(this))) {
+      return;
     }
+    notifyListeners();
   }
 
   @override
@@ -391,6 +399,10 @@ class MutationController<TData, TVariables, TOnMutateResult>
   /// listener added from inside the first notification races it.
   bool _subscribing = false;
 
+  /// See [QueryController] on the same field, and [NotifyGate].
+  final NotifyGate<MutationResult<TData, TVariables>> _gate =
+      NotifyGate<MutationResult<TData, TVariables>>.byValue();
+
   /// The observer underneath, for what the controller does not mirror — the
   /// defaulted `options` it runs with, for one.
   MutationObserver<TData, TVariables, TOnMutateResult> get observer =>
@@ -452,6 +464,7 @@ class MutationController<TData, TVariables, TOnMutateResult>
       return;
     }
     _subscribing = true;
+    _gate.seed(value);
     final void Function() unsubscribe;
     try {
       unsubscribe = _observer.subscribe(
@@ -477,10 +490,13 @@ class MutationController<TData, TVariables, TOnMutateResult>
     }
   }
 
+  /// See [QueryController] on the same method: dropped when it carries the
+  /// result the listeners already have ([NotifyGate]).
   void _notify() {
-    if (!_disposed && hasListeners) {
-      notifyListeners();
+    if (_disposed || !hasListeners || !_gate.moved(value)) {
+      return;
     }
+    notifyListeners();
   }
 
   @override

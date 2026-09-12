@@ -32,9 +32,11 @@
 /// * **The rebuild decision.** What a read records and when a notification is
 ///   worth a frame is [ReadEntry], which the builder widgets watch their one
 ///   controller through as well (C48,
-///   https://github.com/KoTTi97/flutter_query/issues/57). #58's `buildWhen:`
-///   for the keyless styles is `ReadEntry.read`'s existing argument, threaded
-///   through the three `read*` methods below.
+///   https://github.com/KoTTi97/flutter_query/issues/57). The `buildWhen:`
+///   the two keyless styles gained with C49
+///   (https://github.com/KoTTi97/flutter_query/issues/55) is that entry's own
+///   argument: the two query reads below take one and hand it over, so all
+///   four call styles filter through one implementation.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -108,8 +110,9 @@ class ReadSet {
   QueryResult<TData> readQuery<TQueryData, TData>(
     QueryClient client,
     QueryObserverOptionsBase<TQueryData, TData> options,
-    Object? id,
-  ) {
+    Object? id, {
+    BuildWhen<QueryResult<TData>>? buildWhen,
+  }) {
     final identity = id == null
         ? (options.queryKey, TQueryData, TData)
         : (#query, TQueryData, TData, id);
@@ -124,7 +127,8 @@ class ReadSet {
     // observer itself decides whether anything actually changed, and options
     // built inline carry a fresh closure every build anyway.
     controller.setOptions(options);
-    final result = entry.read() as QueryResult<TData>;
+    final result =
+        entry.read(buildWhen: _erased(buildWhen)) as QueryResult<TData>;
     debugCheckRepeatRead(repeat, before, result, identity, who);
     return result;
   }
@@ -135,8 +139,9 @@ class ReadSet {
       readInfiniteQuery<TPageData, TPageParam, TData>(
     QueryClient client,
     InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
-    Object? id,
-  ) {
+    Object? id, {
+    BuildWhen<QueryResult<TData>>? buildWhen,
+  }) {
     final identity = id == null
         ? (options.queryKey, TPageData, TPageParam, TData)
         : (#infinite, TPageData, TPageParam, TData, id);
@@ -155,7 +160,7 @@ class ReadSet {
     debugCheckRepeatRead(
       repeat,
       before,
-      entry.read() as QueryResult<TData>,
+      entry.read(buildWhen: _erased(buildWhen)) as QueryResult<TData>,
       identity,
       who,
     );
@@ -216,6 +221,19 @@ class ReadSet {
     entry.read();
     return controller;
   }
+
+  /// A caller's predicate as the untyped entries take it.
+  ///
+  /// One set holds a query's, an infinite query's and a mutation's controller
+  /// side by side, so its entries are `ReadEntry<Object?>` and a
+  /// `BuildWhen<QueryResult<TData>>` is not one of theirs — function types are
+  /// contravariant in their parameters. The casts are safe by construction:
+  /// an entry only ever compares values it read from the controller this read
+  /// just typed.
+  static BuildWhen<Object?>? _erased<T>(BuildWhen<T>? buildWhen) =>
+      buildWhen == null
+          ? null
+          : (previous, current) => buildWhen(previous as T, current as T);
 
   _Entry _entryFor(
     Object identity,

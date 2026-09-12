@@ -122,11 +122,19 @@ A computed form is equal to another when its function is. Two tear-offs of
 one top-level, static or instance method compare equal, and a `const` value
 is one value; a closure written inline in `build` is a new function on every
 build, so options carrying one never compare as unchanged — every rebuild is
-a `setOptions`. That costs an options-updated event, not a restart: the
-observer compares the *resolved* values before it touches a timer, so an
-inline `StaleTime.dynamic` or `RefetchInterval.dynamic` does not reset a poll
-on every frame. Keep the functions stable when you want the options to read
-as unchanged — `select` and `queryFn` included.
+a `setOptions`.
+
+**That costs one defaulting pass and nothing else.** The comparison that
+decides whether anything happens is one layer down and is by value:
+`setOptions` resolves the defaults first and compares the **defaulted**
+options, and only a real difference emits an options-updated event or triggers
+a fetch. Timers go further still — the observer compares the *resolved* values
+before it touches one, so an inline `StaleTime.dynamic` or
+`RefetchInterval.dynamic` does not reset a poll on every frame. So an options
+literal written inline in `build` is not a leak and not a restart; hoisting it
+to a `static final` is a real optimisation, and a small one. Keep the
+functions stable when you want the options themselves to read as unchanged —
+`select` and `queryFn` included.
 
 While a query is retrying, `failureCount` and `failureReason` are on the
 result, so the UI can say "attempt 2 of 3" without owning a counter. A

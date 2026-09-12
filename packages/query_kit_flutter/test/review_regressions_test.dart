@@ -546,9 +546,20 @@ void main() {
         // build; the reentrant path needs the notification to land while
         // `subscribe` is still on the stack.
         ..notifyManager.setScheduler((callback) => callback());
-      final controller = QueryController<int, int>(
+      // `QueryController.observing`, whose `value` is the observer's current
+      // result rather than the optimistic one. Since C49 a controller drops a
+      // notification carrying what a listener arriving right now would
+      // already read (`_NotifyWhenMoved`), and a controller built from
+      // options reads that optimistically — straight from the cache — so the
+      // fixture below could no longer produce a notification at all. The
+      // reentrancy this pins is `QueryController.addListener`'s and is the
+      // same for either constructor.
+      final controller = QueryController<int, int>.observing(
         client,
-        QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+        QueryObserver<int, int>(
+          client,
+          QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+        ),
       );
       // Attach once and let go, then change the data behind the detached
       // observer: the next subscribe finds a changed result and notifies
@@ -1619,6 +1630,282 @@ void main() {
       expect(builds, 2);
     }, createClient: newClient);
   });
+
+  group('C49 the four styles made equal', () {
+    // `buildWhen` on the two keyless reads, and the notification a controller
+    // no longer passes on. Both from
+    // https://github.com/KoTTi97/flutter_query/issues/55; neither was
+    // reachable before, so nothing here is a rewrite of an older case.
+    for (final (name, reader) in <(String, _C49QueryReader)>[
+      ('QueryMixin.watchQuery', _C49MixinQuery.new),
+      ('context.query', _C49ContextQuery.new),
+    ]) {
+      queryWidgetTest('$name skips what its buildWhen rejects',
+          (tester, client) async {
+        var fetches = 0;
+        final builds = <String?>[];
+        final options = QueryObserverOptions<String>(
+          queryKey: key,
+          queryFn: (_) async {
+            fetches++;
+            return 'a';
+          },
+        );
+        await tester.pumpApp(client, reader(options, builds));
+        await tester.pumpAndSettle();
+        expect(builds, <String?>[null, 'a']);
+
+        // The same data, fetched again: `dataUpdatedAt` and `fetchStatus`
+        // moved, so `QueryResult ==` says the result changed — which is
+        // exactly the change `select` cannot narrow away — and the data did
+        // not.
+        await client.refetchQueries(filters: QueryFilters(queryKey: key));
+        await tester.pumpAndSettle();
+        expect(fetches, 2);
+        expect(builds, <String?>[null, 'a']);
+      }, createClient: newClient);
+    }
+
+    for (final (name, reader) in <(String, _C49InfiniteReader)>[
+      ('QueryMixin.watchInfiniteQuery', _C49MixinInfinite.new),
+      ('context.infiniteQuery', _C49ContextInfinite.new),
+    ]) {
+      queryWidgetTest('$name skips what its buildWhen rejects',
+          (tester, client) async {
+        var fetches = 0;
+        final builds = <String>[];
+        final options = InfiniteQueryObserverOptions<List<String>, int>(
+          queryKey: key,
+          initialPageParam: 0,
+          pageFn: (context) async {
+            fetches++;
+            return <String>['p${context.pageParam}'];
+          },
+          getNextPageParam: (_, __, lastParam, ___) => lastParam + 1,
+        );
+        await tester.pumpApp(client, reader(options, builds));
+        await tester.pumpAndSettle();
+        expect(builds, <String>['null', '[[p0]]']);
+
+        await client.refetchQueries(filters: QueryFilters(queryKey: key));
+        await tester.pumpAndSettle();
+        expect(fetches, 2);
+        expect(builds, <String>['null', '[[p0]]']);
+      }, createClient: newClient);
+    }
+
+    queryWidgetTest(
+        'a ValueListenableBuilder over a controller does not rebuild for '
+        'the fetch it started', (tester, client) async {
+      final fetch = Completer<String>();
+      final builds = <String?>[];
+      final controller = QueryController.create<String>(
+        client,
+        QueryObserverOptions<String>(
+            queryKey: key, queryFn: (_) => fetch.future),
+      );
+      try {
+        await tester.pumpApp(
+          client,
+          ValueListenableBuilder<QueryResult<String>>(
+            valueListenable: controller,
+            builder: (_, result, __) {
+              builds.add(result.dataOrNull);
+              return Text('${result.dataOrNull}');
+            },
+          ),
+        );
+        // The builder read the optimistic result — `fetching`, because a
+        // listener was about to start the fetch — and the observer's report
+        // of that very fetch lands after the frame carrying the same thing.
+        for (var i = 0; i < 3; i++) {
+          await tester.pump();
+        }
+        expect(builds, <String?>[null]);
+
+        fetch.complete('abcd');
+        await tester.pumpAndSettle();
+        expect(builds, <String?>[null, 'abcd']);
+      } finally {
+        controller.dispose();
+      }
+    }, createClient: newClient);
+
+    queryWidgetTest(
+        'a QueriesBuilder does not rebuild for the fetches it '
+        'started', (tester, client) async {
+      final fetch = Completer<String>();
+      final builds = <String>[];
+      await tester.pumpApp(
+        client,
+        QueriesBuilder<String, String>(
+          queries: <QueryObserverOptions<String>>[
+            QueryObserverOptions<String>(
+              queryKey: key,
+              queryFn: (_) => fetch.future,
+            ),
+          ],
+          builder: (_, results) {
+            builds.add('${results.single.dataOrNull}');
+            return Text('${results.single.dataOrNull}');
+          },
+        ),
+      );
+      for (var i = 0; i < 3; i++) {
+        await tester.pump();
+      }
+      expect(builds, <String>['null']);
+
+      fetch.complete('abcd');
+      await tester.pumpAndSettle();
+      expect(builds, <String>['null', 'abcd']);
+    }, createClient: newClient);
+
+    queryWidgetTest(
+        'a MutationController told twice in one batch notifies once',
+        (tester, client) async {
+      final controller = MutationController<int, int, void>(
+        client,
+        MutationOptions<int, int, void>(mutationFn: (v) async => v),
+      );
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      try {
+        // Two states inside one batch: both notifications are held to the
+        // flush, and both read the same settled result when they run.
+        client.notifyManager.batch(() {
+          controller
+            ..mutate(1)
+            ..mutate(2);
+        });
+        await tester.pumpAndSettle();
+        expect(controller.value.dataOrNull, 2);
+        expect(notifications, 2);
+      } finally {
+        controller.dispose();
+      }
+    }, createClient: newClient);
+
+    queryWidgetTest(
+        'a MutationStateController told twice in one batch notifies once',
+        (tester, client) async {
+      final states = MutationStateController<MutationStatus>(
+        client,
+        select: (mutation) => mutation.state.status,
+      );
+      var notifications = 0;
+      states.addListener(() => notifications++);
+      final first = MutationController<int, int, void>(
+        client,
+        MutationOptions<int, int, void>(mutationFn: (v) async => v),
+      );
+      final second = MutationController<int, int, void>(
+        client,
+        MutationOptions<int, int, void>(mutationFn: (v) async => v),
+      );
+      try {
+        client.notifyManager.batch(() {
+          first.mutate(1);
+          second.mutate(2);
+        });
+        await tester.pumpAndSettle();
+        expect(states.value,
+            <MutationStatus>[MutationStatus.success, MutationStatus.success]);
+        expect(notifications, 2);
+      } finally {
+        first.dispose();
+        second.dispose();
+        states.dispose();
+      }
+    }, createClient: newClient);
+  });
+}
+
+/// The two keyless styles reading one query with a `buildWhen`.
+typedef _C49QueryReader = Widget Function(
+  QueryObserverOptions<String> options,
+  List<String?> builds,
+);
+
+/// The same, for an infinite query.
+typedef _C49InfiniteReader = Widget Function(
+  InfiniteQueryObserverOptions<List<String>, int> options,
+  List<String> builds,
+);
+
+bool _dataChanged(QueryResult<String> previous, QueryResult<String> current) =>
+    previous.dataOrNull != current.dataOrNull;
+
+bool _pagesChanged(
+  QueryResult<InfiniteData<List<String>, int>> previous,
+  QueryResult<InfiniteData<List<String>, int>> current,
+) =>
+    '${previous.dataOrNull?.pages}' != '${current.dataOrNull?.pages}';
+
+class _C49ContextQuery extends StatelessWidget {
+  const _C49ContextQuery(this.options, this.builds);
+
+  final QueryObserverOptions<String> options;
+  final List<String?> builds;
+
+  @override
+  Widget build(BuildContext context) {
+    final result = context.query(options, buildWhen: _dataChanged);
+    builds.add(result.dataOrNull);
+    return Text('${result.dataOrNull}');
+  }
+}
+
+class _C49MixinQuery extends StatefulWidget {
+  const _C49MixinQuery(this.options, this.builds);
+
+  final QueryObserverOptions<String> options;
+  final List<String?> builds;
+
+  @override
+  State<_C49MixinQuery> createState() => _C49MixinQueryState();
+}
+
+class _C49MixinQueryState extends State<_C49MixinQuery> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final result = watchQuery(widget.options, buildWhen: _dataChanged);
+    widget.builds.add(result.dataOrNull);
+    return Text('${result.dataOrNull}');
+  }
+}
+
+class _C49ContextInfinite extends StatelessWidget {
+  const _C49ContextInfinite(this.options, this.builds);
+
+  final InfiniteQueryObserverOptions<List<String>, int> options;
+  final List<String> builds;
+
+  @override
+  Widget build(BuildContext context) {
+    final feed = context.infiniteQuery(options, buildWhen: _pagesChanged);
+    builds.add('${feed.value.dataOrNull?.pages}');
+    return Text('${feed.value.dataOrNull?.pages}');
+  }
+}
+
+class _C49MixinInfinite extends StatefulWidget {
+  const _C49MixinInfinite(this.options, this.builds);
+
+  final InfiniteQueryObserverOptions<List<String>, int> options;
+  final List<String> builds;
+
+  @override
+  State<_C49MixinInfinite> createState() => _C49MixinInfiniteState();
+}
+
+class _C49MixinInfiniteState extends State<_C49MixinInfinite> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final feed = watchInfiniteQuery(widget.options, buildWhen: _pagesChanged);
+    widget.builds.add('${feed.value.dataOrNull?.pages}');
+    return Text('${feed.value.dataOrNull?.pages}');
+  }
 }
 
 class _A21Reader extends StatelessWidget {

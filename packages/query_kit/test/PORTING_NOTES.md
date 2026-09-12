@@ -2970,3 +2970,124 @@ elides the private mixins). The core is untouched (587).
 `read*` methods. The predicate, the equality that answers before it and the
 paging-flags exception are now one implementation for all four call styles, so
 #58 writes the wiring rather than the decision.
+
+### C49 — the four call styles, made equal ([#55](https://github.com/KoTTi97/flutter_query/issues/55), [#58](https://github.com/KoTTi97/flutter_query/issues/58))
+
+[#55](https://github.com/KoTTi97/flutter_query/issues/55) measured the four
+asymmetries against the ruling that the call styles are **equal alternatives
+with no default** ([#21](https://github.com/KoTTi97/flutter_query/issues/21))
+and found two bugs, one honest price and one cost by design. This is the row
+for applying them. Nothing here is a port question — the four styles are the
+binding's own shape — but the guarantee they now all make is upstream's:
+a reader is told when what it shows moved, and not otherwise.
+
+**What moved, in the binding.**
+
+- **`buildWhen:` on the two keyless reads.** `ReadSet.readQuery` and
+  `ReadSet.readInfiniteQuery` take one and hand it to `ReadEntry.read`, whose
+  named argument had been waiting since C48; `watchQuery`,
+  `watchSelectQuery`, `watchInfiniteQuery`, `context.query`,
+  `context.selectQuery` and `context.infiniteQuery` pass it through. One
+  private helper, `ReadSet._erased`, adapts a `BuildWhen<QueryResult<TData>>`
+  to the `BuildWhen<Object?>` an untyped entry takes — function types are
+  contravariant in their parameters, and one set holds a query's, an infinite
+  query's and a mutation's controller side by side. **Semantics unchanged and
+  shared**: an equal result is skipped before the predicate is asked, and an
+  infinite query whose paging flags moved alone rebuilds regardless. No new
+  mechanism: six public surfaces over the decision C48 had already made one.
+- **The controllers stop notifying when nothing moved.** `NotifyGate`
+  (`lib/src/notify_gate.dart`, not exported) holds what a controller's
+  listeners have already seen; `QueryController` — and `InfiniteQueryController`
+  through it, `observedState` and all — `MutationController`,
+  `QueriesController` and `MutationStateController` each seed it with what a
+  listener arriving right now would read, *before* subscribing, and drop a
+  notification that carries the same thing again. Composition, not a mixin:
+  the four share no superclass beyond `ChangeNotifier`, and a mixin's members
+  would have had to be public to reach them.
+- **`QueriesBuilder`: decided, not extended.** It gets the "no rebuild for
+  nothing" half through `QueriesController`'s gate and **no `buildWhen`**. It
+  is not one of the four styles and has no keyless twin (there is no
+  `watchQueries`, no `context.queries`), so there is no inequality to close;
+  and a predicate over a whole `List<QueryResult>` would fire for any query in
+  the list and say nothing about which. Per-query filtering is already
+  expressible — read each query with its own builder or keyless read, each
+  with its own `buildWhen`. That supersedes C48's row above, which left the
+  question open.
+
+**Two notifications carry nothing, and both are real.** Measured, not assumed:
+the gate was instrumented to log every suppression and the three suites were
+run. `QueryController`'s gate fired **461** times and `QueriesController`'s
+**15**; the two mutation-side gates fired **zero** times, which is why each
+got a case of its own rather than a comment. The first kind is the
+notification the **first subscribe** provokes — a controller's `value` before
+anyone listens is the *optimistic* result, so the reader's first build already
+showed the fetch the observer then reports. The second is the **second of two
+notifications delivered in one flush**: `NotifyManager.schedule` queues inside
+a batch, so two states reached within one batch produce two callbacks that
+both read the same settled value. That second kind is what reaches the
+mutation controllers, whose observers already drop an equal result before
+notifying.
+
+**What was deliberately left.** `watchMutation` and `context.mutation` take no
+`buildWhen` while `MutationBuilder` does — #55 ruled on the two query reads
+and this row does not widen it; it is a one-line thread through
+`ReadSet.readMutation` for whoever takes it up. And `QueryController` takes
+none at all, which is not a fourth exception: a controller *is* the notifier,
+and a predicate on it would impose one listener's filter on every listener.
+
+**One existing test changed, and it was not pinning the bug.**
+`review_regressions_test.dart`'s F08/F09 case — "a listener that leaves inside
+its first notification unsubscribes" — built its synchronous first
+notification by attaching and detaching a controller, writing new data behind
+the detached observer, and re-subscribing. Under the new rule that is no
+longer a notification at all: a controller built from options reads
+optimistically, straight from the cache, so the state the gate seeds *is* the
+new data. The reentrancy the case pins (`QueryController.addListener` keeping
+no handle when its first notification removed the last listener) is untouched
+and still covered; only the fixture moved, to `QueryController.observing`,
+whose `value` is the observer's current result rather than the optimistic one.
+Its comment says so. **No other test in any suite changed** — the rest of the
+commit only appends.
+
+**Coverage came first, six times.** `C49 the four styles made equal` in
+`query_kit_flutter/test/review_regressions_test.dart`: `buildWhen` rejecting a
+refetch that brought back the same data, once per keyless style and once per
+shape (four cases); a `ValueListenableBuilder` over a `QueryController` not
+rebuilding for the fetch its own subscription started; a `QueriesBuilder` not
+rebuilding for the fetches it started; and a `MutationController` and a
+`MutationStateController` each told twice inside one `notifyManager.batch`.
+Each of the six branches was then disabled in turn — the two `buildWhen`
+hand-overs and the four gates — and each time exactly the cases naming it went
+red.
+
+**What proves the behaviour did not change:** the binding's 107 widget tests
+(115 with the eight new ones), the showcase's 217, the task manager's 16, the
+doc snippets' 2 and the core's 587, all green. `dart analyze --fatal-infos`
+and `dart format` clean; `dart doc` 0 warnings, 0 errors; the documentation
+site builds.
+
+**Documentation.** `reading-a-query.md` said "You want `buildWhen` | a builder;
+the other three use `select` instead" — false twice over, because
+`QueryResult`'s `==` includes `fetchStatus`, so a status-only change rebuilds
+a `select` reader and `select` cannot express `buildWhen`'s canonical case.
+That row and the sentence above it are corrected, `rebuilds.md` names all six
+places that take a predicate and says in its own sections why a controller and
+a `QueriesBuilder` take none, and `options.md` now says what an inline options
+literal actually costs: **one defaulting pass and nothing else**, because
+`setOptions` compares the *defaulted* options by value
+([#10](https://github.com/KoTTi97/flutter_query/issues/10)) and only a real
+difference reaches the query. `key_change_test.dart` gained a header comment
+saying why it runs two loops — two documented behaviours, not one difference
+the styles have yet to settle (#55 item 2 kept it). The new site sample is
+compiled in `examples/doc_snippets/`.
+
+**On the tag.** 0.1.0 is unpublished, so both halves were free. Had the tag
+gone out, `buildWhen:` would still have been additive and safe; the gate would
+have been a behaviour change needing a changelog line of the shape *"Fixed:
+`QueryController`, `InfiniteQueryController`, `MutationController`,
+`QueriesController` and `MutationStateController` no longer notify their
+listeners when neither the value nor the state observed beside it has moved —
+most visibly, a `ValueListenableBuilder` over a controller no longer rebuilds
+for the fetch its own subscription starts. A listener that relied on being
+called per observer event rather than per change should read `fetchStatus`,
+which is inside the equality."*

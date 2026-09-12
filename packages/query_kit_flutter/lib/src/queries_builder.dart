@@ -8,6 +8,20 @@ import 'queries_controller.dart';
 import 'query_client_provider.dart';
 
 /// Builds from independent query results in the same order as [queries].
+///
+/// **No `buildWhen`, and the rebuild decision is the controller's.** The four
+/// call styles all take a predicate over the one result they read (C49,
+/// https://github.com/KoTTi97/flutter_query/issues/55); this widget is not one
+/// of them and has no keyless twin — there is no `watchQueries` and no
+/// `context.queries` — so there is no inequality here to close. There is also
+/// no one result to filter on: a predicate over a whole `List<QueryResult>`
+/// would fire for any query in the collection and say nothing about which, and
+/// a reader who wants per-query filtering already has it by reading each query
+/// with its own [QueryBuilder] or `watchQuery`, each with its own `buildWhen`.
+/// What this widget *does* owe a reader is the other half — nothing rebuilds
+/// for a notification carrying what it is already showing — and that is made
+/// once, element-wise, in [QueriesController], so this state stays a plain
+/// `setState` on every notification it is told about.
 class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
   /// Owns a collection controller, bound to [client] or the nearest provider.
   const QueriesBuilder({

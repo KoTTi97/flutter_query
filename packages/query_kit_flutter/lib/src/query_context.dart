@@ -48,6 +48,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:query_kit/query_kit.dart';
 
+import 'query_builder.dart';
 import 'query_controller.dart';
 import 'read_set.dart';
 
@@ -69,28 +70,43 @@ extension QueryContext on BuildContext {
   /// `client:` here. Options built inline are re-applied on every build, as
   /// upstream re-applies them on every render; the observer decides what, if
   /// anything, actually changed.
+  ///
+  /// [buildWhen] narrows *when* this widget rebuilds, the same predicate a
+  /// builder takes ([QueryBuilder.buildWhen]): given the result the last build
+  /// showed and the one that just arrived, it says whether the change is worth
+  /// a frame. A result equal to the one last built is skipped before the
+  /// predicate is asked, so it only ever sees a real change. It is the tool
+  /// for the change `select` cannot narrow away — a background refetch moves
+  /// `fetchStatus` and `dataUpdatedAt`, and both are inside `QueryResult`'s
+  /// `==` (C49, https://github.com/KoTTi97/flutter_query/issues/55). Each read
+  /// has its own predicate, and any one of them letting a change through
+  /// rebuilds the whole widget: that is the grain a keyless read works at.
   QueryResult<TData> query<TData>(
     QueryObserverOptions<TData> options, {
     Object? id,
+    BuildWhen<QueryResult<TData>>? buildWhen,
   }) =>
-      _read<TData, TData>(options, id);
+      _read<TData, TData>(options, id, buildWhen);
 
   /// [query] for a query with a `select`: a [QuerySelectOptions], whose
   /// required `select` anchors [TData] (ADR-0001).
   QueryResult<TData> selectQuery<TQueryData, TData>(
     QuerySelectOptions<TQueryData, TData> options, {
     Object? id,
+    BuildWhen<QueryResult<TData>>? buildWhen,
   }) =>
-      _read<TQueryData, TData>(options, id);
+      _read<TQueryData, TData>(options, id, buildWhen);
 
   QueryResult<TData> _read<TQueryData, TData>(
     QueryObserverOptionsBase<TQueryData, TData> options,
     Object? id,
+    BuildWhen<QueryResult<TData>>? buildWhen,
   ) {
     final element = _scopeElement(this);
     final result = element
         .readsFor(this as Element)
-        .readQuery<TQueryData, TData>(element.client, options, id);
+        .readQuery<TQueryData, TData>(element.client, options, id,
+            buildWhen: buildWhen);
     dependOnInheritedWidgetOfExactType<QueryScope>();
     return result;
   }
@@ -102,16 +118,24 @@ extension QueryContext on BuildContext {
   /// final feed = context.infiniteQuery(feedQuery());
   /// if (feed.hasNextPage) feed.fetchNextPage();
   /// ```
+  ///
+  /// [buildWhen] compares the controller's results, as
+  /// [InfiniteQueryBuilder.buildWhen] does. A fetch that moves only the paging
+  /// flags — two fetches in opposite directions leave the result equal —
+  /// rebuilds regardless: there is nothing there for a predicate over results
+  /// to compare, and the reader is showing the stale half.
   InfiniteQueryController<TPageData, TPageParam, TData>
       infiniteQuery<TPageData, TPageParam, TData>(
     InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options, {
     Object? id,
+    BuildWhen<QueryResult<TData>>? buildWhen,
   }) {
     final element = _scopeElement(this);
     final controller = element
         .readsFor(this as Element)
         .readInfiniteQuery<TPageData, TPageParam, TData>(
-            element.client, options, id);
+            element.client, options, id,
+            buildWhen: buildWhen);
     dependOnInheritedWidgetOfExactType<QueryScope>();
     return controller;
   }

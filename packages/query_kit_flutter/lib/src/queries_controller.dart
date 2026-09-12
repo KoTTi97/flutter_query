@@ -4,6 +4,8 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:query_kit/query_kit.dart';
 
+import 'notify_gate.dart';
+
 /// An ordered query-result list, observed only while listeners are attached.
 class QueriesController<TQueryData, TData> extends ChangeNotifier
     implements ValueListenable<List<QueryResult<TData>>> {
@@ -18,6 +20,12 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
   void Function()? _unsubscribe;
   bool _disposed = false;
   bool _subscribing = false;
+
+  /// What the listeners have already seen; see [NotifyGate]. Element-wise,
+  /// because [value] is a `List` — identity, not value, equality — while the
+  /// `QueryResult`s in it carry `==`.
+  final NotifyGate<List<QueryResult<TData>>> _gate =
+      NotifyGate.elementWise<QueryResult<TData>>();
 
   @override
   List<QueryResult<TData>> get value => !_observer.hasListeners && !_disposed
@@ -36,11 +44,10 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
     super.addListener(listener);
     if (_unsubscribe != null || _disposed || _subscribing) return;
     _subscribing = true;
+    _gate.seed(value);
     try {
       final unsubscribe = _observer.subscribe((_) {
-        client.notifyManager.schedule(() {
-          if (!_disposed && hasListeners) notifyListeners();
-        });
+        client.notifyManager.schedule(_notifyIfMoved);
       });
       if (_disposed || !hasListeners) {
         unsubscribe();
@@ -50,6 +57,14 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
     } finally {
       _subscribing = false;
     }
+  }
+
+  /// Notifies only if a result in the collection moved — the same guarantee
+  /// the other controllers make, element-wise because the value is a list.
+  /// See [NotifyGate].
+  void _notifyIfMoved() {
+    if (_disposed || !hasListeners || !_gate.moved(value)) return;
+    notifyListeners();
   }
 
   @override
