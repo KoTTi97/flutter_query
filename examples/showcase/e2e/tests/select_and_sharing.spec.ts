@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, group, holdRequest, test } from './fixtures'
+import { expect, fact, factNumber, group, holdRequest, test } from './fixtures'
 
 // The five readers of the one entry, by the id of their semantics group.
 const readers = ['context', 'builder', 'mixin', 'controller', 'raw'] as const
@@ -14,13 +14,10 @@ type Counters = { builds: number; dataBuilds: number }
 /// A reader's two counters, read off its exact `builds=<n>` and
 /// `data builds=<n>` texts.
 async function counters(page: Page, id: Reader): Promise<Counters> {
-  const read = async (name: string) => {
-    const text = await reader(page, id)
-      .getByText(new RegExp(`^${name}=\\d+$`))
-      .textContent()
-    return Number(text!.slice(name.length + 1))
+  return {
+    builds: await factNumber(page, `reader ${id}`, 'builds'),
+    dataBuilds: await factNumber(page, `reader ${id}`, 'data builds'),
   }
-  return { builds: await read('builds'), dataBuilds: await read('data builds') }
 }
 
 async function snapshot(page: Page): Promise<Record<Reader, Counters>> {

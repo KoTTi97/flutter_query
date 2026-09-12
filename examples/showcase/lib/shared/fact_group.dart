@@ -18,6 +18,11 @@
 /// in either layer. Nothing derives a *label*: the names on screen are the
 /// names the suites already read, and none of them moved (C56, #51).
 ///
+/// The first of the showcase's three widget modules, split from the other two
+/// by what a test does with them (#69): everything here is something a test
+/// **reads**. What it presses is `controls.dart`; what it does neither to is
+/// `chrome.dart`.
+///
 /// The three widgets, smallest first:
 ///
 /// * [SemanticsGroup] — the group itself. Named or not.
@@ -26,10 +31,38 @@
 ///   fact list. A group that also carries a heading, a control or a nested
 ///   reader composes the other two instead of growing a parameter here.
 ///
+/// With them the two spellings a fact is printed in — [monoStyle] and
+/// [monoStyleSmall] — and [hhmmss], the one form a time takes when it becomes
+/// a fact's value.
+///
 /// `QueryDebugStrip` is a [SemanticsGroup] named `debug <label>` around a
 /// heading and a dense [FactList] — the one group that is about the *cache*
 /// rather than about the screen, which is why it stays its own widget in
 /// `debug_strip.dart` instead of being a call to [FactGroup].
+///
+/// **Three screens now write "a named group with a heading and some facts" and
+/// none of them is a copy of another (#69).** Counted: `select_and_sharing`'s
+/// `_ReaderRow` puts a two-column heading *inside* the group and its counts
+/// beside the facts as two `Pill`s; `build_when`'s `_ReaderRow` puts a
+/// one-line heading inside and its count *in* the fact list, as
+/// `builds=<n>`; `four_call_styles`' `_InfiniteRow` puts its heading
+/// **outside** the group, has no count at all, and admits a caller's widgets
+/// into the fact wrap. So the region they share is exactly
+/// `SemanticsGroup(name:) + FactList(...)` — which is this module — and what
+/// differs is every remaining line. A `FactRow` taking `heading`, `facts`,
+/// `counters`, `trailing`, `dense` and *where the heading goes* would be a
+/// wider interface than the three call sites put together, and deleting it
+/// again would bring nothing back: the shallow module the map warns about.
+///
+/// The rule this settles, because the README's "the third copy moves" cannot
+/// tell the two cases apart: **the third copy of the same lines moves; the
+/// third composition of the same vocabulary is the vocabulary working.** A
+/// fourth `_ReaderRow` is welcome. What would change the answer is two of them
+/// becoming line-identical — then the lines move, not the shape.
+///
+/// (`invalidation_and_filters`' `_ReaderRow<T>` shares only the name: it is a
+/// `ListenableBuilder` over a controller with a skeleton and a fetching pill,
+/// in no semantics group at all.)
 library;
 
 import 'package:flutter/material.dart';
@@ -45,6 +78,19 @@ const TextStyle monoStyle = TextStyle(fontFamily: 'monospace', fontSize: 13);
 /// rather than a handful.
 const TextStyle monoStyleSmall =
     TextStyle(fontFamily: 'monospace', fontSize: 12);
+
+/// The one spelling a time takes when it becomes a fact: `hh:mm:ss`, local.
+///
+/// Never a date and never a duration. Nothing in either suite asserts on a
+/// clock — what a test does with `dataUpdatedAt=12:03:44` is compare it with
+/// the reading before it — so what this owes them is only that two readings of
+/// the same instant are the same string. It belongs with the facts rather than
+/// with the controls it was swept in beside (#69).
+String hhmmss(DateTime at) {
+  final local = at.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+}
 
 /// One semantics group: its children stay nodes of their own, and a [name]
 /// makes it addressable from both test layers.

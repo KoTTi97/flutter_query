@@ -24,13 +24,25 @@ import 'routes.dart';
 import 'shared/api.dart';
 import 'shared/cache_stats.dart';
 import 'shared/scope.dart';
-import 'shared/theme.dart';
 
 /// Built with `--dart-define=E2E=true`, the app switches its semantics tree on
 /// from the start. Flutter web paints to a canvas, so that tree — rendered as
 /// `flt-semantics` DOM nodes with roles and labels — is the only thing a
 /// browser-driving test can see. It is what a screen reader would get.
 const bool _e2e = bool.fromEnvironment('E2E');
+
+/// The app's one theme.
+///
+/// Here rather than in `lib/shared/`: a `ThemeData` has exactly one caller —
+/// the [MaterialApp] below — and a module in `shared/` is something more than
+/// one feature calls (#69). What *is* shared is the theme given a shape, and
+/// that is `shared/chrome.dart`.
+ThemeData _showcaseTheme() => ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B5FFF)),
+      useMaterial3: true,
+      snackBarTheme:
+          const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    );
 
 void main() {
   if (_e2e) {
@@ -86,7 +98,7 @@ class _ShowcaseAppState extends State<ShowcaseApp> {
           child: MaterialApp(
             title: 'TanStack Query Showcase',
             debugShowCheckedModeBanner: false,
-            theme: buildShowcaseTheme(),
+            theme: _showcaseTheme(),
             initialRoute: widget.initialRoute ?? '/',
             onGenerateRoute: onGenerateRoute,
           ),

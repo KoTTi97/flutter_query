@@ -9,8 +9,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:showcase/features/load_more/load_more_screen.dart';
+import 'package:showcase/shared/chrome.dart';
 import 'package:showcase/shared/models.dart';
-import 'package:showcase/shared/theme.dart';
 
 import '../harness.dart';
 

@@ -90,6 +90,24 @@ export const group = (page: Page, name: string) => page.getByRole('group', { nam
 /// `fetchStatus=idle`, `fetches=2`.
 export const factIn = (page: Page, name: string, text: string) => group(page, name).getByText(text, { exact: true })
 
+/// The number a fact carries: `factNumber(page, 'reader mixin', 'builds')`
+/// reads `3` off the exact text `builds=3` inside that group.
+///
+/// The reading half of the same convention `factIn` serves, for the case a
+/// spec cannot spell as an exact text — a *delta*, where what is asserted is
+/// the number before plus what the action should have moved. Three specs wrote
+/// this out themselves and each one differently (#69).
+///
+/// `factIn` is still the right tool wherever the expected text is known: it
+/// retries into the frame, while a number read once races it. The pattern is
+/// anchored, so `data builds=1` is never read as `builds=1`.
+export async function factNumber(page: Page, name: string, key: string): Promise<number> {
+  const text = await group(page, name)
+    .getByText(new RegExp(`^${key}=\\d+$`))
+    .textContent()
+  return Number(text!.slice(key.length + 1))
+}
+
 /// The debug strip labelled `label`: the group named `debug <label>`, the one
 /// group that is about the cache rather than about the screen.
 export const strip = (page: Page, label: string) => group(page, `debug ${label}`)

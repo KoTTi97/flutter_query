@@ -68,6 +68,7 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/chrome.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/fact_group.dart';
@@ -75,7 +76,6 @@ import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
 import '../../shared/scope.dart';
-import '../../shared/theme.dart';
 
 const Feature buildWhenFeature = Feature(
   id: 'build-when',

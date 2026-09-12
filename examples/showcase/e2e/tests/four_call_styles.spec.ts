@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-import { expect, fact, factIn, group, holdRequest, test } from './fixtures'
+import { expect, fact, factIn, factNumber, group, holdRequest, test } from './fixtures'
 
 // Eight cards and three strips: taller than the default viewport, and a
 // lazily built list only has what is in view.
@@ -34,12 +34,7 @@ async function expectEveryReader(page: Page, text: string) {
 }
 
 /// How many times the card called `name` has built, read off the card.
-async function buildsOf(page: Page, name: string) {
-  const text = await group(page, `reader ${name}`)
-    .getByText(/^builds=\d+$/)
-    .textContent()
-  return Number(/builds=(\d+)/.exec(text ?? '')![1])
-}
+const buildsOf = (page: Page, name: string) => factNumber(page, `reader ${name}`, 'builds')
 
 async function buildsOfAll(page: Page) {
   const counts: Record<string, number> = {}

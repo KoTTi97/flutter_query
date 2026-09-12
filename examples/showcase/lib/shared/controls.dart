@@ -1,5 +1,4 @@
-/// The controls more than one feature screen drives itself with, and the clock
-/// they print times in.
+/// The controls a feature screen drives itself with.
 ///
 /// Every one of these was copied between feature directories until the
 /// review's C55 counted the copies: the toolbar four times, the action button
@@ -7,21 +6,18 @@
 /// between copies is a parameter here; what differed in kind — the knob that
 /// is one cell of a `Wrap` rather than a row of a stretched `Column` — is
 /// composed from [knobButton] instead of flagged.
+///
+/// The second of the showcase's three widget modules, split from the other two
+/// by what a test does with them (#69): every widget here is one a test
+/// **presses**, addressed by its role and its name. What a test *reads* is
+/// `fact_group.dart`, and what it does neither to is `chrome.dart`. The clock
+/// that used to sit here went with the facts it prints into: a timestamp is a
+/// fact's value, not a control.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'fact_group.dart';
-
-/// A local wall clock as `hh:mm:ss`.
-///
-/// Never a date and never a duration: a test asserts that two readings differ,
-/// not what either one is — nothing in the suites asserts on a clock.
-String hhmmss(DateTime at) {
-  final local = at.toLocal();
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
-}
 
 /// A row of buttons in one semantics group.
 ///

@@ -23,12 +23,12 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/chrome.dart';
 import '../../shared/debug_strip.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
 import '../../shared/scope.dart';
-import '../../shared/theme.dart';
 
 const Feature defaultQueryFunctionFeature = Feature(
   id: 'default-query-function',
@@ -234,7 +234,7 @@ class _DefaultQueryFunctionScreenState extends State<DefaultQueryFunctionScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 for (final comment in data)
-                  LabeledRow(comment.author, comment.text),
+                  _CommentRow(comment.author, comment.text),
                 const SizedBox(height: 4),
                 Text('comments=${data.length}'),
               ],
@@ -318,4 +318,33 @@ class _DefaultQueryFunctionScreenState extends State<DefaultQueryFunctionScreen>
         QueryError(staleData: final T data) =>
           body(data),
       };
+}
+
+/// One comment: its author in a fixed-width column, its text beside it.
+///
+/// Was `LabeledRow` in `lib/shared/`, where it had this one caller and no
+/// other — a module in `shared/` is something more than one feature calls, so
+/// it came home (#69).
+class _CommentRow extends StatelessWidget {
+  const _CommentRow(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: <Widget>[
+            SizedBox(
+              width: 140,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            ),
+            Expanded(child: Text(value)),
+          ],
+        ),
+      );
 }

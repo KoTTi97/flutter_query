@@ -40,17 +40,46 @@ it everywhere; the test says where you stopped.
 
 **`lib/shared/` is the deliberate exception to "self-contained".** Self-
 contained means a feature never reaches into another feature's directory, not
-that it re-types the app's own furniture: the backend client (`api.dart`), the
-models, the scope, the theme and `SectionCard`/`Pill`/`Notice`, the debug
-strip, `CacheListener` and its `PhaseSafeRebuild` mixin (`cache_listener.dart`),
-the `SemanticsGroup`/`FactGroup`/`FactList` a screen publishes its facts with
-and the `monoStyle` they print in (`fact_group.dart`), and the
-`Toolbar`/`ActionButton`/`knob` controls with the `hhmmss` format
-(`controls.dart`). The rule for adding to it: **the third copy
-moves.** Two screens that happen to look alike stay two screens — the fourth
-knob is a `Wrap` cell rather than a row of a stretched `Column`, so it composes
-`knobButton` itself and says why in its dartdoc, which is the shape to copy
-when a shared thing nearly fits.
+that it re-types the app's own furniture. Each file there is one subject, and
+these are the sentences:
+
+| Module | What it holds |
+|---|---|
+| `api.dart` | the one way to the backend: dio, the scenario header, every endpoint |
+| `models.dart` | what comes back over it |
+| `feature.dart` | what a screen says about itself — the catalogue's row |
+| `feature_scaffold.dart` | the frame around a screen: title, back, scenario, the intro |
+| `scope.dart` | how a screen is handed the api and the cache counters |
+| `cache_stats.dart` | what the cache has done since the app started, which a screen built later cannot have watched |
+| `cache_listener.dart` | *an event arrived and I do not know the scheduler phase*: `PhaseSafeRebuild`, and `CacheListener` for the eight sites whose event is the cache's |
+| `debug_strip.dart` | the facts of **one cache entry**, the only named group that is about the cache rather than about the screen |
+| `fact_group.dart` | how a screen tells a test what happened: `SemanticsGroup`/`FactList`/`FactGroup`, the one name they publish, the styles and `hhmmss` a fact is printed in |
+| `controls.dart` | how a screen is driven: `Toolbar`, `ActionButton`, `knob`/`knobButton` |
+| `chrome.dart` | what a screen is made of and what none of it means to a test: `SectionCard`, `Pill`, `Notice`, `SkeletonBox` |
+
+The last three are the three widget modules, and they are split by **what a
+test does with the widget** — it reads a fact group, it presses a control, it
+does neither to chrome — not by which ticket happened to need it.
+
+**What earns a file, or a member, a place here.** The standard is
+`cache_listener.dart`: a seam with a name, behind which sits more than any
+caller wants to know.
+
+1. **One subject, sayable in one sentence without "and".** An "and" that is a
+   *layering* is still one subject — `CacheListener` is built on
+   `PhaseSafeRebuild`. An "and" that is a *list* is two files.
+2. **Shared in fact: more than one feature calls it.** The app's `ThemeData`
+   has one caller and lives beside its `MaterialApp` in `main.dart`; a
+   label–value row had one caller and went home to it (#69).
+3. **The third copy of the same *lines* moves — the third *composition* of the
+   same vocabulary does not.** Three screens now build "a named group with a
+   heading and some facts" and no two of them share a line beyond
+   `SemanticsGroup` + `FactList`, which is already the module; a widget taking
+   every way they differ would have a wider interface than the three call
+   sites together. Two screens that merely look alike stay two screens — the
+   fourth knob is a `Wrap` cell rather than a row of a stretched `Column`, so
+   it composes `knobButton` itself and says why in its dartdoc, which is the
+   shape to copy when a shared thing nearly fits.
 
 | Feature | Shows | Upstream example |
 |---|---|---|
@@ -158,6 +187,10 @@ paints to a canvas, so the tests read the **semantics tree**, switched on by
   thing. Every locator goes through `group` / `factIn` in `tests/fixtures.ts`
   and every finder through `groupNamed` / `factIn` in the harness — nothing
   writes `getByRole('group', …)` or `find.byKey` for a group of its own.
+- **A delta is read with `factNumber(page, name, key)`**, not by slicing the
+  text yourself. Prefer `factIn` wherever the expected text is known: an exact
+  text retries into the frame, while a number read once races it — so read a
+  number only to compute the text you then assert.
 - A screen's **debug strip** is such a group, named `debug <label>`, whose
   facts are exact leaf texts: `fact(page, 'post', 'fetchStatus=idle')`. That is
   how a test reads the cache — whether a fetch happened, whether an entry is
@@ -192,7 +225,14 @@ Rules that cost someone a debugging session, in the order they bite:
   strip below a long list is never built, and neither a widget finder nor the
   browser can see it. Keep strips near the top, bound tall content in its own
   scroller, and widen the test window (`tester.view.physicalSize`,
-  `test.use({ viewport })`) when a screen is taller than the default.
+  `test.use({ viewport })`) when a screen is taller than the default. **That
+  size is a fact about the screen and stays in its own test file** — there is
+  deliberately no shared `tall()`: twenty-three widget-test files set the
+  window, sixteen of them behind a local function of that name, over
+  twenty-one different sizes from 800×900 to 2400×8400; nineteen specs set a
+  viewport of their own over eleven heights. A helper taking the size would be
+  the size with an import in front of it, and a helper *not* taking it would
+  be twenty-three wrong windows (#69).
 - **A lazy `ListView.builder` with a fixed `itemExtent` does not relayout when
   only the item count grows**, so rows appended by a "load more" can be
   unreachable in a widget test. An eager bounded `Column` is the honest fix.

@@ -4,8 +4,8 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:showcase/shared/api.dart';
+import 'package:showcase/shared/chrome.dart';
 import 'package:showcase/shared/models.dart';
-import 'package:showcase/shared/theme.dart';
 
 import '../harness.dart';
 

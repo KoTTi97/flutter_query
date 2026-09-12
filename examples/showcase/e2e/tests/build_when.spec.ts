@@ -8,7 +8,7 @@
 // landing are two separate moments — a notification that reached the same
 // frame as the one before it would be one rebuild, and then there would be
 // nothing to filter.
-import { expect, fact, factIn, group, holdRequest, test, type Page } from './fixtures'
+import { expect, fact, factIn, factNumber, group, holdRequest, test, type Page } from './fixtures'
 
 // Five cards, two strips and sixteen readers: taller than the default 720,
 // and the list that holds them is lazy — without this the mutation card is
@@ -31,12 +31,7 @@ const readerFact = (page: Page, member: Member, filtered: boolean, text: string)
   factIn(page, readerName(member, filtered), text)
 
 /// One reader's build counter, off its exact `builds=<n>` text.
-async function builds(page: Page, member: Member, filtered: boolean): Promise<number> {
-  const text = await group(page, readerName(member, filtered))
-    .getByText(/^builds=\d+$/)
-    .textContent()
-  return Number(text!.slice('builds='.length))
-}
+const builds = (page: Page, member: Member, filtered: boolean) => factNumber(page, readerName(member, filtered), 'builds')
 
 type Pair = { filtered: number; plain: number }
 

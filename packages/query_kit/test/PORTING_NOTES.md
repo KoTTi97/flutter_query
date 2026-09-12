@@ -3819,3 +3819,101 @@ reader *on this screen* that passes a predicate, and points at `build-when`.
 `rebuilds.md`'s "Seeing it" names the new screen as the page's other half; the
 catalogue counts in the root README and `website/docs/project/examples.md` go
 27 → 28.
+
+### C57 — `lib/shared/` split by ticket history rather than by seam ([#69](https://github.com/KoTTi97/flutter_query/issues/69))
+
+The one ticket of this map with **nothing duplicated to point at**: every file
+in `examples/showcase/lib/shared/` was already the only copy of what it holds.
+The question was what each module is *for*, measured against
+`cache_listener.dart` — the one file there that is a seam with a name rather
+than a bag of what a ticket happened to need.
+
+**What moved, and why each move is the same rule.** A module in `shared/` is
+one subject a feature reaches for; a member with one caller is not shared, it
+is misplaced.
+
+- `theme.dart` → **`chrome.dart`**, holding `SectionCard`, `Pill`, `Notice`,
+  `SkeletonBox`. Its library doc had said "the widgets every feature screen
+  shares, **and** the theme" — a list, not a layering, which is the difference
+  between `cache_listener.dart`'s "and" (`CacheListener` is built on
+  `PhaseSafeRebuild`) and a bag.
+- `buildShowcaseTheme` → `lib/main.dart`, beside the `MaterialApp` it
+  configures. One caller, always; 28 screens were importing a file of widgets
+  and `main.dart` was importing it for six lines of `ThemeData`.
+- `LabeledRow` → `default_query_function_screen.dart` as a private
+  `_CommentRow`. **One call site in the whole app.**
+- `hhmmss` → `fact_group.dart`. A timestamp is a fact's value, not a control;
+  its own dartdoc was already entirely about the test contract. This drops
+  `debug_strip.dart`'s and `max_pages_screen.dart`'s imports of
+  `controls.dart`, which were for the clock alone.
+
+**What the three widget modules now are**, and it is not "widgets, split three
+ways": `fact_group.dart` is what a test **reads**, `controls.dart` what it
+**presses**, `chrome.dart` what it does **neither** to — `SectionCard` opts out
+of being a semantic container, `SkeletonBox` excludes itself from the tree,
+`Pill` and `Notice` are leaf texts nothing addresses by name. Every class in
+`chrome.dart` reads `Theme.of(context)`, holds no state, takes no callback and
+publishes no name; that is the file's one sentence and it is checkable.
+
+**Three refusals, each measured rather than asserted.**
+
+1. **The third "reader row" does not move.** `select_and_sharing`'s
+   `_ReaderRow`, `four_call_styles`' `_InfiniteRow` and `build_when`'s
+   `_ReaderRow` are the README's own "third copy" trigger — and they share
+   **no line** beyond `SemanticsGroup(name:) + FactList(...)`, which is already
+   the module. The headings sit inside the group, inside the group, and
+   *outside* it; the build count is two `Pill`s, a `builds=<n>` fact, and
+   absent. A widget taking every way they differ (`heading`, `facts`,
+   `counters`, `trailing`, `dense`, and where the heading goes) would have a
+   wider interface than the three call sites put together. So the rule is
+   sharpened, in `fact_group.dart`'s dartdoc and in the README: **the third
+   copy of the same lines moves; the third composition of the same vocabulary
+   is the vocabulary working.** (A fourth class called `_ReaderRow`, in
+   `invalidation_and_filters`, shares only the name — it is a
+   `ListenableBuilder` in no semantics group at all.)
+2. **No shared `tall()` for the test window.** #68 reported "one viewport
+   shape in 25 widget-test files, one hand-rolled spec"; the count is **23
+   widget-test files setting `view.physicalSize`** — 16 behind a local function
+   of that name, 18 in the `tall`/`taller`/`tallest` family — over **21
+   different sizes** from 800×900 to 2400×8400, and **19 of 28 specs** setting
+   a viewport over 11 heights. Neither layer has a convention to twin: the size
+   is a fact about the screen. A helper taking it is the size with an import in
+   front of it. Recorded in the README beside the lazy-`ListView` rule.
+3. **`controls.dart` and `chrome.dart` do not merge.** An `ActionButton` has a
+   contract with the browser suite (the tooltip is excluded so the visible
+   label is the accessible name); a `Pill` has none. One 300-line file of
+   widgets would have no sentence.
+
+**One thing taken from the test side**, because `fact_group.dart`'s own doc
+names the two reading halves as part of the convention it publishes:
+`factNumber(page, name, key)` in `e2e/tests/fixtures.ts`, replacing three
+hand-rolled "read the digits off an exact `key=<n>` fact" helpers
+(`build_when`, `four_call_styles`, `select_and_sharing`) that had three
+different spellings of the same regex-and-slice. The widget layer needs no
+twin — it asserts exact texts and never reads a number out.
+
+**What proves the behaviour did not change:** showcase **238** widget tests
+(24 skipped) and **169** end-to-end against the real express backend in
+Chromium, both identical to the runs taken before anything was touched and
+**neither suite's case bodies modified** — the `e2e/` diff is three helper
+declarations and an import each. Task manager **31**; core **589** and binding
+**128** untouched, since no library code was touched at all. `dart analyze
+--fatal-infos packages examples tool` clean, `dart format
+--set-exit-if-changed …` clean, `npm run typecheck` clean in `e2e/`.
+
+**An end-to-end flake, watched rather than assumed.** Two of the first full
+runs on this branch failed one and then two cases of
+`e2e/tests/optimistic_updates.spec.ts` — a file this commit touches only in an
+import line. The same build then ran that spec **12/12** under
+`--repeat-each=3` and the whole suite **169 green twice consecutively**, and
+`c0a2ddc` itself was re-built and re-run (169 green) to have the comparison.
+The two cases assert exact request *counts* around a held write, so they are
+timing-sensitive by construction and the failure is load, not this change.
+Worth a ticket if it recurs.
+
+**Noted for a later map, not fixed here.** Four of the 23 widget-test files
+multiply their `physicalSize` by `tester.view.devicePixelRatio` and 19 do not,
+so the same `Size(800, 1800)` means two different logical windows depending on
+the file — a `test/` hygiene question, and normalising it would change what
+every one of those 102 call sites renders, which is the rewrite this map's
+invariant forbids.

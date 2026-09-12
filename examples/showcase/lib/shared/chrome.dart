@@ -1,14 +1,26 @@
-/// The few widgets every feature screen shares, and the theme.
+/// What a screen is made of, and what none of it means to a test.
+///
+/// The third of the showcase's three widget modules, and they are split by
+/// what a test does with them: it **reads** a `fact_group.dart` group by name,
+/// it **presses** a `controls.dart` button by name, and it does neither to
+/// anything here. That is not a coincidence of what each one looks like — it
+/// is what these four widgets are *for*, and each of them says so in its own
+/// doc: [SectionCard] opts out of being a semantic container so the texts
+/// inside it stay findable, [SkeletonBox] excludes itself from the tree
+/// altogether, and [Pill] and [Notice] are leaf texts a test may match but
+/// never addresses as a thing.
+///
+/// So the whole file is one sentence: the theme given a shape. Every class
+/// here is a `StatelessWidget` that reads `Theme.of(context)`, holds no state,
+/// takes no callback, and publishes no name to either test layer. A widget
+/// that wants any of those four is not chrome and belongs in one of the other
+/// two modules (#69).
+///
+/// The `ThemeData` itself is *not* here: it has exactly one caller and always
+/// will, so it lives beside the `MaterialApp` it configures in `main.dart`.
 library;
 
 import 'package:flutter/material.dart';
-
-ThemeData buildShowcaseTheme() => ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B5FFF)),
-      useMaterial3: true,
-      snackBarTheme:
-          const SnackBarThemeData(behavior: SnackBarBehavior.floating),
-    );
 
 /// A card with a heading, the unit every screen is laid out in.
 ///
@@ -127,31 +139,6 @@ class SkeletonBox extends StatelessWidget {
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(4),
           ),
-        ),
-      );
-}
-
-/// A label–value line.
-class LabeledRow extends StatelessWidget {
-  const LabeledRow(this.label, this.value, {super.key});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: <Widget>[
-            SizedBox(
-              width: 140,
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-            ),
-            Expanded(child: Text(value)),
-          ],
         ),
       );
 }
