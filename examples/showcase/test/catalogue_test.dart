@@ -5,8 +5,8 @@
 /// a row of [featureEntries], as `test/features/<id>_test.dart`, as
 /// `e2e/tests/<id>.spec.ts`, and as a row of the README's table. Nothing but a
 /// habit held them level, and the review counted 26/26/26/26 by hand (C59,
-/// https://github.com/KoTTi97/flutter_query/issues/66). It is 27 now, and the
-/// screen that made it 27 is exactly the drift this file is here to catch: a
+/// https://github.com/KoTTi97/flutter_query/issues/66). It is 28 now, and the
+/// screen that made it 28 is exactly the drift this file is here to catch: a
 /// feature added to four of the five is a silent hole — the catalogue entry
 /// with no end-to-end spec, the screen nobody routes to — and `onGenerateRoute`
 /// answering an unknown name with the home screen is what makes the last of

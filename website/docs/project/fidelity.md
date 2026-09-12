@@ -97,13 +97,22 @@ That is what [the examples](examples.md) are for.
 
 ## The numbers
 
+Measured on 2026-09-12 by running each suite, not by counting `test(` in the
+sources — which is the same rule the landing page follows, and the reason these
+two agree.
+
 | | |
 |---|---|
-| core | **586** tests, on the Dart VM and compiled to JavaScript |
-| binding | **98** tests, widget tests behind one harness |
-| showcase | **217** widget tests + **163** Playwright tests in Chromium |
+| core | **589** tests, on the Dart VM and compiled to JavaScript |
+| binding | **128** tests, widget tests behind one harness |
+| showcase | **214** widget tests + **169** Playwright tests in Chromium |
 | task manager | **16** widget tests + **9** Playwright tests |
-| contract | **17** cases, each run against the fake backend *and* the real server |
+| contract | **39** cases — 24 in the showcase, 15 in the task manager — each run against the fake backend *and* the real server |
+| doc snippets | **2** tests, the testing guide's teardown as code that runs |
+
+The showcase's `flutter test` reports 238: the 214 above plus the contract's
+24, which run against the fake in every checkout and against the real server
+only in the `e2e` job. The task manager's reports 31 the same way.
 
 Every push runs all of it, plus the analyzer at `--fatal-infos`, the formatter,
 `dart doc --validate-links`, both publish dry-runs, a web build of each example

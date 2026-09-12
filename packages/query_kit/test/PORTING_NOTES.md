@@ -3961,3 +3961,52 @@ task manager 16 → 31, and the only existing test whose behaviour moved was
 F08/F09's fixture, which had manufactured its first notification out of data
 the caller could already read — exactly what the C49 gate drops. The
 reentrancy it pins is untouched.
+
+## Documentation and coverage after map #49
+
+Map [#70](https://github.com/KoTTi97/flutter_query/issues/70). Where the maps
+before it worked on the port, this one works on what a reader of the port can
+see, and on the two places the browser suites structurally do not reach. One
+row per ticket, appended in the ticket's own commit.
+
+### Phase 0: the site's numbers were remembered, not measured ([#71](https://github.com/KoTTi97/flutter_query/issues/71))
+
+`website/README.md` states the rule — *"Numbers are measured, not remembered.
+The test counts on the landing page and in `docs/project/fidelity.md` come from
+actual runs. If you cannot re-measure one, do not restate it."* Three places
+were breaking it at once, and disagreeing with each other: the landing page
+said 549 / 84 / 370 / 155, `intro.md` said 586 / 98 / 233 + 172, and
+`fidelity.md` said 586 / 98 / 217 + 163 / 16 + 9 / 17. None of the three was
+right, and no two agreed.
+
+Re-measured on 2026-09-12 by running every suite:
+
+| suite | command | result |
+|---|---|---|
+| core | `dart test` in `packages/query_kit` | **589** |
+| binding | `flutter test` in `packages/query_kit_flutter` | **128** |
+| showcase | `flutter test test/features test/catalogue_test.dart` | **214** |
+| showcase contract | `flutter test test/backend_contract_test.dart` | **24** (+24 server-leg skipped without `SHOWCASE_SERVER`) |
+| task manager | `flutter test test/acceptance_test.dart` | **16** |
+| task manager contract | `flutter test test/backend_contract_test.dart` | **15** (+14 server-leg skipped) |
+| doc snippets | `flutter test` in `examples/doc_snippets` | **2** |
+| showcase e2e | `e2e/tests/*.spec.ts` | **169** |
+| task manager e2e | `e2e/tests/tasks.spec.ts` | **9** |
+
+The landing page's four slots are 589 / 128 / **269** (both apps' `flutter
+test`: 238 + 31) / **178** (both Playwright legs). `fidelity.md` gained a row
+for the doc snippets and a sentence explaining why the showcase's `flutter
+test` reports 238 rather than 214 — the contract's 24 run against the fake in
+every checkout and against the real server only in the `e2e` job, and a reader
+who runs the suite should not have to work that out.
+
+Two counts in the same class were stale for the same reason and are fixed
+here: `examples/showcase/test/catalogue_test.dart`'s doc comment and
+`examples/task_manager/README.md` both said the catalogue is 27 screens. It
+has been 28 since [#68](https://github.com/KoTTi97/flutter_query/issues/68) —
+and `catalogue_test.dart` is the file whose whole job is catching exactly that
+drift in the other four artefact sets, which is why its own prose saying 27
+was worth a line in this table.
+
+**Nothing about the library changed.** The gate ran in full anyway, because the
+numbers being wrong is the only way to discover that they are.

@@ -19,11 +19,15 @@ const sample = `class TaskScreen extends StatelessWidget {
   }
 }`
 
+// Measured, not remembered (see website/README.md): these come from an actual
+// run of every suite, 2026-09-12. `dart test` in packages/query_kit, then
+// `flutter test` in packages/query_kit_flutter, examples/showcase and
+// examples/task_manager, then `npx playwright test` in each example's e2e/.
 const figures = [
-  { value: '549', label: 'core tests, on the VM and compiled to JavaScript' },
-  { value: '84', label: 'widget tests in the binding' },
-  { value: '370', label: 'tests across the two example apps' },
-  { value: '155', label: 'end-to-end tests in a real browser' },
+  { value: '589', label: 'core tests, on the VM and compiled to JavaScript' },
+  { value: '128', label: 'widget tests in the binding' },
+  { value: '269', label: 'tests across the two example apps' },
+  { value: '178', label: 'end-to-end tests in a real browser' },
 ]
 
 const points = [
