@@ -317,7 +317,7 @@ void main() {
     final key = queryKey();
     final calls = <int>[];
     client.setQueryData(
-        key, const InfiniteData<int, int>(pages: [10, 20], pageParams: [1, 2]));
+        key, InfiniteData<int, int>(pages: [10, 20], pageParams: [1, 2]));
     final observer = InfiniteQueryObserver<int, int, InfiniteData<int, int>>(
       client,
       InfiniteQueryObserverOptions(

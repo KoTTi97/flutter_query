@@ -51,15 +51,26 @@ class QueriesObserver<TQueryData, TData> {
       List.unmodifiable(_observers);
 
   /// Registers a listener and starts each enabled query independently.
+  ///
+  /// A member whose dynamic option throws on its first subscribe throws out
+  /// of here too, and — as `QueryObserver.subscribe` does for itself — leaves
+  /// nothing behind: the members subscribed before it are unsubscribed again
+  /// and the listener is removed (pre-release verification, 2026-09-12,
+  /// AR-02).
   void Function() subscribe(void Function(List<QueryResult<TData>>) listener) {
     final remove = _listeners.add(listener, onRemoved: () {
       if (!hasListeners) _detach();
     });
     if (_listeners.length == 1) {
-      for (final observer in List.of(_observers)) {
-        _subscribeObserver(observer);
+      try {
+        for (final observer in List.of(_observers)) {
+          _subscribeObserver(observer);
+        }
+        _collect();
+      } catch (_) {
+        remove();
+        rethrow;
       }
-      _collect();
     }
     return remove;
   }

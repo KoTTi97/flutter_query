@@ -1,6 +1,8 @@
 /// Port of `query-core/src/onlineManager.ts` at upstream `50680b98c`.
 library;
 
+import 'package:meta/meta.dart';
+
 import 'subscribable.dart';
 
 /// Installs a platform listener; returns its cleanup, if it has one.
@@ -26,6 +28,7 @@ class OnlineManager extends Subscribable<void Function(bool online)> {
   bool isOnline() => _online;
 
   @override
+  @protected
   void onSubscribe() {
     if (_cleanup == null) {
       final setup = _setup;
@@ -36,6 +39,7 @@ class OnlineManager extends Subscribable<void Function(bool online)> {
   }
 
   @override
+  @protected
   void onUnsubscribe() {
     if (!hasListeners) {
       _cleanup?.call();

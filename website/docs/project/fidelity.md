@@ -38,10 +38,10 @@ counts and line references drift otherwise.
 |---|---|---|---|
 | `query` | 44 / 51 | `mutation` | 28 / 28 |
 | `queryCache` | 14 / 16 | `mutationCache` | 16 / 16 |
-| `queryObserver` | 62 / 75 | `mutationObserver` | 16 / 16 |
+| `queryObserver` | 64 / 75 | `mutationObserver` | 16 / 16 |
 | `queryClient` | 106 / 156 | `infiniteQueryBehavior` | 7 / 9 |
 | `retryer` | 13 / 13 | `infiniteQueryObserver` | 6 / 7 |
-| `queriesObserver` | 12 / 22 | | |
+| `queriesObserver` | 12 / 23 | | |
 
 The gap is almost entirely React-specific tests, JavaScript-helper tests with
 no Dart counterpart, and features [deliberately not
@@ -49,7 +49,7 @@ ported](../reference/feature-matrix.md). Each is enumerated.
 
 ## What porting found
 
-**22 bugs**, none of which a test written from the Dart side would have caught —
+**23 bugs**, none of which a test written from the Dart side would have caught —
 because each is a behaviour you only know to check if you know the original:
 
 - the abort signal marked as consumed one `await` too late;
@@ -97,22 +97,26 @@ That is what [the examples](examples.md) are for.
 
 ## The numbers
 
-Measured on 2026-09-12 by running each suite, not by counting `test(` in the
-sources — which is the same rule the landing page follows, and the reason these
-two agree.
+Measured by running each suite, not by counting `test(` in the sources — which
+is the same rule the landing page follows, and the reason these two agree. The
+core row was re-measured on 2026-09-12 after the pre-release deep-dive review,
+its final review and the bounded confidence assessment; the rows below it were measured earlier
+the same day and only the task manager's has moved since.
 
 | | |
 |---|---|
-| core | **648** Dart VM tests; **645** also compiled to JavaScript (three barrel checks are VM-only) |
+| core | **741** Dart VM tests; **737** also compiled to JavaScript (four barrel checks are VM-only). Of those, 414 are ported upstream cases; the rest are the port-only files, the review regressions and 32 bounded confidence sequences |
 | binding | **128** tests, widget tests behind one harness |
 | showcase | **214** widget tests + **169** Playwright tests in Chromium |
 | task manager | **16** widget tests + **9** Playwright tests |
 | contract | **39** cases — 24 in the showcase, 15 in the task manager — each run against the fake backend *and* the real server |
-| doc snippets | **2** tests, the testing guide's teardown as code that runs |
+| doc snippets | **9** tests — six that hold the site's fences level with their compiled twins, three that run the testing guide's teardown as code |
 
 The showcase's `flutter test` reports 238: the 214 above plus the contract's
 24, which run against the fake in every checkout and against the real server
-only in the `e2e` job. The task manager's reports 31 the same way.
+only in the `e2e` job. The task manager's works the same way and now reports
+**32 passing with 14 skipped** — the skipped ones are the contract cases that
+wait for `TASK_MANAGER_SERVER`, which the `e2e` job sets.
 
 Every push runs all of it, plus the analyzer at `--fatal-infos`, the formatter,
 `dart doc --validate-links`, both publish dry-runs, a web build of each example

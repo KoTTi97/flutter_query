@@ -63,7 +63,9 @@ class QueryDefaults {
   /// (https://github.com/KoTTi97/flutter_query/issues/7).
   final QueryFn<Object?>? queryFn;
 
-  /// Erased for the same reason as [queryFn].
+  /// Erased for the same reason as [queryFn]. `noStructuralSharing()` is
+  /// recognised here too, and reaches each query as its own typed opt-out —
+  /// `select` output included (pre-release review, 2026-09-12, F4).
   final Object? Function(Object? previous, Object? next)? structuralSharing;
 
   /// Default for `enabled`: whether queries under this default fetch on their
@@ -598,10 +600,17 @@ class QueryClient {
 
   /// Puts matching queries back to the state they were created with, then
   /// refetches the active ones.
+  ///
+  /// `async`, like [cancelQueries] and [refetchQueries]: a throwing filter
+  /// predicate fails the returned future rather than throwing out of the
+  /// call, so all four bulk operations report the same way. Upstream's
+  /// `notifyManager.batch(() => …)` form throws synchronously from a
+  /// `Promise`-returning method (pre-release verification, 2026-09-12,
+  /// AR-12).
   Future<void> resetQueries({
     QueryFilters filters = const QueryFilters(),
     bool cancelRefetch = true,
-  }) =>
+  }) async =>
       notifyManager.batch(() {
         // The matched set is captured *before* resetting, because a filter that
         // looks at state (`status: error`, a predicate over `query.state`) no
@@ -623,11 +632,13 @@ class QueryClient {
   /// Marks matching queries stale and refetches the ones [refetchType] names,
   /// which defaults to the filter's own type and then to
   /// [QueryTypeFilter.active].
+  ///
+  /// `async` for the reason [resetQueries] is.
   Future<void> invalidateQueries({
     QueryFilters filters = const QueryFilters(),
     RefetchType? refetchType,
     bool cancelRefetch = true,
-  }) =>
+  }) async =>
       notifyManager.batch(() {
         // The matched set is captured *before* invalidating, as `resetQueries`
         // does: a filter that looks at state (`stale: false`, a predicate over
@@ -670,7 +681,7 @@ class QueryClient {
           .map((query) {
         final fetch = query
             .fetch(
-              fetchOptions: FetchOptions<Never>(cancelRefetch: cancelRefetch),
+              fetchOptions: FetchOptions(cancelRefetch: cancelRefetch),
             )
             .then((_) {})
             .catchError((Object _) {});
@@ -737,7 +748,7 @@ class QueryClient {
                 defaults,
               )
             : defaulted,
-        fetchOptions: FetchOptions<TQueryData>(
+        fetchOptions: FetchOptions(
           retry: retryConfigured == null ? RetryPolicy.never : null,
         ),
       );
@@ -793,10 +804,25 @@ class QueryClient {
   /// caller of `mutateAsync` is told. A teardown that must leave nothing
   /// pending lets the callbacks run and clears once more — the widget-test
   /// teardown the Flutter binding documents does (ninth review, 2026-09-10,
-  /// C11).
+  /// C11). A mutation restored from persistence and never continued has no
+  /// request of its own: it is dropped without running and without failing,
+  /// as upstream drops it — and dropping a restored scope queue starts none
+  /// of it, whatever the network says (MU-01, 2026-09-12).
+  ///
+  /// One batch for both caches, so a subscriber wrapped in
+  /// `notifyManager.batchCalls` — the documented way to defer delivery —
+  /// gets one scheduled flush for the call rather than one per entry
+  /// removed, which is what [removeQueries] already gave it and what
+  /// upstream's own `queryCache.clear()` does (pre-release review,
+  /// 2026-09-12, QE-03). The batching is here rather than on
+  /// [QueryCache.clear] because a cache holds no notify manager: the manager
+  /// belongs to the client, and one client's batch around both caches is
+  /// strictly fewer flushes than upstream's two.
   void clear() {
-    queryCache.clear();
-    mutationCache.clear();
+    notifyManager.batch(() {
+      queryCache.clear();
+      mutationCache.clear();
+    });
   }
 
   // ------------------------------------------------------------ defaults
@@ -959,6 +985,13 @@ class QueryClient {
     final sharing = defaults.structuralSharing;
     if (sharing == null) {
       return null;
+    }
+    // The opt-out has to arrive as itself, not wrapped: the observer
+    // recognises `noStructuralSharing()` by identity, and a wrapper closure
+    // left a default-level opt-out sharing the selection anyway (pre-release
+    // review, 2026-09-12, F4).
+    if (isNoStructuralSharing(sharing)) {
+      return noStructuralSharing<TQueryData>();
     }
     return _memoised<StructuralSharing<TQueryData>>(
         _adaptedSharing, sharing, TQueryData, () {

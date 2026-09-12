@@ -287,8 +287,11 @@ void main() {
           'set to false', (time) async {
         final key = queryKey();
 
-        // There is no `false` here: the identity function is how sharing is
-        // turned off (see `StructuralSharing`).
+        // There is no `false` here. A hook of your own governs the cache write
+        // this case is about, so the identity function keeps the new data;
+        // `noStructuralSharing()` is the spelling that also turns sharing off
+        // for the placeholder and the `select` output (see
+        // `StructuralSharing`).
         queryClient.setDefaultOptions(const DefaultOptions(
           queries: QueryDefaults(structuralSharing: _keepNext),
         ));
@@ -1779,6 +1782,18 @@ void main() {
         expect(calls, 0);
       });
 
+      // Not ported: `should not refetch inactive queries that have a
+      // skipToken queryFn even if "refetchType" is "all"`
+      // (`queryClient.test.tsx:2473`). It pins the `skipToken` arm of
+      // upstream's `isDisabled`, and this port has no value that means
+      // `skipToken` *and not* `enabled: false`: `Enabled.no` spells both
+      // (#17), and `enabled: false` is the meaning kept — an unobserved,
+      // seeded query is refetched, as upstream's `enabled: false` one is. Ported
+      // on 2026-09-12 (FI-01) by making `Enabled.no` mean `skipToken` there,
+      // and unported again the same day when that silenced every disabled
+      // dependent query and ran `Enabled.when` predicates with no observer
+      // (pre-release review, F2/F3). See PORTING_NOTES' skipToken omissions.
+
       testFakeAsync(
           'should cancel ongoing fetches if cancelRefetch option is set (default value)',
           (time) async {
@@ -2424,7 +2439,7 @@ void main() {
 
         queryClient.setQueryData<InfiniteData<String, int>>(
           key.append(<Object?>['id']),
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['bar'],
             pageParams: <int>[0],
           ),
@@ -2443,7 +2458,7 @@ void main() {
               getNextPageParam: (_, __, ___, ____) => null,
             ),
           ),
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['bar'],
             pageParams: <int>[0],
           ),
@@ -2470,7 +2485,7 @@ void main() {
               getNextPageParam: (_, __, ___, ____) => null,
             ),
           ),
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['data'],
             pageParams: <int>[1],
           ),
@@ -2492,7 +2507,7 @@ void main() {
         );
         final cached = queryClient.getQueryData<InfiniteData<int, int>>(key);
 
-        const expected =
+        final expected =
             InfiniteData<int, int>(pages: <int>[10], pageParams: <int>[10]);
 
         expect(result, expected);
@@ -2517,7 +2532,7 @@ void main() {
               enabled: Enabled.no,
             ),
           ),
-          const InfiniteData<int, int>(pages: <int>[0], pageParams: <int>[0]),
+          InfiniteData<int, int>(pages: <int>[0], pageParams: <int>[0]),
         );
 
         expect(calls, 1);
@@ -2530,7 +2545,7 @@ void main() {
 
         queryClient.setQueryData<InfiniteData<String, int>>(
           key,
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['old-page'],
             pageParams: <int>[0],
           ),
@@ -2559,7 +2574,7 @@ void main() {
 
         expect(
           result,
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['new-page-0'],
             pageParams: <int>[0],
           ),
@@ -2591,7 +2606,7 @@ void main() {
 
         expect(
           first,
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['fetched-0'],
             pageParams: <int>[0],
           ),
@@ -2633,7 +2648,7 @@ void main() {
 
         expect(
           queryClient.getQueryData<InfiniteData<int, int>>(key),
-          const InfiniteData<int, int>(pages: <int>[10], pageParams: <int>[10]),
+          InfiniteData<int, int>(pages: <int>[10], pageParams: <int>[10]),
         );
       });
 
@@ -2652,7 +2667,7 @@ void main() {
 
         expect(
           queryClient.getQueryData<InfiniteData<String, int>>(key),
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['10', '15', '20'],
             pageParams: <int>[10, 15, 20],
           ),
@@ -2679,7 +2694,7 @@ void main() {
 
         expect(
           queryClient.getQueryData<InfiniteData<String, int>>(key),
-          const InfiniteData<String, int>(
+          InfiniteData<String, int>(
             pages: <String>['10', '15', '20'],
             pageParams: <int>[10, 15, 20],
           ),

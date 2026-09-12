@@ -67,11 +67,11 @@ alternatives — there is no recommended default, pick per situation:
 | `queryFn: ({ signal }) => …` | `queryFn: (context) => …`; `context.signal` is a `QueryCancelToken`, and `signal.onCancel(…)` is the interop point for `dio` and friends |
 | `enabled: false` | `Enabled.no` |
 | `enabled: () => bool` | `Enabled.when((query) => …)` |
-| `skipToken` | `Enabled.no` |
+| `skipToken` | `Enabled.no`, which keeps `enabled: false`'s meaning where the two differ: a cached query nobody observes is still refetched by `refetchQueries` / `invalidateQueries(refetchType: RefetchType.all)` |
 | `staleTime: 0` (the default) | `StaleTime.zero` |
 | `staleTime: 30_000` | `StaleTime.duration(Duration(seconds: 30))` |
 | `staleTime: Infinity` | `StaleTime.infinite` — never stale by time, still refetched when asked |
-| `staleTime: 'static'` | `StaleTime.static` — never stale and skipped by every refetch trigger |
+| `staleTime: 'static'` | `StaleTime.static` — never stale and, while an observer holds the query, skipped by every refetch trigger |
 | `staleTime: (query) => …` | `StaleTime.dynamic((query) => …)` |
 | `gcTime: 300_000` | `GcTime.duration(Duration(minutes: 5))` (`GcTime.defaultValue`) |
 | `gcTime: Infinity` | `GcTime.never` |
@@ -96,8 +96,8 @@ alternatives — there is no recommended default, pick per situation:
 | `select: (data) => …` | its own options shape: `QuerySelectOptions<TQueryData, TData>`, `select` required. Without one, `QueryObserverOptions<TData>` has a single type argument |
 | `notifyOnChangeProps` | gone: `select` narrows what is reported, and every builder and keyless read takes `buildWhen` — a mutation's too, where there is no `select` |
 | `throwOnError` | gone: errors are the `QueryError` case of the sealed result |
-| `structuralSharing` | on by default: lists are shared element by element, maps and sets whole when deep-equal, everything else by `==`, so typed models need `==`/`hashCode`; `structuralSharing: (previous, next) => …` replaces it for the cache write |
-| `structuralSharing: false` | `structuralSharing: (_, next) => next` |
+| `structuralSharing` | on by default: lists are shared element by element, maps and sets whole when deep-equal, everything else by `==`, so typed models need `==`/`hashCode`; `structuralSharing: (previous, next) => …` replaces it for the cache write and placeholder data; what `select` produced is still shared by the default comparison, because the hook is typed for the query's data and cannot be handed a selection |
+| `structuralSharing: false` | `structuralSharing: noStructuralSharing()` — off for the cache write, placeholder data and `select` output alike; a hook of your own such as `(_, next) => next` does not reach `select` |
 | `queryCache.find({ queryKey })` | `queryCache.find(filters: QueryFilters(queryKey: …))` — exact by default, as upstream; `exact: false` for a prefix |
 
 ## Infinite queries

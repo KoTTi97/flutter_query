@@ -2,6 +2,7 @@
 library;
 
 import 'package:clock/clock.dart';
+import 'package:meta/meta.dart';
 
 import 'subscribable.dart';
 
@@ -57,6 +58,7 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   bool isFocused() => _focused ?? true;
 
   @override
+  @protected
   void onSubscribe() {
     if (_cleanup == null) {
       final setup = _setup;
@@ -67,6 +69,7 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   }
 
   @override
+  @protected
   void onUnsubscribe() {
     if (!hasListeners) {
       _cleanup?.call();
@@ -87,8 +90,10 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
     });
   }
 
-  /// Sets the focus state by hand. Passing `null` returns control to the
-  /// installed event listener.
+  /// Sets the focus state by hand. Passing `null` forgets the value set by
+  /// hand, and [isFocused] then answers `true` — pure Dart has no document to
+  /// consult, where upstream reads `document.visibilityState`. It does not
+  /// hand control to the event listener, which only ever calls this.
   void setFocused(bool? focused) {
     final changed = _focused != focused;
     if (changed) {

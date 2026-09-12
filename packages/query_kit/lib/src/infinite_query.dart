@@ -23,20 +23,41 @@ import 'query_options.dart';
 /// Every page fetched so far, and the param each was fetched with.
 ///
 /// The two lists are the same length and in the same order: `pages[i]` was
-/// fetched with `pageParams[i]`.
+/// fetched with `pageParams[i]`, and the constructor refuses anything else.
 ///
 /// Every `InfiniteData` the library writes — a fetch result, a structurally
 /// shared refetch, a [copyWith] — holds two unmodifiable lists, so the value
 /// read back from the cache cannot be grown behind the observers' backs:
 /// `getInfiniteQueryData(key)!.pages.add(…)` throws `UnsupportedError`
-/// (ninth review, 2026-09-10, C20). The constructor is `const` and wraps
-/// nothing: a `const [...]` literal is already unmodifiable, and a growable
-/// list handed in through `initialData` or `setQueryData` stays the caller's
-/// own until the next fetch replaces it.
+/// (ninth review, 2026-09-10, C20). The constructor wraps nothing: a
+/// `const [...]` literal is already unmodifiable, and a growable list handed
+/// in through `initialData` or `setQueryData` stays the caller's own until
+/// the next fetch replaces it.
 @immutable
 final class InfiniteData<TPageData, TPageParam> {
-  /// Both lists at once; keep them the same length and in the same order.
-  const InfiniteData({required this.pages, required this.pageParams});
+  /// Both lists at once; they must be the same length and in the same order.
+  ///
+  /// Lists of different lengths are refused with an [ArgumentError] naming
+  /// both: the pair is the invariant every paging read depends on, and a
+  /// misaligned pair used to survive the write and fail much later —
+  /// `hasNextPage` threw a `RangeError` out of a plain getter, and with a
+  /// `select` that collapsed the value the same `RangeError` was raised
+  /// inside `Query`'s observer loop and reported to the zone, naming nothing
+  /// that could be traced back to the write (pre-release review, 2026-09-12,
+  /// IN-01). The check costs the constructor its `const`, which is why the
+  /// class is not const-constructible; upstream has no equivalent invariant
+  /// because JavaScript reads the missing param as `undefined` and hands it
+  /// to `getNextPageParam` (`infiniteQueryBehavior.ts:222-240`).
+  InfiniteData({required this.pages, required this.pageParams}) {
+    if (pages.length != pageParams.length) {
+      throw ArgumentError.value(
+        this,
+        'pageParams',
+        'InfiniteData needs one page param per page, but it was given '
+            '${pages.length} pages and ${pageParams.length} page params.',
+      );
+    }
+  }
 
   /// The pages in list order: [FetchDirection.forward] appends,
   /// [FetchDirection.backward] prepends, and `maxPages` drops from the far
@@ -121,8 +142,9 @@ bool _listEquals<T>(List<T> a, List<T> b) {
 /// [direction] are typed instead of `Object?`.
 class InfinitePageContext<TPageParam> {
   /// Built by the paging behaviour for each page; a page function receives
-  /// one rather than constructing it.
-  @internal
+  /// one rather than constructing it. Construct one directly to call a
+  /// `pageFn` in a test, with a [signalProvider] that returns a token of the
+  /// test's own — `() => QueryCancelToken()` (API-02, 2026-09-12).
   InfinitePageContext({
     required this.client,
     required this.queryKey,
@@ -177,7 +199,7 @@ typedef PageParamFn<TPageData, TPageParam> = TPageParam? Function(
 /// holds; the user's function is [pageFn] rather than `queryFn`, since it
 /// returns one page.
 @immutable
-class InfiniteQueryOptions<TPageData, TPageParam>
+base class InfiniteQueryOptions<TPageData, TPageParam>
     extends QueryOptions<InfiniteData<TPageData, TPageParam>> {
   /// The paging fields plus the cache-layer options an ordinary query takes.
   /// There is no `queryFn` or `behavior`: the function is [pageFn], and the
@@ -238,12 +260,18 @@ class InfiniteQueryOptions<TPageData, TPageParam>
   /// observer refetches as many pages as the query already holds, as
   /// upstream's observer does, and a fixed count there would throw away the
   /// pages the user had paged to on the next refetch.
+  ///
+  /// A count handed to `QueryClient.infiniteQuery` is installed on the shared
+  /// query's options, so it also shapes every later option-less refetch —
+  /// `invalidateQueries`, `refetchQueries` — until an observer's fetch
+  /// reinstalls its own options with no count; upstream persists it the same
+  /// way (IN-02, 2026-09-12).
   final int? pages;
 
   /// This, with the given fields replaced — paging fields included, so the
-  /// copy is still an infinite query. `queryFn` and `behavior` are not
-  /// accepted: an infinite query's function is [pageFn], and its behaviour is
-  /// derived from these very options.
+  /// copy is still an infinite query. `queryFn` is not accepted: an infinite
+  /// query's function is [pageFn], and its behaviour is derived from these
+  /// very options.
   @override
   InfiniteQueryOptions<TPageData, TPageParam> copyWith({
     QueryKey? queryKey,
@@ -259,7 +287,6 @@ class InfiniteQueryOptions<TPageData, TPageParam>
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
     Object? meta,
-    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
     InfinitePageFn<TPageData, TPageParam>? pageFn,
     TPageParam? initialPageParam,
     PageParamFn<TPageData, TPageParam>? getNextPageParam,
@@ -267,7 +294,7 @@ class InfiniteQueryOptions<TPageData, TPageParam>
     int? maxPages,
     int? pages,
   }) {
-    _rejectQueryFnAndBehavior(queryFn, behavior);
+    _rejectQueryFn(queryFn);
     return InfiniteQueryOptions<TPageData, TPageParam>(
       queryKey: queryKey ?? this.queryKey,
       pageFn: pageFn ?? this.pageFn,
@@ -296,19 +323,12 @@ class InfiniteQueryOptions<TPageData, TPageParam>
     );
   }
 
-  static void _rejectQueryFnAndBehavior(Object? queryFn, Object? behavior) {
+  static void _rejectQueryFn(Object? queryFn) {
     if (queryFn != null) {
       throw ArgumentError.value(
         queryFn,
         'queryFn',
         'An infinite query has no queryFn; its function is pageFn.',
-      );
-    }
-    if (behavior != null) {
-      throw ArgumentError.value(
-        behavior,
-        'behavior',
-        'An infinite query derives its behaviour from its own paging options.',
       );
     }
   }
@@ -445,7 +465,6 @@ sealed class InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
     Object? meta,
-    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
     InfinitePageFn<TPageData, TPageParam>? pageFn,
     TPageParam? initialPageParam,
     PageParamFn<TPageData, TPageParam>? getNextPageParam,
@@ -486,18 +505,19 @@ sealed class InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>
 ///
 /// ```dart
 /// InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
-///     InfiniteQueryObserverOptions(
-///       queryKey: const QueryKey(['feed']),
-///       pageFn: (page) => api.feed(page: page.pageParam),
-///       initialPageParam: 1,
-///       getNextPageParam: (last) => last.page.isEmpty ? null : last.pageParam + 1,
+///     InfiniteQueryObserverOptions<List<Post>, int>(
+///       queryKey: QueryKey(['feed']),
+///       pageFn: (context) => api.feed(cursor: context.pageParam),
+///       initialPageParam: 0,
+///       getNextPageParam: (page, pages, pageParam, pageParams) =>
+///           page.isEmpty ? null : pageParam + page.length,
 ///     );
 /// ```
 ///
 /// To flatten or otherwise project the pages, use
 /// [InfiniteQuerySelectOptions].
 @immutable
-class InfiniteQueryObserverOptions<TPageData, TPageParam>
+final class InfiniteQueryObserverOptions<TPageData, TPageParam>
     extends InfiniteQueryObserverOptionsBase<TPageData, TPageParam,
         InfiniteData<TPageData, TPageParam>> {
   /// The paging fields, the cache-layer options, and the observer's own.
@@ -548,7 +568,6 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam>
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
     Object? meta,
-    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
     InfinitePageFn<TPageData, TPageParam>? pageFn,
     TPageParam? initialPageParam,
     PageParamFn<TPageData, TPageParam>? getNextPageParam,
@@ -563,7 +582,7 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam>
     bool? refetchIntervalInBackground,
     bool? retryOnMount,
   }) {
-    InfiniteQueryOptions._rejectQueryFnAndBehavior(queryFn, behavior);
+    InfiniteQueryOptions._rejectQueryFn(queryFn);
     InfiniteQueryObserverOptionsBase._rejectPages(pages);
     return InfiniteQueryObserverOptions<TPageData, TPageParam>(
       queryKey: queryKey ?? this.queryKey,
@@ -634,16 +653,17 @@ class InfiniteQueryObserverOptions<TPageData, TPageParam>
 ///
 /// ```dart
 /// InfiniteQuerySelectOptions<List<Post>, int, List<Post>> flatFeed() =>
-///     InfiniteQuerySelectOptions(
-///       queryKey: const QueryKey(['feed']),
-///       pageFn: (page) => api.feed(page: page.pageParam),
-///       initialPageParam: 1,
-///       getNextPageParam: (last) => last.page.isEmpty ? null : last.pageParam + 1,
+///     InfiniteQuerySelectOptions<List<Post>, int, List<Post>>(
+///       queryKey: QueryKey(['feed']),
+///       pageFn: (context) => api.feed(cursor: context.pageParam),
+///       initialPageParam: 0,
+///       getNextPageParam: (page, pages, pageParam, pageParams) =>
+///           page.isEmpty ? null : pageParam + page.length,
 ///       select: (data) => [for (final page in data.pages) ...page],
 ///     );
 /// ```
 @immutable
-class InfiniteQuerySelectOptions<TPageData, TPageParam, TData>
+final class InfiniteQuerySelectOptions<TPageData, TPageParam, TData>
     extends InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> {
   /// The paging fields, the cache-layer options, and the observer's own,
   /// [select] required.
@@ -695,7 +715,6 @@ class InfiniteQuerySelectOptions<TPageData, TPageParam, TData>
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<InfiniteData<TPageData, TPageParam>>? structuralSharing,
     Object? meta,
-    FetchBehavior<InfiniteData<TPageData, TPageParam>>? behavior,
     InfinitePageFn<TPageData, TPageParam>? pageFn,
     TPageParam? initialPageParam,
     PageParamFn<TPageData, TPageParam>? getNextPageParam,
@@ -711,7 +730,7 @@ class InfiniteQuerySelectOptions<TPageData, TPageParam, TData>
     bool? retryOnMount,
     SelectFn<InfiniteData<TPageData, TPageParam>, TData>? select,
   }) {
-    InfiniteQueryOptions._rejectQueryFnAndBehavior(queryFn, behavior);
+    InfiniteQueryOptions._rejectQueryFn(queryFn);
     InfiniteQueryObserverOptionsBase._rejectPages(pages);
     return InfiniteQuerySelectOptions<TPageData, TPageParam, TData>(
       queryKey: queryKey ?? this.queryKey,
@@ -853,9 +872,9 @@ class InfiniteQueryBehavior<TPageData, TPageParam>
     // Progress lives outside `fetchFn`, exactly as upstream keeps it in
     // `onFetch`: a retry continues from the page that failed instead of
     // starting the whole run again. Pages already fetched are not re-requested.
-    var result = const InfiniteData<Never, Never>(
-      pages: <Never>[],
-      pageParams: <Never>[],
+    var result = InfiniteData<Never, Never>(
+      pages: const <Never>[],
+      pageParams: const <Never>[],
     ) as InfiniteData<TPageData, TPageParam>;
     var currentPage = 0;
 

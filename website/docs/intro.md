@@ -43,10 +43,10 @@ That is the whole differentiator, and it is checkable:
 
 |  |  |
 |---|---|
-| **648** tests in the core | 648 on the Dart VM; 645 also compiled to JavaScript |
+| **741** tests in the core | 741 on the Dart VM; 737 also compiled to JavaScript |
 | **128** tests in the binding | four call styles, each proven to interoperate |
 | **269** tests across the two examples | plus **178** Playwright tests in a real browser |
-| **22** bugs found by porting | none of which a test written from the Dart side would have caught |
+| **23** bugs found by porting | none of which a test written from the Dart side would have caught |
 | **every omission listed by name** | in [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md) |
 
 Upstream is pinned at `50680b98c`. When a ported test fails, the assumption is

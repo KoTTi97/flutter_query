@@ -52,6 +52,18 @@ enum FetchStatus {
 final class QueryState<TQueryData> {
   /// Validates a state before a query, cache build or state replacement accepts
   /// it. Presence flags must agree with both success and the payload's type.
+  ///
+  /// A `success` state must have [hasData], whatever `TQueryData` is — `void`
+  /// and nullable types included. To restore a query that resolved to
+  /// nothing, write `hasData: true` with `data: null`, which is upstream's
+  /// `null` as opposed to its `undefined`. A query's data is read through
+  /// `select` into an observer's own data type, which may be non-nullable: a
+  /// data-less success skips the selector, and `null` cast to a `String`
+  /// selection threw in the observer's constructor. Accepting such a state for
+  /// a nullable `TQueryData` (pre-release review, 2026-09-12, F5) was reverted
+  /// for that reason (round 3, R2-3). The mutation twin keeps the looser rule,
+  /// because nothing projects a mutation's data into another type; see
+  /// `MutationState.validate`.
   @internal
   void validate() {
     if ((status == QueryStatus.success && !hasData) ||

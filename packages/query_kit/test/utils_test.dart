@@ -242,6 +242,30 @@ void main() {
 
         expect(cancelled, isTrue);
       });
+
+      testFakeAsync(
+          'should consume the signal only once across repeated accesses',
+          (time) async {
+        // Upstream counts `addEventListener` calls on the signal, which its
+        // getter makes exactly once; here the same "consumed" moment is the
+        // `onSignalRead` callback the query hands the context, so that is
+        // what is counted. Both assert that reading twice returns the same
+        // token and consumes it once (pre-release review, 2026-09-12, P11).
+        final token = QueryCancelToken();
+        var consumed = 0;
+
+        final context = QueryFunctionContext(
+          client: testClient(),
+          queryKey: queryKey(),
+          signal: token,
+          onSignalRead: () => consumed++,
+        );
+
+        expect(context.signal, same(token));
+        expect(context.signal, same(token));
+
+        expect(consumed, 1);
+      });
     });
 
     group('replaceEqualDeep', () {

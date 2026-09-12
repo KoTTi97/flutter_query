@@ -7,10 +7,12 @@
 library;
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:query_kit/query_kit.dart';
 import 'package:query_kit/src/retryer.dart';
+import 'package:query_kit/src/structural_sharing.dart' show sharingBucketOf;
 import 'package:query_kit/src/timers.dart';
 import 'package:test/test.dart';
 
@@ -422,6 +424,64 @@ void main() {
     client.clear();
   });
 
+  testFakeAsync(
+      'AR-03: InitialData.compute is consulted on every options update until '
+      'the query holds data, as upstream does', (time) async {
+    final client = testClient();
+    String? seed;
+    var calls = 0;
+    final options = QueryObserverOptions<String>(
+      queryKey: queryKey(),
+      queryFn: (_) async => throw StateError('boom'),
+      retry: RetryPolicy.never,
+      initialData: InitialData<String>.compute(() {
+        calls++;
+        return seed;
+      }),
+    );
+
+    // One call from `QueryCache.build`, one from the observer's own
+    // `setOptions` — upstream's constructor and `#currentQuery.setOptions`.
+    final observer = client.observe<String, String>(options);
+    expect(calls, 2);
+    for (var i = 0; i < 100; i++) {
+      observer.setOptions(options);
+    }
+    expect(calls, 102);
+    final unsubscribe = observer.subscribe((_) {});
+    expect(calls, 103, reason: 'a fetch passes options through setOptions');
+    await time.advance(ms(10));
+    final query = observer.currentQuery;
+    expect(query.state.status, QueryStatus.error);
+    expect(calls, 103);
+
+    // A seed that becomes available replaces an error held without data, as
+    // upstream's `successState` does (TanStack/query#9743): a late seed is
+    // data the query never had, and the counters say what happened.
+    seed = 'late';
+    observer.setOptions(options);
+    expect(calls, 104);
+    expect(query.state.status, QueryStatus.success);
+    expect(query.state.data, 'late');
+    expect(query.state.error, isNull);
+    expect(query.state.dataUpdateCount, 0);
+    expect(query.state.errorUpdateCount, 1);
+    expect(query.resetState.data, 'late');
+
+    // Once the query holds data the callback is never consulted again — not
+    // by a rebuild, and not by a fetch that fails.
+    for (var i = 0; i < 100; i++) {
+      observer.setOptions(options);
+    }
+    observer.refetch().ignore();
+    await time.advance(ms(10));
+    expect(query.state.status, QueryStatus.error);
+    expect(query.state.data, 'late');
+    expect(calls, 104);
+    unsubscribe();
+    client.clear();
+  });
+
   testFakeAsync('PlaceholderData.value(null) is a placeholder', (time) async {
     final client = testClient();
     final observer = QueryObserver<String?, String?>(
@@ -453,6 +513,8 @@ void main() {
   showcaseFindings();
   eighthReview();
   ninthReview();
+  fidelityReview();
+  finalReview();
 }
 
 // -----------------------------------------------------------------------------
@@ -1431,7 +1493,7 @@ void fourthReview() {
     expect(
       () => options.copyWith(
         queryFn: (_) async =>
-            const InfiniteData<int, int>(pages: <int>[], pageParams: <int>[]),
+            InfiniteData<int, int>(pages: <int>[], pageParams: <int>[]),
       ),
       throwsArgumentError,
     );
@@ -1473,7 +1535,10 @@ void fourthReview() {
     final mutation = client.mutationCache.mutations.single;
     expect(mutation.state.isPaused, isTrue);
 
-    // Upstream's `continue()` rejects with what the mutation settled on.
+    // Upstream's `continue()` rejects with what the mutation settled on, and
+    // so does this one. The future is `execute`'s, which completes after the
+    // error callbacks have run (ninth review, C10), not the retryer's
+    // transport future, which completed before the first of them.
     client.onlineManager.setOnline(true);
     Object? caught;
     final continued = mutation.continueMutation();
@@ -1491,10 +1556,13 @@ void fourthReview() {
     expect(second.state.isPaused, isTrue);
     client.onlineManager.setOnline(true);
     await client.mutationCache.resumePaused();
-    // Settles on the retryer, as upstream's `continue()` does; the error
-    // callbacks dispatch the state a few microtasks later.
-    await time.flushMicrotasks();
+    // Settles *after* the callbacks, not on the retryer: since C10 the future
+    // `continueMutation` hands back is `execute`'s own, so by the time this
+    // await returns the error callbacks have run and the state has moved —
+    // which is what `resumePausedMutations` promises a reconnect refetch
+    // queued behind it.
     expect(second.state.status, MutationStatus.error);
+    await time.flushMicrotasks();
     client.clear();
   });
 
@@ -1532,7 +1600,7 @@ void fourthReview() {
     final key = queryKey();
     client.setQueryData<InfiniteData<int, int?>>(
       key,
-      const InfiniteData<int, int?>(pages: <int>[7], pageParams: <int?>[null]),
+      InfiniteData<int, int?>(pages: <int>[7], pageParams: <int?>[null]),
     );
     final params = <int?>[];
     final observer = InfiniteQueryObserver<int, int?, InfiniteData<int, int?>>(
@@ -1590,8 +1658,12 @@ void fourthReview() {
   });
 
   testFakeAsync('A20: a missing query function is not retried', (time) async {
-    // No gc timer, so a pending timer could only be the retry backoff (the
-    // fetch's `finally` arms collection unconditionally, as upstream does).
+    // No gc timer, so a pending timer could only be the retry backoff:
+    // `GcTime.never` arms none, and the fetch's `finally` arms one only when
+    // the query has no observers left — where upstream arms it
+    // unconditionally (`query.ts:818`) — and this query keeps its observer
+    // for the whole case (comment corrected in the pre-release review,
+    // 2026-09-12).
     final client = testClient(
       defaultOptions: const DefaultOptions(
         queries: QueryDefaults(gcTime: GcTime.never),
@@ -1772,6 +1844,117 @@ void fifthReviewObserver() {
         replaceEqualDeep<List<double>>(doubles, <double>[1.0]), same(doubles));
   });
 
+  test(
+      'AR-09: an element type the copy refused once does not stop a later '
+      'element that fits', () {
+    // `_Wide(1) == _Narrow(1)`, so the walk shares `previous`'s `_Wide` into
+    // a `List<_Narrow>` copy, which refuses it; the refusal is remembered per
+    // runtime type, and the `_Narrow` at index 1 is still shared.
+    final previous = <_Wide>[_Wide(1), _Narrow(2)];
+    final next = <_Narrow>[_Narrow(1), _Narrow(2)];
+    final result = replaceEqualDeep<List<_Wide>>(previous, next);
+    expect(result, isA<List<_Narrow>>());
+    expect(result, isNot(same(previous)));
+    expect(result[0], same(next[0]));
+    expect(result[1], same(previous[1]));
+    // The all-refused case on the VM: a `List<double>` copy with `next`'s
+    // values. On the web an `int` is a `double`, nothing is refused and
+    // `previous` itself comes back — equal either way, so only the values
+    // are pinned here (R14 pins the VM shape).
+    final widened =
+        replaceEqualDeep<List<num>>(<int>[1, 2, 3], <double>[1.0, 2.0, 3.0]);
+    expect(widened, [1.0, 2.0, 3.0]);
+  });
+
+  test(
+      'AR-01: a set of value-equal members is shared by its own equality, '
+      'whatever its order', () {
+    final client = testClient();
+    final key = queryKey();
+    final ids = <int>{1, 2, 3};
+    client.setQueryData<Set<int>>(key, ids);
+    client.setQueryData<Set<int>>(key, <int>{3, 2, 1});
+    expect(client.getQueryData<Set<int>>(key), same(ids));
+    client.setQueryData<Set<int>>(key, <int>{1, 2, 4});
+    expect(client.getQueryData<Set<int>>(key), isNot(same(ids)));
+    expect(client.getQueryData<Set<int>>(key), <int>{1, 2, 4});
+    client.clear();
+    // `1 == 1.0` and both hash alike: shared, as the walk always said.
+    final nums = <num>{1, 2};
+    expect(replaceEqualDeep<Set<num>>(nums, <num>{1.0, 2.0}), same(nums));
+    // A set of lists still goes through the deep walk, still as multisets.
+    final lists = <List<int>>{
+      [1],
+      [1],
+      [2]
+    };
+    expect(
+        replaceEqualDeep<Set<List<int>>>(lists, <List<int>>{
+          [2],
+          [1],
+          [1]
+        }),
+        same(lists));
+    expect(
+        replaceEqualDeep<Set<List<int>>>(lists, <List<int>>{
+          [2],
+          [2],
+          [1]
+        }),
+        isNot(same(lists)));
+  });
+
+  test(
+      'AR-01: a key with a set part compares by the set\'s own equality '
+      'first, and hashes consistently', () {
+    final a = QueryKey(<Object?>[
+      'tasks',
+      <int>{1, 2, 3}
+    ]);
+    final b = QueryKey(<Object?>[
+      'tasks',
+      <int>{3, 2, 1}
+    ]);
+    expect(a, equals(b));
+    expect(a.hashCode, b.hashCode);
+    expect(
+        a,
+        isNot(equals(QueryKey(<Object?>[
+          'tasks',
+          <int>{1, 2, 4}
+        ]))));
+    // Sets of lists — distinct members under the set's equality — are still
+    // multisets, and `==` still agrees with `hashCode`.
+    final twoOnes = QueryKey(<Object?>[
+      <List<int>>{
+        [1],
+        [1],
+        [2]
+      }
+    ]);
+    final twoOnesAgain = QueryKey(<Object?>[
+      <List<int>>{
+        [2],
+        [1],
+        [1]
+      }
+    ]);
+    final twoTwos = QueryKey(<Object?>[
+      <List<int>>{
+        [1],
+        [2],
+        [2]
+      }
+    ]);
+    expect(twoOnes, equals(twoOnesAgain));
+    expect(twoOnes.hashCode, twoOnesAgain.hashCode);
+    expect(twoOnes, isNot(equals(twoTwos)));
+    final client = testClient();
+    client.setQueryData<int>(a, 1);
+    expect(client.getQueryData<int>(b), 1);
+    client.clear();
+  });
+
   test('D10/F02 (R02): structural sharing compares sets as multisets', () {
     final client = testClient();
     final key = queryKey();
@@ -1830,7 +2013,7 @@ void fifthReviewObserver() {
     // No allocation is not observable, but the walk's rules are: depth,
     // typed data and `InfiniteData` compare the same way they share.
     final previous = <String, Object>{
-      'pages': const InfiniteData<List<int>, int>(pages: [
+      'pages': InfiniteData<List<int>, int>(pages: [
         [1]
       ], pageParams: [
         0
@@ -1838,7 +2021,7 @@ void fifthReviewObserver() {
       'bytes': Uint8List.fromList([1]),
     };
     final equal = <String, Object>{
-      'pages': const InfiniteData<List<int>, int>(pages: [
+      'pages': InfiniteData<List<int>, int>(pages: [
         [1]
       ], pageParams: [
         0
@@ -1964,7 +2147,7 @@ void fifthReviewObserver() {
       InfiniteQueryObserverOptions(
         queryKey: queryKey(),
         initialPageParam: 0,
-        initialData: const InitialData.value(
+        initialData: InitialData.value(
             InfiniteData<int, int>(pages: [0], pageParams: [0])),
         pageFn: (_) => response.future,
         getNextPageParam: (_, __, param, ___) => param + 1,
@@ -2099,7 +2282,12 @@ void eighthReview() {
     expect(observer.currentResult.fetchStatus, FetchStatus.fetching);
 
     // Reachable from one public call. Upstream leaves the query `fetching`
-    // with nothing running and no way out: it never loads again.
+    // with nothing running until something calls `fetch()` again: its own
+    // `finally` clears `#retryer` (`query.ts:813-816`), so the next fetch
+    // does start and dispatches its way out — the state is wrong in the
+    // meantime, and every read of it in between reports a fetch that is not
+    // happening, which is why `idle` is the better answer here (comment
+    // corrected in the pre-release review, 2026-09-12: it said "for good").
     // Not awaited directly: under fake async the clock has to move for the
     // cancelled fetch to settle.
     client
@@ -2627,7 +2815,7 @@ void ninthReview() {
     final key = queryKey();
     final stamp = DateTime.utc(2026);
     client.setQueryData(
-        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        key, InfiniteData<int, int>(pages: [1], pageParams: [0]),
         updatedAt: stamp);
     final observer = InfiniteQueryObserver<int, int, int>(
       client,
@@ -2643,12 +2831,12 @@ void ninthReview() {
     var notifications = 0;
     final unsubscribe = observer.subscribe((_) => notifications++);
     client.setQueryData(
-        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        key, InfiniteData<int, int>(pages: [1], pageParams: [0]),
         updatedAt: stamp);
     notifications = 0;
     expect(observer.hasNextPage, isTrue);
     client.setQueryData(
-        key, const InfiniteData<int, int>(pages: [2], pageParams: [0]),
+        key, InfiniteData<int, int>(pages: [2], pageParams: [0]),
         updatedAt: stamp);
     expect(observer.hasNextPage, isFalse);
     expect(notifications, 1,
@@ -2664,7 +2852,7 @@ void ninthReview() {
     final key = queryKey();
     final stamp = DateTime.utc(2026);
     client.setQueryData(
-        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        key, InfiniteData<int, int>(pages: [1], pageParams: [0]),
         updatedAt: stamp);
     final observer = InfiniteQueryObserver<int, int, int>(
       client,
@@ -2681,12 +2869,12 @@ void ninthReview() {
     var notifications = 0;
     final unsubscribe = observer.subscribe((_) => notifications++);
     client.setQueryData(
-        key, const InfiniteData<int, int>(pages: [1], pageParams: [0]),
+        key, InfiniteData<int, int>(pages: [1], pageParams: [0]),
         updatedAt: stamp);
     notifications = 0;
     expect(observer.hasPreviousPage, isTrue);
     client.setQueryData(
-        key, const InfiniteData<int, int>(pages: [2], pageParams: [0]),
+        key, InfiniteData<int, int>(pages: [2], pageParams: [0]),
         updatedAt: stamp);
     expect(observer.hasPreviousPage, isFalse);
     expect(notifications, 1);
@@ -2776,7 +2964,7 @@ void ninthReview() {
       pages: 2,
     ));
     expect(client.getInfiniteQueryData<int, int>(intKey),
-        const InfiniteData<int, int>(pages: [0, 1], pageParams: [0, 1]));
+        InfiniteData<int, int>(pages: [0, 1], pageParams: [0, 1]));
     client.clear();
   });
 
@@ -2815,7 +3003,7 @@ void ninthReview() {
   test(
       'C20 / P5 flatten<T>() over pages that are not Iterable<T> throws an '
       'ArgumentError naming the page type and the cure', () {
-    const data = InfiniteData<int, int>(pages: [1, 2], pageParams: [0, 1]);
+    final data = InfiniteData<int, int>(pages: [1, 2], pageParams: [0, 1]);
     expect(
         () => data.flatten<int>(),
         throwsA(isA<ArgumentError>().having(
@@ -2823,7 +3011,7 @@ void ninthReview() {
             'message',
             allOf(contains('Iterable<int>'), contains('int'),
                 contains('select')))));
-    const nested = InfiniteData<List<int>, int>(pages: [
+    final nested = InfiniteData<List<int>, int>(pages: [
       [1],
       [2, 3]
     ], pageParams: [
@@ -3001,6 +3189,610 @@ void ninthReview() {
     removeFirst();
     client.clear();
   });
+
+  // Pre-release verification, 2026-09-12: a dynamic option that throws on
+  // the first subscribe (AR-02). Each kind is asked at a different point of
+  // `_onSubscribe` — before the fetch on mount (`Enabled.when`,
+  // `StaleTime.dynamic`, `RefetchOn.when`) or after it (`PlaceholderData
+  // .compute`, `RefetchInterval.dynamic`) — so all five are pinned. The
+  // options are healthy at construction and break before the subscribe, as
+  // a widget's state going null between a build and a listen does.
+  for (final (kind, build) in <(
+    String,
+    QueryObserverOptions<int> Function(QueryKey key, bool Function() broken)
+  )>[
+    (
+      'Enabled.when',
+      (key, broken) => QueryObserverOptions(
+            queryKey: key,
+            queryFn: (_) => 1,
+            enabled: Enabled.when(
+                (_) => broken() ? throw StateError('enabled') : true),
+          )
+    ),
+    (
+      'StaleTime.dynamic',
+      (key, broken) => QueryObserverOptions(
+            queryKey: key,
+            queryFn: (_) => 1,
+            initialData: const InitialData.value(0),
+            staleTime: StaleTime.dynamic((_) => broken()
+                ? throw StateError('staleTime')
+                : const StaleTime.duration(Duration(seconds: 10))),
+          )
+    ),
+    (
+      'PlaceholderData.compute',
+      (key, broken) => QueryObserverOptions(
+            queryKey: key,
+            queryFn: (_) => sleep(ms(10)).then((_) => 1),
+            // `null` at construction: a placeholder that was shown is
+            // memoised and never asked again, one that was not is.
+            placeholderData: PlaceholderData.compute(
+                (_, __) => broken() ? throw StateError('placeholder') : null),
+          )
+    ),
+    (
+      'RefetchOn.when',
+      (key, broken) => QueryObserverOptions(
+            queryKey: key,
+            queryFn: (_) => 1,
+            initialData: const InitialData.value(0),
+            refetchOnMount: RefetchOn.when((_) => broken()
+                ? throw StateError('refetchOnMount')
+                : RefetchOn.always),
+          )
+    ),
+    (
+      'RefetchInterval.dynamic',
+      (key, broken) => QueryObserverOptions(
+            queryKey: key,
+            queryFn: (_) => sleep(ms(10)).then((_) => 1),
+            refetchInterval: RefetchInterval.dynamic((_) => broken()
+                ? throw StateError('refetchInterval')
+                : const Duration(seconds: 1)),
+          )
+    ),
+  ]) {
+    testFakeAsyncGuarded(
+        'AR-02 a $kind throwing on the first subscribe leaves nothing behind',
+        (time, uncaught) async {
+      final client = testClient();
+      var broken = false;
+      final observer =
+          client.observe<int, int>(build(queryKey(), () => broken));
+      final query = observer.currentQuery;
+      broken = true;
+      var calls = 0;
+      expect(() => observer.subscribe((_) => calls++), throwsStateError);
+      expect(observer.hasListeners, isFalse);
+      expect(query.observersCount, 0);
+      // The interval is computed after the fetch on mount started, so that
+      // listener may have heard `fetching` once; nothing after the throw.
+      final callsAtThrow = calls;
+      await time.advance(ms(50));
+      expect(calls, callsAtThrow);
+      // The observer is usable again once the option no longer throws.
+      broken = false;
+      final unsubscribe = observer.subscribe((_) => calls++);
+      await time.advance(ms(50));
+      expect(observer.hasListeners, isTrue);
+      expect(query.observersCount, 1);
+      unsubscribe();
+      client.clear();
+      expect(time.pendingTimers, 0);
+    });
+  }
+
+  testFakeAsyncGuarded(
+      'AR-02 a QueriesObserver member throwing on subscribe leaves no member '
+      'subscribed', (time, uncaught) async {
+    final client = testClient();
+    var broken = false;
+    final observer = QueriesObserver<int, int>(client, [
+      QueryObserverOptions(queryKey: queryKey(), queryFn: (_) => 1),
+      QueryObserverOptions(
+        queryKey: queryKey(),
+        queryFn: (_) => 2,
+        enabled:
+            Enabled.when((_) => broken ? throw StateError('member') : true),
+      ),
+    ]);
+    broken = true;
+    expect(() => observer.subscribe((_) {}), throwsStateError);
+    expect(observer.hasListeners, isFalse);
+    for (final member in observer.observers) {
+      expect(member.hasListeners, isFalse);
+      expect(member.currentQuery.observersCount, 0);
+    }
+    await time.advance(ms(50));
+    observer.destroy();
+    client.clear();
+    expect(time.pendingTimers, 0);
+  });
+
+  testFakeAsync(
+      'AR-05 a throwing InitialData.compute leaves setOptions untaken, on the '
+      'same query and across a key switch', (time) async {
+    final client = testClient();
+    final a = queryKey();
+    final b = queryKey();
+    // `b` exists with no data, so the seed is computed when it is joined.
+    client.queryCache.build(
+        client, client.defaultQueryOptions(QueryOptions<int>(queryKey: b)));
+    final queryB = client.queryCache.get<int>(b)!;
+    final observer = client.observe<int, int>(
+        QueryObserverOptions(queryKey: a, enabled: Enabled.no));
+    final queryA = observer.currentQuery;
+    final unsubscribe = observer.subscribe((_) {});
+    final options = observer.options;
+    final queryOptions = queryA.options;
+    final events = <String>[];
+    final stop = client.queryCache.subscribe((e) => events.add(eventName(e)));
+
+    for (final key in [a, b]) {
+      expect(
+          () => observer.setOptions(QueryObserverOptions<int>(
+                queryKey: key,
+                enabled: Enabled.no,
+                initialData:
+                    InitialData.compute(() => throw StateError('seed')),
+              )),
+          throwsStateError);
+      expect(identical(observer.options, options), isTrue);
+      expect(identical(observer.currentQuery, queryA), isTrue);
+      expect(identical(queryA.options, queryOptions), isTrue);
+      expect(queryA.observersCount, 1);
+      expect(queryB.observersCount, 0);
+    }
+    // The same-key attempt touches nothing; the switch is undone, so the
+    // cache saw the observer leave `b` again and nothing else.
+    expect(events, [
+      'observerRemoved',
+      'observerAdded',
+      'observerRemoved',
+      'observerAdded',
+    ]);
+    stop();
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'AR-12 every bulk operation reports a throwing predicate through its '
+      'future', (time) async {
+    final client = testClient();
+    client.setQueryData<int>(queryKey(), 1);
+    final filters = QueryFilters(predicate: (_) => throw StateError('pred'));
+    for (final operation in <Future<void> Function()>[
+      () => client.cancelQueries(filters: filters),
+      () => client.refetchQueries(filters: filters),
+      () => client.invalidateQueries(filters: filters),
+      () => client.resetQueries(filters: filters),
+    ]) {
+      late final Future<void> future;
+      expect(() => future = operation(), returnsNormally);
+      await expectLater(future, throwsStateError);
+    }
+    client.clear();
+  });
+
+  // IN-01 — `InfiniteData` took two lists of different lengths and said
+  // nothing; `hasNextPage` then threw a `RangeError` out of a plain getter,
+  // and with a collapsing `select` the same `RangeError` was raised inside
+  // `Query._dispatch`'s observer loop and reported to the zone, naming
+  // nothing that pointed back at the write that caused it.
+  test('IN-01 InfiniteData refuses two lists of different lengths, naming both',
+      () {
+    expect(
+      () => InfiniteData<int, int>(pages: <int>[1, 2], pageParams: <int>[1]),
+      throwsA(isA<ArgumentError>().having(
+        (e) => e.message,
+        'message',
+        allOf(contains('2 pages'), contains('1 page param')),
+      )),
+    );
+    expect(
+      () => InfiniteData<int, int>(pages: <int>[1], pageParams: <int>[1, 2]),
+      throwsA(isA<ArgumentError>().having(
+        (e) => e.message,
+        'message',
+        allOf(contains('1 page'), contains('2 page param')),
+      )),
+    );
+  });
+
+  test('IN-01 copyWith is the same door: trimming one list alone is refused',
+      () {
+    final aligned =
+        InfiniteData<int, int>(pages: <int>[1, 2], pageParams: <int>[1, 2]);
+    expect(() => aligned.copyWith(pages: <int>[1]), throwsArgumentError);
+    expect(() => aligned.copyWith(pageParams: <int>[1]), throwsArgumentError);
+    // Both together still pass.
+    expect(aligned.copyWith(pages: <int>[1], pageParams: <int>[1]).pages,
+        <int>[1]);
+  });
+
+  testFakeAsyncGuarded(
+      'IN-01 a setQueryData updater that drops a page param fails at the call '
+      'site, not later inside a dispatch', (time, uncaught) async {
+    final client = testClient();
+    final key = queryKey();
+    final observer = InfiniteQueryObserver<int, int, int>(
+      client,
+      InfiniteQuerySelectOptions<int, int, int>(
+        queryKey: key,
+        initialPageParam: 0,
+        pageFn: _page,
+        getNextPageParam: (_, __, param, ___) => param + 1,
+        // The collapsing select of the reproduction: the result stays
+        // value-equal, so the paging check is what reads the two lists.
+        select: (data) => data.pages.length,
+        enabled: Enabled.no,
+      ),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    client.setQueryData<InfiniteData<int, int>>(
+      key,
+      InfiniteData<int, int>(pages: <int>[1, 2], pageParams: <int>[1, 2]),
+    );
+    await time.flushMicrotasks();
+
+    expect(
+      () => client.updateQueryData<InfiniteData<int, int>>(
+        key,
+        // The realistic way in: trim the pages and forget the params.
+        (previous) => previous!.copyWith(pages: previous.pages.sublist(0, 1)),
+      ),
+      throwsArgumentError,
+    );
+    await time.flushMicrotasks();
+    // The cache still holds the aligned pair, and the failure never reached
+    // the zone through an observer loop.
+    expect(client.getInfiniteQueryData<int, int>(key)!.pages, <int>[1, 2]);
+    expect(uncaught, isEmpty);
+    expect(observer.hasNextPage, isTrue);
+    unsubscribe();
+    client.clear();
+  });
+
+  // MU-03 — `MutationCache.build`'s doc said the twin was closed with the
+  // same door as `QueryCache.build`'s, and it was not: a restored `success`
+  // state with no data went in, and `MutationState` then reported success
+  // holding nothing.
+  testFakeAsync(
+      'MU-03 a restored success state must carry data, as the query '
+      'twin must', (time) async {
+    final client = testClient();
+    final options = client.defaultMutationOptions(
+      MutationOptions<String, int, void>(mutationFn: (v) async => '$v'),
+    );
+    expect(
+      () => client.mutationCache.build<String, int, void>(
+        client,
+        options,
+        state: const MutationState<String, int, void>(
+          status: MutationStatus.success,
+          variables: 1,
+          hasVariables: true,
+        ),
+      ),
+      throwsArgumentError,
+    );
+    // The same state, refused by the mutation's own constructor door too.
+    expect(
+      () => Mutation<String, int, void>(
+        client: client,
+        cache: client.mutationCache,
+        mutationId: 99,
+        options: options,
+        state: const MutationState<String, int, void>(
+          status: MutationStatus.success,
+          variables: 1,
+          hasVariables: true,
+        ),
+      ),
+      throwsArgumentError,
+    );
+    // With data it is the persistence door, as documented.
+    final restored = client.mutationCache.build<String, int, void>(
+      client,
+      options,
+      state: const MutationState<String, int, void>(
+        status: MutationStatus.success,
+        variables: 1,
+        hasVariables: true,
+        hasData: true,
+        data: 'restored',
+      ),
+    );
+    expect(restored.state.data, 'restored');
+    client.clear();
+  });
+
+  // QE-02 — a snapshot taken mid-fetch was installed verbatim: nothing ran,
+  // yet `isFetching()` counted it and gc never collected it.
+  testFakeAsync(
+      'QE-02 a restored fetching state is normalised to idle at the build door',
+      (time) async {
+    final client = testClient();
+    for (final restored in <FetchStatus>[
+      FetchStatus.fetching,
+      FetchStatus.paused,
+    ]) {
+      final key = queryKey();
+      final options =
+          client.defaultQueryOptions<int>(QueryOptions<int>(queryKey: key));
+      final query = client.queryCache.build<int>(
+        client,
+        options,
+        state: QueryState<int>(
+          status: QueryStatus.success,
+          hasData: true,
+          data: 1,
+          dataUpdateCount: 1,
+          dataUpdatedAt: DateTime.utc(2026),
+          fetchStatus: restored,
+        ),
+      );
+      expect(query.state.fetchStatus, FetchStatus.idle,
+          reason: 'no fetch survives the process that started it');
+      expect(query.state.data, 1, reason: 'the rest of the state is untouched');
+      expect(client.isFetching(), 0);
+    }
+    // And the entry is collectable, which a `fetching` one never was.
+    await time.advance(const Duration(minutes: 10));
+    expect(client.queryCache.queries, isEmpty);
+    client.clear();
+  });
+
+  testFakeAsync('QE-02 Query.setState installs the fetch status it is given',
+      (time) async {
+    // The other half of a restore, and upstream's other half too: a merge
+    // into an existing query keeps an actively fetching status.
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<int>(key, 1);
+    final query = client.queryCache.get<int>(key)!;
+    query.setState(QueryState<int>(
+      status: QueryStatus.success,
+      hasData: true,
+      data: 2,
+      dataUpdateCount: 1,
+      dataUpdatedAt: DateTime.utc(2026),
+      fetchStatus: FetchStatus.fetching,
+    ));
+    expect(query.state.fetchStatus, FetchStatus.fetching);
+    query.setState(QueryState<int>(
+      status: QueryStatus.success,
+      hasData: true,
+      data: 2,
+      dataUpdateCount: 1,
+      dataUpdatedAt: DateTime.utc(2026),
+    ));
+    client.clear();
+  });
+
+  // MU-02 — a restored `pending` head with `isPaused: false` could never be
+  // resumed: `resumePausedMutations` only continues paused runs, so the
+  // entry blocked its scope for good, and with it every reconnect refetch
+  // behind `mount()`'s awaited `resumePausedMutations()`.
+  testFakeAsync(
+      'MU-02 a restored pending state is normalised to paused at the build '
+      'door', (time) async {
+    final client = testClient();
+    final restored = client.mutationCache.build<int, int, void>(
+      client,
+      client.defaultMutationOptions(
+        MutationOptions<int, int, void>(mutationFn: (v) async => v),
+      ),
+      state: const MutationState<int, int, void>(
+        status: MutationStatus.pending,
+        variables: 1,
+        hasVariables: true,
+      ),
+    );
+    expect(restored.state.isPaused, isTrue);
+    expect(restored.state.status, MutationStatus.pending);
+    // Paused is resumable: that is the whole point of the flip.
+    await client.resumePausedMutations();
+    expect(restored.state.status, MutationStatus.success);
+    expect(restored.state.data, 1);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'MU-02 a restored pending mutation no longer blocks the reconnect '
+      'refetch behind mount()', (time) async {
+    final client = testClient();
+    client.mount();
+    final scope = MutationScope('mu-02');
+    final key = queryKey();
+    var fetches = 0;
+    final observer = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions(
+        queryKey: key,
+        queryFn: (_) => ++fetches,
+        staleTime: StaleTime.zero,
+        refetchOnReconnect: RefetchOn.always,
+      ),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(fetches, 1);
+
+    // What a persister writes for a mutation that was in flight when the app
+    // died, restored into a scope a live mutation also uses.
+    client.mutationCache.build<int, int, void>(
+      client,
+      client.defaultMutationOptions(
+        MutationOptions<int, int, void>(
+            scope: scope, mutationFn: (v) async => v),
+      ),
+      state: const MutationState<int, int, void>(
+        status: MutationStatus.pending,
+        variables: 7,
+        hasVariables: true,
+      ),
+    );
+    final live = client.mutationCache.build<int, int, void>(
+      client,
+      client.defaultMutationOptions(
+        MutationOptions<int, int, void>(
+            scope: scope, mutationFn: (v) async => v),
+      ),
+    );
+    live.execute(2).ignore();
+    await time.flushMicrotasks();
+
+    client.onlineManager.setOnline(false);
+    client.onlineManager.setOnline(true);
+    await time.advance(const Duration(minutes: 10));
+
+    expect(fetches, 2,
+        reason: 'the reconnect refetch is not held hostage by a restored '
+            'mutation nobody could resume');
+    unsubscribe();
+    client.unmount();
+    client.clear();
+  });
+
+  // AR-04 — `isActive`/`isStatic` walked the live observer list while
+  // resolving user predicates, so a predicate with a subscription side
+  // effect threw `ConcurrentModificationError` out of every filtered bulk
+  // operation.
+  testFakeAsync(
+      'AR-04 an enabled predicate that unsubscribes a sibling does not break '
+      'isFetching', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    void Function()? siblingUnsubscribe;
+    var armed = false;
+    // The meddling observer subscribes first, so the walk is still inside the
+    // list when the predicate removes the one behind it.
+    final meddling = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions(
+        queryKey: key,
+        queryFn: (_) => 1,
+        enabled: Enabled.when((_) {
+          if (armed) {
+            armed = false;
+            siblingUnsubscribe?.call();
+          }
+          return false;
+        }),
+      ),
+    );
+    final sibling = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions(queryKey: key, queryFn: (_) => 1),
+    );
+    final unsubscribe = meddling.subscribe((_) {});
+    siblingUnsubscribe = sibling.subscribe((_) {});
+    await time.flushMicrotasks();
+
+    armed = true;
+    expect(
+      () => client.isFetching(
+          filters: const QueryFilters(type: QueryTypeFilter.active)),
+      returnsNormally,
+    );
+    expect(armed, isFalse, reason: 'the predicate really did run and remove');
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'AR-04 a staleTime callback that unsubscribes a sibling does not break '
+      'refetchQueries', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    void Function()? siblingUnsubscribe;
+    var armed = false;
+    final meddling = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions(
+        queryKey: key,
+        queryFn: (_) => 1,
+        staleTime: StaleTime.dynamic((_) {
+          if (armed) {
+            armed = false;
+            siblingUnsubscribe?.call();
+          }
+          return StaleTime.zero;
+        }),
+      ),
+    );
+    final sibling = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions(queryKey: key, queryFn: (_) => 1),
+    );
+    final unsubscribe = meddling.subscribe((_) {});
+    siblingUnsubscribe = sibling.subscribe((_) {});
+    await time.flushMicrotasks();
+
+    armed = true;
+    await expectLater(
+      client.refetchQueries(filters: QueryFilters(queryKey: key)),
+      completes,
+    );
+    expect(armed, isFalse, reason: 'the callback really did run and remove');
+    unsubscribe();
+    client.clear();
+  });
+
+  // QE-03 — `clear()` delivered one scheduled flush per removed entry to a
+  // subscriber wrapped in `batchCalls`, where `removeQueries` delivered one
+  // for the call.
+  testFakeAsync('QE-03 clear() batches its removals like removeQueries does',
+      (time) async {
+    final client = testClient();
+    var flushes = 0;
+    client.notifyManager.setScheduler((callback) {
+      flushes++;
+      callback();
+    });
+    for (var i = 0; i < 3; i++) {
+      client.setQueryData<int>(QueryKey(<Object?>['qe-03', i]), i);
+    }
+    final unsubscribe =
+        client.queryCache.subscribe(client.notifyManager.batchCalls((_) {}));
+
+    client.removeQueries(
+      filters: QueryFilters(queryKey: QueryKey(<Object?>['qe-03', 0])),
+    );
+    expect(flushes, 1);
+
+    flushes = 0;
+    client.clear();
+    expect(flushes, 1, reason: 'one flush for the call, not one per entry');
+    unsubscribe();
+  });
+
+  // Fidelity P11 — the `signal` getter told the query on every read, where
+  // upstream's `addConsumeAwareSignal` consumes exactly once.
+  testFakeAsync(
+      'P11 a FetchContext consumes its signal once across repeated accesses',
+      (time) async {
+    final token = QueryCancelToken();
+    var reads = 0;
+    final context = FetchContext<int>(
+      client: testClient(),
+      queryKey: queryKey(),
+      options: testClient().defaultQueryOptions(
+          QueryOptions<int>(queryKey: queryKey(), queryFn: (_) => 1)),
+      state: const QueryState<int>(),
+      fetchOptions: null,
+      fetchFn: () async => 1,
+      signal: token,
+      onSignalRead: () => reads++,
+    );
+    expect(context.signal, same(token));
+    expect(context.signal, same(token));
+    expect(reads, 1);
+  });
 }
 
 /// The eight members [Query] asks of an observer, answered with the quietest
@@ -3050,4 +3842,963 @@ class _Selector {
     calls++;
     return data.length;
   }
+}
+
+/// Value-equal across the hierarchy: a `_Wide(1)` equals a `_Narrow(1)`, so
+/// the sharing walk hands a `_Wide` to a `List<_Narrow>` copy (AR-09).
+class _Wide {
+  _Wide(this.value);
+  final int value;
+  @override
+  bool operator ==(Object other) => other is _Wide && other.value == value;
+  @override
+  int get hashCode => value.hashCode;
+}
+
+class _Narrow extends _Wide {
+  _Narrow(super.value);
+}
+
+// -----------------------------------------------------------------------------
+// Fidelity review, 2026-09-12. Three behavioural gaps between `query.ts` /
+// `queryObserver.ts` at `50680b98c` and this port, each reproduced before the
+// fix. The ported cases they belong to are in `query_test.dart` and
+// `query_client_test.dart`; these are the parts that have no upstream case,
+// because upstream expresses them with `skipToken` and an untyped
+// `structuralSharing`.
+
+void fidelityReview() {
+  // FI-01's two cases pinned `isDisabled` consulting `enabled` with no
+  // observer attached. That was reverted by the final review of the same
+  // day; `F2 …` and `F3 …` in `finalReview` below pin what replaced it.
+
+  testFakeAsync(
+      'FI-04 a fetch with no query function of its own borrows an '
+      "observer's", (time) async {
+    final client = testClient();
+    final key = queryKey();
+    var fetches = 0;
+    Future<String> queryFn(QueryFunctionContext _) async {
+      fetches++;
+      return 'observed';
+    }
+
+    final observer = client.observe<String, String>(
+      QueryObserverOptions<String>(queryKey: key, queryFn: queryFn),
+    );
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    expect(fetches, 1);
+
+    // The one way a query with observers can have no query function of its
+    // own: an imperative call that carries none. Upstream reaches the same
+    // branch by constructing a `Query` with no options at all, which cannot
+    // happen here — a `Query` is always the cache's entry for its key, and
+    // the observer wrote its own options into it.
+    expect(
+      await client.query<String>(QueryOptions<String>(queryKey: key)),
+      'observed',
+    );
+    expect(fetches, 2);
+    expect(client.queryCache.get<String>(key)!.options.queryFn, same(queryFn));
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync('FI-05 a structuralSharing opt-out reaches select output',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final observer = client.observe<List<String>, List<String>>(
+      QuerySelectOptions<List<String>, List<String>>(
+        queryKey: key,
+        // A fresh but equal list on every fetch.
+        queryFn: (_) => <String>['a', 'b'],
+        // A fresh but equal list on every selection.
+        select: List<String>.of,
+        // The opt-out. Upstream's `replaceData` routes `structuralSharing`
+        // for the selected value too; this port always ran the selection
+        // through `replaceEqualDeep`, so the reader was handed the first
+        // instance forever and the switch was invisible to it. Spelled
+        // `noStructuralSharing()` since F4: only the recognised opt-out
+        // reaches the selection.
+        structuralSharing: noStructuralSharing(),
+      ),
+    );
+    observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    final first = observer.currentResult.dataOrNull;
+    await observer.refetch();
+    await time.flushMicrotasks();
+    expect(identical(observer.currentResult.dataOrNull, first), isFalse);
+    expect(observer.currentResult.dataOrNull, <String>['a', 'b']);
+    observer.destroy();
+    client.clear();
+  });
+
+  testFakeAsync('FI-05 the default still shares select output', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final observer = client.observe<List<String>, List<String>>(
+      QuerySelectOptions<List<String>, List<String>>(
+        queryKey: key,
+        queryFn: (_) => <String>['a', 'b'],
+        select: List<String>.of,
+      ),
+    );
+    observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    final first = observer.currentResult.dataOrNull;
+    await observer.refetch();
+    await time.flushMicrotasks();
+    expect(identical(observer.currentResult.dataOrNull, first), isTrue);
+    observer.destroy();
+    client.clear();
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Final review of the pre-release branch, 2026-09-12. Defects the round's own
+// fixes introduced (F1–F6), each reproduced with the reviewer's probe before
+// anything changed, and each regression below red against the tree it fixes.
+
+/// A value class: `==` by [value], two instances apart by identity.
+final class _Valued {
+  _Valued(this.value);
+  final int value;
+  @override
+  bool operator ==(Object other) => other is _Valued && other.value == value;
+  @override
+  int get hashCode => value.hashCode;
+}
+
+/// A list whose `==` only compares lengths — looser than the sharing walk.
+final class _LengthEqualList extends ListBase<String> {
+  _LengthEqualList(this._items);
+  final List<String> _items;
+  @override
+  int get length => _items.length;
+  @override
+  set length(int value) => _items.length = value;
+  @override
+  String operator [](int index) => _items[index];
+  @override
+  void operator []=(int index, String value) => _items[index] = value;
+  @override
+  bool operator ==(Object other) =>
+      other is _LengthEqualList && other.length == length;
+  @override
+  int get hashCode => length.hashCode;
+}
+
+/// A set that answers only `length`, iteration and `add`: every method whose
+/// answer depends on an equality policy throws, as `MapKeySet.lookup` does.
+final class _MembersOnlySet<E> extends SetBase<E> {
+  _MembersOnlySet(Iterable<E> members) : _members = members.toList();
+  final List<E> _members;
+  @override
+  bool add(E value) {
+    _members.add(value);
+    return true;
+  }
+
+  @override
+  Iterator<E> get iterator => _members.iterator;
+  @override
+  int get length => _members.length;
+  @override
+  bool contains(Object? element) => throw UnsupportedError('contains');
+  @override
+  E? lookup(Object? element) => throw UnsupportedError('lookup');
+  @override
+  bool remove(Object? value) => throw UnsupportedError('remove');
+  @override
+  bool containsAll(Iterable<Object?> other) =>
+      throw UnsupportedError('containsAll');
+  @override
+  Set<E> toSet() => _MembersOnlySet<E>(_members);
+}
+
+/// A hand-written set whose `lookup` returns its argument rather than the
+/// stored member — what dart2js's default set does for numbers.
+final class _ArgumentLookupSet extends SetBase<String> {
+  _ArgumentLookupSet(this._base);
+  final Set<String> _base;
+  @override
+  bool add(String value) => _base.add(value);
+  @override
+  bool contains(Object? element) => _base.contains(element);
+  @override
+  Iterator<String> get iterator => _base.iterator;
+  @override
+  int get length => _base.length;
+  @override
+  String? lookup(Object? element) =>
+      contains(element) ? element as String : null;
+  @override
+  bool remove(Object? value) => _base.remove(value);
+  @override
+  Set<String> toSet() => _ArgumentLookupSet(_base.toSet());
+}
+
+int _caseInsensitive(String a, String b) =>
+    a.toLowerCase().compareTo(b.toLowerCase());
+
+void finalReview() {
+  test(
+      'F1 a set with its own equality policy is compared by the walk, not by '
+      'its own lookup', () {
+    // A case-insensitive `SplayTreeSet` calls "Alpha" and "alpha" the same
+    // member, and `containsAll` asks the set. The walk compares with `==`.
+    final splayPrevious = SplayTreeSet<String>(_caseInsensitive)..add('Alpha');
+    final splayNext = SplayTreeSet<String>(_caseInsensitive)..add('alpha');
+    expect(replaceEqualDeep<Set<String>>(splayPrevious, splayNext),
+        same(splayNext));
+
+    // The same through `equals:`/`hashCode:`.
+    LinkedHashSet<String> caseless(String member) => LinkedHashSet<String>(
+          equals: (a, b) => a.toLowerCase() == b.toLowerCase(),
+          hashCode: (value) => value.toLowerCase().hashCode,
+        )..add(member);
+    final hashedNext = caseless('alpha');
+    expect(replaceEqualDeep<Set<String>>(caseless('Alpha'), hashedNext),
+        same(hashedNext));
+
+    // Equal members under `==` are still shared, whatever the set's policy.
+    final kept = SplayTreeSet<String>(_caseInsensitive)..add('Alpha');
+    expect(
+        replaceEqualDeep<Set<String>>(
+            kept, SplayTreeSet<String>(_caseInsensitive)..add('Alpha')),
+        same(kept));
+  });
+
+  test(
+      'F1 members a set holds apart, or a policy pairs, are still compared '
+      'by the walk', () {
+    // Two `==` members an identity set can hold apart. Both are `==` to the
+    // same member of the other set: a comparison that did not consume each
+    // partner once would call `{V(1), V(1)}` "equal" to `{V(1), V(2)}`.
+    final twice = Set<Object?>.identity()
+      ..add(_Valued(1))
+      ..add(_Valued(1));
+    final previous = <Object?>{_Valued(1), _Valued(2)};
+    expect(replaceEqualDeep<Set<Object?>>(previous, twice), same(twice));
+    expect(replaceEqualDeep<Set<Object?>>(twice, previous), same(previous));
+
+    // A collection member that is not the very instance goes to the walk,
+    // which still shares it when it is deep-equal.
+    final lists = <Object?>{
+      <int>[1],
+      <int>[2],
+    };
+    expect(
+        replaceEqualDeep<Set<Object?>>(lists, <Object?>{
+          <int>[2],
+          <int>[1],
+        }),
+        same(lists));
+    expect(
+        replaceEqualDeep<Set<Object?>>(lists, <Object?>{
+          <int>[2],
+          <int>[3],
+        }),
+        isNot(same(lists)));
+
+    // A collection whose own `==` is looser than the walk — here, equal by
+    // length — is still compared by walking it, as it always was: a pair the
+    // walk would reject is not accepted on `==`'s word.
+    final loose = <Object?>{
+      _LengthEqualList(<String>['a'])
+    };
+    final changed = <Object?>{
+      _LengthEqualList(<String>['b'])
+    };
+    expect(replaceEqualDeep<Set<Object?>>(loose, changed), same(changed));
+
+    // A `null` member, which `lookup` cannot report, is decided by the walk.
+    final withNull = <Object?>{null, 1};
+    expect(replaceEqualDeep<Set<Object?>>(withNull, <Object?>{1, null}),
+        same(withNull));
+    expect(replaceEqualDeep<Set<Object?>>(withNull, <Object?>{1, 2}),
+        isNot(same(withNull)));
+  });
+
+  test('F1 a refetch that changes a member of such a set is reported', () {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<SplayTreeSet<String>>(
+        key, SplayTreeSet<String>(_caseInsensitive)..add('Alpha'));
+    client.setQueryData<SplayTreeSet<String>>(
+        key, SplayTreeSet<String>(_caseInsensitive)..add('alpha'));
+    expect(client.getQueryData<SplayTreeSet<String>>(key)!.single, 'alpha');
+    client.clear();
+  });
+
+  test(
+      "F1 a QueryKey's set part is frozen to default equality, so its own "
+      'set shortcut stays sound', () {
+    // `QueryKey` keeps a `containsAll` shortcut the sharing walk lost. It is
+    // sound there because `_freeze` copies every set part into
+    // `Set.unmodifiable`, a default-equality set, whatever policy the caller's
+    // set had.
+    QueryKey splay(String member) => QueryKey(<Object?>[
+          SplayTreeSet<String>(_caseInsensitive)..add(member),
+        ]);
+    QueryKey hashed(String member) => QueryKey(<Object?>[
+          LinkedHashSet<String>(
+            equals: (a, b) => a.toLowerCase() == b.toLowerCase(),
+            hashCode: (value) => value.toLowerCase().hashCode,
+          )..add(member),
+        ]);
+    expect(splay('Alpha'), isNot(equals(splay('alpha'))));
+    expect(splay('Alpha').hashCode, isNot(splay('alpha').hashCode));
+    expect(hashed('Alpha'), isNot(equals(hashed('alpha'))));
+    expect(splay('Alpha'), equals(splay('Alpha')));
+    expect(splay('Alpha').hashCode, splay('Alpha').hashCode);
+    // And the two policies agree with each other once frozen.
+    expect(splay('Alpha'), equals(hashed('Alpha')));
+  });
+
+  testFakeAsync(
+      'F2 refetchQueries(all) refetches an unobserved query whose last '
+      'observer was Enabled.no', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    var fetches = 0;
+    final observer = client.observe<String, String>(
+      QueryObserverOptions<String>(
+        queryKey: key,
+        queryFn: (_) {
+          fetches++;
+          return 'fetched';
+        },
+        enabled: Enabled.no,
+      ),
+    );
+    client.setQueryData(key, 'seed');
+    observer.subscribe((_) {})();
+    await time.flushMicrotasks();
+
+    final query = client.queryCache.get<String>(key)!;
+    // `Enabled.no` is upstream's `enabled: false`, which never reaches the
+    // no-observer arm upstream: a seeded query is refetched. The FI-01 fix
+    // read it as `skipToken` and skipped the query for good.
+    expect(query.isDisabled(), isFalse);
+    await client.refetchQueries(
+      filters: const QueryFilters(type: QueryTypeFilter.all),
+    );
+    expect(fetches, 1);
+    expect(query.state.data, 'fetched');
+
+    await client.invalidateQueries(refetchType: RefetchType.all);
+    expect(fetches, 2);
+
+    // Upstream's other half is kept: never fetched means disabled.
+    final idleKey = queryKey();
+    client.observe<String, String>(QueryObserverOptions<String>(
+      queryKey: idleKey,
+      queryFn: (_) {
+        fetches++;
+        return 'fetched';
+      },
+      enabled: Enabled.no,
+    ))
+      ..subscribe((_) {})()
+      ..destroy();
+    expect(client.queryCache.get<String>(idleKey)!.isDisabled(), isTrue);
+    await client.refetchQueries(
+      filters: const QueryFilters(type: QueryTypeFilter.all),
+    );
+    expect(fetches, 3, reason: 'only the seeded query was refetched again');
+    client.clear();
+  });
+
+  testFakeAsync(
+      'F3 an Enabled.when predicate is not called once its observer is gone',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    var calls = 0;
+    var observerGone = false;
+    final observer = client.observe<String, String>(
+      QueryObserverOptions<String>(
+        queryKey: key,
+        queryFn: (_) => 'fetched',
+        enabled: Enabled.when((_) {
+          calls++;
+          // A predicate over state its owner tears down with it.
+          if (observerGone) {
+            throw StateError('read after dispose');
+          }
+          return false;
+        }),
+      ),
+    );
+    client.setQueryData(key, 'seed');
+    observer.subscribe((_) {})();
+    await time.flushMicrotasks();
+    observerGone = true;
+    final before = calls;
+
+    final query = client.queryCache.get<String>(key)!;
+    expect(query.isDisabled(), isFalse);
+    await client.refetchQueries(
+      filters: const QueryFilters(type: QueryTypeFilter.all),
+    );
+    await client.invalidateQueries(refetchType: RefetchType.all);
+    expect(calls, before,
+        reason: 'nothing observes the query; its predicate is not asked');
+    client.clear();
+  });
+
+  testFakeAsync(
+      "F4 a sharing hook of the user's own leaves select output shared",
+      (time) async {
+    for (final hook in <StructuralSharing<String>>[
+      // A hook that shares, in its own way.
+      (previous, next) =>
+          previous != null && previous == next ? previous : next,
+      // And the one the docs used to call "off": a hook, not the opt-out.
+      (_, next) => next,
+    ]) {
+      final client = testClient();
+      final key = queryKey();
+      final observer = client.observe<String, List<String>>(
+        QuerySelectOptions<String, List<String>>(
+          queryKey: key,
+          queryFn: (_) => 'a1',
+          structuralSharing: hook,
+          // A fresh list each time, equal whenever the first letter is.
+          select: (data) => <String>[data.substring(0, 1)],
+        ),
+      );
+      final unsubscribe = observer.subscribe((_) {});
+      client.setQueryData<String>(key, 'a1');
+      final first = observer.currentResult.dataOrNull;
+      // The input changes, so the selector runs again and builds a new list.
+      client.setQueryData<String>(key, 'a2');
+      expect(observer.currentResult.dataOrNull, same(first),
+          reason: 'the hook governs the cache write; it did not ask for the '
+              'selection to go unshared');
+      unsubscribe();
+      client.clear();
+    }
+  });
+
+  testFakeAsync(
+      'F4 noStructuralSharing() turns select output sharing off, set on the '
+      'query or through the defaults', (time) async {
+    for (final throughDefaults in <bool>[false, true]) {
+      final client = testClient();
+      if (throughDefaults) {
+        client.setDefaultOptions(DefaultOptions(
+          queries: QueryDefaults(structuralSharing: noStructuralSharing()),
+        ));
+      }
+      final key = queryKey();
+      final observer = client.observe<String, List<String>>(
+        QuerySelectOptions<String, List<String>>(
+          queryKey: key,
+          queryFn: (_) => 'a1',
+          structuralSharing:
+              throughDefaults ? null : noStructuralSharing<String>(),
+          select: (data) => <String>[data.substring(0, 1)],
+        ),
+      );
+      final unsubscribe = observer.subscribe((_) {});
+      client.setQueryData<String>(key, 'a1');
+      final first = observer.currentResult.dataOrNull;
+      client.setQueryData<String>(key, 'a2');
+      expect(observer.currentResult.dataOrNull, isNot(same(first)),
+          reason: 'throughDefaults: $throughDefaults');
+      expect(observer.currentResult.dataOrNull, <String>['a']);
+      unsubscribe();
+      client.clear();
+    }
+
+    // The cache write is off too, and the opt-out is one stable instance per
+    // data type, so options built with it compare equal across rebuilds.
+    final client = testClient();
+    final key = queryKey();
+    final options = QueryOptions<List<int>>(
+        queryKey: key, structuralSharing: noStructuralSharing());
+    client.queryCache.build(client, client.defaultQueryOptions(options));
+    client.setQueryData<List<int>>(key, <int>[1]);
+    final written = <int>[1];
+    client.setQueryData<List<int>>(key, written);
+    expect(client.getQueryData<List<int>>(key), same(written));
+    expect(noStructuralSharing<List<int>>(),
+        same(noStructuralSharing<List<int>>()));
+    expect(
+        client.defaultQueryOptions(options),
+        client.defaultQueryOptions(QueryOptions<List<int>>(
+            queryKey: key, structuralSharing: noStructuralSharing())));
+    client.clear();
+  });
+
+  testFakeAsync(
+      'F5 a void or nullable mutation restores as success without data; a '
+      'non-nullable one is still refused', (time) async {
+    final client = testClient();
+    final voidMutation = client.mutationCache.build<void, int, void>(
+      client,
+      client.defaultMutationOptions(
+          MutationOptions<void, int, void>(mutationFn: (_) async {})),
+      state: const MutationState<void, int, void>(
+        status: MutationStatus.success,
+        variables: 1,
+        hasVariables: true,
+      ),
+    );
+    expect(voidMutation.state.status, MutationStatus.success);
+    final voidObserver = MutationObserver<void, int, void>(
+      client,
+      MutationOptions<void, int, void>(mutationFn: (_) async {}),
+    );
+    expect(voidObserver.currentResult.isSuccess, isFalse);
+
+    final nullable = client.mutationCache.build<String?, int, void>(
+      client,
+      client.defaultMutationOptions(
+          MutationOptions<String?, int, void>(mutationFn: (_) async => null)),
+      state: const MutationState<String?, int, void>(
+        status: MutationStatus.success,
+        variables: 1,
+        hasVariables: true,
+      ),
+    );
+    expect(nullable.state.data, isNull);
+
+    expect(
+      () => client.mutationCache.build<String, int, void>(
+        client,
+        client.defaultMutationOptions(
+            MutationOptions<String, int, void>(mutationFn: (v) async => '$v')),
+        state: const MutationState<String, int, void>(
+          status: MutationStatus.success,
+          variables: 1,
+          hasVariables: true,
+        ),
+      ),
+      throwsArgumentError,
+    );
+    client.clear();
+  });
+
+  testFakeAsync(
+      'F5 the query twin, revised by R2-3: a successful query state must hold '
+      'data whatever its type; one that resolved to null says so with hasData',
+      (time) async {
+    final client = testClient();
+    // Refused through both doors, for `void`, nullable and non-nullable data
+    // alike. F5 had accepted the first two; a `select` to a non-nullable type
+    // then threw in the observer's constructor.
+    void refusedByBuild<T>() => expect(
+          () => client.queryCache.build<T>(
+            client,
+            client.defaultQueryOptions(QueryOptions<T>(queryKey: queryKey())),
+            state: QueryState<T>(status: QueryStatus.success),
+          ),
+          throwsArgumentError,
+          reason: '$T',
+        );
+    refusedByBuild<void>();
+    refusedByBuild<String?>();
+    refusedByBuild<String>();
+
+    final nullableKey = queryKey();
+    client.setQueryData<String?>(nullableKey, 'seed');
+    final query = client.queryCache.get<String?>(nullableKey)!;
+    expect(
+      () => query
+          .setState(const QueryState<String?>(status: QueryStatus.success)),
+      throwsArgumentError,
+    );
+    expect(query.state.data, 'seed', reason: 'a refused state changes nothing');
+
+    // A query that resolved to nothing is restored with `hasData: true`.
+    client.queryCache.build<void>(
+      client,
+      client.defaultQueryOptions(QueryOptions<void>(queryKey: queryKey())),
+      state: const QueryState<void>(status: QueryStatus.success, hasData: true),
+    );
+    query.setState(const QueryState<String?>(
+        status: QueryStatus.success, hasData: true, data: null));
+    final observer = client.observe<String?, String?>(
+      QueryObserverOptions<String?>(
+        queryKey: nullableKey,
+        queryFn: (_) => null,
+        enabled: Enabled.no,
+      ),
+    );
+    expect(observer.currentResult.isSuccess, isTrue);
+    expect(observer.currentResult.dataOrNull, isNull);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'F6 removing a restored scope head releases the queue it was blocking, '
+      'even if its scope moves before the release runs', (time) async {
+    final client = testClient();
+    var ran = 0;
+    MutationOptions<String, String, void> scoped(String scope) =>
+        MutationOptions<String, String, void>(
+          scope: MutationScope(scope),
+          mutationFn: (v) async {
+            ran++;
+            return v;
+          },
+        );
+    MutationState<String, String, void> pending(String variables) =>
+        MutationState<String, String, void>(
+          status: MutationStatus.pending,
+          variables: variables,
+          hasVariables: true,
+        );
+
+    final head = client.mutationCache.build<String, String, void>(
+      client,
+      client.defaultMutationOptions(scoped('queue')),
+      state: pending('head'),
+    );
+    final waiter = client.mutationCache.build<String, String, void>(
+      client,
+      client.defaultMutationOptions(scoped('queue')),
+      state: pending('waiter'),
+    );
+
+    client.mutationCache.remove(head);
+    // Between the removal and its microtask, the removed entry moves scope.
+    head.setOptions(client.defaultMutationOptions(scoped('elsewhere')));
+    await time.advance(ms(10));
+
+    expect(ran, 1, reason: 'the queue the head was blocking is released');
+    expect(waiter.state.status, MutationStatus.success);
+    expect(waiter.state.data, 'waiter');
+    client.clear();
+    await time.advance(ms(10));
+  });
+
+  test(
+      'R2-1 a default set against a SplayTreeSet<double> holding both 0.0 and '
+      '-0.0 is not equal, on every platform', () {
+    // dart2js's default set answers `lookup` with its argument for numbers,
+    // and `0.0 == -0.0`: a lookup round trip paired both of `next`'s zeros
+    // with `previous`'s one and never looked for `3.0`.
+    final previous = <double>{0.0, 1.0, 3.0};
+    final next = SplayTreeSet<double>()..addAll(<double>[-0.0, 0.0, 1.0]);
+    expect(next, hasLength(3), reason: 'compareTo keeps -0.0 and 0.0 apart');
+    expect(replaceEqualDeep<Set<double>>(previous, next), same(next));
+    expect(replaceEqualDeep<Set<double>>(next, previous), same(previous));
+
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<Set<double>>(key, previous);
+    client.setQueryData<Set<double>>(key, next);
+    expect(client.getQueryData<Set<double>>(key), same(next));
+    client.clear();
+
+    // Equal members are still shared across the two set types.
+    final zeros = <double>{0.0, 1.0};
+    expect(
+        replaceEqualDeep<Set<double>>(
+            zeros, SplayTreeSet<double>()..addAll(<double>[1.0, 0.0])),
+        same(zeros));
+  });
+
+  test(
+      "R2-2 set comparison asks a set for its length and members only, never "
+      'its lookup, contains or remove', () {
+    // `package:collection`'s `MapKeySet.lookup` throws; so does every
+    // policy-dependent method of this set.
+    final previous = _MembersOnlySet<Object?>(<Object?>[
+      'a',
+      <int>[1],
+      null
+    ]);
+    final same_ = _MembersOnlySet<Object?>(<Object?>[
+      <int>[1],
+      null,
+      'a'
+    ]);
+    final changed = _MembersOnlySet<Object?>(<Object?>[
+      'a',
+      <int>[2],
+      null
+    ]);
+    expect(replaceEqualDeep<Set<Object?>>(previous, same_), same(previous));
+    expect(replaceEqualDeep<Set<Object?>>(previous, changed), same(changed));
+    // Nested inside the shapes the walk descends into, too.
+    final nested = <String, Object?>{
+      'ids': <Object?>[previous]
+    };
+    expect(
+        replaceEqualDeep<Map<String, Object?>>(nested, <String, Object?>{
+          'ids': <Object?>[same_]
+        }),
+        same(nested));
+
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<Set<Object?>>(key, previous);
+    expect(
+        () => client.setQueryData<Set<Object?>>(key, changed), returnsNormally);
+    expect(client.getQueryData<Set<Object?>>(key), same(changed));
+    client.clear();
+  });
+
+  test(
+      "R2-4 a hand-written set whose lookup returns its argument cannot "
+      'reopen F1', () {
+    final previous = _ArgumentLookupSet(LinkedHashSet<String>(
+      equals: (a, b) => a.toLowerCase() == b.toLowerCase(),
+      hashCode: (value) => value.toLowerCase().hashCode,
+    )..add('Alpha'));
+    final next = <String>{'alpha'};
+    expect(replaceEqualDeep<Set<String>>(previous, next), same(next));
+    expect(replaceEqualDeep<Set<String>>(next, previous), same(previous));
+  });
+
+  test(
+      'R3-1 a set walk spreads fractional doubles across buckets instead of '
+      'piling them into a few', () {
+    // The walk buckets members in a map that spreads its keys by their low
+    // bits. On the VM a fractional double hashes to a value whose low bits
+    // barely vary (`0.5` is `0x3fe000003fe00000`): 10 000 half-integers
+    // shared 64 low-12-bit patterns, so nearly every member landed in the
+    // same few slots and each comparison probed a long chain — 1.6 s per
+    // cache write at 50 000 members. The cost lives inside the map, so it is
+    // pinned here by the spread of the keys it is given, not by a clock.
+    for (final entry in <String, double Function(int)>{
+      'half-integers': (i) => i + 0.5,
+      'quarters': (i) => i / 4,
+      'prices': (i) => i / 100,
+    }.entries) {
+      final lowBits = <int>{
+        for (var i = 0; i < 10000; i++)
+          sharingBucketOf(entry.value(i), 0) & 0xfff,
+      };
+      expect(lowBits.length, greaterThan(3000),
+          reason:
+              '${entry.key}: ${lowBits.length} of 4096 low-12-bit patterns');
+    }
+  });
+
+  test(
+      'R3-1 follow-up: keys and nested data holding a fractional double spread '
+      'their hash codes', () {
+    // Dart's composite hashes combine through a 29-bit mask, and a VM
+    // fractional double varies only in its high hash bits, so a leaf hash
+    // passed straight into `Object.hashAll` collapsed: 10 000 keys
+    // `['price', i + 0.5]` shared 396 hash codes, and every `setQueryData`
+    // and lookup on them scanned a long chain (140 ms for 10 000, 1.7 s for
+    // 50 000, against 15 ms and 86 ms for int keys). Leaves are spread before
+    // they are combined, in the key and in the sharing walk alike. Counted,
+    // not timed. The collapse is the VM's: compiled to JavaScript a double
+    // hashes by value, so the raw version passes there too.
+    const n = 10000;
+    final keyHashes = <int>{
+      for (var i = 0; i < n; i++) QueryKey(['price', i + 0.5]).hashCode,
+    };
+    expect(keyHashes.length, greaterThan(9000),
+        reason: '${keyHashes.length} distinct hash codes for $n price keys');
+
+    for (final entry in <String, Object Function(int)>{
+      'maps {price: i + 0.5}': (i) => {'price': i + 0.5},
+      'sets {i + 0.5}': (i) => {i + 0.5},
+      'lists [1.0, i + 0.5]': (i) => [1.0, i + 0.5],
+    }.entries) {
+      final buckets = <int>{
+        for (var i = 0; i < n; i++) sharingBucketOf(entry.value(i), 0),
+      };
+      expect(buckets.length, greaterThan(9000),
+          reason: '${entry.key}: ${buckets.length} distinct buckets for $n');
+    }
+  });
+
+  test(
+      "R2-1 a QueryKey's set part agrees with == and hashCode for signed "
+      'zeros, int and double, NaN and fractions, on every platform', () {
+    // `QueryKey` keeps `containsAll`, on sets `_freeze` rebuilt with default
+    // equality. Pinned where dart2js differs: numbers hash by value there,
+    // `1` and `1.0` are one value, and `identical(nan, nan)` is false.
+    const values = <Object>[
+      0.0,
+      -0.0,
+      0,
+      1,
+      1.0,
+      double.nan,
+      0.5,
+      -1.5,
+      1e300,
+      double.infinity,
+    ];
+    final shapes = <List<Object>>[
+      for (final a in values) ...<List<Object>>[
+        <Object>[a],
+        for (final b in values) <Object>[a, b],
+      ],
+    ];
+    for (final left in shapes) {
+      for (final right in shapes) {
+        final setLeft = QueryKey(<Object?>[left.toSet()]);
+        final setRight = QueryKey(<Object?>[right.toSet()]);
+        final equal = setLeft == setRight;
+        expect(setRight == setLeft, equal, reason: '$left vs $right');
+        if (equal) {
+          expect(setLeft.hashCode, setRight.hashCode,
+              reason: '$left vs $right');
+        }
+        // The set part answers what a multiset of its frozen members does
+        // under the element rule every other part uses.
+        final frozenLeft = (setLeft.parts.single! as Set<Object?>).toList();
+        final frozenRight = (setRight.parts.single! as Set<Object?>).toList();
+        var multisetEqual = frozenLeft.length == frozenRight.length;
+        final unmatched = frozenLeft.toList();
+        for (final member in frozenRight) {
+          if (!multisetEqual) break;
+          final index = unmatched.indexWhere((other) =>
+              QueryKey(<Object?>[other]) == QueryKey(<Object?>[member]));
+          if (index < 0) {
+            multisetEqual = false;
+          } else {
+            unmatched.removeAt(index);
+          }
+        }
+        expect(equal, multisetEqual, reason: '$left vs $right');
+      }
+    }
+    expect(
+        QueryKey(<Object?>[
+          <Object?>{0.0}
+        ]),
+        QueryKey(<Object?>[
+          <Object?>{-0.0}
+        ]));
+    expect(
+        QueryKey(<Object?>[
+          <Object?>{1}
+        ]),
+        QueryKey(<Object?>[
+          <Object?>{1.0}
+        ]));
+  });
+
+  testFakeAsync(
+      'R2-3 a restored success-without-data query is refused, and one that '
+      'resolved to null reaches a select to a non-nullable type', (time) async {
+    for (final door in <String>['build', 'setState']) {
+      final client = testClient();
+      final key = queryKey();
+      void restore(QueryState<int?> state) {
+        if (door == 'build') {
+          client.queryCache.build<int?>(
+            client,
+            client.defaultQueryOptions(QueryOptions<int?>(queryKey: key)),
+            state: state,
+          );
+        } else {
+          client.setQueryData<int?>(key, 1);
+          client.queryCache.get<int?>(key)!.setState(state);
+        }
+      }
+
+      expect(() => restore(const QueryState<int?>(status: QueryStatus.success)),
+          throwsArgumentError,
+          reason: door);
+      client.clear();
+
+      restore(const QueryState<int?>(
+          status: QueryStatus.success, hasData: true, data: null));
+      for (final enabled in <Enabled?>[null, Enabled.no]) {
+        final observer = client.observe<int?, String>(
+          QuerySelectOptions<int?, String>(
+            queryKey: key,
+            queryFn: (_) async => 7,
+            enabled: enabled,
+            staleTime: StaleTime.infinite,
+            select: (value) => value?.toString() ?? 'none',
+          ),
+        );
+        final unsubscribe = observer.subscribe((_) {});
+        expect(observer.currentResult.dataOrNull, 'none',
+            reason: '$door, enabled: $enabled');
+        unsubscribe();
+        observer.destroy();
+      }
+      client.clear();
+    }
+  });
+
+  testFakeAsync(
+      'R2-3 the mutation twin: a void or nullable success without data is '
+      'safe on every path that reads it', (time) async {
+    Future<void> probe<T>(MutationFn<T, int> mutationFn) async {
+      final settled = <String>[];
+      final client = testClient(
+        mutationCache: MutationCache(
+          onSuccess: (data, _, __, ___) => settled.add('cache $data'),
+        ),
+      );
+      final key = queryKey();
+      final options = MutationOptions<T, int, void>(
+          mutationKey: key, mutationFn: mutationFn);
+      final restored = client.mutationCache.build<T, int, void>(
+        client,
+        client.defaultMutationOptions(options),
+        state: MutationState<T, int, void>(
+          status: MutationStatus.success,
+          variables: 1,
+          hasVariables: true,
+          isPaused: true,
+        ),
+      );
+
+      // `MutationStateObserver`'s select gets the mutation itself, typed
+      // `Object?`: nothing casts the data into a selection's type for it.
+      final statuses = MutationStateObserver<MutationStatus>(client,
+          filters: MutationFilters(mutationKey: key),
+          select: (mutation) => mutation.state.status);
+      final data = MutationStateObserver<String>(client,
+          filters: MutationFilters(mutationKey: key),
+          select: (mutation) => '${mutation.state.data}');
+      final unsubscribeStatuses = statuses.subscribe((_) {});
+      expect(statuses.currentResult, <MutationStatus>[MutationStatus.success]);
+      expect(data.currentResult, <String>['null']);
+
+      // Nothing resumes a settled entry, so no callback sees it.
+      await client.resumePausedMutations();
+      expect(settled, isEmpty, reason: '$T');
+
+      // A `MutationObserver` only ever reflects mutations it ran itself, and
+      // its result, callbacks and getters read its own `TData`.
+      final observer = MutationObserver<T, int, void>(client, options);
+      final unsubscribe = observer.subscribe((_) {});
+      expect(observer.currentResult.isIdle, isTrue, reason: '$T');
+      final calls = <String>[];
+      observer.mutate(2,
+          callbacks: MutateCallbacks<T, int, void>(
+            onSuccess: (value, _, __) => calls.add('success $value'),
+            onSettled: (value, _, __, ___, ____) => calls.add('settled $value'),
+          ));
+      await time.flushMicrotasks();
+      expect(observer.currentResult.isSuccess, isTrue, reason: '$T');
+      expect(observer.currentResult.dataOrNull, isNull);
+      expect(calls, <String>['success null', 'settled null'], reason: '$T');
+      expect(settled, <String>['cache null'], reason: '$T');
+
+      // Running the restored entry again settles it with data.
+      await restored.execute(3);
+      expect(restored.state.hasData, isTrue, reason: '$T');
+
+      unsubscribe();
+      unsubscribeStatuses();
+      observer.destroy();
+      client.clear();
+    }
+
+    await probe<void>((_) async {});
+    await probe<int?>((_) async => null);
+  });
 }

@@ -65,7 +65,7 @@ returned without a fetch; stale data is returned *and* refetched behind it.
 | `StaleTime.zero` | stale immediately — the default, as upstream |
 | `StaleTime.duration(d)` | fresh for `d` |
 | `StaleTime.infinite` | never stale by time, still refetched when explicitly asked |
-| `StaleTime.static` | never stale **and** skipped by every refetch trigger — mount, focus, reconnect, `invalidateQueries`, `refetchQueries` — but not by an observer's own `refetch()`, and not by an explicit `refetchInterval`, which polls a static query exactly as it polls any other |
+| `StaleTime.static` | never stale **and**, while an observer holds the query, skipped by every refetch trigger — mount, focus, reconnect, `invalidateQueries`, `refetchQueries` — but not by an observer's own `refetch()`, and not by an explicit `refetchInterval`, which polls a static query exactly as it polls any other. An entry nobody observes (fetched by `client.query`, say) is refetched by `invalidateQueries` and `refetchQueries` like any other, as upstream |
 | `StaleTime.dynamic((query) => …)` | computed per query |
 
 `StaleTime.static` is the "fetch this once, ever" option — it is what
@@ -104,7 +104,13 @@ QueryObserverOptions<List<Comment>> commentsQuery(
 
 A disabled query does not fetch automatically and keeps its cached or initial
 data. Without data it is `pending`; existing successful data stays successful.
-Explicit `refetch()` can still fetch. Upstream's `skipToken` is `Enabled.no`.
+Explicit `refetch()` can still fetch. `refetchQueries` and
+`invalidateQueries(refetchType: RefetchType.all)` skip a query while a
+disabled observer holds it, but once nothing observes a query that has
+fetched before, they refetch it whatever `enabled` its last observer had — as
+upstream does for `enabled: false`. Upstream's `skipToken` is `Enabled.no` too,
+with `enabled: false`'s meaning where the two differ: upstream would skip an
+unobserved `skipToken` query there, and this port does not.
 
 ## Retries
 
@@ -189,7 +195,7 @@ result. It has an age, so it can already be stale:
 | | |
 |---|---|
 | `InitialData.value(v)` | |
-| `InitialData.compute(() => …)` | returning `null` means "none"; `InitialData.value(null)` is a value *of* `null` |
+| `InitialData.compute(() => …)` | returning `null` means "none"; `InitialData.value(null)` is a value *of* `null`. Asked again on every rebuild and every fetch until the entry holds data — as upstream — so a seed it finds later still lands; keep it cheap, or memoise it |
 | `initialDataUpdatedAt: DateTime?` | how old it is; `null` means now |
 | `initialDataUpdatedAtCompute: () => DateTime?` | the lazy form, evaluated only when the data is actually seeded. Give one form or the other, never both |
 
@@ -221,9 +227,29 @@ Lists are shared element by element; maps and sets are kept whole when deeply
 equal; everything else is compared with `==`. **A typed model therefore needs
 `==` and `hashCode`** — without them every fetch produces a new value.
 
+A set is compared by its members' `==` and `hashCode`, never by the
+comparator or `equals:` it was built with, so a case-insensitive set still
+reports `'Alpha'` becoming `'alpha'`. That costs about a millisecond and a half
+a write for 10 000 members and roughly a frame for 100 000; for a set that
+large, `noStructuralSharing()` skips the comparison.
+
+To turn it off — upstream's `structuralSharing: false`:
+
 ```dart snippet="guides/options.md#structural-sharing"
-structuralSharing: (previous, next) => next, // upstream's `false`
+structuralSharing: noStructuralSharing(), // upstream's `false`
 ```
+
+That turns sharing off everywhere: for the cache write, for placeholder data
+and for what `select` produces, so a selector that returns a fresh list every
+time then counts as a change on every fetch.
+
+A function of your own, `(previous, next) => …`, replaces the default for the
+cache write and placeholder data only. It cannot be handed a selection —
+it is typed for the query's data, and a selection can be another type — so
+what `select` produces is still shared by the default comparison. That is
+also true of `(_, next) => next`: it keeps every write, but it is not the
+opt-out, and a selection over it stays shared. Use `noStructuralSharing()`
+when you mean off.
 
 ## Where each one is on screen
 

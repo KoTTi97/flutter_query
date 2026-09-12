@@ -31,12 +31,17 @@
 ///   refetch as the context and mixin readers, and a first load of two
 ///   builds like everyone's — the fetch its subscription starts is already
 ///   in the first result it builds from.
-/// - `structuralSharing` governs the cache write only; what `select` produces
-///   always goes through `replaceEqualDeep` (see `StructuralSharing` in the
-///   core, decided on https://github.com/KoTTi97/flutter_query/issues/12). So
-///   the switch changes nothing for the four `select` readers — their
-///   selected values are shared regardless. The fifth reader, the one
-///   without `select`, is the control that should see it: with sharing off
+/// - `structuralSharing` governs the cache write *and* what `select`
+///   produces, as upstream's `replaceData` does (see `StructuralSharing` in
+///   the core, decided on https://github.com/KoTTi97/flutter_query/issues/12,
+///   corrected by the fidelity review of 2026-09-12 — until then the core ran
+///   every selection through `replaceEqualDeep` regardless, and the switch
+///   was invisible to all four `select` readers). With the switch off, a
+///   selection is reported exactly as the selector built it, so a reader
+///   moves when its own selected value is not `==` to the last one: the
+///   controller's list of texts is a new instance every time and moves, while
+///   the `int`, the `String` and the record do not. The fifth reader, the one
+///   without `select`, is the control: with sharing off
 ///   the list in the cache is a new instance on every refetch, and upstream
 ///   hands an observer without `select` the cache's data as it is — and so
 ///   does the port's, now: when this screen was first measured (2026-09-09)
@@ -56,10 +61,11 @@
 /// record (and the control); renaming todo 2 moves only the list of texts
 /// (and the control); with sharing off, a refetch with equal data provably
 /// reaches the cache write (an equal list, but a new instance, where sharing
-/// on kept the old one) and still moves no `select` reader's `data builds`
-/// while the guard-less readers' `builds` climb; and the control's
-/// `data builds` climbs with sharing off and stands still once it is back
-/// on.
+/// on kept the old one) and moves the one `select` reader whose selection is
+/// a new instance — the controller's list of texts — while the three whose
+/// selections are `==` to the last stand still and the guard-less readers'
+/// `builds` climb; and the control's `data builds` climbs with sharing off
+/// and stands still once it is back on.
 library;
 
 import 'package:flutter/material.dart';
@@ -98,8 +104,12 @@ List<String> todoTexts(List<Todo> todos) =>
     <String>[for (final todo in todos) todo.text];
 
 /// The opt-out: what arrives is written as it is, never reconciled with what
-/// the cache held — upstream's `structuralSharing: false`.
-List<Todo> keepNext(List<Todo>? previous, List<Todo> next) => next;
+/// the cache held — upstream's `structuralSharing: false`. The core's
+/// `noStructuralSharing()` rather than a `(_, next) => next` of the screen's
+/// own: a hook of one's own governs the cache write only, and only the
+/// recognised opt-out turns sharing off for what `select` produces too
+/// (pre-release review, 2026-09-12, F4).
+final StructuralSharing<List<Todo>> keepNext = noStructuralSharing();
 
 /// The one query every reader shares. They differ only in what they select
 /// and in whether the cache write shares structure. A select is its own

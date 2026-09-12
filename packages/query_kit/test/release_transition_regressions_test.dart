@@ -69,6 +69,104 @@ void main() {
     expect(status, MutationStatus.success);
   });
 
+  group('removing restored scope entries starts nothing mid-removal (MU-01)',
+      () {
+    Mutation<int, int, void> restore(
+      QueryClient client,
+      List<String> calls,
+      String name,
+    ) =>
+        client.mutationCache.build<int, int, void>(
+          client,
+          client.defaultMutationOptions(MutationOptions<int, int, void>(
+            scope: const MutationScope('record'),
+            mutationFn: (value) async {
+              calls.add('fn:$name');
+              return value;
+            },
+            onError: (e, s, v, c) => calls.add('onError:$name'),
+          )),
+          state: const MutationState<int, int, void>(
+            status: MutationStatus.pending,
+            isPaused: true,
+            hasVariables: true,
+            variables: 1,
+          ),
+        );
+
+    testFakeAsync('clear() over a restored scope queue, online', (time) async {
+      final client = testClient();
+      final calls = <String>[];
+      restore(client, calls, 'r1');
+      restore(client, calls, 'r2');
+      restore(client, calls, 'r3');
+      client.clear();
+      expect(client.mutationCache.mutations, isEmpty);
+      await time.advance(const Duration(seconds: 1));
+      expect(calls, isEmpty, reason: 'clear() ran: $calls');
+      expect(time.pendingTimers, 0);
+    });
+
+    testFakeAsync('clear() with a live waiter behind a restored head',
+        (time) async {
+      final client = testClient();
+      final calls = <String>[];
+      restore(client, calls, 'r1');
+      final waiter = client.mutationCache.build<int, int, void>(
+        client,
+        client.defaultMutationOptions(MutationOptions<int, int, void>(
+          scope: const MutationScope('record'),
+          mutationFn: (value) async {
+            calls.add('fn:w');
+            return value;
+          },
+          onError: (e, s, v, c) => calls.add('onError:w:${e.runtimeType}'),
+        )),
+      );
+      final run = waiter.execute(2)..ignore();
+      await time.flushMicrotasks();
+      expect(waiter.state.isPaused, isTrue);
+      client.clear();
+      await time.advance(const Duration(seconds: 1));
+      // C11: the paused live waiter fails on the spot; nothing starts.
+      expect(calls, ['onError:w:CancelledError']);
+      await expectLater(run, throwsA(isA<CancelledError>()));
+      expect(time.pendingTimers, 0);
+    });
+
+    testFakeAsync('a removal loop over findAll, in either order', (time) async {
+      for (final reversed in [false, true]) {
+        final client = testClient();
+        final calls = <String>[];
+        restore(client, calls, 'r1');
+        restore(client, calls, 'r2');
+        restore(client, calls, 'r3');
+        final all = client.mutationCache.findAll();
+        for (final mutation in reversed ? all.reversed : all) {
+          client.mutationCache.remove(mutation);
+        }
+        expect(client.mutationCache.mutations, isEmpty);
+        await time.advance(const Duration(seconds: 1));
+        expect(calls, isEmpty, reason: 'reversed=$reversed ran: $calls');
+        expect(time.pendingTimers, 0);
+      }
+    });
+
+    testFakeAsync('removing a restored tail does not start the head',
+        (time) async {
+      final client = testClient();
+      final calls = <String>[];
+      restore(client, calls, 'r1');
+      final tail = restore(client, calls, 'r2');
+      client.mutationCache.remove(tail);
+      await time.advance(const Duration(seconds: 1));
+      expect(calls, isEmpty, reason: '$calls');
+      client.clear();
+      await time.flushMicrotasks();
+      expect(time.pendingTimers, 0);
+    });
+  });
+
   testFakeAsync('sharing callback cannot overwrite a successor fetch status',
       (time) async {
     final client = QueryClient();

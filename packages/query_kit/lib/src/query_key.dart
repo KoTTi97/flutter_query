@@ -9,6 +9,8 @@ library;
 
 import 'package:meta/meta.dart';
 
+import 'hashing.dart';
+
 /// An immutable, structurally compared cache key.
 ///
 /// ```dart
@@ -115,14 +117,35 @@ bool _partsEqual(Object? a, Object? b) {
     if (a.length != b.length) {
       return false;
     }
+    // The set's own equality first, in O(n): `==` implies parts-equal, and a
+    // set holds no duplicates under its own equality, so the multisets below
+    // agree whenever this does. A set of ids never goes further; counting
+    // partners pairwise cost 120 ms for a 2 000-element part (review AR-01).
+    if (a.containsAll(b)) {
+      return true;
+    }
     // As multisets, not "every element has *a* match": a frozen set holds
     // structurally equal lists as distinct members, so `{[1], [1], [2]}` and
     // `{[1], [2], [2]}` both pass the any-match test while hashing
-    // differently. Counting matches on both sides keeps `==` and `hashCode`
-    // telling the same story.
-    int count(Set<Object?> set, Object? element) =>
-        set.where((other) => _partsEqual(element, other)).length;
-    return a.every((element) => count(a, element) == count(b, element));
+    // differently. Consuming each partner once keeps `==` and `hashCode`
+    // telling the same story, and bucketing by `_hashPart` — which is what
+    // `hashCode` ties to `_partsEqual` — keeps it linear.
+    final unmatched = <int, List<Object?>>{};
+    for (final element in a) {
+      (unmatched[_hashPart(element)] ??= <Object?>[]).add(element);
+    }
+    for (final element in b) {
+      final bucket = unmatched[_hashPart(element)];
+      if (bucket == null) {
+        return false;
+      }
+      final partner = bucket.indexWhere((other) => _partsEqual(other, element));
+      if (partner < 0) {
+        return false;
+      }
+      bucket.removeAt(partner);
+    }
+    return true;
   }
   if (a is Map && b is Map) {
     if (a.length != b.length) {
@@ -149,10 +172,10 @@ int _hashPart(Object? part) {
   if (part is Map) {
     return Object.hashAllUnordered(<Object?>[
       for (final entry in part.entries)
-        Object.hash(entry.key, _hashPart(entry.value)),
+        Object.hash(spreadHash(entry.key.hashCode), _hashPart(entry.value)),
     ]);
   }
-  return part.hashCode;
+  return spreadHash(part.hashCode);
 }
 
 /// Upstream `partialMatchKey`: every element of [filter] must partially match

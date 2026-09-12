@@ -23,9 +23,13 @@ sealed class StaleTime {
   /// Stale the moment it arrives — upstream's `staleTime: 0`, the default.
   static const StaleTime zero = StaleTimeDuration(Duration.zero);
 
-  /// Never stale and never refetched by any trigger — upstream's
-  /// `staleTime: 'static'`. Even an explicit `refetchQueries` skips it; only
-  /// an explicit `refetchInterval` and a `refetch()` still fetch.
+  /// Never stale and, while an observer holds it, never refetched by any
+  /// trigger — upstream's `staleTime: 'static'`. Even an explicit
+  /// `refetchQueries` skips it; only an explicit `refetchInterval` and a
+  /// `refetch()` still fetch. It is an observer's option: an entry nobody
+  /// observes (one fetched by `QueryClient.query`, say) is an ordinary entry
+  /// to `refetchQueries` and `invalidateQueries`, as upstream's `isStatic`
+  /// reads the observers too (DC-05, 2026-09-12).
   static const StaleTime static = StaleTimeStatic();
 
   /// Never stale by time, but still refetched when asked — upstream's
@@ -87,9 +91,11 @@ final class StaleTimeDuration extends StaleTime {
   String toString() => 'StaleTime.duration($duration)';
 }
 
-/// The [StaleTime.static] variant: never stale, and never refetched by a
-/// trigger either — not on mount, focus, reconnect, invalidation or
-/// `refetchQueries`. Two things still fetch it: a `refetch()` on the observer
+/// The [StaleTime.static] variant: never stale, and — while an observer with
+/// this option holds the query — never refetched by a trigger either: not on
+/// mount, focus, reconnect, invalidation or `refetchQueries`. With no
+/// observer, `refetchQueries` and `invalidateQueries` refetch it like any
+/// other entry. Two things still fetch it: a `refetch()` on the observer
 /// itself, and an explicit `refetchInterval`, which polls a static query
 /// exactly as it polls any other — an interval is a request, not a trigger,
 /// and upstream (`50680b98c`) polls too; only `refetchQueries` filters
@@ -212,6 +218,15 @@ sealed class Enabled {
 
   /// The query never fetches on its own — upstream's `enabled: false`. It
   /// still serves cached data, and a `refetch()` still works.
+  ///
+  /// It is also this port's only spelling of upstream's `skipToken`
+  /// (https://github.com/KoTTi97/flutter_query/issues/17), and `enabled:
+  /// false` is the meaning that wins wherever upstream keeps the two apart.
+  /// The one place that matters is [Query.isDisabled] with no observer
+  /// attached: a cached query whose last observer left disabled is still
+  /// refetched by `refetchQueries`/`invalidateQueries(refetchType: all)`,
+  /// where upstream's `skipToken` would be skipped (pre-release review,
+  /// 2026-09-12, F2).
   static const Enabled no = EnabledNo();
 
   /// Decided per query, each time it matters — upstream's

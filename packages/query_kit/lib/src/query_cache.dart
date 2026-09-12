@@ -74,11 +74,12 @@ final class QueryObserverRemoved extends QueryCacheEvent {
   final QueryObserverRef observer;
 }
 
-/// An observer's options were replaced while it stayed attached to the same
-/// query — a rebuild that changed `staleTime`, `enabled` or a callback, say.
-/// Not emitted when the new options move the observer to a different key;
-/// that is a removal and an addition. Upstream's `observerOptionsUpdated`
-/// event.
+/// An observer's options were replaced — a rebuild that changed `staleTime`,
+/// `enabled` or a callback, say. Emitted for every change of options, a key
+/// change included: moving an observer to a different key emits
+/// [QueryObserverRemoved] on the old query and [QueryObserverAdded] on the
+/// new one, and then this event on the new query, exactly as upstream's
+/// `observerOptionsUpdated` does (DC-04, 2026-09-12).
 final class QueryObserverOptionsUpdated extends QueryCacheEvent {
   /// Creates the event for [query] and the [observer] whose options changed.
   const QueryObserverOptionsUpdated(super.query, this.observer);
@@ -174,8 +175,11 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   final void Function(Object? data, Query<Object?> query)? onSuccess;
 
   /// Runs after any query's fetch fails for good — once retries are
-  /// exhausted, not per attempt — with the error and the query. Upstream's
-  /// `QueryCacheConfig.onError`.
+  /// exhausted, not per attempt — with the error and the query. A cancel that
+  /// is not silent (`cancelQueries(revert: false)`, or a bare `Query.cancel()`)
+  /// is such a failure and runs it with a `CancelledError`, as upstream does;
+  /// the default reverting cancel dispatches no error and runs nothing.
+  /// Upstream's `QueryCacheConfig.onError`.
   final void Function(
       Object error, StackTrace stackTrace, Query<Object?> query)? onError;
 
@@ -200,6 +204,21 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// `Query.setState` refuses it. An `assert` let a release build accept the
   /// state and fail in the next observer's constructor with `type 'Null' is
   /// not a subtype of type 'int'` (ninth review, 2026-09-10, C8).
+  ///
+  /// A restored [QueryState.fetchStatus] is normalised to
+  /// [FetchStatus.idle]. A snapshot taken mid-fetch says `fetching` or
+  /// `paused`, but no fetch survives the process it ran in: installed
+  /// verbatim it made a query nothing was doing count towards
+  /// `QueryClient.isFetching()`, kept it out of garbage collection for
+  /// good (`Removable` does not collect a fetching entry) and left a
+  /// `paused` one that no reconnect could resume, because there is no
+  /// retryer to continue (pre-release review, 2026-09-12, QE-02). This is
+  /// upstream's rule for the same door, written at `hydration.ts:356` —
+  /// "Reset fetch status to idle to avoid query being stuck in fetching
+  /// state upon hydration". [Query.setState] does *not* normalise: it is
+  /// the other half of hydration, the merge into a query that already
+  /// exists, and upstream preserves an actively fetching status there
+  /// (`hydration.ts:332-335`).
   Query<TQueryData> build<TQueryData>(
     QueryClient client,
     DefaultedQueryOptions<TQueryData> options, {
@@ -216,7 +235,9 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
       cache: this,
       queryKey: options.queryKey,
       options: options,
-      state: state,
+      state: state?.fetchStatus == FetchStatus.idle
+          ? state
+          : state?.copyWith(fetchStatus: FetchStatus.idle),
     );
     // InitialData.compute may synchronously populate this key. That entry,
     // rather than the losing constructor, is the cache's canonical query.
@@ -262,7 +283,12 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   }
 
   /// Removes every query, one [QueryRemoved] each. `QueryClient.clear` calls
-  /// this together with the mutation cache's.
+  /// this together with the mutation cache's, inside one
+  /// `notifyManager.batch`, so a deferred subscriber gets one flush for the
+  /// call; upstream batches inside `clear` itself, which it can because its
+  /// notify manager is a module-wide singleton and this one belongs to a
+  /// client. Call this directly and the removals are delivered unbatched
+  /// (pre-release review, 2026-09-12, QE-03).
   void clear() {
     for (final query in queries) {
       remove(query);

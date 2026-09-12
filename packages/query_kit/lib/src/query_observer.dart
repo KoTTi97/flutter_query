@@ -70,9 +70,26 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// Registers [listener] and returns the function that removes it again.
   ///
   /// Each handle removes its own registration, once — see [ListenerRegistry].
+  ///
+  /// The first subscribe runs user code — an `Enabled.when`, a
+  /// `StaleTime.dynamic`, a `RefetchOn.when`, a `RefetchInterval.dynamic`, a
+  /// `PlaceholderData.compute` — and a throw there is the caller's to see, so
+  /// it propagates. But it propagates *clean*: the listener is removed and the
+  /// observer detached again before it leaves, exactly as if the subscribe
+  /// had never happened. Upstream adds the listener to its `Set` first and
+  /// lets `onSubscribe` throw over it; the caller then holds no handle for a
+  /// listener that is registered and an observer that is attached, and the
+  /// query is never collected (pre-release verification, 2026-09-12, AR-02).
   void Function() subscribe(QueryObserverListener<TData> listener) {
     final remove = _listeners.add(listener, onRemoved: _onUnsubscribe);
-    _onSubscribe();
+    try {
+      _onSubscribe();
+    } catch (_) {
+      // The handle is the rollback: for a last listener it runs `destroy`,
+      // which detaches from the query and clears any timer already armed.
+      remove();
+      rethrow;
+    }
     return remove;
   }
 
@@ -104,6 +121,13 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   bool _hasSelectResult = false;
   TQueryData? _selectInput;
   bool _hasSelectInput = false;
+  // The query the memoised selection was last reported for. A retained
+  // `_selectResult` is what a throwing `select` shows as `staleData`, and
+  // that is only stale data of *this* query if this query once reported it:
+  // after a key change the previous key's selection was labelled the new
+  // key's `isRefetchError` (OB-01, 2026-09-12). Upstream keeps `#selectResult`
+  // across `#updateQuery` and has the same leak.
+  Query<TQueryData>? _selectQuery;
   int _resultRevision = 0;
   int _lifetime = 0;
   _SelectionSnapshot<TQueryData, TData>? _previewSelection;
@@ -117,6 +141,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         hasResult: _hasSelectResult,
         input: _selectInput,
         hasInput: _hasSelectInput,
+        query: _selectQuery,
       );
 
   void _restoreSelection(_SelectionSnapshot<TQueryData, TData> snapshot) {
@@ -128,6 +153,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _hasSelectResult = snapshot.hasResult;
     _selectInput = snapshot.input;
     _hasSelectInput = snapshot.hasInput;
+    _selectQuery = snapshot.query;
   }
 
   Query<TQueryData>? _lastQueryWithData;
@@ -212,10 +238,25 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // transition leaves the previous observer usable.
     final nextQuery =
         _client.queryCache.build<TQueryData>(_client, nextOptions.queryOptions);
+    final prevInitialState = _currentQueryInitialState;
     _options = nextOptions;
 
     _updateQuery(nextQuery);
-    _currentQuery.setOptions(_options.queryOptions);
+    try {
+      _currentQuery.setOptions(_options.queryOptions);
+    } catch (_) {
+      // `InitialData.compute` is user code, and an existing query with no
+      // data runs it here. Its throw is the caller's — but the switch above
+      // is undone first, so the observer stays on the options and the query
+      // it had, as a rejected type transition leaves it (pre-release
+      // verification, 2026-09-12, AR-05).
+      _options = prevOptions;
+      if (!identical(_currentQuery, prevQuery)) {
+        _updateQuery(prevQuery);
+        _currentQueryInitialState = prevInitialState;
+      }
+      rethrow;
+    }
 
     if (_options != prevOptions) {
       _client.queryCache.notifyObserverOptionsUpdated(_currentQuery, this);
@@ -309,7 +350,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     try {
       await _currentQuery.fetch(
         options: _options.queryOptions,
-        fetchOptions: FetchOptions<TQueryData>(
+        fetchOptions: FetchOptions(
           cancelRefetch: cancelRefetch,
           meta: meta,
         ),
@@ -523,7 +564,17 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             select == _selectFn) {
           outData = _selectResult;
           hasOutData = _hasSelectResult;
+          // Equal input through the same selector is this query's selection
+          // too, whichever query first produced it.
+          _selectQuery = query;
         } else {
+          if (!identical(query, _selectQuery)) {
+            // The last selection belongs to another query. It must not stand
+            // behind this query's select error as its stale data.
+            _selectResult = null;
+            _hasSelectResult = false;
+            _selectQuery = query;
+          }
           try {
             _selectFn = select;
             _selectInput = candidate;
@@ -531,10 +582,19 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             // Shared against the last *reported* data, as upstream's
             // `replaceData(prevResult?.data, …)`: a selector that builds a
             // fresh but equal list must not count as a change.
-            outData = replaceEqualDeep<TData>(
-              prevResult?.dataOrNull,
-              select(candidate as TQueryData),
-            );
+            //
+            // `replaceData` routes the `structuralSharing` option, so an
+            // opt-out governs the selected value too. Upstream calls the hook
+            // itself on the selected values; here it is typed for the query's
+            // data (`StructuralSharing<TQueryData>`) and cannot be handed a
+            // `TData`. So only the recognised opt-out steps back from the
+            // selection — a hook that shares in its own way leaves the
+            // selection at the default walk, rather than paying for an
+            // opt-out it never asked for (pre-release review, 2026-09-12, F4).
+            final selected = select(candidate as TQueryData);
+            outData = isNoStructuralSharing(options.structuralSharing)
+                ? selected
+                : replaceEqualDeep<TData>(prevResult?.dataOrNull, selected);
             _selectResult = outData;
             _hasSelectResult = true;
             hasOutData = true;
@@ -794,6 +854,7 @@ typedef _SelectionSnapshot<TInput, TOutput> = ({
   bool hasResult,
   TInput? input,
   bool hasInput,
+  Query<TInput>? query,
 });
 
 /// The refetch rules, as questions asked of one observer's options about one

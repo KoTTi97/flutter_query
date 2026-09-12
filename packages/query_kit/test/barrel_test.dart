@@ -52,4 +52,8 @@ void main() {
     });
     expect(hidden('filters'), {'describeFilters'});
   });
+
+  test('R3-1 the set walk\'s bucket function stays hidden', () {
+    expect(hidden('structural_sharing'), {'sharingBucketOf'});
+  });
 }

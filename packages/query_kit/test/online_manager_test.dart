@@ -1,6 +1,9 @@
 /// Ported from `query-core/src/__tests__/onlineManager.test.tsx`
-/// at upstream `50680b98c`. 6 of 11 cases; the five that spy on `window` /
-/// `navigator` are browser-environment omissions (see PORTING_NOTES.md).
+/// at upstream `50680b98c`. 7 of 11 cases; the four that are only about a
+/// browser environment — `isOnline should return true if navigator.onLine is
+/// true`, the two `cleanup (removeEventListener) should not be called if
+/// window …` cases and `should update online status from window online and
+/// offline events` — are omissions (see PORTING_NOTES.md).
 library;
 
 import 'package:query_kit/query_kit.dart';
@@ -57,6 +60,35 @@ void main() {
 
         expect(remove1Calls, 1);
         expect(remove2Calls, 0);
+      },
+    );
+
+    test(
+      // Upstream spies on `window.addEventListener` / `removeEventListener`
+      // to show the default listener being replaced. Pure Dart installs no
+      // default, so — exactly as the focus twin is ported in
+      // `focus_manager_test.dart` — the custom listener is what is counted:
+      // it is set up once when the first subscriber arrives and torn down
+      // once when the last one leaves (pre-release review, 2026-09-12).
+      'should replace default window listener when a new event listener is set',
+      () {
+        var unsubscribeCalls = 0;
+        var handlerCalls = 0;
+
+        onlineManager.setEventListener((_) {
+          handlerCalls++;
+          return () => unsubscribeCalls++;
+        });
+
+        final unsubscribe = onlineManager.subscribe((_) {});
+
+        // Should call the custom event once
+        expect(handlerCalls, 1);
+
+        unsubscribe();
+
+        // Should unsubscribe our event listener once
+        expect(unsubscribeCalls, 1);
       },
     );
 

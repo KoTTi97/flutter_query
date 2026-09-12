@@ -94,8 +94,9 @@ sealed class QueryResult<TData> {
 
   /// Refetches this query regardless of `enabled` and `staleTime` —
   /// upstream's `refetch`. With `cancelRefetch: true`, the default, a fetch
-  /// already in flight is cancelled and started over; with `false` the
-  /// in-flight one is awaited instead.
+  /// already in flight is cancelled and started over — once the query holds
+  /// data; a first load is joined, not restarted, as upstream's is. With
+  /// `false` the in-flight one is awaited instead.
   final QueryRefetch<TData> refetch;
 
   /// Which variant this is, as an enum — upstream's `status`, for callers

@@ -1142,15 +1142,23 @@ void main() {
         QueryObserverOptions<String>(queryKey: key, queryFn: queryFn),
       );
 
-      final query = queryCache.build<String>(
-        queryClient,
-        queryClient
-            .defaultQueryOptions<String>(QueryOptions<String>(queryKey: key)),
-      );
+      final functionless = queryClient
+          .defaultQueryOptions<String>(QueryOptions<String>(queryKey: key));
+      final query = queryCache.build<String>(queryClient, functionless);
 
       query.addObserver(observer);
 
-      await query.fetch();
+      // Upstream builds a *detached* `Query` with no options at all, so its
+      // `queryFn` is undefined when `fetch` runs. A `Query` here is always
+      // the cache's entry for its key, and `queryClient.observe` already
+      // wrote the observer's options — query function included — into it, so
+      // building it a second time changes nothing and the borrowing branch
+      // was never reached: with the branch deleted this case still passed.
+      // The fetch therefore carries the functionless options, which is the
+      // one way a query with observers can have no query function of its own
+      // (`QueryClient.query(QueryOptions(queryKey: key))` takes it).
+      expect(query.options.queryFn, same(queryFn));
+      await query.fetch(options: functionless);
       expect(query.state.data, 'data');
       expect(query.options.queryFn, same(queryFn));
     });

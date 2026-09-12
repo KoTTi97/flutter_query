@@ -46,7 +46,7 @@ void main() {
       unsubscribe();
       expect(
         observerResult!.dataOrNull,
-        const InfiniteData<String, int>(
+        InfiniteData<String, int>(
           pages: <String>['1'],
           pageParams: <int>[1],
         ),
@@ -86,7 +86,7 @@ void main() {
       unsubscribe();
       expect(
         observerResult!.dataOrNull,
-        const InfiniteData<String, int>(
+        InfiniteData<String, int>(
           pages: <String>['1'],
           pageParams: <int>[1],
         ),
@@ -193,7 +193,7 @@ void main() {
 
       queryClient.setQueryData<InfiniteData<String, int>>(
         key,
-        const InfiniteData<String, int>(pages: <String>[], pageParams: <int>[]),
+        InfiniteData<String, int>(pages: <String>[], pageParams: <int>[]),
       );
 
       expect(nextCalls, 0);

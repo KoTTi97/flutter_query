@@ -73,7 +73,7 @@ typedef OnMutationSettled<TData, TVariables, TOnMutateResult> = FutureOr<void>
 /// Callbacks a caller can attach to a single `mutate` call, on top of the ones
 /// in the options.
 @immutable
-class MutateCallbacks<TData, TVariables, TOnMutateResult> {
+final class MutateCallbacks<TData, TVariables, TOnMutateResult> {
   /// Any of the three may be left unset.
   const MutateCallbacks({this.onSuccess, this.onError, this.onSettled});
 
@@ -105,7 +105,7 @@ class MutateCallbacks<TData, TVariables, TOnMutateResult> {
 /// every build, and the observer compares the resolved values — so inline
 /// callbacks are not a change by themselves.
 @immutable
-class MutationOptions<TData, TVariables, TOnMutateResult> {
+final class MutationOptions<TData, TVariables, TOnMutateResult> {
   /// Every field is optional; an unset field takes the client's default when
   /// the mutation is built.
   const MutationOptions({
@@ -132,7 +132,8 @@ class MutationOptions<TData, TVariables, TOnMutateResult> {
   /// ```dart
   /// context.mutation(MutationOptions.simple(
   ///   mutationFn: (String name) => api.add(name),
-  ///   onSuccess: (_, __, ___) => client.invalidateQueries(…),
+  ///   onSuccess: (_, __, ___) =>
+  ///       client.invalidateQueries(filters: QueryFilters(queryKey: tasksKey)),
   /// ));
   /// ```
   ///

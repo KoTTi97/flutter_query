@@ -237,11 +237,11 @@ void main() {
       final a = queryKey(), b = queryKey();
       client.setQueryData(
         a,
-        const InfiniteData<int, int>(pages: [1], pageParams: [1]),
+        InfiniteData<int, int>(pages: [1], pageParams: [1]),
       );
       client.setQueryData(
         b,
-        const InfiniteData<int, int>(pages: [9], pageParams: [9]),
+        InfiniteData<int, int>(pages: [9], pageParams: [9]),
       );
       final options = InfiniteQueryObserverOptions<int, int>(
         queryKey: a,
@@ -287,7 +287,7 @@ void main() {
       final key = queryKey();
       client.setQueryData(
         key,
-        const InfiniteData<int, int>(pages: [1], pageParams: [1]),
+        InfiniteData<int, int>(pages: [1], pageParams: [1]),
       );
       final pending = <int, Completer<int>>{};
       final observer = InfiniteQueryObserver<int, int, InfiniteData<int, int>>(
@@ -369,7 +369,7 @@ void main() {
           queryKey: key,
           initialPageParam: 1,
           enabled: Enabled.no,
-          initialData: const InitialData.value(
+          initialData: InitialData.value(
             InfiniteData<int, int>(pages: [1, 2, 3], pageParams: [1, 2, 3]),
           ),
           pageFn: (ctx) {
@@ -517,4 +517,101 @@ void main() {
       client.clear();
     },
   );
+
+  // OB-01 (pre-release verification, 2026-09-12): the selection memo did not
+  // know which query it was computed for, so after a key change a throwing
+  // `select` reported the *previous* key's selection as this key's
+  // `staleData`, with `isRefetchError` true. Upstream keeps `#selectResult`
+  // the same way; the port stamps both memos with their query. A selector
+  // swap on the same key still reports the old selection as stale data of
+  // that query, as the ported "should return stale data if selector throws"
+  // requires.
+  group('OB-01 a throwing select after a key change', () {
+    QuerySelectOptions<({int id, String? city}), String> cityOf(
+      QueryKey key, {
+      Enabled enabled = Enabled.no,
+      QueryFn<({int id, String? city})>? queryFn,
+    }) =>
+        QuerySelectOptions<({int id, String? city}), String>(
+          queryKey: key,
+          enabled: enabled,
+          queryFn: queryFn,
+          staleTime: StaleTime.infinite,
+          select: (user) => user.city!,
+        );
+
+    testFakeAsync('reports a loading error of the new key, not stale data',
+        (time) async {
+      final client = testClient();
+      final a = queryKey();
+      final b = queryKey();
+      client.setQueryData<({int id, String? city})>(a, (id: 1, city: 'Berlin'));
+      client.setQueryData<({int id, String? city})>(b, (id: 2, city: null));
+      final observer =
+          client.observe<({int id, String? city}), String>(cityOf(a));
+      final unsubscribe = observer.subscribe((_) {});
+      expect(observer.currentResult.dataOrNull, 'Berlin');
+
+      observer.setOptions(cityOf(b));
+      final result = observer.currentResult;
+      expect(result, isA<QueryError<String>>());
+      final error = result as QueryError<String>;
+      expect(error.hasStaleData, isFalse,
+          reason: 'staleData=${error.staleData}');
+      expect(error.isLoadingError, isTrue);
+      expect(error.isRefetchError, isFalse);
+      unsubscribe();
+      client.clear();
+    });
+
+    testFakeAsync('the same through a preview of the other key', (time) async {
+      final client = testClient();
+      final a = queryKey();
+      final b = queryKey();
+      client.setQueryData<({int id, String? city})>(a, (id: 1, city: 'Berlin'));
+      client.setQueryData<({int id, String? city})>(b, (id: 2, city: null));
+      final observer =
+          client.observe<({int id, String? city}), String>(cityOf(a));
+      final unsubscribe = observer.subscribe((_) {});
+
+      final preview = observer.getOptimisticResult(cityOf(b));
+      expect(preview, isA<QueryError<String>>());
+      expect((preview as QueryError<String>).hasStaleData, isFalse,
+          reason: 'preview staleData=${preview.staleData}');
+
+      observer.setOptions(cityOf(a));
+      expect(observer.currentResult.dataOrNull, 'Berlin',
+          reason: 'committing key A again reuses its own selection');
+      unsubscribe();
+      client.clear();
+    });
+
+    testFakeAsync('a selector swap on the same key keeps its stale data',
+        (time) async {
+      final client = testClient();
+      final key = queryKey();
+      client.setQueryData<int>(key, 1);
+      final observer = client.observe<int, String>(
+        QuerySelectOptions<int, String>(
+          queryKey: key,
+          enabled: Enabled.no,
+          select: (v) => 'v$v',
+        ),
+      );
+      final unsubscribe = observer.subscribe((_) {});
+      expect(observer.currentResult.dataOrNull, 'v1');
+      observer.setOptions(
+        QuerySelectOptions<int, String>(
+          queryKey: key,
+          enabled: Enabled.no,
+          select: (_) => throw StateError('v2 cannot'),
+        ),
+      );
+      final result = observer.currentResult as QueryError<String>;
+      expect(result.staleData, 'v1');
+      expect(result.isRefetchError, isTrue);
+      unsubscribe();
+      client.clear();
+    });
+  });
 }

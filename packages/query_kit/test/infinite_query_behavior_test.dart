@@ -50,7 +50,7 @@ void main() {
       await time.flushMicrotasks();
       expect(observerResult!.isFetching, isFalse);
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[1], pageParams: <int>[1]));
+          IntPages(pages: <int>[1], pageParams: <int>[1]));
       expect(calls, [(1, FetchDirection.forward)]);
       calls.clear();
 
@@ -60,7 +60,7 @@ void main() {
       expect(calls, [(2, FetchDirection.forward)]);
       expect(observerResult!.isFetching, isFalse);
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
+          IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
       calls.clear();
 
       // Fetch the page before the first page
@@ -69,7 +69,7 @@ void main() {
       expect(calls, [(0, FetchDirection.backward)]);
       // Only the first two pages are kept
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[0, 1], pageParams: <int>[0, 1]));
+          IntPages(pages: <int>[0, 1], pageParams: <int>[0, 1]));
       calls.clear();
 
       // Fetch the page before that
@@ -77,7 +77,7 @@ void main() {
 
       expect(calls, [(-1, FetchDirection.backward)]);
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[-1, 0], pageParams: <int>[-1, 0]));
+          IntPages(pages: <int>[-1, 0], pageParams: <int>[-1, 0]));
       calls.clear();
 
       // Fetch the page after
@@ -85,7 +85,7 @@ void main() {
 
       expect(calls, [(1, FetchDirection.forward)]);
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[0, 1], pageParams: <int>[0, 1]));
+          IntPages(pages: <int>[0, 1], pageParams: <int>[0, 1]));
       calls.clear();
 
       // Refetch the infinite query: only two pages refetch
@@ -172,12 +172,12 @@ void main() {
       // Wait for the first page to be fetched
       await time.flushMicrotasks();
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[1], pageParams: <int>[1]));
+          IntPages(pages: <int>[1], pageParams: <int>[1]));
 
       // Fetch the second page
       await observer.fetchNextPage();
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
+          IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
       calls.clear();
       slow = true;
 
@@ -194,7 +194,7 @@ void main() {
       expect((observerResult! as QueryError<IntPages>).error,
           isA<CancelledError>());
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
+          IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
 
       // The second page was never re-fetched: the loop stopped at the first.
       expect(calls, <int>[1]);
@@ -226,7 +226,7 @@ void main() {
       await time.flushMicrotasks();
       await observer.fetchNextPage();
       expect(observer.currentResult.dataOrNull,
-          const IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
+          IntPages(pages: <int>[1, 2], pageParams: <int>[1, 2]));
 
       calls.clear();
 
@@ -326,7 +326,7 @@ void main() {
       expect(observerResult!.isFetching, isFalse);
       expect(
         observerResult!.dataOrNull,
-        const InfiniteData<String, Object?>(
+        InfiniteData<String, Object?>(
           pages: <String>['data'],
           pageParams: <Object?>[null],
         ),
@@ -362,13 +362,13 @@ void main() {
       await time.flushMicrotasks();
       expect(observerResult!.isFetching, isFalse);
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[1], pageParams: <int>[1]));
+          IntPages(pages: <int>[1], pageParams: <int>[1]));
 
       await observer.fetchNextPage();
 
       expect(observerResult!.isFetching, isFalse);
       expect(observerResult!.dataOrNull,
-          const IntPages(pages: <int>[1], pageParams: <int>[1]));
+          IntPages(pages: <int>[1], pageParams: <int>[1]));
 
       unsubscribe();
     });

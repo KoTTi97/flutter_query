@@ -787,6 +787,92 @@ void main() {
       expect(observerResult1.dataOrNull, same(observerResult2.dataOrNull));
     });
 
+    testFakeAsync(
+        'should not use replaceEqualDeep for select value when structuralSharing option is true',
+        (time) async {
+      final key = queryKey();
+      // Upstream's two deep-equal objects. A `List` here, because
+      // `replaceEqualDeep` compares a plain Dart object with `==` — two
+      // instances of a class without value equality are never shared, so a
+      // list is what makes the sharing step visible at all.
+      final data = <String>['data'];
+      final selectedData = <String>['data'];
+
+      final observer = queryClient.observe<List<String>, List<String>>(
+        QuerySelectOptions<List<String>, List<String>>(
+          queryKey: key,
+          queryFn: (_) => data,
+          select: (_) => data,
+        ),
+      );
+
+      final unsubscribe = observer.subscribe((_) {});
+
+      await time.flushMicrotasks();
+      expect(observer.currentResult.dataOrNull, same(data));
+
+      observer.setOptions(
+        QuerySelectOptions<List<String>, List<String>>(
+          queryKey: key,
+          queryFn: (_) => data,
+          // `noStructuralSharing()` is upstream's `structuralSharing: false`
+          // (https://github.com/KoTTi97/flutter_query/issues/12). A hook of
+          // one's own, even `(_, next) => next`, leaves the selection shared:
+          // only the recognised opt-out reaches it (F4, 2026-09-12).
+          structuralSharing: noStructuralSharing(),
+          select: (_) => selectedData,
+        ),
+      );
+
+      await observer.refetch();
+      expect(observer.currentResult.dataOrNull, same(selectedData));
+
+      unsubscribe();
+    });
+
+    testFakeAsync(
+        'should not use replaceEqualDeep for select value when structuralSharing option is true and placeholderData is defined',
+        (time) async {
+      final key = queryKey();
+      final data = <String>['data'];
+      final selectedData1 = <String>['data'];
+      final selectedData2 = <String>['data'];
+      final placeholderData1 = <String>['data'];
+      final placeholderData2 = <String>['data'];
+
+      final observer = queryClient.observe<List<String>, List<String>>(
+        QuerySelectOptions<List<String>, List<String>>(
+          queryKey: key,
+          queryFn: (_) => data,
+          select: (_) => data,
+        ),
+      );
+
+      observer.setOptions(
+        QuerySelectOptions<List<String>, List<String>>(
+          queryKey: key,
+          queryFn: (_) => data,
+          select: (_) => selectedData1,
+          placeholderData:
+              PlaceholderData<List<String>>.value(placeholderData1),
+        ),
+      );
+
+      observer.setOptions(
+        QuerySelectOptions<List<String>, List<String>>(
+          queryKey: key,
+          queryFn: (_) => data,
+          select: (_) => selectedData2,
+          placeholderData:
+              PlaceholderData<List<String>>.value(placeholderData2),
+          // Upstream's `false` (see the case above).
+          structuralSharing: noStructuralSharing(),
+        ),
+      );
+
+      expect(observer.currentResult.dataOrNull, same(selectedData2));
+    });
+
     testFakeAsync('should not trigger a fetch when subscribed and disabled',
         (time) async {
       final key = queryKey();

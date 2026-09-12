@@ -153,6 +153,15 @@ class Retryer<TData> {
   /// 2026-09-09). A loop that *can* start runs its one attempt, as an
   /// in-flight request is left to settle.
   Future<TData> start() {
+    // Settled before it started: cancelled from the `fetch` notification the
+    // owner dispatches between installing this retryer and starting it. A
+    // pause here would be dispatched into a query that has no retryer to
+    // release it — `paused` with nothing running, never collected, skipped
+    // by `refetchQueries` when unobserved. `_attempt` and `_pause`'s
+    // continuation already check; this is the one entry that did not.
+    if (isResolved) {
+      return future;
+    }
     if (canStart()) {
       _attempt().ignore();
     } else if (_isRetryCancelledImmediately) {

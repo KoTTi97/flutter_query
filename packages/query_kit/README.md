@@ -37,14 +37,22 @@ upstream's test names so the two files diff against each other:
 |---|---|---|---|
 | `query` | 44 / 51 | `mutation` | 28 / 28 |
 | `queryCache` | 14 / 16 | `mutationCache` | 16 / 16 |
-| `queryObserver` | 62 / 75 | `mutationObserver` | 16 / 16 |
+| `queryObserver` | 64 / 75 | `mutationObserver` | 16 / 16 |
 | `queryClient` | 106 / 156 | `infiniteQueryBehavior` | 7 / 9 |
 | `retryer` | 13 / 13 | `infiniteQueryObserver` | 6 / 7 |
-| `queriesObserver` | 12 / 22 | | |
+| `queriesObserver` | 12 / 23 | | |
 
-Every case that is *not* ported is listed by name and category in
-[`test/PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md), together with every place this
-port deliberately diverges. No omission is silent.
+The small suites are in the same table in the notes: `subscribable` 9 / 9,
+`retryer` 13 / 13, `removable` 11 / 12, `focusManager` 7 / 9, `onlineManager`
+7 / 11, `notifyManager` 6 / 7, `utils` 48 / 78. **414 of 536** upstream cases
+across the seventeen suites, counting one `it`/`test` declaration as one case.
+
+Every case that is *not* ported is accounted for in
+[`test/PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md) — by name, or by the upstream block
+it belongs to — with its category and its reason, together with every place
+this port deliberately diverges. No omission is silent. Those numbers were recounted
+against the pin on 2026-09-12 and several of them moved — see the notes' "FI /
+DC — what the review found in *this file*".
 
 Pinned upstream revision: `50680b98c`.
 
@@ -92,7 +100,13 @@ device coming back online — no `refetchOnWindowFocus`, no
 `refetchOnReconnect`, no resuming of paused mutations, and a `query` that
 paused offline waits for a reconnect only while mounted. The Flutter binding
 mounts the client it is given; in pure Dart it is your call. A client also
-owns `gcTime` timers, so end with `client.clear()` to let the process exit.
+owns `gcTime` timers, so end with `client.clear()` to let the process exit —
+**and unsubscribe or `destroy()` your observers first.** `clear()` empties the
+cache and cancels what the cache owns, but it does not stop an observer: a
+subscribed one with a `refetchInterval` keeps its timer and keeps fetching
+into the cache you just emptied, so the process stays alive. Call the handle
+`subscribe` returned, or `destroy()`, which clears an observer's listeners and
+timers and leaves its query — then `clear()`.
 
 ## What is Dart rather than JavaScript
 
@@ -159,7 +173,8 @@ Each row is recorded, with its reason, in
 | `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the binding's builders |
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |
-| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook |
+| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook. Two limits: a map is shared **whole**, so one changed leaf shares nothing beneath it; and a hook governs the cache write and unselected placeholders: `select` output is shared by the default comparison unless the option is `noStructuralSharing()` — upstream's `false` — which turns it off too, because the hook is typed for the query's data and cannot be routed over a selection |
+| Observer options in `setQueryDefaults` / `defaultOptions.queries` | `QueryDefaults` is a subset: no `initialData`, `initialDataUpdatedAt(Compute)`, `placeholderData`, `select` or `behavior`. A default that decides what a query *holds* belongs at the call site, where its type is known |
 | `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous; mixed data types need a `select`, and the returned list is mapped by the caller |
 | `streamedQuery` | not ported |
 | `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |

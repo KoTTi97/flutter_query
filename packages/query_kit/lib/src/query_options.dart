@@ -29,9 +29,10 @@ import 'query_key.dart';
 /// instead, which carries the page param and the direction, typed.
 class QueryFunctionContext {
   /// Built by the query for each fetch; a query function receives one rather
-  /// than constructing it. [onSignalRead] is how the query learns that
-  /// [signal] was consumed.
-  @internal
+  /// than constructing it. Construct one directly to call a `queryFn` in a
+  /// test — `await fetchTasks(QueryFunctionContext(client: client, queryKey:
+  /// key, signal: QueryCancelToken()))` — and leave [onSignalRead] unset; it
+  /// is how the query learns that [signal] was consumed (API-02, 2026-09-12).
   QueryFunctionContext({
     required this.client,
     required this.queryKey,
@@ -54,18 +55,31 @@ class QueryFunctionContext {
 
   final QueryCancelToken _signal;
 
-  /// Told the moment [signal] is read, so the query can react *during* the
-  /// fetch rather than after it — upstream's `#abortSignalConsumed` is set by
-  /// the same getter.
+  /// Told the moment [signal] is first read, so the query can react *during*
+  /// the fetch rather than after it — upstream's `#abortSignalConsumed` is set
+  /// by the same getter.
   final void Function()? _onSignalRead;
+  bool _signalConsumed = false;
 
   /// The cancel token for this fetch — upstream's `AbortSignal`.
   ///
   /// Reading it marks the fetch as cancellable: from then on, losing the last
   /// observer or a `cancelQueries` cancels the token and the query function
   /// is expected to stop. A function that never reads it is left to finish.
+  ///
+  /// Consumed once per context, whatever a query function does with it:
+  /// upstream's `addConsumeAwareSignal` returns the memoized signal on every
+  /// access after the first and registers its abort listener exactly once
+  /// (`utils.ts:596-612`, pinned by `should consume the signal only once
+  /// across repeated accesses`). Here that is one call to [_onSignalRead],
+  /// not one per read (pre-release review, 2026-09-12, fidelity P11). A
+  /// retry is a new context, so an attempt that never touches the token is
+  /// as uncancellable as a first try that did not.
   QueryCancelToken get signal {
-    _onSignalRead?.call();
+    if (!_signalConsumed) {
+      _signalConsumed = true;
+      _onSignalRead?.call();
+    }
     return _signal;
   }
 }
@@ -90,14 +104,21 @@ typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
 /// previous data keeps the previous instance, so an unchanged refetch notifies
 /// nobody for unchanged data alone. Lists are shared element by element;
 /// maps and sets are compared deeply and shared whole, while typed models
-/// use their own `==`. Set this to `(_, next) => next` to
-/// turn sharing off — upstream's `structuralSharing: false` — or to a function
-/// of your own to reconcile typed models yourself
-/// (https://github.com/KoTTi97/flutter_query/issues/12). The hook governs the
-/// cache write and unselected placeholder data. Selected output goes through
-/// `replaceEqualDeep`, because the hook is typed on the raw data and a
-/// selector's output can be another type. After removing a selector, an
-/// unselected placeholder receives no previous raw value from that selection.
+/// use their own `==`. Set this to `noStructuralSharing()`
+/// ([noStructuralSharing]) to turn sharing off — upstream's
+/// `structuralSharing: false` — or to a function of your own to reconcile
+/// typed models yourself (https://github.com/KoTTi97/flutter_query/issues/12).
+///
+/// A hook governs the cache write and unselected placeholder data. A
+/// `select`'s output goes through `replaceEqualDeep` instead, because a hook
+/// typed on the raw data cannot be handed a selection of another type —
+/// upstream calls its hook on the selected values, which a
+/// `StructuralSharing<TQueryData>` cannot be (`utils.ts` `replaceData`).
+/// Only `noStructuralSharing()` turns the selection's sharing off as well: a
+/// hook that *does* share, deeply or in its own way, leaves the selection at
+/// the default rather than paying for the opt-out (pre-release review,
+/// 2026-09-12, F4). After removing a selector, an unselected placeholder
+/// receives no previous raw value from that selection.
 ///
 /// [previous] is `null` when nothing has been cached yet. With a nullable
 /// `TQueryData` the hook cannot tell that apart from a previous value that
@@ -105,6 +126,56 @@ typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
 /// `query.state.hasData` instead.
 typedef StructuralSharing<TQueryData> = TQueryData Function(
     TQueryData? previous, TQueryData next);
+
+/// The opt-out for [QueryOptions.structuralSharing] — upstream's
+/// `structuralSharing: false`. Every write keeps the incoming value, so every
+/// refetch reports a new instance, and so does every `select`.
+///
+/// ```dart
+/// QueryOptions<List<Task>>(
+///   queryKey: QueryKey(['tasks']),
+///   queryFn: fetchTasks,
+///   structuralSharing: noStructuralSharing(),
+/// );
+/// ```
+///
+/// Use this rather than an equivalent `(_, next) => next` of your own. The two
+/// behave identically where they are called — on the cache write and on
+/// unselected placeholder data — but only this one is *recognised* as the
+/// opt-out, and that is what turns sharing off for a `select`'s output too:
+/// no hook typed on the query's data can be handed a selection of another
+/// type, so a hook of your own leaves the selection shared by the default walk
+/// (pre-release review, 2026-09-12, F4).
+///
+/// A call rather than a function to pass: it returns one hook per
+/// `TQueryData`, the same instance every time, so options built with it
+/// compare equal across rebuilds. Recognition is by that instance's identity.
+/// Comparing against a tear-off of a generic function instead is not
+/// dependable — `f<T>` instantiated inside a generic class is not `==` to the
+/// `f<String>` a caller passed, on the VM, even when `T` is `String`.
+StructuralSharing<TQueryData> noStructuralSharing<TQueryData>() {
+  final existing = _noStructuralSharingHooks[TQueryData];
+  if (existing != null) {
+    return existing as StructuralSharing<TQueryData>;
+  }
+  TQueryData keepNext(TQueryData? previous, TQueryData next) => next;
+  final StructuralSharing<TQueryData> hook = keepNext;
+  _noStructuralSharingHooks[TQueryData] = hook;
+  _noStructuralSharingInstances.add(hook);
+  return hook;
+}
+
+// One opt-out per data type, shared across clients: the hooks close over
+// nothing, so the memo is a cache of pure functions, as `QueryClient`'s
+// adapted defaults are.
+final Map<Type, Function> _noStructuralSharingHooks = <Type, Function>{};
+final Set<Function> _noStructuralSharingInstances = Set<Function>.identity();
+
+/// Whether [sharing] is a hook [noStructuralSharing] returned — the opt-out,
+/// rather than a hook of the user's own.
+@internal
+bool isNoStructuralSharing(Function? sharing) =>
+    sharing != null && _noStructuralSharingInstances.contains(sharing);
 
 /// Projects a query's data into what an observer reports — the `select` of a
 /// [QuerySelectOptions].
@@ -119,8 +190,11 @@ sealed class InitialData<TQueryData> {
   const factory InitialData.value(TQueryData data) =
       InitialDataValue<TQueryData>;
 
-  /// A seed computed when the query is first built, and skipped when
-  /// [compute] returns `null` — upstream's `initialData: () => value`.
+  /// A seed computed lazily — when the query is built, and again on every
+  /// options update and every fetch for as long as the query holds no data —
+  /// and skipped while [compute] returns `null`. Upstream's
+  /// `initialData: () => value`; see [InitialDataCompute.compute] for when it
+  /// runs.
   const factory InitialData.compute(TQueryData? Function() compute) =
       InitialDataCompute<TQueryData>;
 
@@ -163,14 +237,22 @@ final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
   String toString() => 'InitialData.value($data)';
 }
 
-/// The [InitialData.compute] variant: a seed computed lazily, once, when the
-/// query is first built — upstream's `initialData: () => value`.
+/// The [InitialData.compute] variant: a seed computed lazily, for as long as
+/// the query has no data — upstream's `initialData: () => value`.
 final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
   /// Seeds the cache with what [compute] returns, unless that is `null`.
   const InitialDataCompute(this.compute);
 
-  /// Called once, when the query is created. Returning `null` means "no seed
-  /// after all" — upstream's `undefined`.
+  /// Called when the query is created, and again on every options update —
+  /// every observer rebuild, equal options included — and every fetch, until
+  /// the query holds data; once seeded or fetched it is never consulted
+  /// again. That is upstream's `Query.setOptions` (TanStack/query#9743), and
+  /// it is what lets a detail seed itself from a list that arrives later.
+  ///
+  /// Returning `null` means "no seed after all" — upstream's `undefined` —
+  /// and the next call may still yield one. A seed that becomes available
+  /// replaces an error the query holds without data. A callback that is
+  /// expensive to run is the caller's to memoise.
   final TQueryData? Function() compute;
 
   // Equal when the function is: two tear-offs of one function compare equal
@@ -304,7 +386,7 @@ final class PlaceholderDataCompute<TQueryData>
 /// *resolved* values — so two inline closures for `queryFn` do not count as a
 /// change, and neither does a fresh `Enabled.when(…)`.
 @immutable
-class QueryOptions<TQueryData> {
+base class QueryOptions<TQueryData> {
   /// Every field but [queryKey] is optional; an unset field takes the
   /// client's default when the query is built.
   const QueryOptions({
@@ -321,7 +403,7 @@ class QueryOptions<TQueryData> {
     this.initialDataUpdatedAtCompute,
     this.structuralSharing,
     this.meta,
-    this.behavior,
+    @internal this.behavior,
   });
 
   /// The key this query is cached under. Bound to exactly one data type: a
@@ -400,7 +482,6 @@ class QueryOptions<TQueryData> {
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<TQueryData>? structuralSharing,
     Object? meta,
-    FetchBehavior<TQueryData>? behavior,
   }) =>
       QueryOptions<TQueryData>(
         queryKey: queryKey ?? this.queryKey,
@@ -422,7 +503,7 @@ class QueryOptions<TQueryData> {
                 : null),
         structuralSharing: structuralSharing ?? this.structuralSharing,
         meta: meta ?? this.meta,
-        behavior: behavior ?? this.behavior,
+        behavior: behavior,
       );
 
   /// What [toString] shows after the key: every field, in declaration order,
@@ -494,7 +575,7 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
     super.initialDataUpdatedAtCompute,
     super.structuralSharing,
     super.meta,
-    super.behavior,
+    @internal super.behavior,
     this.placeholderData,
     this.refetchOnMount,
     this.refetchOnWindowFocus,
@@ -573,7 +654,6 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<TQueryData>? structuralSharing,
     Object? meta,
-    FetchBehavior<TQueryData>? behavior,
     PlaceholderData<TQueryData>? placeholderData,
     RefetchOn? refetchOnMount,
     RefetchOn? refetchOnWindowFocus,
@@ -602,7 +682,7 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
 /// For a query whose observers see a projection of the cached data, use
 /// [QuerySelectOptions].
 @immutable
-class QueryObserverOptions<TData>
+final class QueryObserverOptions<TData>
     extends QueryObserverOptionsBase<TData, TData> {
   /// The cache-layer fields plus the observer's own. Every field but
   /// [queryKey] is optional and takes the client's default.
@@ -620,7 +700,7 @@ class QueryObserverOptions<TData>
     super.initialDataUpdatedAtCompute,
     super.structuralSharing,
     super.meta,
-    super.behavior,
+    @internal super.behavior,
     super.placeholderData,
     super.refetchOnMount,
     super.refetchOnWindowFocus,
@@ -649,7 +729,6 @@ class QueryObserverOptions<TData>
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<TData>? structuralSharing,
     Object? meta,
-    FetchBehavior<TData>? behavior,
     PlaceholderData<TData>? placeholderData,
     RefetchOn? refetchOnMount,
     RefetchOn? refetchOnWindowFocus,
@@ -678,7 +757,7 @@ class QueryObserverOptions<TData>
                 : null),
         structuralSharing: structuralSharing ?? this.structuralSharing,
         meta: meta ?? this.meta,
-        behavior: behavior ?? this.behavior,
+        behavior: behavior,
         placeholderData: placeholderData ?? this.placeholderData,
         refetchOnMount: refetchOnMount ?? this.refetchOnMount,
         refetchOnWindowFocus: refetchOnWindowFocus ?? this.refetchOnWindowFocus,
@@ -707,7 +786,7 @@ class QueryObserverOptions<TData>
 /// select and still goes here; the shape is about *whether* there is a
 /// projection, not about the types being different.
 @immutable
-class QuerySelectOptions<TQueryData, TData>
+final class QuerySelectOptions<TQueryData, TData>
     extends QueryObserverOptionsBase<TQueryData, TData> {
   /// The cache-layer fields plus the observer's own, [select] required.
   /// Every other field but [queryKey] is optional and takes the client's
@@ -727,7 +806,7 @@ class QuerySelectOptions<TQueryData, TData>
     super.initialDataUpdatedAtCompute,
     super.structuralSharing,
     super.meta,
-    super.behavior,
+    @internal super.behavior,
     super.placeholderData,
     super.refetchOnMount,
     super.refetchOnWindowFocus,
@@ -757,7 +836,6 @@ class QuerySelectOptions<TQueryData, TData>
     DateTime? Function()? initialDataUpdatedAtCompute,
     StructuralSharing<TQueryData>? structuralSharing,
     Object? meta,
-    FetchBehavior<TQueryData>? behavior,
     PlaceholderData<TQueryData>? placeholderData,
     RefetchOn? refetchOnMount,
     RefetchOn? refetchOnWindowFocus,
@@ -788,7 +866,7 @@ class QuerySelectOptions<TQueryData, TData>
                 : null),
         structuralSharing: structuralSharing ?? this.structuralSharing,
         meta: meta ?? this.meta,
-        behavior: behavior ?? this.behavior,
+        behavior: behavior,
         placeholderData: placeholderData ?? this.placeholderData,
         refetchOnMount: refetchOnMount ?? this.refetchOnMount,
         refetchOnWindowFocus: refetchOnWindowFocus ?? this.refetchOnWindowFocus,

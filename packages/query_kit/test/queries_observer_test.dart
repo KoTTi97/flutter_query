@@ -29,6 +29,16 @@ void main() {
   List<int?> data(List<QueryResult<int>> results) =>
       results.map((r) => r.dataOrNull).toList();
 
+  /// One `status/fetchStatus/data` string per result, so a whole sequence of
+  /// snapshots reads as data in the failure message.
+  List<List<String>> snapshots(List<List<QueryResult<int>>> sequence) =>
+      sequence
+          .map((results) => results
+              .map((r) =>
+                  '${r.status.name}/${r.fetchStatus.name}/${r.dataOrNull}')
+              .toList())
+          .toList();
+
   observerTest('should return an array with all query results', (time) async {
     final observer = QueriesObserver<int, int>(client, [first, second]);
     List<QueryResult<int>>? result;
@@ -171,6 +181,28 @@ void main() {
     final results = [observer.currentResult];
     final unsubscribe = observer.subscribe(results.add);
     await time.flushMicrotasks();
+    // The whole sequence, not just its endpoint. Upstream asserts six
+    // results here and the port produces seven — its seed plus six
+    // notifications, where upstream's is a seed plus five — because
+    // upstream's third occurrence reports `idle` for one notification while
+    // the key1 query it shares with the first occurrence is already
+    // fetching, and every occurrence here reports its actual fetching state
+    // (the divergence row in PORTING_NOTES). Asserting only the final data
+    // let a regression anywhere in the duplicate-observer path pass, which
+    // is the one path this case exists for (pre-release review, 2026-09-12).
+    expect(snapshots(results), [
+      ['pending/idle/null', 'pending/idle/null', 'pending/idle/null'],
+      ['pending/fetching/null', 'pending/idle/null', 'pending/idle/null'],
+      ['pending/fetching/null', 'pending/fetching/null', 'pending/idle/null'],
+      [
+        'pending/fetching/null',
+        'pending/fetching/null',
+        'pending/fetching/null'
+      ],
+      ['success/idle/1', 'pending/fetching/null', 'pending/fetching/null'],
+      ['success/idle/1', 'pending/fetching/null', 'success/idle/1'],
+      ['success/idle/1', 'success/idle/2', 'success/idle/1'],
+    ]);
     expect(data(results.last), [1, 2, 1]);
     expect(
         results.last.every((r) => r.fetchStatus == FetchStatus.idle), isTrue);

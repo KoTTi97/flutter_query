@@ -26,7 +26,10 @@ the additional `release_*_regressions_test.dart` suites.
 - A mutation scope has an explicit owner through transport and completion
   callbacks. Cache insertion order alone is insufficient. Removing an active
   owner does not release the scope until its run settles; removing an
-  unstarted restored queue head releases its waiters immediately.
+  unstarted restored queue head releases its waiters once that removal has
+  completed (the next microtask), and only the head's removal does. Removing
+  entries — one, a filtered loop, or `clear()` — never starts a mutation
+  function while the removal is under way.
 - Every mutation call has an invocation identity. Reentrant newer calls or
   resets retain ownership of the observer and its per-call callbacks. An
   older invocation may still execute its own mutation without taking the

@@ -408,4 +408,109 @@ void main() {
     expect(calls, 1, reason: 'only the third registration remains subscribed');
     removeThird();
   });
+
+  // QE-01 (pre-release verification, 2026-09-12): a cancel delivered
+  // synchronously from the `fetch` notification while the fetch cannot start
+  // (offline, `NetworkMode.online`) used to leave the query `paused` with no
+  // retryer to release it — never collected, skipped by `refetchQueries`
+  // when unobserved, deaf to reconnect. `Retryer.start` now returns at once
+  // when the retryer was settled before it started.
+  group('QE-01 cancel from the fetch notification while offline', () {
+    QueryOptions<String> offlineOptions(QueryKey key) => QueryOptions<String>(
+          queryKey: key,
+          queryFn: (_) async => 'data',
+          gcTime: GcTime.duration(ms(100)),
+        );
+
+    void Function() onFetchOf(
+      QueryClient client,
+      QueryKey key,
+      void Function(Query<Object?> query) callback,
+    ) {
+      var fired = false;
+      return client.queryCache.subscribe((event) {
+        if (fired) return;
+        if (event case QueryUpdated(:final query, action: QueryFetchAction())) {
+          if (query.queryKey == key) {
+            fired = true;
+            callback(query);
+          }
+        }
+      });
+    }
+
+    testFakeAsync('cancelQueries from a cache listener leaves the query idle',
+        (time) async {
+      final client = testClient()..mount();
+      client.onlineManager.setOnline(false);
+      final key = queryKey();
+      final unsubscribe = onFetchOf(client, key, (_) {
+        client.cancelQueries(filters: QueryFilters(queryKey: key)).ignore();
+      });
+      client.query<String>(offlineOptions(key)).ignore();
+      await time.advance(ms(10));
+      final query =
+          client.queryCache.find(filters: QueryFilters(queryKey: key));
+      expect(query!.state.fetchStatus, FetchStatus.idle,
+          reason: 'nothing runs: the fetch was cancelled before it started');
+      unsubscribe();
+      client.unmount();
+      client.clear();
+    });
+
+    testFakeAsync(
+        'a cancelled never-started query is collected and refetchable',
+        (time) async {
+      final client = testClient()..mount();
+      client.onlineManager.setOnline(false);
+      final key = queryKey();
+      final unsubscribe = onFetchOf(
+        client,
+        key,
+        (query) => query.cancel(revert: true).ignore(),
+      );
+      client.query<String>(offlineOptions(key)).ignore();
+      await time.advance(ms(10));
+      unsubscribe();
+      client.onlineManager.setOnline(true);
+      await time.flushMicrotasks();
+      final query =
+          client.queryCache.find(filters: QueryFilters(queryKey: key));
+      expect(query!.state.fetchStatus, FetchStatus.idle);
+      await time.advance(ms(150));
+      expect(client.queryCache.queries, isEmpty,
+          reason: 'an idle, unobserved entry is collected after gcTime');
+      client.unmount();
+      client.clear();
+    });
+
+    testFakeAsync('an observer that cancels on paused does not stay paused',
+        (time) async {
+      final client = testClient()..mount();
+      client.onlineManager.setOnline(false);
+      final key = queryKey();
+      final observer = client.observe<String, String>(
+        QueryObserverOptions<String>(
+          queryKey: key,
+          queryFn: (_) async => 'data',
+          gcTime: GcTime.duration(ms(100)),
+        ),
+      );
+      final seen = <FetchStatus>[];
+      var cancelled = false;
+      final unsubscribe = observer.subscribe((result) {
+        seen.add(result.fetchStatus);
+        if (!cancelled && result.fetchStatus == FetchStatus.paused) {
+          cancelled = true;
+          client.cancelQueries(filters: QueryFilters(queryKey: key)).ignore();
+        }
+      });
+      await time.advance(ms(10));
+      expect(observer.currentResult.fetchStatus, FetchStatus.idle,
+          reason: 'delivered: $seen');
+      unsubscribe();
+      client.unmount();
+      client.clear();
+    });
+  });
 }

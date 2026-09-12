@@ -146,7 +146,7 @@ test('renaming todo 2 moves only the list of texts', async ({ page, open, scenar
   expect(await scenario.count('PATCH', /^\/api\/todos\/2$/)).toBe(2)
 })
 
-test('with sharing off, an equal refetch still moves no selection', async ({ page, open, scenario }) => {
+test('with sharing off, an equal refetch moves the selection that is a new instance', async ({ page, open, scenario }) => {
   await open('/select-and-sharing')
   await loaded(page)
 
@@ -167,14 +167,19 @@ test('with sharing off, an equal refetch still moves no selection', async ({ pag
   await expect(fact(page, 'todos', 'fetchStatus=idle')).toBeVisible()
   await expect(reader(page, 'context').getByText(`builds=${before.context.builds + 2}`, { exact: true })).toBeVisible()
 
-  // What `select` produces is shared whatever the option says: the four
-  // `select` readers saw nothing new. The readers without a `buildWhen`
-  // still rebuilt for the flip and the landing — the `ListenableBuilder`
-  // among them, which has no equality guard at all.
+  // The opt-out reaches what `select` produces too, as upstream's
+  // `replaceData` does: the controller's selection is a fresh list of texts
+  // every time and counts as new, while the `int`, the `String` and the
+  // record are `==` to the last and stand still. The readers without a
+  // `buildWhen` still rebuilt for the flip and the landing — the
+  // `ListenableBuilder` among them, which has no equality guard at all.
   const after = await snapshot(page)
-  for (const id of ['context', 'builder', 'mixin', 'controller'] as const) {
+  for (const id of ['context', 'builder', 'mixin'] as const) {
     expect(after[id].dataBuilds, `${id} data builds`).toBe(before[id].dataBuilds)
   }
+  expect(after.controller.dataBuilds, 'controller data builds').toBe(
+    before.controller.dataBuilds + 1,
+  )
   expect(after.builder.builds).toBe(before.builder.builds)
   for (const id of ['mixin', 'controller', 'raw'] as const) {
     expect(after[id].builds, `${id} builds`).toBe(before[id].builds + 2)

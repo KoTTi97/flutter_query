@@ -4,8 +4,11 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
+
 // A cycle (infinite_query → query → here), which Dart allows; the
 // alternative is a public sharing interface, which nobody has asked for.
+import 'hashing.dart';
 import 'infinite_query.dart';
 
 /// Returns [previous] when [next] is deep-equal to it, and otherwise [next]
@@ -23,10 +26,22 @@ import 'infinite_query.dart';
 /// typed `Map<Object?, Object?>` would not be the caller's `Map<String, int>`.
 /// A list can be copied with `toList()`, which keeps its element type.
 ///
-/// Collection comparison assumes standard element/key equality. Maps or sets
-/// with custom comparators or equality policies require a custom
-/// `structuralSharing` hook (or `(_, next) => next`) when those policies or
-/// their key representations must be preserved.
+/// A set is compared as a multiset under this walk's own relation — never
+/// under the set's equality policy, so a `SplayTreeSet` with a
+/// case-insensitive comparator reports a member that changed case
+/// (pre-release review, 2026-09-12, F1). The comparison asks the two sets for
+/// nothing but their length and their members: no `lookup`, `contains` or
+/// `containsAll`, whose answers are the set's policy and, for a `Set` a user
+/// wrote, whatever that implementation does (pre-release review, round 3,
+/// R2-1, R2-2, R2-4). Members are bucketed by a hash consistent with the walk,
+/// so a set of 10 000 ids costs about 1.5 ms a write (review AR-01).
+///
+/// A map is still looked up by its own keys, so a map with a custom key
+/// equality is compared under that policy: two maps whose keys differ only in
+/// a way their own comparator ignores are shared, and the older key
+/// representation is kept. Give such a map a custom `structuralSharing` hook
+/// (or the opt-out `noStructuralSharing`) when the key representation
+/// matters.
 ///
 /// A [TypedData] list — `Uint8List`, `Float32List` and the rest — is a leaf,
 /// as a `Uint8Array` is for upstream: compared with `==` (identity, for
@@ -68,19 +83,36 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
     // element is shared, as upstream's is; the ported suite pins that.
     final copy = next.toList();
     var equalItems = 0;
+    Set<Type>? refused;
     for (var i = 0; i < nextLength; i++) {
       final nextItem = next[i];
       if (i < previousLength) {
         final previousItem = previous[i];
         final shared =
             replaceEqualDeep<Object?>(previousItem, nextItem, depth + 1);
+        if (identical(shared, nextItem)) {
+          // Nothing to store: the copy already holds `next`'s element. It is
+          // still an equal one when both sides held the very same instance.
+          if (identical(nextItem, previousItem)) {
+            equalItems++;
+          }
+          continue;
+        }
         // The copy has `next`'s element type and `shared` may be `previous`'s
         // element: `<int>[1]` against `<double>[1.0]` finds `1 == 1.0` and
         // would store an `int` in a `List<double>`. A part that does not fit
-        // stays `next`'s, and does not count as equal.
+        // stays `next`'s, and does not count as equal. Whether it fits is a
+        // property of its runtime type alone, so a type the list refused once
+        // is not tried again: `<int>` against `<double>` used to throw and
+        // catch one `TypeError` per element, 2 µs apiece (review AR-09).
+        final type = shared.runtimeType;
+        if (refused != null && refused.contains(type)) {
+          continue;
+        }
         try {
           copy[i] = shared;
         } on TypeError {
+          (refused ??= <Type>{}).add(type);
           continue;
         }
         if (identical(shared, previousItem)) {
@@ -194,20 +226,99 @@ bool _mapsEqualDeep(
 // As multisets, the way `QueryKey` compares sets: "every element of `b` has
 // *a* deep-equal partner in `a`" called `{[1], [1], [2]}` and `{[1], [2],
 // [2]}` equal, and the cache kept the old value (fifth review, 2026-09-09).
-// A set of structurally equal lists is exactly the case that reaches here —
-// a set of value-equal members has no duplicates to miscount.
+//
+// Only `length` and iteration are asked of either set, and only `==` and
+// `hashCode` of their members, through `_equalDeep` and `_hashDeep` — the
+// contract the rest of the walk relies on. Two shortcuts through the set's own
+// methods were tried and both broke: `a.containsAll(b)` answered with `a`'s
+// equality policy, so a case-insensitive set kept a stale member (F1); a
+// `lookup` round trip trusted `lookup` to return the stored member and not to
+// throw, but dart2js's default set returns its argument for numbers, which
+// called `{0.0, 1.0, 3.0}` equal to `{-0.0, 0.0, 1.0}` on the web, and
+// `package:collection`'s `MapKeySet.lookup` throws (R2-1, R2-2). Correctness
+// by construction beats correctness by argument on a path that failed twice.
+//
+// Bucketed by a hash consistent with the walk, so a partner is looked for
+// only among the members that can be one. The unbucketed walk this replaced
+// cost 100 ms for 10 000 ints and 10 s for 100 000, on every cache write
+// (review AR-01).
+//
+// Elements that break `==`'s own contract — not transitive, or equal without
+// hashing alike — and sets nested past the depth limit get this walk's answer,
+// which is greedy there; nothing better is defined (round 3, R2-5).
 bool _setsEqualDeep(Set<Object?> a, Set<Object?> b, int depth) {
   if (a.length != b.length) {
     return false;
   }
-  final unmatched = List<Object?>.of(a);
+  final unmatched = <int, List<Object?>>{};
+  for (final element in a) {
+    (unmatched[sharingBucketOf(element, depth + 1)] ??= <Object?>[])
+        .add(element);
+  }
   for (final element in b) {
+    final bucket = unmatched[sharingBucketOf(element, depth + 1)];
+    if (bucket == null) {
+      return false;
+    }
     final partner =
-        unmatched.indexWhere((other) => _equalDeep(other, element, depth + 1));
+        bucket.indexWhere((other) => _equalDeep(other, element, depth + 1));
     if (partner < 0) {
       return false;
     }
-    unmatched.removeAt(partner);
+    bucket.removeAt(partner);
   }
   return true;
+}
+
+/// The bucket a member of a compared set goes into: [_hashDeep], mixed.
+/// Hidden from the barrel; visible to the suite, which pins its spread (R3-1).
+///
+/// The map the walk buckets into spreads its keys by their low bits, and a
+/// raw hash does not always vary there — on the VM a fractional `double`
+/// hashes to a value whose low bits barely change (`0.5` is
+/// `0x3fe000003fe00000`), so 10 000 half-integers fell into a few dozen
+/// buckets and the walk went quadratic: 40 ms where a `Set<int>` of the same
+/// size took 1.5 ms (round-3 review, R3-1). Mixing moves which bucket a value
+/// lands in and nothing else; a partner is still accepted only by
+/// [_equalDeep], so the answer is the same whatever the mix.
+@visibleForTesting
+int sharingBucketOf(Object? value, int depth) =>
+    spreadHash(_hashDeep(value, depth));
+
+/// A hash consistent with [_equalDeep]: two values the walk calls equal hash
+/// alike. Leaves hash as themselves, which Dart's `==` contract already ties
+/// to equality (`1` and `1.0` hash the same); a list hashes in order, a map
+/// or set unordered, an [InfiniteData] as its two lists — the shapes the walk
+/// compares. Past the depth limit the walk says "not equal", so any value is
+/// consistent there.
+int _hashDeep(Object? value, int depth) {
+  if (depth > 500) {
+    return 0;
+  }
+  if (value is TypedData) {
+    return spreadHash(value.hashCode);
+  }
+  if (value is List) {
+    return Object.hashAll(
+        <int>[for (final element in value) _hashDeep(element, depth + 1)]);
+  }
+  if (value is InfiniteData) {
+    return Object.hash(
+      value.runtimeType,
+      _hashDeep(value.pages, depth + 1),
+      _hashDeep(value.pageParams, depth + 1),
+    );
+  }
+  if (value is Map) {
+    return Object.hashAllUnordered(<int>[
+      for (final entry in value.entries)
+        Object.hash(
+            spreadHash(entry.key.hashCode), _hashDeep(entry.value, depth + 1)),
+    ]);
+  }
+  if (value is Set) {
+    return Object.hashAllUnordered(
+        <int>[for (final element in value) _hashDeep(element, depth + 1)]);
+  }
+  return spreadHash(value.hashCode);
 }

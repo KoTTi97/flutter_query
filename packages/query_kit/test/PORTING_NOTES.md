@@ -27,21 +27,21 @@ is a bug in this file.
 |---|---|---|---|
 | `subscribable.test.tsx` | `subscribable_test.dart` | 9 / 9 | done |
 | `notifyManager.test.tsx` | `notify_manager_test.dart` | 6 / 7 | done |
-| `focusManager.test.tsx` | `focus_manager_test.dart` | 6 / 9 | done |
-| `onlineManager.test.tsx` | `online_manager_test.dart` | 6 / 11 | done |
+| `focusManager.test.tsx` | `focus_manager_test.dart` | 7 / 9 | done |
+| `onlineManager.test.tsx` | `online_manager_test.dart` | 7 / 11 | done |
 | `removable.test.tsx` | `removable_test.dart` | 11 / 12 | done |
 | `retryer.test.tsx` | `retryer_test.dart` | 13 / 13 | done |
 | `query.test.tsx` | `query_test.dart` | 44 / 51 | done |
 | `queryCache.test.tsx` | `query_cache_test.dart` | 14 / 16 | done |
-| `queryObserver.test.tsx` | `query_observer_test.dart` | 62 / 75 | done |
+| `queryObserver.test.tsx` | `query_observer_test.dart` | 64 / 75 | done |
 | `queryClient.test.tsx` | `query_client_test.dart` | 106 / 156 | done |
-| `queriesObserver.test.tsx` | `queries_observer_test.dart` | 12 / 22 | applicable cases done; combine/suspense/property tracking excluded |
+| `queriesObserver.test.tsx` | `queries_observer_test.dart` | 12 / 23 | applicable cases done; combine/suspense/property tracking excluded |
 | `mutation.test.tsx` | `mutation_test.dart` | 28 / 28 | done |
 | `mutationCache.test.tsx` | `mutation_cache_test.dart` | 16 / 16 | done |
 | `mutationObserver.test.tsx` | `mutation_observer_test.dart` | 16 / 16 | done |
 | `infiniteQueryBehavior.test.tsx` | `infinite_query_behavior_test.dart` | 7 / 9 | done |
 | `infiniteQueryObserver.test.tsx` | `infinite_query_observer_test.dart` | 6 / 7 | done |
-| `utils.test.tsx` | `utils_test.dart` | 47 / 78 | done |
+| `utils.test.tsx` | `utils_test.dart` | 48 / 78 | done |
 
 **What "Cases" counts:** upstream cases ported out of the upstream cases in
 that suite — nothing else. A ported file may also hold port-only cases (a Dart
@@ -52,6 +52,20 @@ rule about where port-only tests live holds for whole *files* with no upstream
 counterpart; a case that belongs beside its ported neighbours stays there,
 named so it reads as the addition it is.
 
+**The counting rule, stated once and applied everywhere below
+(2026-09-12):** one upstream case is one `it` / `test` **declaration**. A
+`describe` contributes nothing of its own, and a parametrised `it.each` block
+counts as **one** declaration, because the reason it is ported or omitted is
+one reason for the whole block — the accounting unit and the decision unit are
+the same thing. One block in the seventeen suites is parametrised:
+`queriesObserver`'s `should cache the falsy combined result %s when nothing has
+changed`, whose eight rows are all in the omitted `combine` group. Expanding
+its rows instead would read 543 upstream cases rather than 536 and 12 / 30 for
+that suite; nothing else in the table moves. A renamed or adapted case counts
+as **ported** against the upstream case it came from — every rename is listed
+in that suite's section, so the pairing can be checked by hand.
+A Dart case that answers no upstream case counts in neither column.
+
 Suites not ported at all, each for one recorded reason:
 `hydration.test.tsx` (hydration is out of v1 scope, #17),
 `timeoutManager.test.tsx` (the module is not ported, #9),
@@ -59,11 +73,62 @@ Suites not ported at all, each for one recorded reason:
 `streamedQuery.test.tsx` (experimental upstream; the Dart `Stream` mapping is
 fog).
 
-The totals at the 0.1.0 tag: 17 suites, 409 of their 535 upstream cases
-ported, and `dart test` runs 586 tests — the port-only cases
-(`smoke_test.dart`, `functional_improvements_test.dart`, `barrel_test.dart`)
-and the review regressions (`port_specifics_test.dart`,
-`port_lifecycle_test.dart`) included — on the VM and compiled to JavaScript.
+The totals at the 0.1.0 tag: 17 suites, 414 of their 536 upstream cases
+ported, and `dart test` runs **741** tests on the VM and **737** compiled to
+JavaScript (three barrel checks are VM-only) — the port-only files
+(`smoke_test.dart`, `functional_improvements_test.dart`, `barrel_test.dart`,
+`confidence_sequences_test.dart`) and the review regressions
+(`port_specifics_test.dart`, `port_lifecycle_test.dart`, the four
+`release_*_regressions_test.dart`) included. Both test totals were measured
+after the final review's round 2 (`6442285`), by running `dart test` and
+`dart test -p chrome` over the whole package.
+
+Those totals read **409 of 535** until the pre-release deep-dive review
+(2026-09-12) recounted them against the pin, one suite at a time, then moved
+again as the review's own findings were fixed, and once more when the final
+review undid one of those fixes. Nothing was recounted by
+hand-adding: the column is re-derived by matching each upstream declaration to
+at most one Dart case (exact path first, then leaf name, renames resolved by
+hand against this file's suite sections), and the total is whatever that
+produces.
+
+- **409 → 412, by recounting.** `focusManager` was always 7 / 9 (the omitted
+  "browser environment" group names three things, but one of them is half of a
+  case that *is* ported, so it is two omitted cases, not three);
+  `queriesObserver`'s denominator is 23 declarations, because the `it.each`
+  block was counted nowhere; and two cases the review caused to be ported —
+  `onlineManager > should replace default window listener when a new event
+  listener is set` and `utils > addConsumeAwareSignal > should consume the
+  signal only once across repeated accesses` — add one each. 535 → 536 is the
+  `it.each` block alone.
+- **412 → 415, by fixing behaviour.** The three behavioural findings each
+  freed a case that had been filed as an omission: FI-01 ported
+  `queryClient`'s `should not refetch inactive queries that have a skipToken
+  queryFn even if "refetchType" is "all"`, and FI-05 ported both of
+  `queryObserver`'s `should not use replaceEqualDeep for select value when
+  structuralSharing option is …` cases. FI-04 moved nothing — it made an
+  already-counted case actually test its subject.
+- **415 → 414, by undoing a fix.** The final review (F2, below) reverted
+  FI-01, so the skipToken invalidation case is unported again and back among
+  `queryClient`'s omissions. The FI-05 pair stays ported.
+
+**How 414 was measured (2026-09-12, after `6442285`).** A script read every
+`it` / `test` declaration of the seventeen upstream files at the pin (536,
+with `it.each` as one) and every `test` / `testFakeAsync` / `*Test(` name in
+the seventeen Dart twins — string literals concatenated, a comment between the
+call and its name allowed — and matched them one to one per suite, removing a
+Dart name once it had been used. **398** paired by identical name. **14** more
+paired by a normalised near-name match (difflib ratio ≥ 0.6), each of which
+was read against its suite's section and is a recorded rename or adaptation:
+`subscribable` 1, `query` 1, `queryCache` 1, `mutation` 2, `queryClient` 3
+(the drifted titles listed in its section), `infiniteQueryBehavior` 1,
+`infiniteQueryObserver` 1, `utils` 4 (three cancel-signal cases and the
+`partialMatchKey` adaptation). **2** were paired by hand: `mutationObserver`'s two "transferred to
+different execution context" cases, which are named "is reported to the zone"
+here. 398 + 14 + 2 = **414**, and it agrees with the Status table suite by
+suite; no ported file carries a `skip:`. What the script cannot see is whether
+a paired case still tests its subject — FI-04 was a paired case that did not —
+so the number is an upper bound on fidelity, not a proof of it.
 
 ## Omissions and adaptations, by suite
 
@@ -76,14 +141,67 @@ and the review regressions (`port_specifics_test.dart`,
 - **adapted:** duplicate keys retain distinct observers by occurrence while
   sharing a cache entry. All occurrences report their actual fetching state;
   the upstream test's transient idle duplicate is not reproduced. The case
-  asserts final data, independent observers and a single fetch per key.
-- **omitted (10):** the eight cases between `should update combined result
-  when queries are added with stable combine reference` and `should return
-  cached combined result when nothing has changed` concerning combine,
-  suspense and fallback results; plus `should return observer result directly
-  when notifyOnChangeProps is set` and `should track properties on all
-  observers when trackResult is called`. These APIs are outside the adopted
-  homogeneous collection surface.
+  asserts final data, independent observers and a single fetch per key — and,
+  since 2026-09-12, the port's **own** result sequence, snapshot by snapshot.
+  Upstream asserts six results (its seed plus five notifications) because its
+  third occurrence reports `idle` for one notification while the key it shares
+  with the first occurrence is already fetching; here every occurrence reports
+  its actual fetching state, so the sequence is seven (seed plus six). The
+  pre-release review pointed out that a case asserting only the endpoint would
+  stay green through a regression anywhere in the duplicate-observer path,
+  which is the one path the case exists for.
+- **omitted (11 of the 23 declarations):** the nine consecutive cases from
+  `should update combined result when queries are added with stable combine
+  reference` to `should return cached combined result when nothing has
+  changed` — combine, suspense and fallback results, and `should return
+  observer result directly when notifyOnChangeProps is set`, which sits among
+  them; the `it.each` block `should cache the falsy combined result %s when
+  nothing has changed`, one declaration over eight rows, all of them `combine`;
+  and `should track properties on all observers when trackResult is called`.
+  These APIs are outside the adopted homogeneous collection surface. The
+  `it.each` block was counted in no earlier version of this file, which is why
+  the suite's denominator read 22 until 2026-09-12.
+
+### The port-only files, and what each is for
+
+Six files hold cases with no upstream counterpart. They count in neither column
+of the Status table, and each is here so that "port-only" never means
+"unaccounted for":
+
+- `smoke_test.dart` — Dart behaviour upstream has no case for (key equality,
+  the `state:` door, the barrel's exports as a user sees them).
+- `functional_improvements_test.dart` — the additions from the competitor
+  analysis, listed in the next section.
+- `barrel_test.dart` — that `query_kit.dart` exports what the documentation
+  says it does.
+- `port_specifics_test.dart` and `port_lifecycle_test.dart` — one case per
+  finding of the nine reviews, the pre-release deep dive and its final
+  review, described in
+  "Regressions found by review" below.
+- the four `release_*_regressions_test.dart` — the 59 acceptance cases of
+  ADR-0003, described in "Core operation ownership".
+- **`confidence_sequences_test.dart` — 32 cases, added 2026-09-12
+  (`bac176a`).** Not a port and not a regression file: a *bounded confidence
+  check* over the public API, planned in
+  [`docs/plans/core-confidence-acceptance.md`](../../../docs/plans/core-confidence-acceptance.md)
+  before it was written and reported in
+  [`docs/research/core-confidence-assessment.md`](../../../docs/research/core-confidence-assessment.md).
+  Where a ported case asks "does this behave as upstream does" and a regression
+  asks "is this one bug gone", these ask "do the contracts still hold when the
+  orderings are enumerated rather than chosen": 24 fetch-ownership cases (three
+  runs, two supersessions, all six completion orders, old results succeeding or
+  failing, cancel or reset), 4 mutation-scope cases (two start orders × the
+  removed owner succeeding or failing), and 4 combined flows — 20 observer
+  selection/placeholder cycles, 20 collection switch-and-resubscribe cycles, a
+  nullable shared entry through invalidation and an offline retry, and an
+  infinite query through a failed page, an offline pause, a cancel and a
+  reload. The expectations are ownership, serialization and cache contracts,
+  not snapshots of internals, and no production code changed for them.
+  **They were shown to be able to fail:** run against the 30 core source files
+  of `d7ef2d3` — the state before the ownership repair — **11 of the 32 go
+  red** and 21 pass, which is the negative control the assessment reports. Case
+  names are generated and name their completion order, so a failure says which
+  interleaving broke.
 
 ### Functional additions from the competitor analysis
 
@@ -123,13 +241,16 @@ listeners, mutation-state controllers and query collections.
 
 ### `focusManager.test.tsx`
 
-- **omitted — browser environment (3):**
-  `cleanup (removeEventListener) should not be called if window is not defined`,
-  `... if window.addEventListener is not defined`, and the `addEventListener`
-  spy half of `should call removeEventListener when last listener unsubscribes`.
-  There is no `window` in Dart and no default DOM adapter to install; the
-  Flutter binding's `AppLifecycleListener` adapter is covered by that package's
-  own tests.
+- **omitted — browser environment (2):**
+  `cleanup (removeEventListener) should not be called if window is not defined`
+  and `... if window.addEventListener is not defined`. There is no `window` in
+  Dart and no default DOM adapter to install; the Flutter binding's
+  `AppLifecycleListener` adapter is covered by that package's own tests. The
+  `addEventListener` spy half of `should call removeEventListener when last
+  listener unsubscribes` goes with them, but that case is **ported** (adapted,
+  below) — dropping half of its assertions does not make it an omission. Until
+  2026-09-12 this bullet said three and the status table read 6 / 9; seven of
+  the nine upstream names are in `focus_manager_test.dart`.
 - **adapted:** `should return true for isFocused if document is undefined` —
   upstream deletes `globalThis.document` to show the manager defaults to
   focused. Pure Dart has nothing to ask in the first place, so the assertion is
@@ -140,13 +261,26 @@ listeners, mutation-state controllers and query collections.
 
 ### `onlineManager.test.tsx`
 
-- **omitted — browser environment (5):** the two `navigator.onLine` spies, the
-  two `window`-undefined cleanup cases, and
-  `should update online status from window online and offline events`. The
-  Flutter binding's `connectivity_plus` adapter is tested in that package.
-- **adapted:** `isOnline should return true if navigator is undefined` and
-  `should call removeEventListener when last listener unsubscribes`, for the
-  same reasons as the focus manager.
+- **omitted — browser environment (4), by name:**
+  `isOnline should return true if navigator.onLine is true`,
+  `cleanup (removeEventListener) should not be called if window is not
+  defined`, `... if window.addEventListener is not defined`, and
+  `should update online status from window online and offline events`. There is
+  no `navigator` and no `window` in Dart; the Flutter binding's
+  `connectivity_plus` adapter is tested in that package.
+- **adapted:** `isOnline should return true if navigator is undefined` — the
+  manager defaults to online with nothing to ask, as the focus manager defaults
+  to focused — and `should call removeEventListener when last listener
+  unsubscribes`, which asserts the installed adapter's cleanup, for the same
+  reason as its focus twin. Both are ported, not omitted.
+- **ported 2026-09-12:** `should replace default window listener when a new
+  event listener is set`. The earlier enumeration said "the two
+  `navigator.onLine` spies" — there is one — and never named this case, which
+  counted it as omitted by arithmetic while its focus twin was ported and
+  green. It needed no change to the port: `setEventListener` installs the
+  handler, the first `subscribe` runs it once, and the last unsubscribe runs
+  the handle it returned once. Found by the pre-release deep-dive review
+  (2026-09-12), which probed it against unchanged code before reporting it.
 
 ### `removable.test.tsx`
 
@@ -179,9 +313,11 @@ listeners, mutation-state controllers and query collections.
 removed immediately after unsubscribing` expects the query function to have run
 once; here it runs twice. Upstream's observer rejoins the query it last watched
 even after the cache has collected it, and shows that dead query's data without
-fetching; this port re-resolves the key on resubscribe (see "resubscribe after
-gc" in the second review below), and a collected query has no data left to
-show, so the second subscription fetches. The rest of the case — removal
+fetching; this port re-resolves the key on resubscribe (the divergence table's
+row "an observer resubscribing after its query was collected rejoins the dead
+query", decided in the second review — there is no section of that name, which
+is what this sentence pointed at until 2026-09-12), and a collected query has
+no data left to show, so the second subscription fetches. The rest of the case — removal
 immediately after unsubscribe, both times — is unchanged.
 
 ### `queryCache.test.tsx`
@@ -217,11 +353,27 @@ immediately after unsubscribe, both times — is unchanged.
   `should use an infinite garbage collection time on the server`. There is no
   `isServer` here; `environmentManager` is not ported
   ([#9](https://github.com/KoTTi97/flutter_query/issues/9)).
-- **omitted — hydration (1):** `should reset to default state when created from
-  hydration`. Hydration is out of the v1 scope
-  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)); the state door it
-  would use (`QueryCache.build(..., state:)`) exists and is covered by
-  `smoke_test.dart`.
+- **portable, not yet ported (1):** `should reset to default state when created
+  from hydration`. Filed as an omission "covered by `smoke_test.dart`" until
+  2026-09-12, and **that coverage does not exist**: `smoke_test.dart` has no
+  `state:` build and no `reset()` at all, and no case anywhere in the suite
+  resets a query that was built from a restored state (`.reset()` appears in
+  `query_test.dart` twice, both on queries that fetched or were seeded through
+  `initialData`). Nor does the case need hydration — that is only how upstream
+  gets a query whose state did not come from its own fetch. What it actually
+  pins is that `reset()` goes back to the query's *default* state and not to
+  the state it was **built with**, which is exactly what this port does:
+  `_initialState = _defaultState(options)` is computed before `_state = state
+  ?? _initialState` (`query.dart:317-318`), so a restored state never becomes
+  the reset target, and `reset()` writes `_initialState` (`:589`). The Dart
+  shape is `QueryCache.build(..., state:)` with data, then `reset()`, then
+  assert the data is gone — three lines, and hydration is not among them. Read
+  and confirmed against the source, not run: deferred to the first post-0.1.0
+  porting pass rather than added under a release deadline, and recorded here so
+  the deferral is a decision instead of a false claim of coverage. (Hydration
+  itself remains out of the v1 scope,
+  [#17](https://github.com/KoTTi97/flutter_query/issues/17) — that part was
+  never the problem.)
 - **omitted — undefined guards (1):** `fetch should dispatch an error if the
   queryFn returns undefined`. `Future<T>` with a non-nullable `T` cannot produce
   it, and with a nullable one `null` is a legitimate value
@@ -260,7 +412,17 @@ immediately after unsubscribe, both times — is unchanged.
 - **adapted (2):** `should use queryFn from observer if not provided in options`
   and `should call initialData function when it is a function` construct a
   `Query` directly upstream. A `Query` here is always born into a cache, so both
-  build through `QueryCache.build`.
+  build through `QueryCache.build`. **The first of the two was vacuous until
+  the fidelity review of 2026-09-12** (FI-04): upstream's detached `Query` has
+  no options at all, while `queryClient.observe` writes the observer's options
+  — query function included — into the cache's entry before the test builds it
+  a second time, and `QueryCache.build` returns an existing entry untouched. So
+  `fetch()` found a query function of its own and `Query.fetch`'s borrowing
+  branch was never entered; deleting that branch left the case green. The case
+  now fetches with the functionless options (`query.fetch(options: …)`), which
+  is the one way a query with observers can have no query function of its own
+  and the path `QueryClient.query(QueryOptions(queryKey: key))` takes — and it
+  goes red when the branch is removed. The branch itself was never broken.
 - **adapted (1):** `should provide context to queryFn` no longer asserts
   `args.pageParam` is undefined. `QueryFunctionContext` has no `pageParam` (or
   `direction`): nothing ever set them, because an infinite query's page
@@ -293,12 +455,20 @@ with `cancelRefetch: false` where upstream's default is `true`.
 
 ### `queryObserver.test.tsx`
 
-- **omitted — dropped observer feature (5):** the two `notifyOnChangeProps`
-  cases and the three `throwOnError` / `trackResult` / `trackProp` cases. Both
-  features are React-render-scheduling machinery that
-  [#15](https://github.com/KoTTi97/flutter_query/issues/15) replaced with
-  `select` plus the binding's own rebuild filter, and with errors living in the
-  sealed result.
+- **omitted — dropped observer feature (4):** the two `notifyOnChangeProps`
+  cases and the two `should (not) track error prop when throwOnError is …`
+  cases. All four are React-render-scheduling machinery —
+  `notifyOnChangeProps` and `trackProp` decide which fields a render subscribes
+  to — which [#15](https://github.com/KoTTi97/flutter_query/issues/15) replaced
+  with `select` plus the binding's own rebuild filter.
+- **omitted — `throwOnError` dropped (1):** `should throw an error if
+  throwOnError option is true`. This one is *not* render machinery, and filing
+  it as such (until 2026-09-12) hid its real reason: it calls
+  `observer.refetch({ throwOnError: true })` and expects the returned promise
+  to reject. That switch is `RefetchOptions.throwOnError`, and the port has no
+  `throwOnError` anywhere — errors live in the sealed result (the divergence
+  table's own row), so `refetch()` has nothing to flip and the case has no
+  shape here.
 - **omitted — React-only (3):** the two `fetchOptimistic` cases (suspense's
   primitive, and suspense is dropped) and
   `should set fetchStatus to idle when _optimisticResults is isRestoring`
@@ -307,12 +477,24 @@ with `cancelRefetch: false` where upstream's default is `true`.
   selector` and `should structurally share placeholder data`. Both assert
   reference identity across two runs that produce equal values, which
   `replaceEqualDeep` now provides here too (see the third review below).
-- **omitted — no off switch for select output (2):** the two `should not use
+- **ported since the fidelity review, 2026-09-12 (2):** the two `should not use
   replaceEqualDeep for select value when structuralSharing option is ...`
-  cases. `structuralSharing: false` has no counterpart for what `select`
-  produces: the typed hook governs the cache write and the placeholder, and a
-  selector's output always goes through `replaceEqualDeep` (in the table
-  below).
+  cases. They were omitted as "no off switch for select output" — the note said
+  a selector's output always goes through `replaceEqualDeep` — and that was a
+  gap, not a divergence: upstream's `createResult` shares the selected value
+  through `replaceData`, which routes the `structuralSharing` option, so
+  `false` reaches it (FI-05, `queryObserver.ts:668`, `utils.ts:455`). The
+  port's `false` is `noStructuralSharing()` since the final review (F4): only
+  that recognised opt-out stops the observer sharing the selection. A hook of
+  one's own — `(_, next) => next` included — governs the cache write and leaves
+  the selection at the default walk, because the hook is typed
+  `StructuralSharing<TQueryData>` and cannot be applied to a `TData` (the row
+  in the table below says so). Between FI-05 and F4 *any* hook turned the
+  selection's sharing off; both cases spelled `false` as `(_, next) => next`
+  then and spell it `noStructuralSharing()` now, assertions unchanged. Both are
+  adapted to a `List<String>`: upstream's two deep-equal objects are compared
+  with `==` here, and two instances of a class without value equality are never
+  shared, so a list is what makes the sharing step visible at all.
 - **omitted — SSR (1):** `should not schedule timers on the server`.
 - **omitted — type-level (2):** `should throw an error if enabled option type is
   not valid` (`Enabled` is a sealed type; an invalid value does not typecheck)
@@ -344,66 +526,180 @@ upstream's shape: one `select` step over "query data or placeholder", and
 
 ### `queryClient.test.tsx`
 
-106 ported and 34 omitted (the 25 infinite cases were deferred until
-[#16](https://github.com/KoTTi97/flutter_query/issues/16) and are ported now —
-see the infinite section below).
+**106 ported and 50 omitted.** This accounting was wrong until 2026-09-12 and
+wrong in a way worth recording: the heading said "106 ported and 34 omitted" of
+156, which does not subtract, and the bullets below it enumerated 35 — so
+fourteen omitted cases were covered by no bullet and named nowhere, while the
+README promised every one of them by name. The list below was rebuilt by
+matching all 156 upstream declarations against the Dart file one at a time; the
+ten categories sum to 50, which is what 156 − 106 requires. It read 107 / 49
+for part of that day, while FI-01's fix had the skipToken invalidation case
+in the file; the final review reverted FI-01 (F2) and the case is an omission
+again.
 
-- **omitted — deprecated upstream API (16):** `fetchQuery` (9),
-  `ensureQueryData` (4) and `prefetchQuery` (3) cases. Upstream deprecated all
-  three at this pin in favour of `queryClient.query`, and pairs each block with
-  a modern equivalent — `query with static staleTime`, `query`, `query used for
-  prefetching` — which *are* ported
-  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The ordinary and
-  infinite `revalidateIfStale` cases are now adapted to named parameters on
-  `query` and `infiniteQuery`, retaining their upstream test names.
+Of upstream's 25 infinite cases here, **ten are ported** — see the infinite
+section below, whose own sentence said nine until the same recount. The rest
+are in the categories below.
+
+- **omitted — deprecated upstream API (24):** `fetchQuery` (9),
+  `ensureQueryData` (4 of 5), `prefetchQuery` (3), `fetchInfiniteQuery` (2),
+  `prefetchInfiniteQuery` (4) and `ensureInfiniteQueryData` (2 of 3). Upstream
+  deprecated all six at this pin in favour of `queryClient.query` /
+  `infiniteQuery`, and pairs each block with a modern equivalent — `query with
+  static staleTime`, `query`, `query used for prefetching`, `infiniteQuery with
+  static staleTime`, `infiniteQuery`, `infiniteQuery used for prefetching` —
+  which *are* ported
+  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The two
+  exceptions are the `revalidateIfStale` cases of `ensureQueryData` and
+  `ensureInfiniteQueryData`, which are ported (adapted to the named parameter
+  on `query` / `infiniteQuery`, upstream names kept) — which is why those two
+  blocks read "4 of 5" and "2 of 3". Four of these 24 are the block's own
+  `should not type-error with strict query key`; they are counted here, not in
+  the type-level bullet. The earlier "deprecated (16)" counted only the three
+  non-infinite blocks and undercounted `ensureQueryData`.
+- **omitted — type-level (4):** `should not type-error with strict query key`
+  in `query`, `infiniteQuery`, `query used for prefetching` and `infiniteQuery
+  used for prefetching` — the four that live outside a deprecated block. (The
+  bullet said two.)
 - **omitted — option not ported (3):** the three `defaultQueryOptions` cases,
   all about `persister` defaulting `networkMode` to `offlineFirst`.
 - **omitted — hashKey identity (1):** `setQueryData > should use default
   options`, which sets a `queryKeyHashFn`
   ([#8](https://github.com/KoTTi97/flutter_query/issues/8)).
-- **omitted — undefined/falsy guards (3):** the two `setQueryData` cases that
-  pass `undefined` as data, and `query with static staleTime`'s "cached query
-  data is falsy". `setQueryData` takes a non-nullable value here and
-  `updateQueryData` returning `null` means "leave it alone" — both of which are
-  ported; and `null` is a value like any other in Dart, not a falsy hole.
-- **omitted — skipToken (6):** four in `query`, one in `invalidateQueries`, and
-  the third observer of `resetQueries > should refetch all active queries`
-  (adapted by dropping it). `skipToken` is `Enabled.no` here
-  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)), and the
-  imperative path has no equivalent — it fetches by definition.
-- **omitted — no `select` on the imperative path (3):** `should fetch when
-  disabled and apply select`, `should apply select when data is fresh in cache`,
-  `should apply select to freshly fetched data`. `query()` keeps one type
-  parameter and the transform is a `.then` at the call site
-  ([#7](https://github.com/KoTTi97/flutter_query/issues/7)), so these would
-  assert Dart's `await`, not the library's.
-- **omitted — type-level (2):** the two surviving `should not type-error with
-  strict query key` cases.
+- **omitted — `undefined` as data (2):** `setQueryData > should not create a
+  new query if query was not found and data is undefined` and `> should not
+  update query data if data is undefined`. There is no `undefined`: a value of
+  `null` is a value (see the `setQueryData` row in the divergence table), and
+  "leave it alone" is `updateQueryData` returning `null`, which is ported.
+- **portable, not yet ported (1):** `query with static staleTime > should
+  return the cached query data if the query is found and cached query data is
+  falsy`. This was filed with the two above as a "falsy guard", which is not
+  what it is about: upstream seeds the cache with `null` — a value in
+  JavaScript too, not `undefined` — and asserts `query()` returns it rather
+  than fetching. The port does exactly that, and the pre-release review's probe
+  of the case passed against unchanged code. It is deferred, not inapplicable:
+  porting it means a nullable-typed `query<String?>` throughout the case, and
+  the suite's `query with static staleTime` block is written over a
+  non-nullable `String`. Deferred to the first post-0.1.0 porting pass rather
+  than reshaped under a release deadline.
+- **skipToken (8 upstream cases: 8 omitted, 0 ported):** four in `query` (`should throw when skipToken is
+  provided and no cached data exists`, `should return cached data when
+  skipToken is provided`, `should return cached data when skipToken and enabled
+  false are both provided`, `should throw when skipToken is provided with no
+  cached data`), three in `infiniteQuery` (the same shapes), and
+  `invalidateQueries > should not refetch inactive queries that have a
+  skipToken queryFn even if "refetchType" is "all`. `skipToken` is `Enabled.no`
+  here ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The three
+  reasons are different and only one of them is a language argument:
+  - the four `query` cases are **portable, not yet ported**. The recorded
+    reason — "the imperative path has no equivalent, it fetches by definition"
+    — is not true of them: what they assert is that a fetch with no usable
+    query function throws (`MissingQueryFunctionError` here) or returns the
+    cached data instead, and `query()` with an absent `queryFn` reaches both
+    branches — the pre-release review probed both and both behaved as upstream
+    does. Deferred for the same reason as the falsy case above.
+  - the three `infiniteQuery` cases are genuinely unportable: `pageFn` is
+    required on `InfiniteQueryOptions`, so "an infinite query whose fetcher is
+    a skip marker" has no expressible form
+    ([#16](https://github.com/KoTTi97/flutter_query/issues/16)).
+  - the `invalidateQueries` case is **not portable as long as one value
+    spells two meanings**. It pins the `skipToken` arm of upstream's
+    no-observer `isDisabled` (`queryFn === skipToken || !isFetched()`), and
+    this port has no value that means `skipToken` *and not* `enabled: false`:
+    `Enabled.no` spells both (#17), and `enabled: false` is the meaning kept —
+    upstream's `enabled: false` never reaches that arm, so a seeded,
+    unobserved query whose last observer had `Enabled.no` is refetched here,
+    as upstream's `enabled: false` one is. The case was ported for part of
+    2026-09-12 (FI-01) by making `Enabled.no` mean `skipToken` in that arm, and
+    unported again the same day when the final review showed that silenced
+    every disabled dependent query that had lost its widget and ran
+    `Enabled.when` predicates with no observer attached (F2, F3 — the decision
+    and its alternatives are in "Final review of the pre-release branch",
+    below). A comment at its old position in `query_client_test.dart` says so.
+    It was filed until then under the untrue "fetches by definition" sentence;
+    this is its true reason.
+- **omitted — no `select` on the imperative path (5):** `query > should fetch
+  when disabled and apply select`, `> should apply select when data is fresh in
+  cache`, `> should apply select to freshly fetched data`, and their two
+  infinite twins `infiniteQuery > should fetch when disabled and apply select`
+  and `> should apply select to infinite query data`. `query()` /
+  `infiniteQuery()` keep one type parameter and the transform is a `.then` at
+  the call site ([#7](https://github.com/KoTTi97/flutter_query/issues/7)), so
+  these would assert Dart's `await`, not the library's. (The bullet named the
+  three ordinary ones and left the infinite two unnamed.)
 - **omitted — dropped observer feature (1):** `refetchQueries > should throw an
   error if throwOnError option is set to true`
   ([#15](https://github.com/KoTTi97/flutter_query/issues/15)).
-- **omitted — hydration (1):** `should resumePausedMutations when coming online
-  after having restored cache (and resumed) while offline`.
+- **omitted — hydration (1):** `focusManager and onlineManager > should
+  resumePausedMutations when coming online after having restored cache (and
+  resumed) while offline`.
 - **adapted:** `setQueriesData` reads as `updateQueriesData`, and
   `setQueryData(key, updaterFn)` as `updateQueryData` — Dart cannot overload on
   "a value or a function"
   ([#17](https://github.com/KoTTi97/flutter_query/issues/17)).
+- **adapted:** `resetQueries > should refetch all active queries` drops its
+  third observer, whose `queryFn` is `skipToken`. The case is ported; only that
+  observer is gone, so it is an adaptation and not one of the 50 omissions —
+  it was counted among the "skipToken (6)" until 2026-09-12, which is one of
+  the reasons that bullet did not reconcile.
 - **adapted:** `setQueryDefaults > should merge defaultOptions` uses `retry`
   where upstream uses `suspense`, which is dropped.
 - **adapted:** `should set the new data without comparison if structuralSharing
-  is set to false` turns sharing off with the identity function,
-  `(_, next) => next`, which is the port's `false`
-  ([#12](https://github.com/KoTTi97/flutter_query/issues/12), revised by the
-  third review: sharing is now on by default, as upstream).
+  is set to false` turns sharing off on the cache write with an identity
+  function of its own through `QueryDefaults` (`_keepNext`)
+  ([#12](https://github.com/KoTTI97/flutter_query/issues/12), revised by the
+  third review: sharing is now on by default, as upstream). Since the final
+  review the port's `false` is spelled `noStructuralSharing()` (F4); the case
+  still passes as written, because on the cache write — the only thing it
+  asserts on — a hook of one's own and the opt-out behave identically. Its
+  comment ("the identity function is how sharing is turned off") predates F4
+  and is true only of the cache write.
 - **adapted (4):** the `focusManager`/`onlineManager` spy cases. Without
   `vi.spyOn` there is nothing to count, so each asserts the effect: a refetch
   happens (or does not) after the event, and the mount/unmount balance is read
-  the same way. The "resumePausedMutations was called" half of the first two is
-  unobservable when nothing is paused, and is covered by the online cases that
-  watch a real resumption.
+  the same way. The "`resumePausedMutations` was called" half of `should notify
+  queryCache and mutationCache if focused` and `… after multiple mounts and
+  single unmount` is **dropped**, and the reason recorded here until 2026-09-12
+  — "unobservable when nothing is paused" — was not true. It is observable
+  (pause a mutation offline, go back online while unmounted, mount, then
+  focus), and the pre-release review's probe showed the port doing the right
+  thing. What the two cases prove here is therefore half of what they prove
+  upstream; the resumption half is covered by the online cases that watch a
+  real resumption, and the honest reason for not extending these two is that
+  a focus-driven resumption needs a different fixture than the one they set up.
 - **adapted:** `should throw an error if throwOnError option is set to true`'s
   neighbours use `expectLater(..., throwsA(...))` where upstream uses
   `rejects.toEqual`.
+- **renamed against the rule, recorded 2026-09-12 (3).** The file keeps
+  upstream names verbatim everywhere else; these drifted and were
+  recorded nowhere, so a title diff against `queryClient.test.tsx` read them as
+  more missing cases — which is part of how fourteen omissions went
+  unnamed above. Each is listed here with the upstream name it came from:
+  - `query used for prefetching > should resolve to nothing when the error is
+    ignored` ← upstream `should resolve to undefined when error is caught with
+    noop` (`queryClient.test.tsx:1897`). The body drifted with the name:
+    upstream awaits the call and asserts the resolved value is `undefined`;
+    the Dart case `.ignore()`s the future and asserts `getQueryData` is `null`
+    and the entry's status is `error`. Both are true of the port, but the
+    assertion upstream makes — what a caught prefetch *resolves to* — is not
+    the one made here.
+  - `invalidateQueries > should not refetch disabled inactive queries even if
+    "refetchType" is "all"` ← upstream `… "refetchType" is "all`
+    (`:2455`). Upstream's title has an unbalanced quote; the port closed it.
+  - *(a fourth, `… have a skipToken queryFn even if "refetchType" is
+    "all"`, was written with FI-01's fix and copied the same closed quote; it
+    left the file with the case when F2 unported it.)*
+  - `infiniteQuery used for prefetching > should stop prefetching if
+    getNextPageParam returns null` ← upstream `… returns undefined`
+    (`:1797`). `null` is what the Dart `getNextPageParam` returns, but the
+    file-to-file diff is what the naming rule buys, and a substantive rename
+    belongs in an **adapted** bullet rather than in the title.
+
+  **To revert** (for whoever next touches `query_client_test.dart`; this file's
+  author does not own that file): restore all three upstream titles — unbalanced
+  quotes included, because a title that diffs is the whole point — and either
+  restore the upstream assertion of the first or keep the Dart assertion and
+  record it as an adaptation right here.
 
 **Four port bugs this suite caught:**
 
@@ -460,6 +756,26 @@ All 28 ported — the first suite with no omissions at all.
 - **adapted (2):** the mutation-state assertions compare the fields that exist
   here rather than a whole object literal: `context` is `onMutateResult`,
   `submittedAt` is a `DateTime`, and errors carry a `StackTrace` beside them.
+- **adapted (2), recorded 2026-09-12:** the same two cases also moved from
+  `states[1]` / `states[2]` to `states.last`, and that is not cosmetic. It is
+  there because the port delivers **fewer notifications than upstream**:
+  `MutationObserver` notifies only when the result differs from the last one it
+  reported, where upstream's `#notify` runs the listeners once per action. So
+  the success case collects three states here against upstream's four, and the
+  `onMutate` step in the error case produces one pending state here against
+  upstream's two. Indexing from the front would have failed; `states.last`
+  passes and says nothing about the count. The notification gate itself is now
+  a row in the divergence table, and the two cases keep `states[0]` and
+  `states.last` — the endpoints are the same either way, which is what they can
+  honestly assert while the gate stands.
+- **adapted, recorded 2026-09-12:** `should be able to restore a mutation`
+  passes `onMutate` / `onSuccess` / `onSettled` in the built options where
+  upstream registers them through `setMutationDefaults(key, …)`.
+  `MutationDefaults` carries no callbacks here (the README's "Callbacks in
+  `setMutationDefaults` — not ported" row), so there is nowhere else to put
+  them; the mutation
+  under test is still built from a restored `state:`, which is what the case is
+  about.
 
 **Six port bugs this suite caught,** all of them in how a mutation's callbacks
 and its retryer are sequenced:
@@ -526,6 +842,17 @@ All 16 ported.
   cases collect what the zone reports, through `testFakeAsyncGuarded`.
 - **adapted:** `should not notify cache when setOptions is called with same
   options` reads the events the cache emitted instead of spying on `notify`.
+- **adapted, recorded 2026-09-12:** the same case also **inserts a
+  `mutate('input')`** before the `setOptions` calls, which upstream does not.
+  Without it the case is vacuous here: upstream's `setOptions` emits
+  `observerOptionsUpdated` with `mutation: undefined` when the observer has no
+  mutation yet, so its positive half (one notification for the *differing*
+  options) has something to count; this observer emits nothing before the first
+  `mutate`, so both halves would read zero and the negative assertion would
+  pass for the wrong reason. The `mutate` gives the observer a mutation and the
+  case its teeth. That the event is missing before the first `mutate` is a
+  divergence in its own right — a devtools listener never sees a pre-mutate
+  option change — and it is now a row in the divergence table.
 
 **Four port bugs this suite caught:**
 
@@ -548,18 +875,29 @@ without which every rebuild would report an options change.
 
 ### `utils.test.tsx`
 
-47 ported, 31 omitted (the 8 `addToEnd`/`addToStart` cases were deferred until
+48 ported, 30 omitted (the 8 `addToEnd`/`addToStart` cases were deferred until
 [#16](https://github.com/KoTTi97/flutter_query/issues/16), the 23
 `replaceEqualDeep` cases until the third review; both are ported now).
 This is the one upstream file that is mostly *not* applicable: it tests
 JavaScript helpers, and the ones that survive the port are already methods on a
 value type here.
 
-- **ported:** `partialMatchKey` (8) as `QueryKey.matches`, `hashKey` (4) as
-  `QueryKey.debugString`, `matchMutation` (1), and the three
-  `addConsumeAwareSignal` cases as the query function context's `signal` getter
-  plus `QueryCancelToken.onCancel`.
-- **omitted — no counterpart (26):** `isPlainObject` (7), `isPlainArray` (2),
+- **ported:** `partialMatchKey` (8 of 8) as `QueryKey.matches`, `hashKey`
+  (4 of 5) as `QueryKey.debugString`, `matchMutation` (1 of 1), and
+  `addConsumeAwareSignal` (**4 of 4** since 2026-09-12) as the query function
+  context's `signal` getter plus `QueryCancelToken.onCancel`. The counts add up
+  to what the groups hold: this bullet said `hashKey (4)` for a group of five
+  (one is omitted, below) and "the three `addConsumeAwareSignal` cases" for a
+  group of four.
+- **ported 2026-09-12:** `addConsumeAwareSignal > should consume the signal
+  only once across repeated accesses`, the fourth case of that group, unported
+  and unlisted until the pre-release deep-dive review named it. It did not port
+  unchanged: upstream memoizes the signal on first access and registers its
+  abort listener exactly once, and the port's `signal` getter called its
+  `onSignalRead` hook on **every** read. The case is the assertion; the getter
+  now consumes once per context (`query_options.dart`, `query.dart`), and a
+  retry is a new context, as upstream's per-attempt reset is.
+- **omitted — no counterpart (28):** `isPlainObject` (8), `isPlainArray` (2),
   `shallowEqualObjects` (4), `isValidTimeout` (6), `hashQueryKeyByOptions` (2),
   `keepPreviousData` (1), `ensureQueryFn` (3), `shouldThrowError` (2). Dart has
   no plain-object introspection, `Duration` cannot be `NaN` or a string, and
@@ -598,10 +936,21 @@ value type here.
   `should stop refetching if undefined is returned from getNextPageParam`,
   which is the `null` case again in a language that has both.
 - **omitted — option not ported (1):** `should use persister when provided`.
-- **adapted:** `should surface the abort reason when cancellation happens
-  between refetched pages` drives a real observer instead of hand-building a
-  `FetchContext`, and asserts the same thing: the page loop stops rather than
-  fetching the next page.
+- **adapted, and renamed with it:** `should surface the abort reason when
+  cancellation happens between refetched pages` → `should surface the
+  cancellation when it happens between refetched pages`. It drives a real
+  observer instead of hand-building a `FetchContext` and calling
+  `behavior.onFetch` — and it does **not** assert the same thing, which this
+  entry claimed until 2026-09-12. Upstream aborts an `AbortController` from
+  inside the first refetched page and asserts the rejection is
+  `signal.reason` *by identity*. There is no abort reason here:
+  `QueryCancelToken` carries none, so a cancellation has nothing to surface and
+  the rename is the honest half of the adaptation. What the Dart case asserts
+  is the other half — the page loop stops at the first page (`calls == [1]`)
+  and the result is an error — and the error it reads comes from the query's
+  own `cancel()`, not from anything the page loop surfaced. A port of
+  upstream's assertion would need a reason on the token; that is fog, not a
+  decision, and it is not one today.
 - **adapted:** the page function's arguments are asserted directly rather than
   through a spy's recorded call objects, and `queryFn` reads as `pageFn`
   throughout — it returns one page, not the whole `InfiniteData`.
@@ -610,7 +959,12 @@ value type here.
   `hasNextPage`/`hasPreviousPage` while building *every* result, so its expected
   sequence counts those calls; here they are lazy getters on the observer, so
   the sequence is what the paging itself asked for plus the explicit reads the
-  test makes.
+  test makes. **Recorded 2026-09-12:** it is also a different *scenario*, not
+  only a shorter sequence. Upstream's observer is never subscribed — it builds
+  results and pages by hand — where the Dart case subscribes first, so the
+  initial page is fetched by the subscription before any `fetchNextPage`. The
+  two sequences are therefore not the same sequence with entries removed, and
+  a reader diffing them should expect the difference to be structural.
 - **adapted:** `getOptimisticResult` becomes `getOptimisticInfiniteResult`, and
   the paging fields it asserts on (`hasNextPage` and friends) are read from the
   observer rather than from the result.
@@ -620,7 +974,10 @@ callbacks a microtask after `cancel()`, which was long enough for an in-flight
 page loop to start one more page. They now run synchronously inside `cancel`,
 the way a browser's `AbortController` dispatches its abort event.
 
-The nine infinite cases deferred from `queryClient.test.tsx` and the eight
+The **ten** infinite cases deferred from `queryClient.test.tsx` (of the 25 that
+file holds; the other fifteen are in the omission categories of its own section
+above — this sentence said nine, and its neighbour up there said all 25 were
+ported, until the 2026-09-12 recount) and the eight
 `addToEnd`/`addToStart` cases deferred from `utils.test.tsx` are ported with
 them; both files' status lines are now plain "done". `addToEnd`/`addToStart`
 drop exactly *one* item when `max` would be exceeded, not "down to max" —
@@ -1474,15 +1831,28 @@ reproduced before anything changed; the regressions are `E1`–`E5` in
    per `subscribe`, each handle removing its own — and calling a handle twice
    removes nothing the second time.
 
-3. **`cancelQueries(revert: false, silent: true)` wedged the query in
-   `fetching` for good.** A silent cancel dispatches no error because the
-   fetch that replaces it announces itself instead; with no replacement,
-   nothing ever ends the status and the query never loads again. `Query.cancel`
-   documented the hazard, but `cancelQueries` is public, takes the flag, and
-   said nothing. Upstream has the same hole. `cancel` now puts the status back
-   to `idle` itself when nothing replaced the fetch — told apart by whether
-   `_retryer` is a *different* retryer, since `fetch()` installs a successor
-   synchronously before the cancel's await resumes.
+3. **`cancelQueries(revert: false, silent: true)` left the query stuck in
+   `fetching`.** A silent cancel dispatches no error because the fetch that
+   replaces it announces itself instead; with no replacement, nothing ends the
+   status. `Query.cancel` documented the hazard, but `cancelQueries` is public,
+   takes the flag, and said nothing. Upstream has the same hole. `cancel` now
+   puts the status back to `idle` itself when nothing replaced the fetch —
+   told apart by whether `_retryer` is a *different* retryer, since `fetch()`
+   installs a successor synchronously before the cancel's await resumes.
+
+   **Corrected 2026-09-12 — "for good" was too strong.** This entry said the
+   query "never loads again", and so did the divergence-table row and
+   `port_specifics_test.dart`'s comment on the case. Upstream's `fetch`
+   `finally` clears `#retryer` when the settled retryer is still the current
+   one (`query.ts:811-818`), and `fetch()`'s re-entry guard only returns the
+   existing promise `else if (this.#retryer)` (`:590-610`) — so with the
+   retryer cleared, the *next* `fetch()` starts a real request and the query
+   recovers. What upstream actually leaves behind is a lying status: until
+   something fetches again, `fetchStatus` reads `fetching`, `isFetching()`
+   counts it, and every observer of it shows a fetch that is not running. The
+   port's `idle` reset is still the better answer — it is the difference
+   between a wrong reading and a correct one, not between a dead query and a
+   live one.
 
 4. **`unmount()` before `mount()` disabled focus and reconnect refetching for
    the life of the client.** The count went to -1, and the next `mount()`
@@ -1661,11 +2031,23 @@ because the record is what makes a decision reopenable:
   than changed on an unreproduced report.
 - *"A reentrant `addListener` leaves an observer subscribed."* The window is
   real in the code — `_unsubscribe` is assigned only after `subscribe()`
-  returns — but `QueryObserver.subscribe` does not notify synchronously, so no
-  public path reaches it; the reproduction offered turned out to add the same
-  listener repeatedly (a `ChangeNotifier` permits duplicates) and remove it
-  once. The two-line guard was kept as hardening, not as a fix for an observed
-  defect, and it changes no behaviour the suites can see.
+  returns. The reproduction offered did not exercise it: it added the same
+  listener repeatedly (a `ChangeNotifier` permits duplicates) and removed it
+  once. The two-line guard was kept as hardening rather than as a fix for an
+  observed defect.
+
+  **Corrected 2026-09-12.** This entry went on to say that
+  "`QueryObserver.subscribe` does not notify synchronously, so no public path
+  reaches it", and that is **false**. It does: `_onSubscribe` calls
+  `updateResult()`, which notifies on the spot when the query moved on while
+  nobody was listening — which is exactly what C15 (ninth review) established
+  when it asked the same question of `MutationStateController`, and what
+  [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) states as
+  "direct observer subscriptions are synchronous". So the guard the third
+  review put into `QueryController`, `MutationController` and
+  `QueriesController` closes a window their observers really do open; what
+  could not be reproduced was this particular report, not the window. The two
+  sentences contradicted each other in this file for two days.
 
 ### Ninth review (2026-09-10, of `f6a9ddd`)
 
@@ -2260,18 +2642,33 @@ consolidated id — deep-dive `F`/`P` numbers, release-review `R` numbers — in
   rather than `next.copyWith`, so an unchanged list keeps its identity (the
   fourth review's `C-M1 … shared structurally on refetch` went red when the
   first cut wrapped unconditionally — `same(before.pageParams)` — and is
-  what pinned that rule). The `const` constructor is untouched and wraps
-  nothing: a `const [...]` literal is already unmodifiable, and a growable
-  list handed in through `initialData`/`setQueryData` is the caller's own,
-  one sentence in the class doc says so. `flatten<TItem>()` checks every
-  page `is Iterable<TItem>` up front and throws an `ArgumentError` naming
-  the page's runtime type and the two cures (a type argument, or a `select`
-  over the pages). Value equality is unchanged — over the two lists'
-  contents — so the ported suites' `const InfiniteData(...)` expectations
-  still match a sealed result; a page that is itself a `List` compares by
-  `==` as it always did. Alternative not taken: dropping `const` to wrap in
-  the constructor, which would break every literal in tests and docs for a
-  guarantee the cache boundary gives anyway. Regressions: `C20 / P5 the
+  what pinned that rule). At the time, the `const` constructor was left
+  untouched and wrapped nothing: a `const [...]` literal is already
+  unmodifiable, and a growable list handed in through
+  `initialData`/`setQueryData` is the caller's own, one sentence in the class
+  doc says so. `flatten<TItem>()` checks every page `is Iterable<TItem>` up
+  front and throws an `ArgumentError` naming the page's runtime type and the
+  two cures (a type argument, or a `select` over the pages). Value equality is
+  unchanged — over the two lists' contents — so the ported suites'
+  `InfiniteData(...)` expectations still match a sealed result; a page that is
+  itself a `List` compares by `==` as it always did. Alternative not taken:
+  dropping `const` to wrap in the constructor, which would break every literal
+  in tests and docs for a guarantee the cache boundary gives anyway.
+
+  **`const` went anyway on 2026-09-12, for a different reason (IN-01).** This
+  paragraph said "the ported suites' `const InfiniteData(...)` expectations"
+  until then, and there are none left. The pre-release review found that a
+  `pages`/`pageParams` pair of different lengths survived construction and
+  failed much later and elsewhere — `hasNextPage` threw a `RangeError` out of a
+  plain getter, and under a collapsing `select` the same `RangeError` came out
+  of `Query`'s observer loop and was reported to the zone, naming nothing that
+  led back to the write. The length check belongs in the constructor, and a
+  constructor that checks cannot be `const`. An `assert` instead would have
+  kept `const` and let a release build install the misaligned pair, which is
+  the build where the late `RangeError` is hardest to trace. So the class is no
+  longer const-constructible (`infinite_query.dart:39-51`), and every
+  `const InfiniteData(...)` in the ported infinite suites lost its `const` —
+  a mechanical change to the *expectations*, not to what they assert. Regressions: `C20 / P5 the
   pages and pageParams a fetch writes are unmodifiable`, `C20 / P5 a
   structurally shared refetch result is unmodifiable too, and an unchanged
   list keeps its identity`, `C20 / P5 flatten<T>() over pages that are not
@@ -2717,12 +3114,12 @@ suite does not have to go looking:
 |---|---|---|
 | `data === undefined` runtime guard in `Query.fetch` | impossible: `Future<T>` with non-nullable `T` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | `hashKey` string identity, `queryKeyHashFn` | `QueryKey` is a value type; the string is a debug view | [#8](https://github.com/KoTTi97/flutter_query/issues/8) |
-| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; the typed hook replaces it for the cache write, and `(_, next) => next` is `false`; selected output goes through `replaceEqualDeep`; unselected placeholders use the raw-data sharing hook | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
+| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; a typed hook replaces it for the cache write and unselected placeholders; `noStructuralSharing()` is `false` and the one spelling of it that turns sharing **off** for what `select` produced too — upstream routes the selection through `replaceData` and so through a function hook as well, which cannot be done here because the hook is typed `StructuralSharing<TQueryData>` and a selection is a `TData`, so a hook of one's own (`(_, next) => next` included) leaves the selection at the default walk, and only the recognised opt-out steps back from it (FI-05, fidelity review 2026-09-12; narrowed by F4, final review 2026-09-12); one limit: the select memo compares its input with `==` (C14's rule), so a data type with value equality — `InfiniteData`, a record, a value class — re-reports the previous selection without re-running the selector, where upstream's `===` memo re-runs it; unselected placeholders use the raw-data sharing hook | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
 | `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `MutationFunctionContext` (a mutation function's second argument) | not ported: `MutationFn` takes variables only |  [#14](https://github.com/KoTTi97/flutter_query/issues/14) |
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
-| a `Set` of listeners in `Subscribable` | a `List`: Dart tear-offs are `==`, so a Set let one subscriber's unsubscribe silence another's | eighth review 2026-09-10 |
+| a `Set` of listeners in `Subscribable`, and `delete(listener)` as the way out — so the *function* is the identity and a second registration of it is not a second entry | a `List` of **registrations**: Dart tear-offs are `==`, so a Set let one subscriber's unsubscribe silence another's. The handle returned by `subscribe` is the identity, not the function: it removes its own entry and only its own, it is once-only (a second call removes nothing more, where an unguarded one took another registration of the same function with it), and an entry deactivated by `clear()`, `destroy()` or an earlier removal stays dead — a handle held from before a `destroy()` cannot remove a registration made after it. Upstream has no equivalent of any of this because it has no equal functions | eighth review 2026-09-10; extended by [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R08, `release_observer_regressions_test.dart` OI05/OI16/OI17, `release_query_regressions_test.dart` QER18 |
 | module-level managers | instances the `QueryClient` owns — the `NotifyManager` too since the third review (`NotifyManager.shared` opts back in) | [#19](https://github.com/KoTTi97/flutter_query/issues/19), review 2026-09-09 |
 | `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |
 | `persister` | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
@@ -2783,7 +3180,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | `replaceEqualDeep` walks any array; a `Uint8Array` is compared by identity | `TypedData` is a leaf (`==`, never walked); every `previous` returned is first checked `is T`, a list copy likewise, else `next` — sharing is best effort and never a type error | fifth review, 2026-09-09 |
 | `#updateStaleTimeout` adds 1 ms to the timeout | the stale timer rounds its duration up to whole milliseconds and, if it still runs before the deadline (truncation, or the 2^31 ms clamp), re-arms for the remainder | fifth review, 2026-09-09 |
 | `hasNextPage` and friends are fields of the infinite result, compared with it | getters on `InfiniteQueryObserver` (#16); `shouldNotify` compares the direction flags at every notification and re-asks `hasNextPage`/`hasPreviousPage` only when the paging functions or the data (by identity) differ from what the last notification was answered over | #16, fifth review, 2026-09-09; ninth review, 2026-09-10 (C13) |
-| a silent cancel with no successor leaves `fetchStatus: 'fetching'` for good (`cancelQueries({ silent: true })` wedges the query) | the query puts itself back to `idle` — unless the cache has dropped it, in which case it dispatches nothing after the cancel, as upstream never does | eighth review, 2026-09-10; ninth review, 2026-09-10 (C9) |
+| a silent cancel with no successor leaves `fetchStatus: 'fetching'` standing: nothing dispatches, so the status lies until something fetches the key again (the next `fetch()` does recover — the `finally` cleared `#retryer` — so it is a wrong reading, not a dead query; this row said "for good" until 2026-09-12) | the query puts itself back to `idle` — unless the cache has dropped it, in which case it dispatches nothing after the cancel, as upstream never does | eighth review, 2026-09-10; ninth review, 2026-09-10 (C9) |
 | `Mutation.continue()` with a live retryer returns the retryer's promise, which resolves before the callbacks run; `resumePausedMutations` resolves with it, and `mount()`'s reconnect refetch can overtake an `onSuccess` cache write | `continueMutation` releases the pause and hands on `execute()`'s own future, settled after the callbacks and the settled dispatch — the restored-mutation path upstream already takes | ninth review, 2026-09-10 (C10) |
 | the `select` memo keeps the last selection while the selector is `===` the last one | `==`: an instance-method tear-off is `==` to the next tear-off of the same method, as the options already treat it | ninth review, 2026-09-10 (C14) |
 | observer `TData` defaults to the query's type; nothing checks a mismatch | a `QueryObserver` with no `select` whose `TQueryData` is not a `TData` is refused with `ArgumentError` at construction, `setOptions` and `getOptimisticResult` | fifth review, 2026-09-09 |
@@ -2796,6 +3193,63 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | the binding: side effects need a builder that also rebuilds | `QueryListener` / `InfiniteQueryListener` / `MutationListener` borrow a controller, deliver each accepted transition off the build phase and never rebuild their `child`; a rejected `listenWhen` still advances the comparison state | functional improvements plan, `competitor-deep-dive.md` §6 #8 |
 | `mutate(variables, { onSuccess, onError, onSettled })` on the result: per-call callbacks ride on the result's own `mutate` | `MutationResult.mutate` takes the variables only; per-call callbacks are `MutationObserver.mutate(variables, MutateCallbacks(…))` — `MutationController.mutate(variables, callbacks)` in the binding | ninth review, 2026-09-10 (C23.8) |
 | `mutate` on a forgotten `useMutation` observer re-attaches it to the new mutation, which is then never collected | the binding: `mutate`/`mutateAsync` on a disposed `MutationController` run the mutation through the cache without attaching anything — the options' callbacks run, the per-call ones are dropped as for any unlistened run, `value` stays idle, and the settled mutation is collected after its `gcTime` | ninth review, 2026-09-10 (C18) |
+| `subscribe` adds the listener, then `onSubscribe` evaluates `enabled` / `staleTime` / `refetchOn*` / `refetchInterval` / `placeholderData`; a throw leaves the listener in the `Set` and the observer on the query, with no handle returned | `QueryObserver.subscribe` and `QueriesObserver.subscribe` are atomic: a throw from a dynamic option detaches and removes what the call registered, then propagates | pre-release verification, 2026-09-12 (AR-02) |
+| `setOptions` writes the options and switches queries before `query.setOptions` computes a late `initialData`; a throw there leaves the switch half done | the seed is computed before the query writes anything, and the observer restores its previous options and query before rethrowing | pre-release verification, 2026-09-12 (AR-05) |
+| `invalidateQueries` / `resetQueries` / `refetchQueries` / `cancelQueries` throw synchronously from a `Promise`-returning method when a filter predicate throws | all four are `async`: the throw fails the returned future | pre-release verification, 2026-09-12 (AR-12) |
+| the observer's `#selectResult` memo survives a key change, so a `select` that throws on the new key reports the previous key's selection as stale data with `isRefetchError` | the selection memo belongs to the query it was computed for; a select error on a query that never reported a selection through this observer is a loading error with no stale data (same-key selector swaps keep theirs) | pre-release verification, 2026-09-12 (OB-01) |
+| `mutationCache.remove` / `clear` never continue a scope's waiters; a restored queue whose head is removed stays paused until the next resume, online or focus event | removing a scope's never-started `pending` head releases its waiters one microtask after the removal has completed; `clear()` empties the cache before destroying anything, so nothing it drops runs (ADR-0003, narrowed by MU-01) | ADR-0003; pre-release verification, 2026-09-12 (MU-01) |
+| `fetch` is dispatched before the retryer exists, so a cancel from that notification is silently ignored; `pause()` is unguarded | the retryer is installed first so a listener can cancel or join (fifth review, #44), and `Retryer.start()` returns at once when the cancel already settled it | pre-release verification, 2026-09-12 (QE-01) |
+| Sets and Maps are not plain objects, so `replaceEqualDeep` returns `next` for them untouched | shared whole when deep-equal (row above); a set is compared as a multiset under the walk's own relation, never under the set's equality policy: a hashed multiset walk that asks either set for its length and its members only — no `lookup`, `contains`, `containsAll` or `remove` — and the members for `==` and `hashCode` — so a case-insensitive `SplayTreeSet` reports a member that changed case, and a `Set` whose own methods throw or break their contract is compared all the same. About 1.3 ms a write at 10 000 members and 14–22 ms at 100 000, past a 16 ms frame; members that break `==`'s own contract get the greedy walk's answer. A map is still looked up by its own keys, so a map with a custom key equality is compared under that policy and keeps the older key representation; such a map needs its own hook or `noStructuralSharing()`. `QueryKey`'s set parts are frozen to default equality, so its `containsAll` shortcut stays sound | pre-release verification, 2026-09-12 (AR-01); final review 2026-09-12 (F1) and its round 3 (R2-1, R2-2, R2-4), `port_specifics_test.dart` `F1 …` ×4, `R2-1 …` ×2, `R2-2 …`, `R2-4 …` |
+| `Query.isDisabled()`'s no-observer branch is `queryFn === skipToken \|\| !isFetched()`: it consults the `skipToken` sentinel but **not** `enabled`, so an unobserved query whose last observer was `enabled: false` and which holds data is *not* disabled and `refetchType: 'all'` refetches it | `!isFetched()` alone. `Enabled.no` spells both `skipToken` and `enabled: false` (#17), and `enabled: false` is the meaning kept — upstream's `enabled: false` does not reach this arm either. So an unobserved, seeded query whose last observer left with `Enabled.no` is refetched by `refetchType: all`, where upstream's `skipToken` one is not, and no `Enabled.when` predicate is evaluated for a query nobody observes. `enabled` governs automatic fetching; `refetchQueries` is an explicit command. The ported case for the `skipToken` arm is unported again. FI-01 had made this branch `!_options.enabled.resolve(this) \|\| !isFetched()` for part of the day; F2/F3 reverted it | final review of the pre-release branch, 2026-09-12 (F2/F3, reverting FI-01); `port_specifics_test.dart` `F2 …`, `F3 …` |
+| `MutationObserver.#notify` runs its listeners once per action, so a listener sees one state per step of the mutation | listeners are notified only when the result is not `==` the last one they were told — the rule the query side has had since A19. The observable cost is fewer states: `mutation.test.tsx`'s two state cases see 3 where upstream sees 4, and 1 pending state across `onMutate` where upstream sees 2, which is why both moved to `states.last` | pre-release deep-dive review, 2026-09-12 (FI-02); the query-side rule it matches is A19, fourth review 2026-09-09 |
+| `MutationObserver.setOptions` notifies the cache with `observerOptionsUpdated` before the first `mutate`, carrying `mutation: undefined` | nothing is emitted until the observer has a mutation (`_currentMutation == null` → no event), so a devtools or logging listener never sees an option change made before the first `mutate` | pre-release deep-dive review, 2026-09-12 (FI-09) |
+| `notifyManager`'s `defaultScheduler` is `setTimeout(0)`, a macrotask | `scheduleMicrotask`: a batch flushes before the next event-loop turn, not after it, which is the finer grain Dart offers and what a Flutter frame wants. `setNotifyFunction` / `setBatchNotifyFunction` / `setScheduler` are all present for anything that needs upstream's timing back | [#19](https://github.com/KoTTi97/flutter_query/issues/19); stated in the `NotifyManager` dartdoc since, and in this table since the pre-release deep-dive review, 2026-09-12 (FI-13) |
+| `setQueryData(key, undefined)` creates nothing and updates nothing — the two `setQueryData` cases pin it | there is no `undefined`, and `null` is a value: `setQueryData<String?>(key, null)` **creates** the entry and writes `null` into it. The type argument is what stops this by accident — a bare `setQueryData(key, null)` infers `Null` and a query of another type refuses it — so reaching the behaviour takes naming a nullable type on purpose. "Leave it alone" is `updateQueryData` returning `null` | [#7](https://github.com/KoTTi97/flutter_query/issues/7), null convention of the second review 2026-09-09; recorded here at the pre-release deep-dive review, 2026-09-12 (FI-18) |
+| `isMutating(filters)` spreads the caller's filters and then **overrides** `status: 'pending'`, so `isMutating({ status: 'error' })` still counts pending mutations | the caller's `status` is kept and `pending` is applied on top of it, so `isMutating(filters: MutationFilters(status: MutationStatus.error))` is 0. Upstream's override silently ignores an argument it was given; ANDing answers the question that was asked. Nothing else in the filter family behaves like upstream's override, which is the reason this one does not either | pre-release deep-dive review, 2026-09-12 (MU-07) |
+| `retryDelay` is resolved *before* the retryer decides whether to retry, so the callback runs once more than there are retries — including after the final failure | resolved only when a retry will actually follow. A pure delay function cannot tell the difference; one with side effects (a log line, a counter, a jitter source) runs one fewer time here | pre-release deep-dive review, 2026-09-12 (DC-16 / fidelity P4) |
+| a cancelled fetch's rejection still runs through the query, so a `cancelQueries` followed at once by a new `fetch` can have the *old* response dispatch an error over the successor's state | a fetch dispatches only while it still owns the query's run: the cancelled one settles into nothing, the successor keeps `fetching`, a third caller joins the successor rather than starting a third request, and the late response cannot replace the successor's data | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R01; `release_query_regressions_test.dart` QER3, QER8, QER13 |
+| an observer destroyed from inside its own first notification can still re-arm its `refetchInterval`, because the timer is scheduled by a callback that outlived the destroy | `destroy()` is final for timers: nothing an already-destroyed observer runs re-arms polling, attaches it to a query, or installs an obsolete query as its current one | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R07; `release_observer_regressions_test.dart` OI04 |
+| a scope's turn goes to the first *pending* mutation the cache finds, which is the earliest one **built** — so a mutation built first and executed second can take the scope from the run already in flight | the scope's owner is whoever **started its transport** first, and it holds the scope until its run settles — including through the settled callbacks. An earlier-built mutation executed later waits | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R02; `release_mutation_regressions_test.dart` MU1, MU8 |
+| mutation start always awaits at least once before the mutation function runs, so a second same-scope `mutate` gets its `onMutate` in before the first transport begins: two same-scope mutations with synchronous `onMutate` observe `['optimistic:1', 'optimistic:2', 'transport:1']` | a synchronous `onMutate` runs the transport synchronously — no artificial await between the optimistic update and the request — so the same two mutations observe **`['optimistic:1', 'transport:1', 'optimistic:2']`**. The order is reversed against upstream and this is the deliberate half of the scope work: an optimistic update should reach the UI in the frame that asked for it, and the ordering upstream gets is a by-product of an await it does not need. Neither ADR-0003 nor this file stated the reversal until 2026-09-12 | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R02; `release_mutation_regressions_test.dart` MU12 |
+| a callback queued in `notifyManager.batch` that throws takes the rest of the batch with it | every queued callback is isolated: a throw is reported to the zone and the callbacks behind it still run, as every other notification loop in the core already does | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) optional robustness; `release_observer_regressions_test.dart` OI08 |
+| a `Query` or `Mutation` that was removed from its cache can be added back, and then runs as a second entry under a key that already has one | a removed object is terminally removed: `QueryCache.add` / `MutationCache.add` refuse it with a `StateError`, and it collects itself rather than lingering. Re-adding was how a removal could quietly produce two live entries for one key | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) V02/V03; `release_query_regressions_test.dart` QER4 |
+| `Set.forEach` visits entries added during the iteration, so a listener that subscribes from inside a notification is delivered **that** round | `ListenerRegistry.notify` iterates a snapshot, so a listener added during a dispatch first hears the next one. Removal keeps upstream's behaviour — a listener unsubscribed by an earlier one in the same round is skipped — because the registry checks each entry is still active before delivering. The snapshot is what makes the loop safe in Dart at all: iterating the live list while a listener subscribes throws | C50, [#59](https://github.com/KoTTi97/flutter_query/issues/59); `listener_registry.dart`, recorded here at the pre-release deep-dive review, 2026-09-12 |
+| an `initialData` callback that writes to its own key while it is being computed leaves two entries in play: the caller's `fetchQuery` resolves with the fetched value (3) while the cache keeps what the reentrant write left (1) | one entry is canonical. The reentrant `setQueryData` writes into the query being built, the fetch settles over it, and the caller and the cache agree — both see the fetched value | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) V02/V03; `release_query_regressions_test.dart` QER5 |
+
+### Sharing a map whole: what it costs (2026-09-12)
+
+The `replaceEqualDeep` row above says maps and sets are shared **whole** — kept
+by identity when deep-equal, replaced by `next` when not. The rule is simple
+and it is deliberate ([#12](https://github.com/KoTTi97/flutter_query/issues/12)):
+a `Map` is not upstream's "plain object", Dart has no property enumeration that
+means the same thing, and an entry-by-entry rebuild would have to guess a key
+type and an equality policy the map itself owns. What was never written down is
+the price, and it is not small for the shape most people fetch.
+
+Upstream walks a changed object key by key and keeps every unchanged property
+**and subtree** by identity, so `{a: {b: 'b'}, c: 'c'}` → `{a: {b: 'b'}, c: 'd'}`
+hands back a new outer object whose `a` is the *same instance*. Here the outer
+map is `next` and nothing beneath it is shared: `a` is whatever the new tree
+holds. For JSON-shaped data — a `Map<String, Object?>` decoded from a response —
+that means **one changed leaf invalidates every sibling by identity**. A reader
+that rebuilds on `==` over the whole map is unaffected (two equal maps are
+still equal); a reader that holds a *sub-map* and compares it by identity, or a
+`select` returning `data['a']` compared with `identical`, sees a change on every
+refetch even when its own slice did not move. Lists do not have this problem —
+they are walked element by element, and `InfiniteData`'s two lists each on their
+own.
+
+**Kept for 0.1.0, as a known limitation rather than an oversight.** The obvious
+narrowing — a `Map<String, Object?>` special case that rebuilds the map key by
+key, sharing unchanged values, exactly as upstream does for a plain object —
+is a candidate for the next map: it covers the JSON case, which is the one that
+hurts, without claiming anything about maps with custom keys or a custom
+equality policy. It is not in 0.1.0 because structural sharing is the one place
+where a wrong guess about a user's collection is a silent data bug, and the
+narrowing deserves its own decision rather than a release-week patch.
+Pinned by `utils_test.dart`'s four adapted `replaceEqualDeep` cases, which
+assert the port's answer rather than upstream's; the pre-release deep-dive
+review re-probed both and reported the gap as a decision to record (FI-11).
 
 ### C52 — option-field transcription: explored, kept ([#62](https://github.com/KoTTi97/flutter_query/issues/62))
 
@@ -4120,6 +4574,16 @@ files, including independently discovered transition cases. Baseline 589 VM
 tests becomes 648. Diagnostic probes asserting broken behavior were converted
 to desired-contract assertions before being adopted.
 
+**589 against the Status paragraph's 586, reconciled (2026-09-12).** Both were
+right when they were written and the file never said so. The release commit
+`e1f018b` measured 586 and wrote it into the Status paragraph; between it and
+`d7ef2d3`, the structural work of map #49 added **three** cases to
+`port_specifics_test.dart` and `port_lifecycle_test.dart` (142 → 145 across the
+two files), which is the 586 → 589 the ownership work then took as its
+baseline. 589 + 59 = 648, and 648 is what the pre-release deep-dive review
+measured before it started. The Status paragraph, not this section, was the
+stale one; it now carries the current total.
+
 | Findings | Repair and acceptance evidence |
 | --- | --- |
 | R01 query run ownership | QER3/QER8/QER13: cancellation cannot alter successor status, data or signal consumption; third callers deduplicate. Transition cases also revoke writes on reset inside sharing, with and without a successor. |
@@ -4148,3 +4612,989 @@ upstream too, while Dart's deliberate synchronous optimistic path exposes the
 ordinary nested observer sequence sooner. Registry identities, result action
 ownership and generic payload validation are Dart obligations. The original
 pin stays `50680b98c`; known upstream defects do not become required behavior.
+
+## Pre-release deep-dive review (2026-09-12)
+
+The last review before publication ran as eight fresh reviewers, one lens
+each — query engine, mutations, observers, infinite queries, public API and
+packaging, upstream fidelity, architecture and performance, documentation
+against behaviour — every reviewer obliged to reproduce a finding with an
+executed probe before reporting it. Every P1/P2 then went to a second fresh
+verifier, who reproduced it from the description alone before reading the
+reviewer's probe, decided the severity, and wrote the fix. The verification
+stage earned its place: three reviewers independently reported the
+`InitialData.compute` behaviour as a P2 against an upstream that does the
+same on purpose (below); two proposed fixes would have left a variant open
+(MU-01's tail removal, OB-01's preview path); and one P2 turned out to be a
+P1 (MU-01). No ported assertion changed. Baseline 648 becomes 670 at the
+point this section was written — the P1/P2 fixes and their regressions. The
+suite ends the day at **724**, measured: the documentation and fidelity work
+below added its own cases, the three behavioural fixes (FI-01, FI-04, FI-05)
+added eight, and `bac176a` brought the 32 bounded confidence sequences, which
+are not part of this review at all. Every intermediate figure in the
+subsections below is the count at *that* step and is left as written. 724
+described the branch until the final review's round 2 (**732** VM / **729**
+JavaScript), and round 3 ends it at **738** VM / **735** JavaScript and
+414 / 536 ported — see "Final review of
+the pre-release branch", the last section of this file.
+
+| Finding | Verified as | Regressions |
+|---|---|---|
+| MU-01 removing restored scope entries started the next one | **P1**, wider than reported | `release_transition_regressions_test.dart`, four cases under `MU-01` |
+| QE-01 a cancel from the `fetch` notification while offline wedged the query in `paused` | P2, port-specific | `release_query_regressions_test.dart`, three cases under `QE-01` |
+| OB-01 a throwing `select` after a key change showed the previous key's selection as `staleData` | P2, upstream-identical | `release_observer_regressions_test.dart`, three cases under `OB-01` |
+| AR-01 / AR-09 `Set` comparison was quadratic on every cache write; a `List<num>` walk threw per element | P2 (P1 defensible) / P3 | `port_specifics_test.dart`, `AR-01 …`, `AR-09 …` |
+| AR-02 / AR-05 / AR-12 a throwing dynamic option left `subscribe` half done; sync throws from `Future` methods | P2 / P3 / P3 | `port_specifics_test.dart`, `AR-02 …`, `AR-05 …`, `AR-12 …` |
+| AR-03 / DC-03 / API-14 `InitialData.compute` re-run on every rebuild | documentation only — upstream parity | `port_specifics_test.dart`, one pinning case |
+| FI-16 / DC-08 / DC-10 this file's own counts, in both directions | documentation — recount, 409 / 535 → 412 / 536, and 415 / 536 once the behavioural fixes freed three more; 414 / 536 since F2 unported FI-01's case | the Status table and every suite section below |
+| FI-06 / FI-07 / FI-12 / FI-18 recorded reasons that did not hold | documentation — two closed by porting the case | `online_manager_test.dart`, `utils_test.dart` (one case each) |
+| FI-08 / FI-02 / FI-09 / FI-13 / MU-07 / DC-16 divergences outside the table that claims to hold them all | documentation — 15 rows added, one extended | the divergence table; the cases that pin each row are named in it |
+| FI-11 a changed map shares nothing beneath it | kept, known limitation; `Map<String, Object?>` narrowing is next-map work | "Sharing a map whole: what it costs", above |
+| FI-17 three ported cases renamed against the naming rule (a fourth arrived with FI-01 and left with it) | documentation — listed with a note to revert | `query_client_test.dart`, in the `queryClient.test.tsx` section |
+| FI-03 a hydration omission citing coverage that does not exist | documentation — reason rewritten as "portable, not yet ported" | the `query.test.tsx` section |
+| FI-01 / FI-04 / FI-05 three behavioural claims | **fixed**, +3 ported upstream cases, +5 regressions; after the final review **+2 ported, +3 regressions** — FI-01 was reverted (F2/F3) with its case and its two regressions, and FI-05 narrowed (F4) | "Fidelity review, 2026-09-12", below |
+| the 32 bounded confidence sequences of `bac176a` | not this review's work; recorded so the file accounts for every case that runs | "The port-only files, and what each is for" |
+
+### MU-01 — removing restored scope entries started the next one
+
+The ADR-0003 release for a never-started restored head lived in
+`Mutation.destroy()`, fired for *any* never-started `pending` entry, and ran
+synchronously. So `clear()` — the logout call — a `findAll` removal loop in
+either order, and the removal of a restored *tail* each started a mutation
+function (online) that the removal then cancelled with the request already
+sent: `Retryer.start()` calls `_attempt()` synchronously, so
+`cancelRetry(immediately: true)` arrived after the function had been invoked.
+A live waiter behind a restored head *succeeded* on `clear()` instead of
+failing with `CancelledError` (C11), delivering a false success to its
+awaiting caller. The reviewer rated it P2 and located it in `clear()`'s
+iteration order; the verifier reproduced three more shapes and rated it P1:
+scope plus persisted queue plus online plus logout is the ordinary
+post-restart situation, and the outcome is a completed stale write with the
+credentials of the account being left. Upstream's `remove` never continues a
+waiter and its `clear` never calls `runNext`.
+
+**Fix.** `MutationCache.clear()` empties the list before destroying anything
+(upstream's `#mutations.clear()` shape) and emits its `removed` events last —
+a reentrant `clear()` from a listener no longer double-emits. The release
+moved from `Mutation.destroy()` into `MutationCache.remove()`, gated on the
+entry having been its scope's first `pending` (computed before the list is
+touched, through a new `@internal Mutation.isRunning`) and scheduled one
+microtask after the removal, so a removal loop finishes before the wake looks
+at the live list. `_scopeOwners` is deliberately not cleared: the ADR-0003
+lock outlives a detached owner. ADR-0003's "releases its waiters immediately"
+became "once that removal has completed, and only the head's removal does";
+`QueryClient.clear`'s dartdoc says a restored never-continued mutation is
+dropped without running or failing, as upstream drops it. The ADR-0003 case
+"removing an unstarted restored queue head releases its waiters" is untouched
+and green.
+
+### QE-01 — a cancel from the `fetch` notification while offline wedged the query
+
+Under `NetworkMode.online` and offline, a cancel delivered synchronously from
+the `fetch` transition — `cancelQueries` from a cache listener, `cancel(revert:
+true)`, an observer listener cancelling on `paused`, or an observer with no
+data unsubscribing on `paused`, where `removeObserver` issues the revert
+cancel itself — left the query `fetchStatus: paused` with no retryer: never
+collected, skipped by `refetchQueries` while never fetched, deaf to
+`setOnline(true)`, `isPaused` forever on a mounted observer. A later
+`client.query` or a mounting observer did start a fresh fetch, which bounds
+the damage to one leaked entry per occurrence, not a permanently unusable
+key. Root cause: `Retryer.start()` had no `isResolved` check before its
+`_pause()` branch, so it dispatched a phantom `pause` on a retryer the cancel
+had already rejected. Port-specific: upstream dispatches `fetch` *before* it
+creates the retryer (`query.ts`), so a listener's cancel there hits nothing
+and is silently ignored — upstream's `pause()` is unguarded too, protected
+by the adjacency of two statements. The port reversed that order on purpose
+(fifth review, #44) so a listener *can* cancel or join; with the check, the
+port honours the cancel instead of ignoring it. Reset and silent cancel were
+already rescued by `Query.cancel`'s idle fix-up; `always` and `offlineFirst`
+never reach the branch; the mutation path shares the window but its only
+public route (`remove` → `destroy` → `cancelRetry(immediately: true)`) takes
+the branch that already checks. **Fix:** `start()` returns its future at once
+when the retryer is already settled. One line.
+
+### OB-01 — a throwing `select` after a key change showed the previous key's selection
+
+`createResult` kept a selection memo that nothing tied to the query it was
+computed for. When `select` threw, the error branch reported `_selectResult`
+as `staleData`, and `isRefetchError` is defined as `hasStaleData`: an
+observer moved from key A (`select` succeeded, "Berlin") to key B (B's data
+makes `select` throw) reported `QueryError(staleData: 'Berlin',
+isRefetchError: true)` — A's value under B's label, on three paths: a
+committed `setOptions` (cached and fetched B), `getOptimisticResult`, and
+`InfiniteQueryObserver`. Upstream keeps `#selectResult` across keys the same
+way. The binding hands the whole result to `builder`, and the pattern the
+core's own dartdoc suggests (`QueryError(:staleData) => staleData != null ?
+show(staleData) : …`) would put user 1's city on user 2's screen. P2, not P1:
+it needs an already-throwing selector, upstream does the same, the value is
+one observer's own recent selection, and the next good selection heals it.
+
+The reviewer's fix — drop the memo in `_updateQuery` — would have left
+`getOptimisticResult` leaking (a preview runs `createResult` with a query that
+is not `_currentQuery`, under R05's separate memo) and added a `select` call
+on a key change to equal data. **Fix:** both memos own their query: a memo hit
+re-stamps it, a miss for a different query drops the retained result before
+the selector runs. Every existing `select` call count is unchanged (same-key
+counters, the cross-key `keepPrevious` case, C14's tear-off count,
+preview→commit). A selector swap on the *same* key still reports the old
+selection as stale data of that query, as the ported "should return stale
+data if selector throws" requires.
+
+### AR-01 / AR-09 — `Set` comparison was quadratic on every cache write
+
+`_setsEqualDeep` matched members through `indexWhere`/`removeAt`: 102 ms for
+a 10 000-member `Set<int>`, 334 ms when the refetch returned them in another
+order, 10 s for 100 000 — on the calling isolate, on every cache write of that
+entry and on every selected output. `QueryKey ==` counted partners three times
+per member: 122 ms per comparison for a 2 000-member set part. The frame
+budget is crossed at roughly 4 000 same-order members; a `Set<String>` of ids
+is an ordinary data shape. Not upstream's walk — upstream skips Sets and Maps
+only because `isPlainObject` rejects them, and the port's whole-value sharing
+of both is a decided divergence (the table's `replaceEqualDeep` row, entry
+17), the reason a refetched `Set<String>` does not rebuild everything, pinned
+by R02, D10/F02 and N5 — so "do what upstream does" was not the fix.
+**Fix:** both ask the set's own `containsAll` first, which decides every set
+of value-equal members in O(n) and is sound because `==` implies deep-equal
+and a set holds no duplicates under its own equality *(true for `QueryKey`,
+whose set parts are frozen to default equality; **not** true for the sharing
+walk, where a set's own equality policy can be looser than `==` — the final
+review's F1 replaced this shortcut there and its round 3 removed every
+shortcut from that side, see the last section)*; the multiset walk for
+sets of lists, maps or sets (the only reason the walk exists — a Dart `List`
+has identity equality, so structurally equal lists are distinct members, and
+entry 55 / R02 records the data loss the previous existence check caused) is
+kept and bucketed by a hash consistent with the walk (`_hashDeep`; `_hashPart`
+on the key side, which `hashCode` already used). Sub-millisecond at 100 000.
+Sets with a custom equality policy (`SplayTreeSet`, case-insensitive) now go
+by that policy first, which the module header already disclaimed and
+`_mapsEqualDeep` already did for maps — accepted here, and the defect the
+final review found as **F1**: `{'Alpha'}` and `{'alpha'}` were declared equal,
+the cache kept the old value and the change was never reported; `QueryKey.hashCode` is unchanged and
+still consistent with `==`. **AR-09:** the list walk threw and caught one
+`TypeError` per element for a `<int>` previous against a `<double>` next
+(59 ms at 10 000, 2 µs per caught throw); Dart cannot name a generic list's
+element type for an `is` check, so a refused runtime type is remembered per
+list and a `shared` value identical to `next`'s own element is not stored at
+all. A regression with two value-equal types across a hierarchy proves the
+memo is per type, not "first refusal stops sharing".
+
+### AR-02 / AR-05 / AR-07 / AR-12 — a throwing dynamic option, and sync throws from `Future` methods
+
+An adversarial pass over one reported P2 and its siblings, each reproduced
+before anything changed (`test/_review/verify_ar02/`, session artefacts).
+
+- **AR-02, reproduced, P2 confirmed for the bare core and P3 through the
+  binding.** `QueryObserver.subscribe` registered the listener, then ran
+  `_onSubscribe`, which evaluates the dynamic options; a throw there left the
+  listener registered and the observer attached to the query with no handle
+  returned. Four of the five kinds reach it (`Enabled.when`,
+  `StaleTime.dynamic`, `RefetchOn.when` before the fetch on mount,
+  `RefetchInterval.dynamic` after it); `PlaceholderData.compute` only when
+  its constructor-time call returned `null` — a placeholder that *was* shown
+  is memoised by identity and not asked again, which the report did not
+  check. Upstream is in the same half-state (`Subscribable.subscribe` adds to
+  the `Set` first), so the port inherited it. "The caller cannot clean up" is
+  overstated: `destroy()` is public and the binding's `QueryController.dispose`
+  calls it, so through the binding the damage is bounded by the controller's
+  lifetime and the throw surfaces as a build error, which is where a null
+  dereference in user code belongs. **Fix:** `subscribe` is atomic — on a
+  throw it runs the handle it was about to return (for a last listener that is
+  `destroy()`: detach, clear timers) and rethrows. Three contracts were
+  weighed: (1) atomic-and-rethrow, taken; (2) report to the zone and treat the
+  option as its default — rejected, because the "default" of a throwing
+  `Enabled.when` is a fetch the predicate existed to prevent, and the user
+  never sees why; (3) a `QueryError` like a throwing `select` — rejected,
+  because `enabled` and `staleTime` are asked in seven places per subscribe
+  (`Query.isStale`, the refetch rules, the timers, `isDisabled`), each of
+  which would need its own fallback value, and a programming error would be
+  dressed as a data error with a `retry` button. One consequence stays:
+  `RefetchInterval.dynamic` is asked after the fetch on mount started, so
+  that listener may hear `fetching` once before the throw; it hears nothing
+  after. `QueriesObserver.subscribe` gained the same rollback (members
+  subscribed before the throwing one were left subscribed);
+  `MutationObserver.subscribe` runs no user code on that path and
+  `InfiniteQueryObserver` inherits the fix.
+- **AR-05, reproduced, P3.** Only reachable for a query with no data (the
+  seed is not computed otherwise). Same key: the observer's and the query's
+  options were replaced, nothing else. Key switch onto an existing empty
+  query: the observer had already moved and attached to the new query before
+  the throw — self-healing on the next `setOptions` or query event, hence P3.
+  **Fix:** `Query.setOptions` computes the seed before it writes anything;
+  `QueryObserver.setOptions` restores the previous options, query and
+  attachment and rethrows, as its type-transition check already left the
+  observer usable.
+- **AR-07, not a separate finding.** The five sites *are* unisolated by
+  design: they answer a question (`enabled?`, `stale when?`) and have no
+  meaningful fallback, unlike the eight "run user code, report to zone" sites,
+  which are side effects with nothing to return. Where such a throw could
+  corrupt shared state it is already isolated (`Query._dispatch`, 59). What
+  AR-02 and AR-05 fix is the *state* left behind a throw, not the throw.
+- **AR-12, reproduced, P3 (not cosmetic).** `invalidateQueries` and
+  `resetQueries` were `=> notifyManager.batch(…)` and threw synchronously on
+  a throwing predicate; `cancelQueries` and `refetchQueries` were `async` and
+  failed their future. Upstream throws synchronously from all four, which is
+  the JavaScript footgun Effective Dart warns about for `Future`-returning
+  functions. **Fix:** all four are `async`. No ported assertion moved.
+
+Regressions: `port_specifics_test.dart`, `AR-02 …` (five kinds and the
+`QueriesObserver` sibling), `AR-05 …`, `AR-12 …`. Baseline 648 becomes 656.
+
+### AR-03 / DC-03 / API-14 — when `InitialData.compute` runs: verified against upstream, kept
+
+Three reviewers reported that `Query.setOptions` re-runs `InitialData.compute`
+on every equal-options rebuild and every fetch while the query has no data,
+and that a seed arriving then flips an errored query to `success` and replaces
+`resetState` — against, they said, an upstream that calls the function once
+in the constructor. **The behaviour is real; the upstream claim is not.**
+Upstream `query.ts` at the pin re-runs `getDefaultState` in `setOptions`
+whenever `state.data === undefined` and writes `successState` over whatever
+is there, error included, and it does so on purpose: TanStack/query#9743
+(merged 2025-11-01) says "prior fetch metadata/errors are cleared when
+initialData is used". Two ported cases depend on it — `should update
+initialData when Query exists without data` and `should not increment
+dataUpdateCount when setting initialData on prefetched query`.
+
+Measured on both sides — the port under `testFakeAsync`, upstream's
+`query-core/src` at `50680b98c` run directly under node 24 — and equal on
+every line: a `compute` that yields a seed runs **once**, ever (the query
+holds data from then on; 100 rebuilds, a second observer and two fetches add
+nothing). A `compute` that returns `null` runs **2** at construction (the
+cache's build and the observer's own `setOptions`), **+1 per rebuild**, **+1
+per observer**, **+1 per fetch that passes options**, and never again once a
+fetch lands data. An errored query without data takes a seed that becomes
+available on an equal rebuild: `status: success`, `error: null`,
+`dataUpdateCount` unchanged, `errorUpdateCount` kept, `resetState` replaced.
+A constant seed cannot flip anything: the query was seeded at build and an
+error never loses data — the reviewers' "equal-options rebuild flips an
+errored query" needs a `compute` whose answer changed.
+
+Decision: **keep the behaviour, fix the promise.** The alternative — seed on
+`setOptions` only when `initialData` was previously unset — breaks the pattern
+the showcase's card A is built on (a detail seeding itself from a list that
+arrives later, same options object every rebuild) and diverges from a
+deliberate upstream decision with no Flutter-side reason; React calls
+`observer.setOptions` on every render exactly as a widget rebuild does here.
+What was wrong was the dartdoc: `InitialDataCompute.compute` said "called
+once, when the query is created" — upstream's own guide says the same, and
+has been inaccurate for the same reason — while the showcase's
+`initial_and_placeholder_screen.dart` already documented the true contract.
+The dartdoc, the `setOptions` comment and the site's options table now say
+when it runs and that an expensive one is the caller's to memoise;
+`port_specifics_test.dart` pins the counts and the flip. Severity as verified:
+a documentation defect, not a behavioural one.
+
+### FI / DC — what the review found in *this file*
+
+The fidelity and documentation lenses reviewed the audit trail itself, which
+had not been re-derived since the release commit. Nothing below changed a line
+of `lib/`; all of it changed what this file claims, and the claims were wrong
+in **both** directions — three suites were undercounted, one accounting was
+overcounted, and four recorded reasons did not hold. The lesson is map #49's,
+restated: a number in a document is a hypothesis until it is re-measured, and
+these had been carried forward by copying.
+
+**Counts (FI-16, DC-08, DC-10).** Every upstream declaration at the pin was
+re-matched against its Dart twin, one to one. `focusManager` was 7 / 9, not
+6 / 9 — the omission bullet counted half of a *ported* case as an omission.
+`queriesObserver`'s denominator is 23, not 22: its `it.each` block was counted
+nowhere, and the counting rule that settles such a block is now stated in the
+Status section. `queryClient`'s "106 ported and 34 omitted" did not subtract
+(156 − 106 = 50) and its bullets enumerated 35, so fourteen omissions had no
+bullet at all; the deprecated group was 24 rather than 16, the type-level group
+4 rather than 2, and the skipToken and no-`select` groups had unnamed infinite
+twins. `utils` read `isPlainObject (7)` for a group of eight and "no
+counterpart (26)" for a sum of 28. Two sentences disagreed about the infinite
+cases of `queryClient.test.tsx` — "the 25 … are ported now" against "the nine"
+— where the answer is ten of 25. The totals move 409 / 535 → **412 / 536** on
+the recount alone, the two extra ported cases being ones this review caused to
+be ported; the behavioural fixes below then took it to **415 / 536**, and
+`dart test` from 648 to **724** (the review's own regressions, the FI fixes,
+and the 32 bounded confidence cases of `bac176a`). The final review's round 2
+moved both once more, to **414 / 536** and **732**.
+
+**Reasons that did not hold (FI-06, FI-07, FI-12, FI-18).** Four omissions and
+one adaptation were filed under a category that was not what the case was
+about: `query with static staleTime`'s falsy case is about `null`, not
+`undefined`; the four `query > skipToken` cases are expressible with an absent
+`queryFn`; `onlineManager`'s "replace default window listener" was never named
+and ported unchanged; `queryObserver`'s `throwOnError` case is the imperative
+reject switch, not render machinery; and the `resumePausedMutations` half of
+two focus cases is observable. Each now says what is true, and where the
+honest answer is "portable, deferred", it says that instead of borrowing a
+reason from a neighbour. Two of them were closed by porting the case
+(2026-09-12) rather than by rewording.
+
+**Divergences the table did not hold (FI-08, FI-02, FI-09, FI-13, MU-07,
+DC-16).** The table claims to list every divergence, and CLAUDE.md and the site
+repeat the claim. It was missing the whole of the 2026-09-12 ownership work —
+eight deliberate contradictions with upstream recorded only in ADR-0003 and
+the ownership rows, and a ninth (registration identity: OI05/OI16/QER18) that
+belonged in the existing `Set`-of-listeners row and is now in it — plus seven
+older ones, including two the port had lived with since its first weeks (the
+microtask scheduler, the change-gated `MutationObserver`). Fifteen rows were
+added and one extended, and the cost of sharing a map whole got the paragraph
+the table cell could not hold (FI-11). One of the new rows states
+something no document stated before: with a synchronous `onMutate`, two
+same-scope mutations are observed here in the order
+`['optimistic:1', 'transport:1', 'optimistic:2']` where upstream gives
+`['optimistic:1', 'optimistic:2', 'transport:1']` — the order is **reversed**,
+on purpose, and a reader porting a test across has to know it.
+
+**Text that contradicted itself (FI-17, FI-18, DC-11).** The sixth/seventh
+review's "`QueryObserver.subscribe` does not notify synchronously" against the
+ninth's "it can", where the ninth is right and ADR-0003 says so; "upstream
+wedges the query for good" after a silent cancel, where upstream's `finally`
+clears `#retryer` and the next `fetch()` recovers it (the port's `idle` reset
+is still better, for a smaller reason than claimed); a cross-reference to a
+section that does not exist; an adaptation recorded as "asserts the same thing"
+when the port has no abort reason to assert on; and three ported cases in
+`query_client_test.dart` renamed against the naming rule and recorded nowhere
+— a fourth joined them the same day, in the case FI-01 added, and left with
+it when F2 unported that case — now listed with
+the upstream names they came from and a note for whoever reverts them. Two
+claims of coverage that did not exist were also struck: the hydration-reset
+omission cited `smoke_test.dart`, which has no `state:` build and no `reset()`
+at all (FI-03), and the borrowing case was counted as ported while its
+adaptation had removed the condition it tested (FI-04, fixed below).
+
+## Fidelity review, 2026-09-12 (FI-01, FI-04, FI-05)
+
+Three behavioural claims against `query.ts` and `queryObserver.ts` at
+`50680b98c`, each reproduced before anything was changed. Their regressions are
+in `port_specifics_test.dart` under `fidelityReview()`; the upstream cases they
+correspond to are named below.
+
+**FI-01 — `isDisabled` ignored a query's own `enabled`, so an unobserved
+`Enabled.no` query was refetched.** Upstream's no-observer branch is
+`this.options.queryFn === skipToken || !this.isFetched()`
+(`query.ts:400-406`); the port's was `!isFetched()` alone. `skipToken` is
+`Enabled.no` here ([#17](https://github.com/KoTTi97/flutter_query/issues/17)),
+and `enabled` *is* a query-level option in this port — an observer's
+`queryOptions` projection carries it, and `Query.setOptions` keeps the last
+one written — so the information upstream reads off `options.queryFn` is right
+there on `options.enabled`, and nothing read it. The effect: an observer with
+`Enabled.no` over a seeded query, unsubscribed, left a query that
+`invalidateQueries(refetchType: all)` and `refetchQueries(type: all)` fetched.
+Measured before: `dataUpdateCount` 1 → 2 and the query function called once;
+after: 1 and never. The branch is now
+`!_options.enabled.resolve(this) || !isFetched()`.
+
+Two things this deliberately decides:
+
+- **`Enabled.when` is asked here too.** Upstream's `skipToken` is a static
+  sentinel, so its no-observer branch needs no evaluation; `Enabled.when` is a
+  predicate. It takes the *query*, not the observer — `isActive` already
+  resolves it against the query — so it is answerable with nobody attached, and
+  it is answered. The alternative, treating an unresolvable predicate as
+  enabled, has nothing to recommend it: there is no such thing here.
+- **It also covers plain `enabled: false`, which upstream would refetch.**
+  Upstream keeps `enabled` off the query for this decision, so an unobserved
+  query whose last observer was `enabled: false` but had a real `queryFn` is
+  *not* disabled there and `refetchType: 'all'` fetches it — while the same
+  query, one observer earlier, was skipped for being inactive. `Enabled.no` is
+  this port's one spelling of both `skipToken` and `enabled: false`
+  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)), so the two
+  cannot be told apart, and the useful half of the pair is the one that stops
+  a fetch nobody asked for. Nothing upstream pins the other half: no case in
+  `queryClient.test.tsx` refetches an unobserved `enabled: false` query that
+  has data.
+
+Ported with it: `should not refetch inactive queries that have a skipToken
+queryFn even if "refetchType" is "all"`
+(`queryClient.test.tsx:2473`), previously filed under the skipToken omission.
+Checked for the same gap and unchanged, because each already matches upstream:
+`isActive` (observers only, `query.ts:386`), `isStatic` (observers only, and
+`false` with none, `query.ts:420`), `QueryFilters(type: active/inactive)`
+(`utils.ts:199`, which reads `isActive`), and `isFetching` (a `fetchStatus`
+filter, which never consults `isDisabled`). `isDisabled` has exactly one
+caller here and one upstream: the `refetchQueries` filter.
+
+**Reverted the same day (F2, F3).** The final review showed both "deliberate
+decisions" above to be defects: the second silenced every dependent query
+(`enabled: userId != null ? Enabled.yes : Enabled.no`) that went disabled and
+then lost its widget, so `refetchQueries` on resume skipped it without a
+trace; the first ran a user's `Enabled.when` predicate — over a scope its
+owner had torn down — on every bulk refetch, inside `notifyManager.batch`.
+The branch is `!isFetched()` again, the case above is unported again, and the
+two `FI-01 …` regressions, which asserted the defect, were removed. Everything
+this section says about `isDisabled` reading `enabled` is history; the
+decision and its alternatives are in the last section.
+
+**FI-04 — the ported borrowing case was vacuous; the branch it names is
+fine.** `Query.fetch` borrows an observer's query function when its own
+options have none (`query.ts:619-621`), and the port has that branch. But
+`should use queryFn from observer if not provided in options` never reached
+it: deleting the branch outright left `query_test.dart` green. Why is in the
+`query.test.tsx` adaptation note above. The branch is reachable and load-bearing
+— `QueryClient.query(QueryOptions(queryKey: key))` over a key an observer is
+watching borrows and fetches; with the branch deleted the same call fails with
+`MissingQueryFunctionError` — so nothing about it was changed. The ported case
+now drives the fetch through the functionless options and goes red without the
+branch, and `FI-04 a fetch with no query function of its own borrows an
+observer's` covers the user-facing path.
+
+**FI-05 — `structuralSharing` did not reach `select` output.** Upstream shares
+the selected value with `replaceData(prevResult?.data, data, options)`
+(`queryObserver.ts:668`), and `replaceData` routes the option: a function
+replaces the sharing, `false` skips it (`utils.ts:455-477`). The port always
+called `replaceEqualDeep`, so with the opt-out configured a selector returning
+a fresh but equal list handed every reader the *first* instance for the life of
+the observer. Measured before: three refetches, every reported list `identical`
+to the first; after: a new instance per refetch, with the default unchanged
+(still shared). The two upstream cases that pin this are ported (above), and
+`InfiniteQueryObserver` is covered by the same code — it builds its result
+through `QueryObserver._createResult`. `QueriesObserver` has nothing to do:
+upstream's `replaceEqualDeep` there is over the `combine` result, and this port
+has no `combine` (the divergence is already in the table); each child observer
+does its own selection.
+
+What the port cannot do, and why the row in the table says so: upstream's hook
+is `(oldData: unknown, newData: unknown) => unknown` and applies to raw and
+selected data alike; here it is `StructuralSharing<TQueryData>`, so it cannot
+be handed a `TData`. Configuring any hook therefore meant "sharing is yours",
+and the selection was reported as the selector built it — which is exactly
+`false`, the only form the opt-out took here then. *Superseded the same day
+by F4:* a hook that shares, deeply or its own way, lost the selection's
+sharing for nothing, so the opt-out now has its own recognisable spelling,
+`noStructuralSharing()`, and only that turns selection sharing off; a hook of
+one's own leaves the selection at the default walk (last section). One further limit, found while
+measuring: the select memo compares its input with `==` (C14), so for a data
+type with value equality — `InfiniteData`, a record, a value class — an equal
+refetch re-reports the previous selection without running the selector at all,
+and the opt-out is invisible for it. Upstream's memo is `===`, re-runs the
+selector, and reports a new instance. That is a second-order effect of a
+decided divergence, measured and left alone: changing it would re-run every
+selector on every equal refetch.
+
+**The showcase moved with it.** `examples/showcase/`'s `select-and-sharing`
+screen documented and asserted the old behaviour — "what `select` produces is
+shared whatever the option says" — in its header, its widget test and its
+end-to-end spec. Its four `select` readers select an `int`, a `String`, a
+record and a list of texts; with the opt-out on, only the last is a new
+instance each time, so only the controller reader's `data builds` moves. The
+screen's header, `with sharing off, an equal refetch moves the selection that
+is a new instance` (widget and e2e) now say that. The widget suite is green
+(238); the e2e spec was edited to match and not run here.
+
+## Final review of the pre-release branch, 2026-09-12 (F1–F8)
+
+A fresh reviewer read the branch's library diff hunk by hunk — everything the
+deep-dive review, the fidelity review and their documentation passes had
+changed — and attacked it with 49 executed probes. It reported eight findings.
+**Six of them were defects introduced by five of this branch's own fixes:**
+AR-01's set shortcut (F1), FI-01's `isDisabled` clause (F2 and F3, one line),
+FI-05's select branch (F4), MU-03's restore validation (F5 — its query twin,
+`QueryState.validate`, predates the branch and had the same gap) and MU-01's
+deferred scope release (F6). One (F7) was a decided asymmetry left
+half-documented; one (F8) was a list of source-breaking changes with one
+claim that did not hold. The lesson is the deep dive's own, one level up: a
+fix is a change like any other, and the review that verified the finding did
+not review the fix.
+
+Every finding was reproduced with the reviewer's probe before any code
+changed — 8 of the 49 probes red on the incoming tree, exactly the eight
+reported — and every regression below was shown red against the incoming
+`lib/` and green against the fixed one (the fix engineer's run; this pass
+re-ran the suites, not the red half). The code is `6442285`. Regressions are in
+`port_specifics_test.dart` under `finalReview()`: **11 cases**.
+
+| ID | Verdict | Fix | Pinned by (`finalReview()`) |
+|---|---|---|---|
+| F1 | **fixed** — P1, silent stale data | round 2: the set shortcut proved its answer with the walk's own relation; round 3 removed the shortcut (R2-1, R2-2, R2-4) | `F1 …` ×4 (three regressions and one soundness pin for `QueryKey`) |
+| F2 | **fixed by decision** — FI-01 reverted | `Query.isDisabled()`'s no-observer arm is `!isFetched()` again | `F2 refetchQueries(all) refetches an unobserved query whose last observer was Enabled.no` |
+| F3 | **fixed** by the same line | no `Enabled.when` predicate runs with no observer | `F3 an Enabled.when predicate is not called once its observer is gone` |
+| F4 | **fixed by decision** — additive `noStructuralSharing()` | only the recognised opt-out turns selection sharing off | `F4 …` ×2 |
+| F5 | **fixed** for mutations; the query half **reverted** in round 3 (R2-3) | a mutation's success without data is refused only when `null is! TData`; a query's always | `F5 …` ×2 |
+| F6 | **fixed** | the scope is captured at removal | `F6 …` |
+| F7 | **no behaviour change, by decision**; dartdoc made explicit | — | existing `QE-02 Query.setState installs the fetch status it is given` |
+| F8 | `@internal`-on-a-parameter claim **refuted** | — | — |
+
+### F1 — the set shortcut answered with the set's own equality
+
+AR-01 put `a.containsAll(b)` in front of `_setsEqualDeep`'s multiset walk.
+`containsAll` asks `a`'s lookup, not `==`, so a `SplayTreeSet` with a
+case-insensitive comparator or a `LinkedHashSet(equals:, hashCode:)` holding
+`'Alpha'` was declared deep-equal to one holding `'alpha'`: the cache kept the
+old value and a refetch that changed a member was never reported. AR-01's own
+section above called this "sound because a set holds no duplicates under its
+own equality" and accepted the custom-policy consequence; that is the sentence
+that was wrong, because a policy looser than `==` makes the shortcut answer a
+different question from the walk.
+
+Dropping the shortcut and relying on the bucketed walk was sound but cost
+6–31× on a plain `Set<int>` (1.9 ms and 21 ms a write at 10 000 and 100 000
+members, against 0.3 ms and 0.7 ms). What round 2 landed, `_pairedByOwnLookup(a, b)`,
+still let the set find each partner (`a.lookup`, O(1) hashed or O(log n)
+splay) but accepts the answer only with a proof the walk itself would accept,
+and otherwise returns `false`, meaning "walk it":
+
+1. each pair is `identical`, or two **non-collection** values that are `==` —
+   `_equalDeep`'s rule for leaves. A `List`/`Map`/`Set`/`InfiniteData` member
+   that is not the same instance is left to the walk, so a collection whose
+   own `==` is looser than the walk cannot vouch for itself;
+2. `b.lookup(partner)` must be `identical` to the member it started from, so
+   `b.lookup` is a left inverse of the pairing: injective and, with equal
+   lengths, a bijection — equal multisets under the walk's relation;
+3. a `null` member goes to the walk, since `lookup` cannot tell a `null`
+   member from an absent one.
+
+Its dartdoc argued it could only answer `true` with a proof, and so was sound
+for any equality policy. Each guard was probed by deleting it, and each
+deletion turned an `F1` case red; the walk-only variant passed all four, so
+they pin the walk's semantics, not the shortcut's. **The argument assumed
+`lookup` returns the stored member and does not throw, and round 3 removed the
+shortcut when a second reviewer showed both assumptions false** (R2-1, R2-2,
+R2-4 — see "Round 3" below). The first three columns were measured by the fix
+engineer with AR-01's benchmark (median of three rounds of five, Dart 3.10.7,
+macOS arm64); the last was measured in round 3 with a benchmark of its own —
+median of five after warm-up, three runs, same SDK and machine, JIT — and is
+given as the range of the three runs:
+
+| scenario | `containsAll` (unsound) | walk only | round trip (round 2, removed) | **walk only (landed, round 3)** |
+|---|---|---|---|---|
+| `replaceEqualDeep`, `Set<int>(1000)`, same order | — | — | — | **118–199 µs** |
+| `replaceEqualDeep`, `Set<int>(10000)`, same order | 113 µs | 1.80 ms | 284 µs | **1.28–1.45 ms** |
+| `replaceEqualDeep`, `Set<int>(100000)`, same order | — | — | — | **14.4–16.1 ms** |
+| `setQueryData`, `Set<int>(10000)`, same order | 286 µs | 1.86 ms | 347 µs | **1.49–1.58 ms** (building the incoming set included: 0.22–0.25 ms of it) |
+| `setQueryData`, `Set<int>(100000)`, same order | 663 µs | 20.75 ms | 2.26 ms | **19.3–24.7 ms** (2.5–3.4 ms of it building the set) |
+| `Set<String>(10000)` | 284 µs | 2.30 ms | 478 µs | **1.27–1.45 ms** |
+| `Set<List<int>>(2000)`, deep-equal members (walk decides) | 2.26 ms | 653 µs | 1.29 ms | **407–428 µs** |
+
+The round trip made two lookups a member where `containsAll` made one, and
+was about 9× faster than the walk at 100 000 members; an identity set of
+partners proved the same thing and measured about twice as slow. Neither
+survives: the speed was bought with trust in the set's own methods.
+
+**`QueryKey`'s shortcut is sound and stays.** `_freeze` copies every set part
+through `Set<Object?>.unmodifiable`, a view over a default-equality set, so
+`containsAll` there *is* `==`-based; `F1 a QueryKey's set part is frozen to
+default equality, so its own set shortcut stays sound` pins it (green before
+and after — a pin, not a regression). Round 3 checked it again on dart2js,
+where the default set's `lookup` differs; see there. **Left alone, recorded:** a `Map` is
+still looked up by its own keys, so a map with a custom key equality is
+compared under that policy and keeps the older key representation. That
+predates the branch and was not a finding; `replaceEqualDeep`'s dartdoc now
+says so and points at a custom hook or `noStructuralSharing()`, and the
+divergence table's row says the same. The regression named `AR-01: a set of
+value-equal members is shared by its own equality, whatever its order` still
+holds; "by its own equality" no longer describes the mechanism.
+
+### F2 and F3 — `Query.isDisabled()` consulted `enabled` with no observer
+
+FI-01 had made the no-observer arm `!_options.enabled.resolve(this) ||
+!isFetched()`, reading `Enabled.no` as this port's `skipToken`. Both effects
+reproduced: an unobserved, seeded query whose last observer left with
+`Enabled.no` was skipped by `refetchQueries(type: all)` and
+`invalidateQueries(refetchType: all)` for good (F2), and an `Enabled.when`
+predicate ran on every such bulk call with no observer attached, inside
+`notifyManager.batch` (F3).
+
+**The decision (F2), taken without a human in the loop.**
+
+- **Option A — keep FI-01's meaning**, restricted to the static `Enabled.no`
+  so F3 is fixed: `Enabled.no` means `skipToken` in this arm, and the
+  `Enabled.no` dartdoc and the divergence row say so.
+- **Option B — give `skipToken` its own value** (`Enabled.never`, or a
+  `QueryFn` sentinel) and consult only that. Keeps the ported case honestly.
+- **Option C — revert to `!isFetched()`**: `Enabled.no` means upstream's
+  `enabled: false` everywhere, and upstream's `skipToken` arm is recorded as
+  not portable, because one value spells both.
+
+**Answer: C.** Why it beats the others:
+
+1. *It is the least surprising outcome for the user who disabled a query and
+   let its widget go.* The idiom that produces `Enabled.no` is overwhelmingly
+   the dependent query, `enabled: userId != null ? Enabled.yes : Enabled.no`.
+   Under A every such query that went disabled before its widget unmounted is
+   permanently un-refetchable from the cache side — `refetchQueries()` on
+   resume skips it, with no error and nothing to debug.
+2. *`enabled` governs automatic fetching.* `Enabled.no`'s dartdoc already said
+   "a `refetch()` still works"; `refetchQueries` is the bulk form of that
+   explicit command.
+3. *It keeps the port's claims true instead of rewriting them.* `Enabled.no`
+   is documented as upstream's `enabled: false`, and upstream's `enabled:
+   false` never reaches this arm — a seeded, unobserved `enabled: false` query
+   *is* refetched upstream. C is exact fidelity for the value the port
+   actually has. A would have rewritten that mapping and still left
+   `Enabled.no` and `Enabled.when((_) => false)` behaving differently for the
+   same intent.
+4. *`enabled` is an observer option.* On the query it is only the last
+   writer's leftover; deciding a cache-wide operation from a departed
+   observer's option is the category error F3 exposed.
+5. B adds a second "off" spelling whose only observable difference is which
+   bulk operations skip a query — hard to explain, and it reverses #17's
+   settled decision to have one spelling from a review round that cannot see
+   #17's context. A real `skipToken` equivalent (no function *at all*,
+   `refetch` included) deserves its own ticket, not a one-arm distinction.
+
+F3 is fixed by the same line: the arm no longer resolves `enabled`. What
+changed: `Query.isDisabled()` (its comment carries the reasoning) and the
+`Enabled.no` dartdoc, which now says it is also the port's only spelling of
+`skipToken`, that `enabled: false` is the meaning that wins, and that the one
+place it matters is `isDisabled` with no observer. FI-01's two regressions
+asserted the defect and are gone, with a comment in `fidelityReview()`
+pointing here. The ported case `invalidateQueries > should not refetch
+inactive queries that have a skipToken queryFn even if "refetchType" is "all"`
+(`queryClient.test.tsx:2473`) is **unported again** — removed from
+`query_client_test.dart` with a comment at its old position — because the
+port no longer does what it asserts and could be made to only by option A.
+The `queryClient.test.tsx` section and the divergence table carry the reason.
+`F2 …` also pins upstream's other half: a query that has never fetched is
+disabled.
+
+### F4 — any `structuralSharing` hook disabled select-output sharing
+
+FI-05's `createResult` did `structuralSharing == null ?
+replaceEqualDeep(prev, selected) : selected`, so a hook that *shares* — deeply,
+or in its own way — also cost the selection its sharing. Upstream's
+`replaceData` has three states (a function, `false`, unset) and calls a
+function on the selected values; the port's hook is
+`StructuralSharing<TQueryData>` and cannot take a `TData`.
+
+**The decision (F4), taken without a human in the loop.**
+
+- **(a) Always share the selection** and document that the opt-out governs the
+  cache write only (`main`'s behaviour). Loses FI-05's point, unports again
+  the two upstream cases FI-05 ported, and walks the showcase back.
+- **(b1) An exported sentinel function compared by `==`** —
+  `structuralSharing: noStructuralSharing` as a generic tear-off. Tried first
+  and **rejected on evidence**: on the VM (Dart 3.10.7), `off<String> ==
+  off<String>` is `true` at top level, but inside a generic class reading
+  `opts.hook == off<A>` with `A = String` it is `false` — in line, through a
+  helper and through a local — and it was `false` inside
+  `QueryObserver.createResult`. A design resting on that equality fails
+  silently.
+- **(b2) A sealed value type** (`StructuralSharing.off` /
+  `StructuralSharing.hook(fn)`). What this project's own rule asks for — an
+  upstream union is a sealed value type (#10) — and the best shape. Rejected
+  *for this round* because it is not additive: it changes the option's type
+  and breaks every hook passed as a bare function — in the core suite, the
+  showcase and `doc_snippets` (the handover counted 27 places; this pass did
+  not recount them). Worth its own ticket before 0.1.0 is published.
+- **(b3) An exported function that *returns* a recognisable hook** —
+  `structuralSharing: noStructuralSharing()`: one memoised hook per
+  `TQueryData`, recognised by identity. **Chosen.**
+
+Why (b3) beats the rest: it is additive — no call site changes meaning or
+stops compiling; "off" gets a real, detectable identity, so off means off
+everywhere — cache write, placeholder, selection; a hook of one's own,
+`(_, next) => next` included, leaves the selection at the default walk
+instead of paying for an opt-out it never asked for; the hook is the same
+instance per type across rebuilds, so options `==` and `setOptions` are
+unaffected; recognition does not depend on generic-instantiation equality;
+and it survives `QueryDefaults`, whose erased
+`Object? Function(Object?, Object?)` field receives
+`noStructuralSharing<Object?>()` — the client hands each query its own typed
+opt-out rather than wrapping it. The cost is a pair of parentheses and a
+small memo keyed by `Type`, the same pattern as the client's adapted
+defaults. `isNoStructuralSharing` is `@internal` and hidden from the barrel.
+
+**What this changes for a reader of older text:** `(_, next) => next` is no
+longer how "off" is spelled. It still compiles and still turns off the cache
+write, but no longer the selection. The two FI-05 ported cases in
+`query_observer_test.dart` and `FI-05 a structuralSharing opt-out reaches
+select output` now spell upstream's `false` as `noStructuralSharing()`,
+assertions unchanged. New: `F4 a sharing hook of the user's own leaves select
+output shared` (a deep hook and `(_, next) => next`; the input changes, the
+selection stays equal and `identical`) and `F4 noStructuralSharing() turns
+select output sharing off, set on the query or through the defaults` (also:
+the cache write is off, one instance per type, defaulted options compare
+equal). The showcase's `select_and_sharing_screen.dart` spells its `keepNext`
+as `noStructuralSharing()`.
+
+### F5, F6, F7, F8
+
+**F5 — a `void` or nullable success could not be restored.** MU-03's
+`MutationState.validate` refused `status: success && !hasData` for every
+`TData`, `void` and nullable ones included, where `state.data as TData` finds
+a value either way. `QueryState.validate` had the same rule from before the
+branch and was loosened the same way: both read `status == success &&
+!hasData && null is! T`, symmetric with the variables rule beside it. A
+non-nullable type was still refused, because that is the one that throws
+downstream. Pinned by `F5 a void or nullable mutation restores as success
+without data; a non-nullable one is still refused`. **The query half was
+reverted in round 3 (R2-3)**: a query's data also reaches `select`, whose
+output type can be non-nullable, and that was the downstream F5 had not
+looked at. `F5 the query twin: …` was rewritten to the strict rule and is now
+`F5 the query twin, revised by R2-3: a successful query state must hold data
+whatever its type; one that resolved to null says so with hasData`.
+
+**F6 — the deferred scope release re-derived the scope.** MU-01's
+`MutationCache.remove` decided at removal that the entry held its scope, then
+scheduled `onMutationSettled(mutation)`, which read the scope off the entry a
+microtask later; a `setOptions` in between moved it, and the queue the entry
+had been blocking stayed paused. `remove` now captures the scope at removal
+and schedules `_releaseScope(scope, mutation)`, which `onMutationSettled`
+shares. Pinned by `F6 removing a restored scope head releases the queue it was
+blocking, even if its scope moves before the release runs`.
+
+**F7 — the two restore doors, by decision.** No behaviour change, as decided
+with QE-02: `QueryCache.build(state:)` normalises `fetchStatus` to idle
+(upstream `hydration.ts:356`) and `Query.setState` installs it as given
+(upstream preserves an actively fetching status on the merge,
+`hydration.ts:332-335`). `Query.setState`'s dartdoc called it "the door
+persistence and devtools come through", which read as *the* restore door; it
+is now the **merge** half, points a restore of a not-yet-existing entry at
+`QueryCache.build(state:)`, and states the consequence the reviewer measured —
+a `fetching` or `paused` status written with no fetch behind it keeps the
+entry counted by `isFetching()` and out of garbage collection until a real
+fetch settles — as deliberate. The reviewer's probe asserting otherwise stays
+red by this decision.
+
+**F8 — `@internal` on a constructor parameter enforces nothing: refuted.**
+Checked by the fix engineer with consumer packages outside the workspace, on
+Dart 3.10.7 and on 3.6.2 (the Flutter 3.27.4 floor): passing `behavior:` to
+`QueryOptions` or `QueryObserverOptions` from another package reports
+`invalid_use_of_internal_member`. The annotation on the *parameter* is what
+does the work — a field annotation alone does not warn at a call site, and a
+subclass's unannotated `super.x` does not inherit it — so the base's
+`this.behavior` and each subclass's `super.behavior` carry their own: four
+annotations in `query_options.dart`, checked by this pass.
+Kept as is. The enforcement is an analyzer warning, as every `@internal` is.
+The rest of F8 is changelog text.
+
+### Probes and counts
+
+The 49 probes against the fixed tree: **47 pass, 2 fail**, both explained.
+`QE-02 … the setState door …` is red by the F7 decision. `SS-SELECT …` writes
+`'a'`, `'b'`, `'a'` and expects the last selection `identical` to the first;
+the selection is shared against the last *reported* data, which by then is
+`['b']`, so no implementation satisfies it — and it fails on the merge base
+`0c287da` too, although the report said it passed on `main`. The defect it
+was after is real, and `F4 a sharing hook of the user's own leaves select
+output shared` reproduces it with a scenario that can pass.
+
+Measured by this pass after `6442285`: `dart test` **732** (724 − 2 FI-01
+regressions − 1 unported case + 11 `finalReview` cases), `dart test -p chrome`
+**729** (the same three barrel checks are VM-only), **414 / 536** ported
+upstream cases by the method in the Status section. FI-01 / FI-04 / FI-05 now
+stand at +2 ported upstream cases and +3 regressions.
+
+### Round 3 — a second reviewer broke two of the round-2 fixes (R2-1–R2-6)
+
+A second fresh reviewer attacked `6442285` with three probe files. Its
+findings, each reproduced on this tree before anything changed (VM and
+`--platform chrome`): **R2-1** (P2, web only) — dart2js's default hash set
+answers `lookup` with its *argument* for numbers, so the round trip paired
+both zeros of `SplayTreeSet<double>{-0.0, 0.0, 1.0}` with the single `0.0` of
+a cached `{0.0, 1.0, 3.0}`, called the two equal and kept the stale set; the
+reviewer's chrome fuzz found 12 such pairs in 100 000. **R2-2** (P2,
+regression) — `package:collection`'s `MapKeySet.lookup` throws
+`UnsupportedError`, so `setQueryData` of such a set threw. **R2-3** (P2,
+regression from F5) — an `int?` query restored as `success` without data
+made any observer with a `select` to `String` throw `type 'Null' is not a
+subtype of type 'String'` in its constructor, through `QueryCache.build` and
+`Query.setState` alike. **R2-4** (P3) — a hand-written `Set` whose `lookup`
+returns its argument reopened F1. **R2-5** (N) — elements whose `==` is not
+transitive or disagrees with `hashCode`, and sets nested past depth 500,
+where the shortcut and the walk answered differently. **R2-6** (C) —
+documentation drift, already corrected by the documentation pass before this
+round.
+
+**Decision 1, taken without a human in the loop: no set shortcut at all.**
+Two consecutive reviews broke two different shortcuts in `_setsEqualDeep`,
+and the common cause was the same: each trusted a user-supplied `Set` to
+honour a contract the library cannot enforce — `containsAll` its equality
+policy (F1), `lookup` returning the stored member and not throwing (R2-1,
+R2-2, R2-4). Correctness by construction beats correctness by argument on a
+path that has failed twice. `_pairedByOwnLookup` is deleted; what remains
+asks either set for `length` and iteration only, and the members for `==`
+and `hashCode` through `_equalDeep` and `_hashDeep` — the contract structural
+sharing relies on everywhere else. No `lookup`, `contains`, `containsAll` or
+`remove` of a user's set is called; `R2-2 set comparison asks a set for its
+length and members only, never its lookup, contains or remove` pins that with
+a set on which all four throw. Measured (the round-3 column of the F1 table,
+median of five after warm-up, JIT): **118–199 µs at 1 000 members, 1.28–1.45
+ms at 10 000, 14.4–16.1 ms at 100 000** for `replaceEqualDeep` on a
+`Set<int>`; AOT 0.10 ms, 1.2 ms and 20–22 ms; dart2js under Node about 2 ms
+and 24 ms at 10 000 and 100 000 (millisecond timer). AR-01's defect was 102 ms
+at 10 000 and 10 s at 100 000, so the walk alone still fixes it and stays
+inside a 16 ms frame at 10 000. **100 000 members is a documented limit**: a
+cache write of such a set costs about a frame. Regressions: `R2-1 a default
+set against a SplayTreeSet<double> holding both 0.0 and -0.0 is not equal, on
+every platform`, `R2-2 …` above and `R2-4 a hand-written set whose lookup
+returns its argument cannot reopen F1`, each shown red against `6442285`'s
+`lib/` (R2-1 on chrome only, as reported) and green after; the four `F1 …`
+cases stay green. `F1 the set's own lookup is trusted only with a proof the
+walk would accept` described the removed mechanism and is renamed `F1 members
+a set holds apart, or a policy pairs, are still compared by the walk`, its
+assertions unchanged.
+
+**`QueryKey`'s `containsAll`, checked under the same lens and kept.** Its set
+parts are frozen into default-equality sets, so the question was only whether
+dart2js's numbers make `containsAll` disagree with `==`. `R2-1 a QueryKey's
+set part agrees with == and hashCode for signed zeros, int and double, NaN and
+fractions, on every platform` compares every one- and two-member set of
+`0.0`, `-0.0`, `0`, `1`, `1.0`, `NaN`, `0.5`, `-1.5`, `1e300` and `infinity`
+against every other: `==` is symmetric, equal keys hash alike, and the answer
+is the multiset answer of the element rule, on the VM and on chrome — so the
+shortcut stays. Recorded, not changed: on dart2js `identical(nan, nan)` is
+false, so a key holding `NaN` equals only its own instance there, where the VM
+calls two such keys equal; the key's `==` and `hashCode` still agree on both.
+
+**Decision 2: a successful query state must hold data.** For queries,
+`status: success` requires `hasData` whatever `TQueryData` is; "resolved to
+null" is `hasData: true, data: null`, which the type already admits, and
+`QueryState.validate`'s dartdoc says so. The mutation half of F5 **stays**,
+because no consumer path can crash on it, probed for `void` and `int?` (a
+non-nullable `TData` is still refused): `MutationStateObserver`'s required
+`select` receives the `Mutation` typed `Object?`, so any cast into a
+selection's type is the caller's; `resumePausedMutations` never continues a
+settled entry, so no callback sees it; a `MutationObserver` only reflects a
+mutation it built itself through `mutate`, whose result, getters and
+per-call and cache callbacks read that run's own `TData`; and running the
+restored entry again settles it with data. The binding reads no mutation data
+at all. Both `validate()` dartdocs now say why the doors differ: a query's data
+is read through `select` into a possibly non-nullable type, a mutation's is
+not. Regressions: `R2-3 a restored success-without-data query is refused, and
+one that resolved to null reaches a select to a non-nullable type` (both
+doors, `enabled` default and `Enabled.no`) and `R2-3 the mutation twin: a void
+or nullable success without data is safe on every path that reads it`.
+
+**R2-5 is a stated limit, not a defect.** Where members break `==`'s own
+contract — intransitive, or `==` without matching `hashCode` — or a set sits
+past the depth limit of 500, the greedy, hash-bucketed walk's answer is the
+reference; nothing better is defined, and the shortcut that answered
+differently is gone. Its probes (`R2-5a`, `R2-5b`, `R2-5c`) compare the
+library to the walk and now pass on both platforms.
+
+**Probes against this tree.** The first final review's 49 probes and the
+second reviewer's 37 (86 in all), run from a copy outside the worktree:
+**78 pass, 8 fail on the VM and on chrome alike**. Two are the first round's
+`QE-02 … the setState door …` (red by the F7 decision) and `SS-SELECT …`
+(unsatisfiable, see "Probes and counts"). The other six are R2-3's four
+variants, its claim-4 reproduction and claim 4's nullability table: each
+expected a data-less `success` of a nullable or `void` query to be accepted,
+which Decision 2 refuses at the door with an `ArgumentError`, so those
+expectations no longer describe the contract; the defect they were after —
+an observer that crashes — is gone, and `R2-3 …` pins the replacement. The
+reviewer's fuzz reports 0 of 200 000 divergences on both platforms.
+
+Measured by this pass: `dart test` **738** (732 + 6 round-3 regressions) and
+`dart test --platform chrome` **735** (the same three barrel checks are
+VM-only), **414 / 536** ported upstream cases, unchanged.
+
+### Round 3 reviewed — the walk went quadratic for doubles (R3-1–R3-4)
+
+A third fresh reviewer took commit `8c9b8f2`. Correctness held: 10 000 random
+pairs per platform, of which 7 160 (VM) and 6 622 (dart2js) were equal under
+`_equalDeep`, and **none hashed apart**; the set never said "equal" where the
+walk said "not equal"; every internal path that writes a successful query
+state sets `hasData`. What it found was cost.
+
+- **R3-1, P2, introduced by round 3.** The walk buckets members in a map that
+  spreads its keys by their low bits, and on the VM a fractional `double`
+  hashes to a value whose low bits barely vary (`0.5` is `0x3fe000003fe00000`):
+  10 000 half-integers shared **64** low-12-bit patterns. The reviewer measured
+  30–43 ms at 10 000 against round 2's 0.8–1.2 ms, 1.6 s at 50 000 and about
+  11 s at 100 000, on every cache write. Round 2 escaped only because it asked
+  the set's own `lookup`, the shortcut round 3 removed.
+
+  The first repair tried here, `Object.hash(hash, 0)`, was measured before it
+  was kept and **did not fix it**: 7 ms, 90 ms and 363 ms at 10k/50k/100k,
+  still superlinear. `Object.hash` combines through a 29-bit mask, which throws
+  away exactly the high bits that vary. What landed folds the high bits down
+  with shifts that do not align with the value's two 32-bit halves, then masks:
+  `(hash ^ hash >> 7 ^ hash >> 17 ^ hash >> 37) & 0x3fffffff`
+  (`sharingBucketOf`, hidden from the barrel, pinned in `barrel_test.dart`).
+  It changes which bucket a member lands in and nothing else: a partner is
+  still accepted only by `_equalDeep`, and equal values still fold to equal
+  keys, because the fold is a function of `_hashDeep` alone.
+
+  Measured after the fix, median of 5 after warm-up, for nine shapes (`int`,
+  three fractional-`double` shapes, `int`s at multiples of 2^32 and 1024, string
+  ids, records, `DateTime`s) at 10 000 / 50 000 / 100 000 members — every shape
+  linear on every platform:
+
+  | platform | `Set<int>` | `Set<double>` half-integers | slowest shape at 100 000 |
+  |---|---|---|---|
+  | VM JIT | 1.5 / 6.7 / 20.6 ms | 1.1 / 8.1 / 20.1 ms | 22.2 ms (string ids) |
+  | VM AOT | 1.5 / 7.6 / 21.9 ms | 1.4 / 12.1 / 25.6 ms | 56.3 ms (records) |
+  | dart2js on Node | 2 / 9 / 24 ms | 5 / 28 / 67 ms | 86 ms (`DateTime`) |
+
+  **Pinned without a clock**, as the suite requires: `port_specifics_test.dart`
+  `R3-1 a set walk spreads fractional doubles across buckets instead of piling
+  them into a few` asserts that 10 000 half-integers, quarters and prices each
+  cover more than 3 000 of the 4 096 low-12-bit patterns. It fails on the raw
+  hash with exactly the reviewer's figure — `half-integers: 64 of 4096` — and
+  passes on the VM and compiled to JavaScript. A first attempt that counted
+  member comparisons passed on the broken hash too: the cost is the map probing
+  its integer keys, which never calls a member's `==`, so it was replaced.
+- **R3-2, P3, predates round 3.** A set of maps with their own key equality
+  (case-insensitive `LinkedHashMap`s) compares **not equal** though the walk
+  calls the maps equal, because `_hashDeep` hashes a map's keys by their own
+  `hashCode`. The only effect is lost sharing and one extra rebuild; it cannot
+  hide a real change. Kept and recorded: hashing only a map's values and length
+  would fix it but would bucket every map with the same values together, and a
+  set of rows that differ only in their keys would go quadratic — the trade
+  R3-1 just paid for.
+- **R3-3, N.** On the VM `2^53 + 1 == 2^53.0` is true while their hash codes
+  differ — Dart's own `num` breaks the `==`/`hashCode` rule there — so such
+  sets compare not equal. A false "not equal" only, on an unrealistic shape.
+- **R3-4, N, predates round 3.** A list holding `double.nan` equals a copy of
+  itself on the VM and not under dart2js. The hashes agree on both.
+
+Measured at the end: `dart test` **740** (738 + the R3-1 regression + its
+barrel assertion), `dart test --platform chrome` **736** (four barrel checks
+are VM-only).
+
+### The fourth fresh pass — the same collapse one level down, in the key too
+
+A fourth fresh reviewer took the R3-1 fold (`3c4fd63`) and confirmed it: both
+call sites share one function, it is deterministic on dart2js (checked from the
+SDK source for negative hashes, hashes above 2^31 and 2^53, `NaN`, infinities
+and `-0.0`), 4 000 of 4 000 deep-equal random pairs agreed on the VM and on
+chrome, the barrel cannot name `sharingBucketOf`, and `dart doc` neither lists
+nor warns about it. It also found that the fold sat one level too high.
+
+`_hashDeep` handed each child's **raw** hash to `Object.hash`,
+`Object.hashAll` and `Object.hashAllUnordered`, which combine through a 29-bit
+mask. A VM fractional double's variation sits above that mask, so the combined
+hash collapsed before the fold ever saw it: `{'price': i + 0.5}`, `{i + 0.5}`
+and `[1.0, i + 0.5]` still took 4.5 s, 8.1 s and 2.5 s at 100 000 members on
+the VM. Not introduced by `3c4fd63` — the times were the same without it.
+
+Following the root cause further than the report did: `QueryKey._hashPart`
+built its hash the same way, so the collapse reached **the cache itself**, not
+only structural sharing. Measured here: 10 000 keys `['price', i + 0.5]` had
+**396** distinct hash codes, and `setQueryData` followed by `getQueryData` on
+them took **140 ms** against 15 ms for `['item', i]`; at 50 000 keys, **1 664 ms**
+against 86 ms. Every lookup on such a key scanned a long chain.
+
+**Fix.** The fold moved to `lib/src/hashing.dart` as `spreadHash`, internal and
+not exported, and is applied to every **leaf** hash and every map-key hash
+before it is combined — in `_hashDeep` and in `QueryKey._hashPart` alike. A
+composite hash is then built from well-spread parts and inherits the spread.
+It is a function of `hashCode` alone, so values with equal hash codes still
+spread alike, which is all `==` and the walk need; `QueryKey`'s `==` and
+`hashCode` still agree for `1`/`1.0` and `0.0`/`-0.0` (the existing R2-1 pin
+passes on both platforms).
+
+Measured after, median of 5 after warm-up:
+
+| | VM JIT | VM AOT | dart2js on Node |
+|---|---|---|---|
+| 10 000 / 50 000 keys `['price', i + 0.5]`, write and read | 10 / 98 ms, 10 000 distinct | 9 / 101 ms | 30 / 156 ms |
+| same for `['item', i]` (control) | 12 / 90 ms | 8 / 84 ms | 25 / 160 ms |
+| set of 10k / 50k / 100k maps `{price: i + 0.5}` | 5 / 30 / 67 ms | 6 / 26 / 78 ms | 12 / 87 / 218 ms |
+| set of sets `{i + 0.5}` | 6 / 35 / 84 ms | 6 / 36 / 84 ms | 24 / 138 / 274 ms |
+| set of lists `[1.0, i + 0.5]` | 6 / 20 / 48 ms | 5 / 27 / 50 ms | 10 / 59 / 126 ms |
+
+Every shape is linear on every platform. The reviewer's margin probe also
+flagged `1e6 + i/100` at 2 159 of 4 096 low-12-bit patterns; measured, it fills
+100 000 distinct buckets with at most one member each and stays linear
+(1.4 / 8 / 18 ms), so the lower projected count is not clustering and no change
+was made for it.
+
+**Pinned without a clock**: `port_specifics_test.dart` `R3-1 follow-up: keys
+and nested data holding a fractional double spread their hash codes` asserts
+more than 9 000 distinct hash codes for 10 000 price keys and more than 9 000
+distinct buckets for 10 000 maps, sets and lists of such values. With
+`spreadHash` reduced to `return hash;` it fails on the VM with exactly the
+measured figure — `396 distinct hash codes for 10000 price keys` — and so does
+the original R3-1 case (`half-integers: 64 of 4096`). Compiled to JavaScript a
+double hashes by value, the collapse does not exist there, and both pass with or
+without the fold; the test says so rather than claiming a JavaScript guard.
+
+Measured at the end: `dart test` **741**, `dart test --platform chrome` **737**.
+

@@ -212,8 +212,37 @@ final class MutationContinueAction extends MutationAction {
 /// A mutation's state at one point in time.
 @immutable
 final class MutationState<TData, TVariables, TOnMutateResult> {
-  /// Validates restored variables before a mutation or cache build accepts
-  /// them. Nullable variables may be absent; nonnullable pending ones may not.
+  /// Validates a restored state before a mutation or cache build accepts it.
+  ///
+  /// Nullable variables may be absent; nonnullable pending ones may not. A
+  /// `success` state must carry data, the invariant `QueryState.validate`
+  /// has always applied to its own half of the persistence door: the
+  /// `MutationCache.build` doc said "the twin closed with the same door"
+  /// while this side let a data-less `success` through, so a restored
+  /// mutation could report success holding nothing and the `state.data as
+  /// TData` read in the observer's result had no value to find (pre-release
+  /// review, 2026-09-12, MU-03). Upstream validates neither, because
+  /// `data: undefined` with `status: 'success'` is representable in its
+  /// state type at all (`mutation.ts:76-88`); here `hasData` is what says so.
+  ///
+  /// The data rule is symmetric with the variables rule above it: it applies
+  /// only where a `TData` genuinely cannot be absent. A `MutationState<void,
+  /// …>` — the ordinary spelling of a completed mutation that returns
+  /// nothing — and any nullable `TData` have `null is TData`, so `state.data
+  /// as TData` finds a value whether or not `hasData` was recorded, and a
+  /// success without data is accepted. Only a non-nullable `TData` is
+  /// refused, because that is the one that throws downstream (pre-release
+  /// review, 2026-09-12, F5).
+  ///
+  /// `QueryState.validate` is stricter, and the two doors differ on purpose
+  /// (round 3, R2-3): a query's data is read through `select` into an
+  /// observer's own type, which may be non-nullable, so a data-less query
+  /// success crashed such an observer and is refused whatever the data type.
+  /// A mutation's data is not projected into another type: a
+  /// `MutationStateObserver`'s `select` receives the mutation typed
+  /// `Object?`, and a `MutationObserver` reflects only runs it started, with
+  /// their own data. To restore a mutation that resolved to `null`,
+  /// `hasData: true` with `data: null` is accepted too.
   @internal
   void validate() {
     if ((status == MutationStatus.pending &&
@@ -222,6 +251,11 @@ final class MutationState<TData, TVariables, TOnMutateResult> {
         (hasVariables && variables is! TVariables)) {
       throw ArgumentError.value(this, 'state',
           'A pending MutationState must have variables compatible with $TVariables.');
+    }
+    if ((status == MutationStatus.success && !hasData && null is! TData) ||
+        (hasData && data is! TData)) {
+      throw ArgumentError.value(this, 'state',
+          'A successful MutationState must hold data compatible with $TData.');
     }
   }
 
@@ -479,6 +513,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   }
 
   @override
+  @protected
   void optionalRemove() {
     if (_observers.isNotEmpty) {
       return;
@@ -576,19 +611,29 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     // `onError` rollback, writing into the cache `clear()` just emptied
     // (ninth review, 2026-09-10, C11; see `QueryClient.clear`).
     _retryer?.cancelRetry(immediately: true);
-    if (_execution == null && _state.status == MutationStatus.pending) {
-      // A restored queue head has no retryer/finally to release its waiters.
-      _cache.onMutationSettled(_erased);
-    }
+    // A restored entry that never ran has no retryer and no `finally` to
+    // release the scope it heads. That release is the cache's to make, in
+    // `remove`, which alone knows whether this entry *was* the head — made
+    // here, it fired for any never-started entry and started the head on the
+    // removal of a tail, and it fired in the middle of a `clear()` or a
+    // removal loop with the next entry still listed (MU-01, 2026-09-12).
   }
 
   bool _removed = false;
+
+  /// Whether a run is in flight — `execute` has been called and its
+  /// `finally` has not yet run. A restored `pending` mutation that has not
+  /// been continued is not running; it has no retryer to release its scope
+  /// with, which is what the cache's `remove` asks this for.
+  @internal
+  bool get isRunning => _execution != null;
 
   /// Whether the cache permanently removed this entry.
   @internal
   bool get isRemoved => _removed;
 
   @override
+  @protected
   void scheduleGc() {
     if (_removed) {
       return;

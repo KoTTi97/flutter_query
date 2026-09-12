@@ -82,7 +82,7 @@ strategy, this sentence — was decided by an agent.
 **What stands in for human review is adversarial, and deliberately so:**
 
 - **Upstream's own test suite**, ported case for case. It is the one referee
-  that cannot be talked round, and it found 22 bugs.
+  that cannot be talked round, and it found 23 bugs.
 - **Nine rounds of external deep-dive review**, each by a fresh reviewer with
   no memory of the decisions, which found roughly 100 more.
 - **A standing rule that no reported finding is acted on until it has been

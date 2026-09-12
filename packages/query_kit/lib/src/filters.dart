@@ -47,7 +47,7 @@ enum RefetchType {
 /// [QueryFilters] matches everything — the same convention the options model
 /// uses (https://github.com/KoTTi97/flutter_query/issues/17).
 @immutable
-class QueryFilters {
+final class QueryFilters {
   /// Every argument is optional; leave one unset to not filter on it.
   const QueryFilters({
     this.queryKey,
@@ -142,7 +142,7 @@ class QueryFilters {
 
 /// Selects a set of mutations.
 @immutable
-class MutationFilters {
+final class MutationFilters {
   /// Every argument is optional; leave one unset to not filter on it.
   const MutationFilters({
     this.mutationKey,

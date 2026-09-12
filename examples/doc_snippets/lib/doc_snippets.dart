@@ -320,7 +320,7 @@ QueryObserverOptions<Task> withoutStructuralSharing(String id) =>
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id),
       // >>> guides/options.md#structural-sharing
-      structuralSharing: (previous, next) => next, // upstream's `false`
+      structuralSharing: noStructuralSharing(), // upstream's `false`
       // <<<
     );
 

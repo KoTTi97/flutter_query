@@ -190,8 +190,9 @@ void main() {
     });
   });
 
-  showcaseTest('with sharing off, an equal refetch still moves no selection',
-      (tester, h) async {
+  showcaseTest(
+      'with sharing off, an equal refetch moves the selection that is a new '
+      'instance', (tester, h) async {
     await h.open(tester, '/select-and-sharing');
 
     await tester.tap(find.byType(SwitchListTile));
@@ -211,14 +212,19 @@ void main() {
     expect(cached(h), equals(before));
     expect(identical(cached(h), before), isFalse);
 
-    // What `select` produces is shared whatever the option says, so the four
-    // `select` readers saw nothing new; the readers without a `buildWhen`
-    // still rebuilt for the flip and the landing.
+    // The opt-out reaches what `select` produces too, as upstream's
+    // `replaceData` does — so a selection that builds a new value every time
+    // counts as new. Only the controller's selector does: a list of texts.
+    // The other three select an `int`, a `String` and a record, all of which
+    // are `==` to the last one, so their readers stand still. (Until the
+    // 2026-09-12 fidelity review the core ran every selection through
+    // `replaceEqualDeep` regardless and this reader stood still too, which is
+    // what made the switch invisible to all four.)
     expectDataBuilds(const <String, int>{
       'context': 1,
       'builder': 1,
       'mixin': 1,
-      'controller': 1,
+      'controller': 2,
     });
     expectBuilds('builds', const <String, int>{
       'context': 5,

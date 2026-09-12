@@ -59,8 +59,12 @@ to the network coming back: no `refetchOnWindowFocus`, no
 `refetchOnReconnect`, no resuming of paused mutations, and a `query` that
 paused offline waits for a reconnect only while mounted.
 
-**`client.clear()` at the end.** A client owns `gcTime` timers, and a process
-with a pending timer does not exit.
+**`client.clear()` at the end — and unsubscribe the observers first.** A
+client owns `gcTime` timers, and a process with a pending timer does not exit.
+`clear()` empties the caches but does not stop observers: a subscribed
+observer with a `refetchInterval` keeps its timer across `clear()` and rebuilds
+its query on the next tick, so an observer you created is yours to unsubscribe
+or `destroy()` before the client is cleared.
 
 **Focus and online, if they mean anything to you.** There is no window and no
 connectivity plugin outside Flutter, so `client.focusManager.setFocused(…)`
