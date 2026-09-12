@@ -281,16 +281,24 @@ class ShowcaseApi {
 
   // --- the scenario's own controls ---------------------------------------
 
-  /// Reseeds this api's scenario on the backend.
-  Future<void> resetScenario() => _run(
+  /// Reseeds this api's scenario on the backend, and answers the id of the
+  /// scenario that was reseeded — [scenario], unless the backend disagrees.
+  ///
+  /// Returning it is what lets `test/backend_contract_test.dart` see the
+  /// answer at all: a body no method reads is a body the fake can get wrong
+  /// for as long as anyone cares to look (#53).
+  Future<String> resetScenario() => _run(
         () => _dio.post<Map<String, Object?>>('/__scenario/$scenario/reset'),
-        (_) {},
+        (json) => json['id']! as String,
       );
 
   /// Changes this api's scenario on the backend: the latency every request
   /// starts with, the share of requests that fail at random, and scripted
   /// failures for the next matching requests.
-  Future<void> configureScenario({
+  ///
+  /// Answers the scenario's config as the backend now holds it, raw — the
+  /// echo is the only way to read a config back, there being no `GET`.
+  Future<Map<String, Object?>> configureScenario({
     Duration? latency,
     double? errorRate,
     List<FailNext>? failNext,
@@ -305,7 +313,7 @@ class ShowcaseApi {
               'failNext': failNext.map((entry) => entry.toJson()).toList(),
           },
         ),
-        (_) {},
+        (json) => json,
       );
 
   /// This api's scenario's request log — every request the backend answered,
@@ -313,6 +321,15 @@ class ShowcaseApi {
   Future<List<Map<String, Object?>>> scenarioRequests() => _run(
         () => _dio.get<List<Object?>>('/__scenario/$scenario/requests'),
         (items) => items.cast<Map<String, Object?>>(),
+      );
+
+  /// Empties this api's scenario's request log, and answers how many entries
+  /// went — the Dart twin of the end-to-end suite's
+  /// `Scenario.clearRequests` (`e2e/tests/fixtures.ts`).
+  Future<int> clearScenarioRequests() => _run(
+        () =>
+            _dio.delete<Map<String, Object?>>('/__scenario/$scenario/requests'),
+        (json) => json['cleared']! as int,
       );
 
   // --- plumbing ----------------------------------------------------------

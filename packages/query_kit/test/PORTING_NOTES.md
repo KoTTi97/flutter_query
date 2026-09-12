@@ -3374,3 +3374,96 @@ rename before sending it. The 9 Playwright specs talk to the express server
 only, which this ticket did not touch. Suite counts: task manager 16 → **16 +
 15** (the contract test's fake leg; 29 with a server), showcase 217, core 589,
 binding 123, all green; `dart analyze --fatal-infos` and `dart format` clean.
+
+### C57 — the showcase's five transcriptions, and the routes no case could reach ([#52](https://github.com/KoTTi97/flutter_query/issues/52), [#53](https://github.com/KoTTi97/flutter_query/issues/53))
+
+**The five stay five**, as #52 ruled: `server/server.ts`, `server/routes.ts`,
+`test/fake_backend.dart`, `lib/shared/api.dart` and `e2e/tests/fixtures.ts`
+each write the wire contract out, and collapsing them needs code generation or
+a runtime schema — a package neither published package may require, and a
+worse teaching artefact than a hand-written fake a test *checks*. The single
+source of truth is `test/backend_contract_test.dart`, **by checking rather
+than by generating**, so the work was to make it see everything.
+
+**Re-measured on `6c14062`** (§8's counts are from 2026-09-10 and `dbe4ea6`
+added a screen since): **15** route handlers in `routes.ts` plus **4** control
+routes in `server.ts` — §8's "19 handlers" is the two files together — **19**
+`_Route`s in the fake, and **20** methods on `ShowcaseApi`. C39 added no
+route. The counts were right and still are.
+
+**The enumeration, which is most of this row.** Nineteen routes against
+twenty methods against seventeen cases, and exactly **two routes no case
+reached**:
+
+1. **`DELETE /api/__scenario/:id/requests`** — the named blind spot. On the
+   server, in the fake, used seven times by the end-to-end suite
+   (`Scenario.clearRequests`), and reachable from no `ShowcaseApi` method, so
+   the fake's copy of it was dead code nothing could check. `ShowcaseApi`
+   gained `clearScenarioRequests()`.
+2. **The unknown-`/api`-route 404** — `app.use('/api', …)` behind the route
+   table on the server, the `route == null` branch in the fake. `getJson`
+   could always have reached it; no case did.
+
+Everything else is reached by at least one case. Three *responses* were
+invisible for want of a reader, which is the same blind spot one level down:
+`resetScenario()` and `configureScenario()` both parsed to `void`, so the
+reset route's `{ id }` and the config route's echo — the only way to read a
+config back, there being no `GET` — were unassertable. Both now answer what
+the backend said.
+
+**Four drifts, each reproduced red against the fake before anything moved.**
+In every one the fake was the one lying; `server/` was not touched.
+
+1. **The fault chain stopped at an unknown route.** The fake answered its 404
+   *before* latency, `?fail`, `failNext` and `errorRate`; the server registers
+   its fault middleware ahead of the catch-all, so a scripted failure on a
+   path that does not exist answers the failure. Fixed by moving the fake's
+   `route == null` return behind the chain. (Red: `GET /api/nope` scripted to
+   503 came back 404.)
+2. **`POST /__scenario/:id/config` validated nothing.** The server refuses a
+   negative `latency` and an `errorRate` outside 0–1 with a 400 and a
+   sentence; the fake applied both silently — `errorRate: 2` quietly failing
+   every request is a knob that lies in exactly the direction that wastes an
+   afternoon. Fixed by mirroring both checks (and `failNext`'s shape, which
+   no typed `FailNext` can violate, so that branch is commented as
+   unreachable rather than pretended to be covered).
+3. **`POST /__scenario/:id/reset` answered `{ id: 'fake' }`** — a literal
+   constant where the server echoes `req.params.id`. Fixed by capturing the
+   id from the route pattern.
+4. **`FakeBackend(latency:)` was a knob that did nothing**: the constructor
+   stored it and `reset()` — which the constructor calls — overwrote it with
+   zero. The faithful mirror of the server, whose `reset()` restores its own
+   `DEFAULT_LATENCY`, is `_defaultLatency`; nobody passes the argument today,
+   so nothing observable moved.
+
+A fifth difference is **deliberate and stays**: after a reset the fake's
+latency is 0 and the server's is `DEFAULT_LATENCY` (300 ms). The server's
+default is the demo's shop window — a human wants to see the loading states —
+and the fake's is a fixture. No case may assert their agreement, so every case
+sets the latency it wants in `setUp`, as they already did.
+
+**Seven cases added, 17 → 24.** The two unreached routes; the 404 of every
+route that takes an id (`GET /posts/:id`, its `/comments`, `PATCH` and
+`DELETE /todos/:id` — the class of bug #54 found in the task manager, honest
+here); `PATCH`'s `text` branch with its trimming and its 400; `?fail` below
+400; `failNext`'s exact-path matching, its own `message` and the method as
+half the match; and the config route's echo and its two refusals. The `search`
+case gained a needle with spaces around it. Three of the seven were red
+against the fake as it stood.
+
+**Proven against the real server, not only the fake.** The whole file was run
+locally against a fresh `examples/showcase/server` on 5176 — **48 cases, 24
+per target, green** — which is the `e2e` leg's own step, already in
+`ci.yml`. Negative check: breaking the server's `Todo not found`, its
+`Unknown route …` wording and its `latency:` refusal fails **three** server
+cases and no fake case, so the second target is not vacuous.
+
+**What proves the behaviour did not change.** No screen and no widget test was
+touched: the showcase is **224** passed (200 widget tests unmodified + 24
+contract cases), 24 skipped without a server; `examples/task_manager` 31.
+`lib/` changed only in `api.dart`'s scenario controls — one new method and two
+return types that were `void` — so the 33 end-to-end specs covering every
+screen that calls `configureScenario` or `clearRequests` (`retry`,
+`playground`, `invalidation_and_filters`, `cancellation`, `max_pages`) were
+run against the real backend and are green. `dart analyze --fatal-infos` and
+`dart format` clean.

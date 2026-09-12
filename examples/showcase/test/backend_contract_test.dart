@@ -58,7 +58,46 @@ void main() {
 
       test('search: by title, empty for an empty needle', () async {
         expect((await api.search('review')).map((p) => p.id), <int>[3]);
+        expect((await api.search('  review  ')).map((p) => p.id), <int>[3]);
         expect(await api.search(''), isEmpty);
+        expect(await api.search('   '), isEmpty);
+      });
+
+      test('missing ids: a 404 with a message on every route that takes one',
+          () async {
+        Matcher missing(String what) => throwsA(isA<BackendException>()
+            .having((e) => e.status, 'status', 404)
+            .having((e) => e.message, 'message', what));
+        await expectLater(api.post(999), missing('Post not found'));
+        await expectLater(api.comments(999), missing('Post not found'));
+        await expectLater(
+            api.updateTodo(999, text: 'ghost'), missing('Todo not found'));
+        await expectLater(
+            api.updateTodo(999, done: true), missing('Todo not found'));
+        await expectLater(api.deleteTodo(999), missing('Todo not found'));
+        // The id is checked first, so nothing was written on the way.
+        expect(await api.todos(), hasLength(3));
+      });
+
+      test('todos: a rename, trimmed, and the text the backend refuses',
+          () async {
+        final created = await api.createTodo('  Contract  ');
+        expect(created.text, 'Contract');
+        expect((await api.updateTodo(created.id, text: '  Renamed  ')).text,
+            'Renamed');
+        // `done` was not mentioned, so the rename left it alone — and the
+        // other way round.
+        expect((await api.updateTodo(created.id, done: true)).text, 'Renamed');
+        await expectLater(
+          api.updateTodo(created.id, text: '   '),
+          throwsA(isA<BackendException>()
+              .having((e) => e.status, 'status', 400)
+              .having((e) => e.message, 'message',
+                  'Field "text" is missing or empty')),
+        );
+        final stored = (await api.todos()).last;
+        expect(stored.text, 'Renamed');
+        expect(stored.done, isTrue);
       });
 
       test('todos: create, update, delete, and the validation', () async {
@@ -138,6 +177,45 @@ void main() {
         );
       });
 
+      test('?fail: a status below 400 is a 500 all the same', () async {
+        await expectLater(
+          api.time(fail: 200),
+          throwsA(isA<BackendException>()
+              .having((e) => e.status, 'status', 500)
+              .having((e) => e.message, 'message', 'Requested: 200')),
+        );
+        // The knob refuses ahead of the handler, so the world did not move.
+        expect((await api.time()).serial, 1);
+      });
+
+      test('unknown route: a 404 that names it, and the faults in front of it',
+          () async {
+        await expectLater(
+          api.getJson('/nope'),
+          throwsA(isA<BackendException>()
+              .having((e) => e.status, 'status', 404)
+              .having(
+                  (e) => e.message, 'message', 'Unknown route GET /api/nope')),
+        );
+        // It is logged like any other answered request.
+        expect(
+          (await api.scenarioRequests()).map((entry) =>
+              '${entry['method']} ${entry['path']} ${entry['status']}'),
+          <String>['GET /api/nope 404'],
+        );
+        // And the fault chain runs before it: the middleware that applies
+        // the faults is registered ahead of the handler that answers 404.
+        await api.configureScenario(failNext: const <FailNext>[
+          FailNext(method: 'GET', path: '/api/nope', count: 1, status: 503),
+        ]);
+        await expectLater(
+          api.getJson('/nope'),
+          throwsA(isA<BackendException>()
+              .having((e) => e.status, 'status', 503)
+              .having((e) => e.message, 'message', 'Scripted failure 503')),
+        );
+      });
+
       test('failNext: the next matching requests fail, then it clears',
           () async {
         await api.configureScenario(failNext: const <FailNext>[
@@ -154,6 +232,84 @@ void main() {
         expect(await api.todos(), hasLength(3));
         // Other routes were never affected.
         expect((await api.time()).serial, 1);
+      });
+
+      test('failNext: an exact path, its own message, and the method it names',
+          () async {
+        await api.configureScenario(failNext: const <FailNext>[
+          FailNext(
+              method: 'GET',
+              path: '/api/todo',
+              count: 1,
+              status: 409,
+              message: 'Taken'),
+        ]);
+        // Without a trailing `*` the path is exact, so the near miss is
+        // answered normally and the script is still armed.
+        expect(await api.todos(), hasLength(3));
+        await api.configureScenario(failNext: const <FailNext>[
+          FailNext(
+              method: 'DELETE',
+              path: '/api/ticks',
+              count: 1,
+              status: 409,
+              message: 'Taken'),
+        ]);
+        // The method is the other half of the match.
+        expect(await api.ticks(), isEmpty);
+        await expectLater(
+          api.clearTicks(),
+          throwsA(isA<BackendException>()
+              .having((e) => e.status, 'status', 409)
+              .having((e) => e.message, 'message', 'Taken')),
+        );
+        expect(await api.clearTicks(), 0);
+      });
+
+      test('config: what it echoes back, and what it refuses', () async {
+        final config = await api.configureScenario(
+          latency: Duration.zero,
+          errorRate: 0,
+          failNext: const <FailNext>[
+            FailNext(
+                method: 'get',
+                path: '/api/todos',
+                count: 3,
+                status: 500,
+                message: 'Taken'),
+          ],
+        );
+        expect(config['latency'], 0);
+        expect(config['errorRate'], 0);
+        // The method is upper-cased on the way in; everything else is kept
+        // as it was sent.
+        expect(config['failNext'], <Object?>[
+          <String, Object?>{
+            'method': 'GET',
+            'path': '/api/todos',
+            'count': 3,
+            'status': 500,
+            'message': 'Taken',
+          },
+        ]);
+        await expectLater(
+          api.configureScenario(latency: const Duration(milliseconds: -1)),
+          throwsA(isA<BackendException>()
+              .having((e) => e.status, 'status', 400)
+              .having(
+                  (e) => e.message, 'message', 'latency: milliseconds ≥ 0')),
+        );
+        await expectLater(
+          api.configureScenario(errorRate: 2),
+          throwsA(isA<BackendException>()
+              .having((e) => e.status, 'status', 400)
+              .having((e) => e.message, 'message',
+                  'errorRate: a number between 0 and 1')),
+        );
+        // A refused config changed nothing, and an empty one is a read.
+        final unchanged = await api.configureScenario();
+        expect(unchanged['latency'], 0);
+        expect(unchanged['errorRate'], 0);
       });
 
       test('errorRate: one fails everything, zero nothing', () async {
@@ -173,10 +329,11 @@ void main() {
         expect(stopwatch.elapsedMilliseconds, greaterThanOrEqualTo(280));
       });
 
-      test('reset: back to the seed', () async {
+      test('reset: back to the seed, answering with the id it was given',
+          () async {
         await api.createTodo('Gone after reset');
         await api.increment();
-        await api.resetScenario();
+        expect(await api.resetScenario(), api.scenario);
         expect(await api.todos(), hasLength(3));
         expect(await api.counter(), 0);
       });
@@ -193,6 +350,22 @@ void main() {
         );
         expect((log.last['query']! as Map<String, Object?>)['fail'], '418');
         expect(jsonDecode(jsonEncode(log)), log);
+      });
+
+      test('requests: DELETE empties the log and says how many went', () async {
+        await api.posts();
+        await api.time();
+        expect(await api.scenarioRequests(), hasLength(2));
+        expect(await api.clearScenarioRequests(), 2);
+        expect(await api.scenarioRequests(), isEmpty);
+        expect(await api.clearScenarioRequests(), 0);
+        // Emptying the log is not a reset: the world it was logging is
+        // untouched, and the control routes never entered it.
+        expect((await api.time()).serial, 2);
+        expect(
+          (await api.scenarioRequests()).map((entry) => entry['path']),
+          <String>['/api/time'],
+        );
       });
     });
   }

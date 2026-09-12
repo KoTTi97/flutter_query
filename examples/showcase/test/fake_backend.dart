@@ -72,11 +72,15 @@ class _Reply {
 }
 
 class _Route {
-  const _Route(this.method, this.pattern, this.handler);
+  const _Route(this.method, this.pattern, this.handler, {this.control = false});
 
   final String method;
   final RegExp pattern;
   final _Handler handler;
+
+  /// One of the scenario's own controls, which the server registers *before*
+  /// its fault middleware: never delayed, failed or logged.
+  final bool control;
 }
 
 class _HttpError implements Exception {
@@ -87,12 +91,18 @@ class _HttpError implements Exception {
 }
 
 class FakeBackend implements HttpClientAdapter {
-  FakeBackend({this.latency = Duration.zero}) {
+  FakeBackend({this.latency = Duration.zero}) : _defaultLatency = latency {
     reset();
   }
 
   /// Applied to every request first, like the scenario's `latency`.
   Duration latency;
+
+  /// What [reset] puts [latency] back to — this fake's `DEFAULT_LATENCY`,
+  /// which is zero unless a caller asked for otherwise. The server restores
+  /// its own default the same way, which is why the two differ after a reset
+  /// and why every contract case sets the latency it wants.
+  final Duration _defaultLatency;
 
   /// The share of requests that fail at random, like the scenario's.
   double errorRate = 0;
@@ -145,7 +155,7 @@ class FakeBackend implements HttpClientAdapter {
     counter = 0;
     serial = 0;
     projectCount = seed()['projectCount']! as int;
-    latency = Duration.zero;
+    latency = _defaultLatency;
     errorRate = 0;
     _failNext.clear();
     log.clear();
@@ -237,19 +247,48 @@ class FakeBackend implements HttpClientAdapter {
   // The route table, in `server.ts` order. Control routes first, then the
   // resources; the fault chain in [fetch] skips the control routes.
   late final List<_Route> _routes = <_Route>[
-    _Route('POST', RegExp(r'^/__scenario/[^/]+/reset$'), (_, __) {
+    _Route('POST', RegExp(r'^/__scenario/([^/]+)/reset$'), (match, _) {
       reset();
-      return const _Reply(200, <String, Object?>{'id': 'fake'});
-    }),
-    _Route('POST', RegExp(r'^/__scenario/[^/]+/config$'), (_, options) {
+      // The id the caller named, as `req.params.id` is on the server — not a
+      // constant, or a client that reads it back learns nothing.
+      return _Reply(200, <String, Object?>{'id': match[1]});
+    }, control: true),
+    _Route('POST', RegExp(r'^/__scenario/([^/]+)/config$'), (_, options) {
       final body = _body(options);
-      if (body['latency'] case final int ms) {
-        latency = Duration(milliseconds: ms);
+      // Each knob is validated exactly as the server validates it: a config
+      // the server refuses with a 400 must not be one the fake quietly
+      // applies, or a test that mis-sets a knob passes offline and fails in
+      // the `e2e` leg.
+      if (body.containsKey('latency')) {
+        final ms = body['latency'];
+        if (ms is! num || ms < 0) {
+          throw const _HttpError(400, 'latency: milliseconds ≥ 0');
+        }
+        latency = Duration(milliseconds: ms.round());
       }
-      if (body['errorRate'] case final num rate) {
+      if (body.containsKey('errorRate')) {
+        final rate = body['errorRate'];
+        if (rate is! num || rate < 0 || rate > 1) {
+          throw const _HttpError(400, 'errorRate: a number between 0 and 1');
+        }
         errorRate = rate.toDouble();
       }
-      if (body['failNext'] case final List<Object?> entries) {
+      if (body.containsKey('failNext')) {
+        final entries = body['failNext'];
+        // No `ShowcaseApi` method can send a malformed entry — `FailNext` is
+        // a typed record — so no contract case reaches this branch; it is
+        // here because the alternative is a raw `TypeError` out of the
+        // adapter where the server answers a sentence.
+        if (entries is! List<Object?> ||
+            entries.any((entry) =>
+                entry is! Map<String, Object?> ||
+                entry['method'] is! String ||
+                entry['path'] is! String ||
+                entry['count'] is! int ||
+                entry['status'] is! int)) {
+          throw const _HttpError(400,
+              'failNext: a list of { method, path, count, status, message? }');
+        }
         _failNext.clear();
         for (final entry in entries.cast<Map<String, Object?>>()) {
           failNext(
@@ -262,15 +301,15 @@ class FakeBackend implements HttpClientAdapter {
         }
       }
       return _Reply(200, _config());
-    }),
-    _Route('GET', RegExp(r'^/__scenario/[^/]+/requests$'), (_, __) {
+    }, control: true),
+    _Route('GET', RegExp(r'^/__scenario/([^/]+)/requests$'), (_, __) {
       return _Reply(200, log.map((entry) => entry.toJson()).toList());
-    }),
-    _Route('DELETE', RegExp(r'^/__scenario/[^/]+/requests$'), (_, __) {
+    }, control: true),
+    _Route('DELETE', RegExp(r'^/__scenario/([^/]+)/requests$'), (_, __) {
       final cleared = log.length;
       log.clear();
       return _Reply(200, <String, Object?>{'cleared': cleared});
-    }),
+    }, control: true),
     _Route('GET', RegExp(r'^/posts$'), (_, __) => _Reply(200, posts)),
     _Route('GET', RegExp(r'^/posts/([^/]+)$'),
         (match, _) => _Reply(200, _requirePost(match[1]!))),
@@ -412,8 +451,19 @@ class FakeBackend implements HttpClientAdapter {
     var cancelled = false;
     unawaited(cancelFuture?.then((_) => cancelled = true));
 
+    final route = _routes
+        .where((candidate) =>
+            candidate.method == method && candidate.pattern.hasMatch(path))
+        .firstOrNull;
+    // What skips the log and the fault chain is *being* one of the four
+    // control routes, not merely being spelled like one: the server
+    // registers those four ahead of its fault middleware, and anything else
+    // under `/api` — an unknown `/__scenario/…` path included — goes through
+    // the middleware and is logged by it.
+    final control = route?.control ?? false;
+
     ResponseBody reply(int status, Object? body) {
-      if (!path.startsWith('/__scenario/')) {
+      if (!control) {
         log.add(LogEntry(method, fullPath, query, status));
       }
       return ResponseBody.fromString(
@@ -428,15 +478,7 @@ class FakeBackend implements HttpClientAdapter {
     ResponseBody error(int status, String message) =>
         reply(status, <String, Object?>{'message': message});
 
-    final route = _routes
-        .where((candidate) =>
-            candidate.method == method && candidate.pattern.hasMatch(path))
-        .firstOrNull;
-    if (route == null) {
-      return error(404, 'Unknown route $method $fullPath');
-    }
-
-    if (!path.startsWith('/__scenario/')) {
+    if (!control) {
       final delay = int.tryParse(query['delay'] ?? '') ?? 0;
       final wait = latency + Duration(milliseconds: max(0, delay));
       await _wait(wait);
@@ -462,6 +504,13 @@ class FakeBackend implements HttpClientAdapter {
       if (errorRate > 0 && _random.nextDouble() < errorRate) {
         return error(500, 'Failed at random (errorRate)');
       }
+    }
+
+    // After the fault chain, as on the server: the unknown-route handler is
+    // registered behind the middleware, so a scripted failure or an
+    // `errorRate` answers a path that does not exist before its 404 does.
+    if (route == null) {
+      return error(404, 'Unknown route $method $fullPath');
     }
 
     try {
