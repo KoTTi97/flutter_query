@@ -9,7 +9,7 @@ The [bounded core confidence assessment](docs/research/core-confidence-assessmen
 is complete: 32 additional core sequence cases, 680 VM / 677 browser tests,
 a real-backend consumer flow and a historical negative control. No production
 code changed and no confirmed core blocker remains from this assessment.
-Its next step is integration/CI. The existing real-backend E2E flow supplies
+The added tests run in the normal CI workflow. The real-backend E2E flow supplies
 the planned consumer integration evidence; additional practical use is optional,
 not another acceptance gate. Its limits do not expand the feature contract.
 
@@ -17,10 +17,10 @@ not another acceptance gate. Its limits do not expand the feature contract.
 
 | Phase | State |
 |---|---|
-| **`packages/query_kit/`** — the pure-Dart core | **pre-release ownership repairs validated (ADR-0003), not published.** 648 VM tests / 645 compiled-JavaScript tests; original ported assertions unchanged. Fresh bounded reviewers checked the repaired contracts. See PORTING_NOTES' core-operation-ownership section for the fixes and explicit limits; test counts alone are not a release verdict. |
+| **`packages/query_kit/`** — the pure-Dart core | **pre-release ownership repairs validated (ADR-0003), not published.** 680 VM tests / 677 compiled-JavaScript tests; original ported assertions unchanged. Fresh bounded reviewers checked the repaired contracts. See PORTING_NOTES' core-operation-ownership section for the fixes and explicit limits; test counts alone are not a release verdict. |
 | **`packages/query_kit_flutter/`** — the Flutter binding | **done, nine times reviewed, then restructured by map #49.** 128 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46; deduplicated 2026-09-12, map #49).** 28 screens, 238 widget tests against a dio fake of the backend and 169 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 24 cases against fake and server, and `catalogue_test.dart`, which holds the **five** per-feature artefact sets level. It found two library bugs no ported test could reach |
-| **`examples/task_manager/`** — the acceptance demo, one whole app | **done.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, **15 contract cases** run against its fake and its real server (map #49 — twelve of the fourteen were red against the fake), and 9 Playwright end-to-end tests in a real browser against that server; iOS and web generated |
+| **`examples/task_manager/`** — the acceptance demo, one whole app | **done.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, **15 contract cases** run against its fake and its real server (map #49 — twelve of the fourteen were red against the fake), and 10 Playwright end-to-end tests in a real browser against that server; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its

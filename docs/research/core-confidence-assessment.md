@@ -22,7 +22,8 @@ Fehlerfreiheit oder eine Abnahme des gesamten Flutter-Bindings.
   [acceptance_test.dart](../../examples/task_manager/test/acceptance_test.dart).
 - Zum Abschluss der lokalen Prüfung lagen die neuen Tests und dieses Ergebnis
   als Arbeitsbaumänderungen vor; Commit und Push folgen als Integrationsschritt.
-  Das Manifest beschreibt diesen lokalen Prüfzeitpunkt. Die Dateistände der
+  Das Manifest beschreibt diesen lokalen Prüfzeitpunkt und enthält einen
+  separaten Nachtrag zur CI-Integration. Die Dateistände der
   ausführbaren Nachweise stehen im [Ergebnismanifest](core-confidence-results.json).
 
 ## Abgleich von Vertrag und Assertions
@@ -124,12 +125,38 @@ Nicht belegt sind exhaustive Ablaufabdeckung, Langzeit-/Heap-/Lastverhalten,
 vollständige native Plattform- oder Wasm-Abdeckung und Fehlerfreiheit beliebiger
 Nutzer-Callbacks. Die untere SDK-Linie wurde mit 3.6.2, nicht exakt 3.6.0 geprüft.
 Bestehende Eingabegrenzen wie azyklische Keys und stabile Objektgleichheit gelten
-weiter. Es wurde keine Remote-CI für diese Arbeitsbaumänderungen ausgeführt.
+weiter. Der ursprüngliche lokale Prüfzeitpunkt lag vor der Remote-CI;
+der folgende Integrationsnachtrag dokumentiert den anschließenden Lauf.
 
-Der nächste Schritt ist die Integration dieser Tests mit CI am finalen Commit.
+Die ergänzten Tests laufen im normalen CI-Workflow auf jedem Integrationscommit.
 Der bestehende Real-Backend-E2E-Ablauf erbringt den geplanten Consumer-Nachweis;
 zusätzlicher Praxiseinsatz kann weitere Datenmodelle und längere Nutzung
 ergänzen, ist aber kein weiterer Pflichtschritt dieser Core-Abnahme.
 Veröffentlichung und eine umfassende Abnahme des Flutter-Bindings bleiben
 separate Entscheidungen. Neue konkrete Fehler
 öffnen die betroffene Garantiegruppe erneut, nicht automatisch das ganze Projekt.
+
+
+## Integrationsnachtrag
+
+Die Abnahme wurde als `bac176aa90a3bc3ca860c8893a1050ab2e7c717d`
+committed und nach `main` gepusht. Im
+[ersten CI-Lauf](https://github.com/KoTTi97/flutter_query/actions/runs/34712717614)
+bestanden `gates`, `floors`, `website` und die Showcase-E2E-Suite. Im
+Task-Manager bestanden die neun vorhandenen Browserfälle; der neue Fall
+scheiterte auch im Retry vor dem zweiten Submit: Das Eingabefeld enthielt
+`ail` statt `fail`.
+
+Die lokale Browserdiagnose zeigte nach erneutem DOM-Fokus keine aktive
+Flutter-Eingabeverbindung. Der Test wechselt deshalb per Tab und Shift+Tab
+weg und zurück und wartet über Chromiums Debugger auf den Input-Listener,
+bevor er den zweiten Namen eingibt. Dies ist eine Chromium-spezifische
+Synchronisierung des bestehenden Testtreibers. Produktionscode, fachliche
+Assertions und die Retry-Einstellungen bleiben unverändert.
+
+Der korrigierte Ablauf bestand anschließend einzeln und danach gemeinsam
+mit allen anderen Task-Manager-Fällen: **10 von 10 bestanden, ohne Retry**.
+Die TypeScript-Prüfung bestand ebenfalls. Das Manifest behält den ursprünglichen
+lokalen Snapshot und ergänzt unter `integration_followup` die neue
+Testdatei-Prüfsumme sowie die Nachweise. Der CI-Status des Korrekturcommits
+wird direkt im zugehörigen GitHub-Actions-Lauf geführt.

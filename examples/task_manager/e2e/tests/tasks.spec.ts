@@ -292,8 +292,31 @@ test('shared data stays consistent through rename, rollback and network recovery
 
   await field.click()
   await expect(field).toHaveValue(renamed)
-  await field.press('ControlOrMeta+A')
-  await field.pressSequentially('fail')
+  // After the button click, DOM refocus alone can leave Flutter's input
+  // connection inactive. Traverse away and back with the keyboard, then wait
+  // for its input listener; the retained DOM value does not prove readiness.
+  // This suite runs in Chromium, whose debugger can observe the listener
+  // without changing the app or imposing a machine-dependent sleep.
+  await field.press('Tab')
+  await page.keyboard.press('Shift+Tab')
+  const editing = await page.context().newCDPSession(page)
+  try {
+    await expect.poll(async () => {
+      const { result } = await editing.send('Runtime.evaluate', {
+        expression: `(() => {
+          let element = document.activeElement
+          while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement
+          return getEventListeners(element).input?.length ?? 0
+        })()`,
+        includeCommandLineAPI: true,
+        returnByValue: true,
+      })
+      return result.value
+    }).toBeGreaterThan(0)
+  } finally {
+    await editing.detach()
+  }
+  await field.fill('fail')
   await expect(field).toHaveValue('fail')
   const rejectedWrite = holdWrite(page)
   const rejectedRequest = page.waitForRequest((r) =>

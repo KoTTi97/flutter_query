@@ -159,5 +159,41 @@
     "No independent complete Flutter-binding assessment",
     "No remote CI for these uncommitted additions"
   ],
-  "runner_note": "Canonical commands assume resolved workspace dependencies. Local core runs used the SDK binaries and cached test runners with explicit package_config.json to avoid SDK-manager setup writes. Consumer server was owned by a temporary subprocess and terminated after the run."
+  "runner_note": "Canonical commands assume resolved workspace dependencies. Local core runs used the SDK binaries and cached test runners with explicit package_config.json to avoid SDK-manager setup writes. Consumer server was owned by a temporary subprocess and terminated after the run.",
+  "integration_followup": {
+    "initial_commit": "bac176aa90a3bc3ca860c8893a1050ab2e7c717d",
+    "initial_ci_url": "https://github.com/KoTTi97/flutter_query/actions/runs/34712717614",
+    "initial_ci_passed_jobs": [
+      "gates",
+      "floors",
+      "website",
+      "e2e (showcase)"
+    ],
+    "initial_ci_failure": "New task-manager browser sequence lost the first input character on refocus (ail instead of fail), before the second submit; nine existing cases passed.",
+    "correction": "Keyboard focus traversal and observing the Chromium input listener before the second fill. No production change or weakened assertion.",
+    "file_sha256": {
+      "examples/task_manager/e2e/tests/tasks.spec.ts": "f12f2018ca034063c91cb77943ba168b784b26ebf5e0fb04fc28038a82bc4505"
+    },
+    "checks": [
+      {
+        "name": "task_manager_e2e_all",
+        "status": "passed",
+        "passed_cases": 10,
+        "retries": 0,
+        "canonical_command": "CI=1 ./node_modules/.bin/playwright test --retries=0 --reporter=list",
+        "working_directory": "examples/task_manager/e2e",
+        "local_log": "/tmp/query-confidence-e2e-all-final.log",
+        "log_sha256": "9957cc2e694f45fe04c160cf3bf096fc74034e2efdc1f0611a9a6cc40de22f2d"
+      },
+      {
+        "name": "e2e_types",
+        "status": "passed",
+        "canonical_command": "./node_modules/.bin/tsc --noEmit",
+        "working_directory": "examples/task_manager/e2e",
+        "local_log": "/tmp/query-confidence-e2e-types-ci.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "final_ci_note": "The correction commit is validated by its normal GitHub Actions run; this record precedes that run."
+  }
 }
