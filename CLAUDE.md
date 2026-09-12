@@ -5,6 +5,14 @@ A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
 **behavioural fidelity proven by porting the upstream test suite**, so fidelity
 work is first-class here, not an add-on.
 
+The [bounded core confidence assessment](docs/research/core-confidence-assessment.md)
+is complete: 32 additional core sequence cases, 680 VM / 677 browser tests,
+a real-backend consumer flow and a historical negative control. No production
+code changed and no confirmed core blocker remains from this assessment.
+Its next step is integration/CI. The existing real-backend E2E flow supplies
+the planned consumer integration evidence; additional practical use is optional,
+not another acceptance gate. Its limits do not expand the feature contract.
+
 ## Where the work stands (2026-09-12)
 
 | Phase | State |

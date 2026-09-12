@@ -1,0 +1,163 @@
+{
+  "date": "2026-09-12",
+  "snapshot_phase": "local assessment before commit and CI integration",
+  "base_commit": "aee00c3890744b1c378b4b14a28d0d2eb4af52f8",
+  "upstream_pin": "50680b98c4dc5ac4d97f7762014fa83f09a41d9a",
+  "decision": "accepted_for_limited_practical_use",
+  "production_changes": [],
+  "committed": false,
+  "published": false,
+  "core_runtime_versions": {
+    "primary": "3.10.7",
+    "floor": "3.6.2"
+  },
+  "new_core_cases": 32,
+  "checks": [
+    {
+      "name": "core_vm",
+      "status": "passed",
+      "passed_cases": 680,
+      "canonical_command": "dart test --reporter expanded",
+      "working_directory": "packages/query_kit",
+      "local_log": "/tmp/query-confidence-vm.log",
+      "log_sha256": "491bf9ef02a649622723d461a07f76bcaf2466f00832b1a7d0feff43b2040526"
+    },
+    {
+      "name": "core_floor",
+      "status": "passed",
+      "passed_cases": 680,
+      "canonical_command": "dart test --reporter expanded",
+      "working_directory": "packages/query_kit",
+      "local_log": "/tmp/query-confidence-floor.log",
+      "log_sha256": "e53180296091689c5882ae012cb12a3510b607d1c03260bd9ea150073bd19498"
+    },
+    {
+      "name": "core_chrome",
+      "status": "passed",
+      "passed_cases": 677,
+      "canonical_command": "dart test --platform chrome --reporter expanded",
+      "working_directory": "packages/query_kit",
+      "local_log": "/tmp/query-confidence-chrome.log",
+      "log_sha256": "182e77926d2619de51fb770961d2e8bb4f2ce4bf07ce54819faddd9160782790"
+    },
+    {
+      "name": "consumer",
+      "status": "passed",
+      "passed_cases": 46,
+      "canonical_command": "TASK_MANAGER_SERVER=http://localhost:5177/api flutter test --no-pub --reporter expanded",
+      "working_directory": "examples/task_manager",
+      "local_log": "/tmp/query-confidence-consumer-final.log",
+      "log_sha256": "37af34c1e15ea7e7ccc145c581a6d3dc16ce988c6491aa537b944125548f3cb5"
+    },
+    {
+      "name": "analyzer",
+      "status": "passed",
+      "passed_cases": null,
+      "canonical_command": "dart analyze --fatal-infos packages examples tool",
+      "working_directory": ".",
+      "local_log": "/tmp/query-confidence-analyze-final.log",
+      "log_sha256": "871920e3c50e87af266501b26b27ecff746de8c3ad53d0d7555b624169aac5f8"
+    },
+    {
+      "name": "e2e_types",
+      "status": "passed",
+      "passed_cases": null,
+      "canonical_command": "./node_modules/.bin/tsc --noEmit",
+      "working_directory": "examples/task_manager/e2e",
+      "local_log": "/tmp/query-confidence-e2e-types-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "web_build",
+      "status": "passed",
+      "passed_cases": null,
+      "canonical_command": "flutter build web --no-pub --dart-define=E2E=true",
+      "working_directory": "examples/task_manager",
+      "local_log": "/tmp/query-confidence-web-build.log",
+      "log_sha256": "17bda0f5ed2ce3ed19bef13c22ba368b15c8036ef2eba3a83cea22f06ffadba0"
+    },
+    {
+      "name": "publish_dry_run",
+      "status": "passed",
+      "passed_cases": null,
+      "canonical_command": "flutter pub publish --dry-run",
+      "working_directory": "packages/query_kit",
+      "local_log": "/tmp/query-confidence-publish-dry-run.log",
+      "log_sha256": "a6c237f0073f4ba85d885744b9c9eb0e128379a2486ee7619889c5fadc3d779a"
+    },
+    {
+      "name": "browser_sequence",
+      "status": "passed",
+      "passed_cases": 1,
+      "canonical_command": "CI=1 ./node_modules/.bin/playwright test --grep 'shared data stays consistent' --retries=0 --reporter=list",
+      "working_directory": "examples/task_manager/e2e",
+      "local_log": "/tmp/query-confidence-e2e-keyboard.log",
+      "log_sha256": "14e4bcd590082d70415a3703711c59665592cd129f45b1a03513f4176077ef00"
+    }
+  ],
+  "existing_browser_cases": {
+    "passed": 9,
+    "same_web_build": true,
+    "local_log": "/tmp/query-confidence-e2e.log",
+    "log_sha256": "5b492c4d5c6c68f8574fbd7e56c22d64c04b61682033940a3ffe2af50d11d1aa",
+    "note": "Nine unchanged tests passed; the initial new case failed and was corrected and run separately. No claim of a single green ten-test run."
+  },
+  "negative_control": {
+    "source_commit": "d7ef2d3",
+    "passed": 21,
+    "expected_failed": 11,
+    "local_log": "/tmp/query-confidence-negative.log",
+    "log_sha256": "d8f82d6cc0115c319cee0003018459f0b631456b8f1b2f53aff9c9d12682263d"
+  },
+  "discarded_test_expectation": {
+    "note": "Reset uses silent-cancel successor handoff; corrected draft assertion, no production change.",
+    "local_log": "/tmp/query-confidence-initial.log",
+    "log_sha256": "81f372250074ca3eb4ad7f6e86a501c94de0f686037d4cbc758492d8bc69c280"
+  },
+  "file_sha256": {
+    "packages/query_kit/lib/query_kit.dart": "b23069f449d2a05fc1c196ae0ff219b3388c39453aa62b60af52dfec4e8a9d64",
+    "packages/query_kit/lib/src/cancel_token.dart": "b33eb87bf0c87695dc972167ea3cdf5d898f1238fe2424445d86b78fd100a6c2",
+    "packages/query_kit/lib/src/filters.dart": "6cb95b3cd876d67d6a8ea0296d9153dafd00e7cb0893ff5f6ee9f2ab494a9213",
+    "packages/query_kit/lib/src/focus_manager.dart": "c8943c3a3e8cd8835f85ffa12d75cc8d54450c672863542dad90f55dcb8b8314",
+    "packages/query_kit/lib/src/infinite_query.dart": "4b2f992fa9d06429ddf1ffb6e3b44a3d25aa643f38e98f1fec91c88eb79c51f5",
+    "packages/query_kit/lib/src/infinite_query_observer.dart": "a34f7bd6e0dee0ee7f3655c789725baa629e4b24c05dc33bb037e3861cf2da4d",
+    "packages/query_kit/lib/src/listener_registry.dart": "87693c6222459db6bfec29ec8edab107ca0ab8736651e6f3ac52d426090ea01a",
+    "packages/query_kit/lib/src/mutation.dart": "13320354a60a48f92516cb9babd0eb42a43dabe9b6cde58a778d75143116bf76",
+    "packages/query_kit/lib/src/mutation_cache.dart": "0dfdb0e9f98fcafa28a96b9fe5aef72b9db61b027488196e10469a2cdf250730",
+    "packages/query_kit/lib/src/mutation_observer.dart": "dd55bda8625ac42540b4f0d2946b47c5d3f063df030e4ac5cd1c3b6f7fe30085",
+    "packages/query_kit/lib/src/mutation_options.dart": "d543922b483783100e53da7a62435939af51998947826d0c7e9fba19e700704f",
+    "packages/query_kit/lib/src/mutation_result.dart": "6fd60c73aa07043cd1e0c3300b02da01b7e97343027202a2d974101c31c3379d",
+    "packages/query_kit/lib/src/mutation_state_observer.dart": "5456ca41ff2e7965a69df01d9adfda4927f0d5dbbde53c8888a19d64b049b202",
+    "packages/query_kit/lib/src/notify_manager.dart": "2b233963aa49f11835997db8ead2c5c80d050b9983215f0413289dcdf8f4163a",
+    "packages/query_kit/lib/src/online_manager.dart": "85eadef1c2ad072870906bbda358b14a5e646047d02cca09bf63b82c7ef49b22",
+    "packages/query_kit/lib/src/option_values.dart": "f7afa59018824ca65ea39f0906781c9a812f88405b0cc2964e1d13cfe05230fc",
+    "packages/query_kit/lib/src/queries_observer.dart": "981a1667979b832199a280d463b1a698513b3c6ac4f810227e258a14ed8dce30",
+    "packages/query_kit/lib/src/query.dart": "0d29293a567fec2190a919e7729b9603581e5bd8230e05737fe1efc0a9f1bcd8",
+    "packages/query_kit/lib/src/query_cache.dart": "30ae3d289404a17647a277e60741affa0e309c5e23a73e926c2ec810b3f2fe6f",
+    "packages/query_kit/lib/src/query_client.dart": "b641989504f9bf053234b0cdde8d7d57de11cb3579ce5b3345bf21af48ce6279",
+    "packages/query_kit/lib/src/query_key.dart": "d528da20719cc20afe85583d772a4280a90ac40ddef2f3410b23369ff9c3393d",
+    "packages/query_kit/lib/src/query_observer.dart": "6da590f6d3ccca55ccc1d0a5f7becdd764bc5ba14f9cf3bb03e474b44d94fe06",
+    "packages/query_kit/lib/src/query_options.dart": "b04881b827f50e713616f399bd7d67114128df00ec95be25f0d92bb75f910708",
+    "packages/query_kit/lib/src/query_result.dart": "14c42d02e4c52dd6b1d5701665012a0708d2b59de1c6de859b0512675625b01b",
+    "packages/query_kit/lib/src/query_state.dart": "12c2600d3fe17408fb552ef527123a21b7f635ad7ce266350978889f0e406b22",
+    "packages/query_kit/lib/src/removable.dart": "c91fd48e17375e3e456cd5d0202acdc7fcde1e19786e93507807bb17c97a1f91",
+    "packages/query_kit/lib/src/retryer.dart": "0d841191cfd31c87f4ed40a46104cbb7004978c95ea4b33d7cb45ac0edba2c91",
+    "packages/query_kit/lib/src/structural_sharing.dart": "e46f55671f58434a7f332a1c9cb4b5bb5280326e7b548324759da027149dc4fc",
+    "packages/query_kit/lib/src/subscribable.dart": "59858bd4c4ff2ea432175275768bbd82ad9362180776849a83478dddee591532",
+    "packages/query_kit/lib/src/timers.dart": "af88e9bd1563b1b4e36906b894c9a02944e4d4aafde4790be9dbaa29b1dafb6d",
+    "packages/query_kit/test/confidence_sequences_test.dart": "43d29940e42b4d96cec79b119f6e2e651850920299a67b3b6e72e6a12a848953",
+    "examples/task_manager/test/acceptance_test.dart": "f3fe8fa9ca6e8a6e83d321f11b901716c06472e8e32d083351cedaf63be094eb",
+    "examples/task_manager/e2e/tests/tasks.spec.ts": "a072fdb2db5c3010352e0b4a3cfffa93e5d1ac7e98e1a8f2762ac351b8dff7cf",
+    "examples/task_manager/e2e/tests/backend.ts": "bc6586b0859be6a183b6017ac5287d417d65d1de400cd02a7ee2ad6c6f6a2227",
+    "examples/task_manager/e2e/playwright.config.ts": "f5987e004e5a06e9270cdc4b38ce308349c211a15bd78405580f033c3ec39a72",
+    "packages/query_kit/pubspec.yaml": "07d83ef4a17e0439fc2cb4b11fbf3a3c0d3e7431d28f95d0c6ebcf37895fb9fe",
+    "pubspec.lock": "d607c5244fadab4a0ffd98424382ec167cbc2d263478892b1501bf514d2e59c2"
+  },
+  "limits": [
+    "Not an exhaustive state-space or load/heap test",
+    "No complete native platform/Wasm matrix",
+    "No independent complete Flutter-binding assessment",
+    "No remote CI for these uncommitted additions"
+  ],
+  "runner_note": "Canonical commands assume resolved workspace dependencies. Local core runs used the SDK binaries and cached test runners with explicit package_config.json to avoid SDK-manager setup writes. Consumer server was owned by a temporary subprocess and terminated after the run."
+}

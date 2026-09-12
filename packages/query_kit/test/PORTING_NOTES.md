@@ -1,5 +1,11 @@
 # Porting notes
 
+The bounded confidence assessment after the ownership repairs adds
+`confidence_sequences_test.dart`: 32 public-API sequence cases, bringing the
+suite to 680 VM / 677 browser cases. No production code or existing test
+assertions changed. The scope, historical negative control and consumer
+evidence are in [the assessment](../../../docs/research/core-confidence-assessment.md).
+
 What this file is: the audit trail behind the port's central claim — *upstream's
 behaviour, proven by upstream's own tests*. Every upstream case in a ported
 suite is accounted for here as **ported**, **adapted** (with why), or

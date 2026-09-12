@@ -203,6 +203,30 @@ void main() {
     );
   });
 
+  demoTest('a second rename uses new input and rolls back to the first success',
+      (tester) async {
+    backend.writeLatency = const Duration(milliseconds: 200);
+    await start(tester);
+    await openDetail(tester, 'Draft the changelog');
+    final field = find.byType(TextField).first;
+    await tester.enterText(field, 'Confirmed name');
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+    expect(client.getQueryData<Task>(TaskKeys.detail('1'))!.name,
+        'Confirmed name');
+
+    await tester.enterText(field, 'fail');
+    await tester.tap(find.text('Rename'));
+    await tester.pump();
+    expect(client.getQueryData<Task>(TaskKeys.detail('1'))!.name, 'fail');
+    await tester.pumpAndSettle();
+    expect(find.text('The server refused the write'), findsOneWidget);
+    expect(client.getQueryData<Task>(TaskKeys.detail('1'))!.name,
+        'Confirmed name');
+    expect(tester.widget<TextField>(field).controller!.text, 'Confirmed name');
+    expect(backend.tasks['1']!['name'], 'Confirmed name');
+  });
+
   demoTest('editing again clears a failed rename banner', (tester) async {
     await start(tester);
     await openDetail(tester, 'Draft the changelog');
