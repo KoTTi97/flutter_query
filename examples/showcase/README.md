@@ -62,6 +62,7 @@ when a shared thing nearly fits.
 | `query-collections` | `QueriesBuilder` over a list that grows, shrinks and reorders; duplicate keys; partial failure; the same collection as a `QueriesController` | — |
 | `prefetching` | `client.query(...).ignore()` before the screen that needs it, `revalidateIfStale`, and `client.infiniteQuery(...).ignore()` for the first page of an infinite one | `prefetching` |
 | `select-and-sharing` | `select`, `QuerySelectBuilder`, `buildWhen`, `structuralSharing`, rebuild counts | — |
+| `build-when` | `buildWhen` on all eight keyless reads, each beside an unfiltered twin; a knob for the predicate, and the build counts either half of a pair reaches | — |
 | `initial-and-placeholder` | `InitialData` with `initialDataUpdatedAt` and its lazy `initialDataUpdatedAtCompute`, versus `PlaceholderData`, `isPlaceholderData` | — |
 | `stale-and-gc` | every `StaleTime` and `GcTime` value, watched in the inspector | — |
 | `pagination` | `PlaceholderData.keepPrevious()` keeping the previous page, prefetching the next | `pagination` |

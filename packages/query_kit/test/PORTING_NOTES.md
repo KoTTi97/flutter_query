@@ -3734,3 +3734,88 @@ and `context.mutation` take a `buildWhen`, the predicate `MutationBuilder`
 already took. A mutation has no `select`, so this is the only way a keyless
 mutation reader can ignore a change it does not show — the pending state of a
 run, or a retry's `failureCount`."*
+
+### C39, applied — the catalogue's screen for `buildWhen` ([#68](https://github.com/KoTTi97/flutter_query/issues/68))
+
+C39's rule is one knob or one screen per surviving public member, and
+[#58](https://github.com/KoTTi97/flutter_query/issues/58) (`5af8958`) and
+[#67](https://github.com/KoTTi97/flutter_query/issues/67) (`3a3a1b2`) put
+`buildWhen:` on **eight** keyless reads that had none: `watchQuery`,
+`watchSelectQuery`, `watchInfiniteQuery`, `watchMutation`, `context.query`,
+`context.selectQuery`, `context.infiniteQuery` and `context.mutation`. The
+showcase demonstrated the predicate on a *builder* only.
+
+**A screen, not a card on `select-and-sharing`.** The ticket allowed moving
+that screen's build and observer counts, and none of them moved, because the
+card was the wrong shape three times over. Its subject is `select` and
+`structuralSharing` — what a reader *reads* — and `rebuilds.md` opens by saying
+that is not what `buildWhen` is for, so one screen showing both would blur the
+distinction the page exists to draw. Its one todos entry can carry the two
+select reads and nothing else: an infinite query and a mutation have no home
+there at all, and four of the eight members would still have had none. And
+`test/catalogue_test.dart` ([#66](https://github.com/KoTTi97/flutter_query/issues/66))
+is exactly the guardrail for a 28th feature — the five artefact sets moved
+together and it stayed green, which is the thing it was written to check.
+
+**What landed.** `examples/showcase/lib/features/build_when/` (`build-when`,
+"Filtering rebuilds"), **sixteen readers in eight pairs**: every member read
+twice over one entry, once with the predicate and once without, each half
+counting its own builds. So the predicate's effect is the difference between
+two numbers *on one screen* rather than the same number before and after a
+knob. The knob (`knobButton`'s group `predicate`) chooses what the filtered
+half passes — `data` (`previous.dataOrNull != current.dataOrNull`), `never`
+(`(_, __) => false`) and `always` (`(_, __) => true`) — so the filtered half
+can be frozen and then made its twin again, which is what turns "the predicate
+decides" from plausible into visible. Eight observers on the posts entry, four
+on the screen's own infinite entry, four mutations (one is never shared).
+
+Nothing was added to `lib/shared/`: the screen is `SemanticsGroup` +
+`FactList` + `knobButton` + `Toolbar`/`ActionButton` + `QueryDebugStrip` as
+[#50](https://github.com/KoTTi97/flutter_query/issues/50) and
+[#51](https://github.com/KoTTi97/flutter_query/issues/51) left them, with no
+parameter grown anywhere — which is the first evidence from outside those
+tickets that the two modules are the right shape. The one screen that carries
+a heading beside its facts composes `SemanticsGroup` and `FactList` by hand,
+as `fact_group.dart`'s dartdoc prescribes.
+
+**Measured, and each hand-over broken in turn.** `test/features/build_when_test.dart`,
+seven cases: a first load is two builds for every query-shaped reader and one
+for every mutation reader; an equal refetch is 2 → 4 plain and 2 → 2 filtered;
+`Drop a post` (a cache write, no fetch) reaches all sixteen; `Load next` is
++2 plain and +1 filtered; a mutation run is +2 plain and +1 filtered
+(`idle`→`pending` carries no data, and a mutation has no `select` to filter
+with); `never` freezes the filtered half through two refetches while the plain
+half climbs by two each time, and `always` makes the pair move together; and
+leaving the screen releases all twelve query observers. Disabling
+`ReadSet.readQuery`'s hand-over fails exactly the refetch and knob cases,
+`readInfiniteQuery`'s exactly the `Load next` case, `readMutation`'s exactly
+the mutation case, and mapping `Filter.never` to `accept` fails exactly the
+knob case.
+
+**Two things the proofs needed, both about frames rather than about the
+library.** A notification that reaches the same frame as the one before it is
+**one** rebuild, so the fake backend is given a latency and stepped
+(`tester.pump(slow)`) and the browser suite holds the request
+(`holdRequest`) — otherwise the flip and the landing coalesce and there is
+nothing to filter. And the screen is taller than either default window: the
+widget tests set `tall(tester)` as twenty-five other files do, and the spec
+sets `test.use({ viewport: { width: 1280, height: 2400 } })`, the first in
+that suite — without it the list is lazy and the mutation card is never built.
+The end-to-end assertions are deltas of a counter, asserted as an exact
+`builds=<n>` *text* so they retry into the frame instead of racing it.
+
+**What proves the behaviour did not change:** showcase **231 → 238** widget
+tests and **163 → 169** end-to-end, the existing 163 green against the real
+backend and unmodified; task manager **31**; core **589** and binding **128**
+untouched — no library code was touched at all. `dart analyze --fatal-infos
+packages examples tool` clean, `dart format --set-exit-if-changed …` clean,
+`npm run typecheck` clean in `e2e/`.
+
+**One stale claim corrected on the way.** `select_and_sharing_screen.dart`'s
+header still said `QuerySelectBuilder` "is the only style with a `buildWhen`",
+which #58 and #67 made false and neither caught (their sweep found the same
+sentence on `four_call_styles` and fixed that one). It now says it is the only
+reader *on this screen* that passes a predicate, and points at `build-when`.
+`rebuilds.md`'s "Seeing it" names the new screen as the page's other half; the
+catalogue counts in the root README and `website/docs/project/examples.md` go
+27 → 28.

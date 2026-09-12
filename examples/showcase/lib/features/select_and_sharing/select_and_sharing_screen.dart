@@ -20,8 +20,12 @@
 ///   `data builds` is the honest measure of "did my selection change", and it
 ///   is what the proofs assert on for those readers.
 /// - `QuerySelectBuilder` with `buildWhen: previous.dataOrNull !=
-///   next.dataOrNull` skips both of those rebuilds. It is the only style with
-///   a `buildWhen`, so its `builds` counter is the one that stands still.
+///   next.dataOrNull` skips both of those rebuilds, so its `builds` counter
+///   is the one that stands still. It is the only reader *on this screen*
+///   that passes a predicate, not the only one that could: all four builders
+///   and all eight keyless reads take the same `buildWhen`, and the
+///   `build-when` screen is where each of the eight is shown doing it
+///   (https://github.com/KoTTi97/flutter_query/issues/68).
 /// - `ListenableBuilder` over a `QueryController` rebuilds on every
 ///   notification, with no equality guard at all: the same two rebuilds per
 ///   refetch as the context and mixin readers, and a first load of two

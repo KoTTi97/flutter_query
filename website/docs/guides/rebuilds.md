@@ -172,3 +172,10 @@ The showcase's `select-and-sharing` screen puts a build counter next to each
 reader and lets you refetch with equal or changed data, so the difference
 between "the fetch happened" and "the widget rebuilt" is on screen rather than
 in your head.
+
+Its `build-when` screen is this page's other half: each of the eight keyless
+reads is made twice over one entry — once with a predicate, once without — so
+what the predicate costs and saves is the difference between two counters
+rather than a claim. A knob swaps the predicate for `(_, __) => false` and for
+`(_, __) => true`, which freezes the filtered half and then makes it its twin
+again.

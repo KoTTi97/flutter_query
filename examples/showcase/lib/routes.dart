@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import 'features/auto_refetching/auto_refetching_screen.dart';
 import 'features/basic/basic_screen.dart';
+import 'features/build_when/build_when_screen.dart';
 import 'features/cache_inspector/cache_inspector_screen.dart';
 import 'features/cancellation/cancellation_screen.dart';
 import 'features/default_query_function/default_query_function_screen.dart';
@@ -55,6 +56,7 @@ final List<FeatureEntry> featureEntries = <FeatureEntry>[
   FeatureEntry(queryCollectionsFeature, (_) => const QueryCollectionsScreen()),
   FeatureEntry(prefetchingFeature, (_) => const PrefetchingScreen()),
   FeatureEntry(selectAndSharingFeature, (_) => const SelectAndSharingScreen()),
+  FeatureEntry(buildWhenFeature, (_) => const BuildWhenScreen()),
   FeatureEntry(
       initialAndPlaceholderFeature, (_) => const InitialAndPlaceholderScreen()),
   FeatureEntry(staleAndGcFeature, (_) => const StaleAndGcScreen()),
