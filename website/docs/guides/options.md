@@ -27,9 +27,11 @@ one sealed base (ADR-0001):
 | `QueryObserverOptions<TData>` | one: the query's data | none — the observer reports the query's data |
 | `QuerySelectOptions<TQueryData, TData>` | two: the cache's data and the selection | **required** — it is what anchors `TData` |
 
-Each argument is anchored by a required parameter, so an options literal
-written inline infers its types: from `queryFn` on the plain shape, from
-`queryFn` and `select` on the select shape. A single type with an optional
+When supplied, `queryFn` anchors the raw data type; the required `select`
+anchors the selected type. `queryFn` is optional for cached or defaulted
+queries: without it or an expected type, supply an explicit type argument
+such as `QueryObserverOptions<Task>` to avoid inferring `dynamic`.
+A single type with an optional
 `select` carried `TData` only in that one optional field, and a literal
 without it silently became `Query<dynamic>` in the cache. A `select` that
 keeps the type is still a select and still goes on `QuerySelectOptions`.
@@ -100,8 +102,9 @@ QueryObserverOptions<List<Comment>> commentsQuery(
     );
 ```
 
-A disabled query does not fetch, stays `pending`, and keeps whatever it has
-cached. Upstream's `skipToken` is `Enabled.no`.
+A disabled query does not fetch automatically and keeps its cached or initial
+data. Without data it is `pending`; existing successful data stays successful.
+Explicit `refetch()` can still fetch. Upstream's `skipToken` is `Enabled.no`.
 
 ## Retries
 
@@ -113,6 +116,17 @@ cached. Upstream's `skipToken` is `Enabled.no`.
 | `RetryDelay.exponential()` | the default backoff: 1 s, 2 s, 4 s, … capped |
 | `RetryDelay.fixed(d)` | |
 | `RetryDelay.dynamic((failureCount, error) => …)` | computed per failure |
+
+Retry policy, retry delay and network mode are captured when a fetch or
+mutation run starts. Replacing an option during that run affects a later run;
+a dynamic callback still reads its closed-over application state each time it
+is invoked. A mutation's function is read per attempt, and its completion
+callbacks are read when invoked. Its scope stays fixed through settlement.
+
+An imperative `client.query` without an explicit or default retry policy makes
+one attempt and preserves the cache entry's existing retry policy for later
+refetches. An explicitly configured policy replaces it. Other query options
+follow the last installed options; each observer owns its presentation options.
 
 The computed forms come in three families, named by what they compute:
 `.when(predicate)` decides yes or no (`Enabled`, `RetryPolicy`, `RefetchOn`),
@@ -160,7 +174,7 @@ result, so the UI can say "attempt 2 of 3" without owning a counter. A
 |---|---|
 | `RefetchInterval.off` | |
 | `RefetchInterval.every(d)` | |
-| `RefetchInterval.dynamic((query) => …)` | stop by returning `off` |
+| `RefetchInterval.dynamic((query) => …)` | return a `Duration`, or `null` to stop |
 
 `refetchIntervalInBackground` keeps a poll running while the app is not
 focused; by default it stops.

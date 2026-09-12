@@ -102,6 +102,33 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   TData Function(TQueryData data)? _selectFn;
   TData? _selectResult;
   bool _hasSelectResult = false;
+  TQueryData? _selectInput;
+  bool _hasSelectInput = false;
+  int _resultRevision = 0;
+  int _lifetime = 0;
+  _SelectionSnapshot<TQueryData, TData>? _previewSelection;
+
+  _SelectionSnapshot<TQueryData, TData> _captureSelection() => (
+        error: _selectError,
+        stackTrace: _selectErrorStackTrace,
+        updatedAt: _selectErrorUpdatedAt,
+        select: _selectFn,
+        result: _selectResult,
+        hasResult: _hasSelectResult,
+        input: _selectInput,
+        hasInput: _hasSelectInput,
+      );
+
+  void _restoreSelection(_SelectionSnapshot<TQueryData, TData> snapshot) {
+    _selectError = snapshot.error;
+    _selectErrorStackTrace = snapshot.stackTrace;
+    _selectErrorUpdatedAt = snapshot.updatedAt;
+    _selectFn = snapshot.select;
+    _selectResult = snapshot.result;
+    _hasSelectResult = snapshot.hasResult;
+    _selectInput = snapshot.input;
+    _hasSelectInput = snapshot.hasInput;
+  }
 
   Query<TQueryData>? _lastQueryWithData;
 
@@ -119,6 +146,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   void _onSubscribe() {
     if (_listeners.length == 1) {
+      final lifetime = _lifetime;
       // Re-resolve the query first. The one this observer last watched may
       // have been collected while nobody was listening, and a fresh entry
       // may already stand in its place; upstream only re-resolves on
@@ -126,9 +154,13 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       // rejoin its dead predecessor. A binding that reuses a controller
       // across subscriptions hits exactly that.
       _updateQuery();
+      if (!hasListeners || lifetime != _lifetime) return;
       _currentQuery.addObserver(this);
+      if (!hasListeners || lifetime != _lifetime) return;
 
-      if (_options.shouldFetchOnMount(_currentQuery)) {
+      final fetchOnMount = _options.shouldFetchOnMount(_currentQuery);
+      if (!hasListeners || lifetime != _lifetime) return;
+      if (fetchOnMount) {
         executeFetch();
         // A fetch that joined one already running dispatched nothing, and
         // then nothing recomputed the result — while a binding reads
@@ -144,7 +176,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         updateResult();
       }
 
-      _updateTimers();
+      if (hasListeners && lifetime == _lifetime) _updateTimers();
     }
   }
 
@@ -157,6 +189,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// Stops observing: clears listeners and timers and leaves the query, which
   /// starts its `gcTime` clock.
   void destroy() {
+    _lifetime++;
+    _resultRevision++;
     _listeners.clear();
     _clearStaleTimeout();
     _clearRefetchInterval();
@@ -172,9 +206,15 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     final prevOptions = _options;
     final prevQuery = _currentQuery;
 
-    _options = _client.defaultQueryObserverOptions<TQueryData, TData>(options);
+    final nextOptions =
+        _client.defaultQueryObserverOptions<TQueryData, TData>(options);
+    // Resolve the candidate before committing options, so a rejected key/type
+    // transition leaves the previous observer usable.
+    final nextQuery =
+        _client.queryCache.build<TQueryData>(_client, nextOptions.queryOptions);
+    _options = nextOptions;
 
-    _updateQuery();
+    _updateQuery(nextQuery);
     _currentQuery.setOptions(_options.queryOptions);
 
     if (_options != prevOptions) {
@@ -232,12 +272,21 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     );
     final query =
         _client.queryCache.build<TQueryData>(_client, defaulted.queryOptions);
-    final result = createResult(query, defaulted, optimistic: true);
+    final committedSelection = _captureSelection();
+    final previewSelection = _previewSelection;
+    if (previewSelection != null) _restoreSelection(previewSelection);
+    final QueryResult<TData> result;
+    try {
+      result = createResult(query, defaulted, optimistic: true);
+    } finally {
+      _previewSelection = _captureSelection();
+      _restoreSelection(committedSelection);
+    }
 
     if (result != _currentResult) {
       _currentResult = result;
-      _currentResultOptions = _options;
-      _currentResultState = _currentQuery.state;
+      // The previous committed result retains its own state/options. Selection
+      // memoization separately records the input used by this preview.
     }
     return result;
   }
@@ -299,7 +348,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   bool _shouldScheduleTimer(Duration? timeout) =>
       _options.enabled.resolve(_currentQuery) &&
       timeout != null &&
-      timeout > Duration.zero;
+      timeout > Duration.zero &&
+      hasListeners;
 
   void _updateStaleTimeout() {
     _clearStaleTimeout();
@@ -351,6 +401,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     }
 
     _refetchTimer = Timer.periodic(clampTimerDuration(nextInterval), (_) {
+      if (!hasListeners) return;
       if (_options.refetchIntervalInBackground ||
           _client.focusManager.isFocused()) {
         executeFetch().ignore();
@@ -387,7 +438,6 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   }) {
     final prevResult = _previousResult;
     final prevResultOptions = _currentResultOptions;
-    final prevResultState = _currentResultState;
     final queryChanged = !identical(query, _currentQuery);
     final queryInitialState =
         queryChanged ? query.state : _currentQueryInitialState;
@@ -468,16 +518,16 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         // method but never `identical`, so an `identical` memo re-ran such a
         // `select` on every `setOptions` that changed nothing (ninth review,
         // 2026-09-10, C14). A closure is only ever `==` to itself.
-        if (prevResult != null &&
-            prevResultState != null &&
-            prevResultState.hasData &&
-            candidate == prevResultState.data &&
+        if (_hasSelectInput &&
+            candidate == _selectInput &&
             select == _selectFn) {
           outData = _selectResult;
           hasOutData = _hasSelectResult;
         } else {
           try {
             _selectFn = select;
+            _selectInput = candidate;
+            _hasSelectInput = true;
             // Shared against the last *reported* data, as upstream's
             // `replaceData(prevResult?.data, …)`: a selector that builds a
             // fresh but equal list must not count as a change.
@@ -496,6 +546,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           }
         }
       } else if (select == null && hasCandidate) {
+        _hasSelectInput = false;
         assert(
           candidate is TData,
           'A query observer with no select must have the same data type on '
@@ -506,7 +557,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           // here — through the query's own hook, as upstream's
           // `replaceData(prevResult?.data, placeholderData, options)`.
           final sharing = options.structuralSharing;
-          final previous = prevResult?.dataOrNull as TQueryData?;
+          final previousOutput = prevResult?.dataOrNull;
+          final previous =
+              prevResultOptions?.select == null && previousOutput is TQueryData
+                  ? previousOutput
+                  : null;
           outData = (sharing == null
               ? replaceEqualDeep<TQueryData>(previous, candidate as TQueryData)
               : sharing(previous, candidate as TQueryData)) as TData;
@@ -524,6 +579,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         // happens once `select` is gone.
         _clearSelectError();
       } else if (!hasCandidate) {
+        _hasSelectInput = false;
         // A select error belongs to data that is now gone.
         _clearSelectError();
       }
@@ -640,11 +696,12 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     }
 
     _currentResult = nextResult;
+    _previousResult = nextResult;
     if (!shouldNotify(prevResult, nextResult)) {
       return;
     }
 
-    _previousResult = nextResult;
+    final revision = ++_resultRevision;
 
     _client.notifyManager.batch(() {
       // A listener's throw is the listener's problem, not the query's:
@@ -652,16 +709,21 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       // Reported to the zone, the way the mutation callbacks already are —
       // and a listener an earlier one unsubscribed is not called at all
       // ([ListenerRegistry.notify]).
-      _listeners.notify((listener) => listener(_currentResult));
-      _client.queryCache.notifyObserverResultsUpdated(_currentQuery);
+      _listeners.notify((listener) {
+        if (revision == _resultRevision) listener(nextResult);
+      });
+      if (revision == _resultRevision) {
+        _client.queryCache.notifyObserverResultsUpdated(_currentQuery);
+      }
     });
   }
 
-  void _updateQuery() {
-    final query = _client.queryCache.build<TQueryData>(
-      _client,
-      _options.queryOptions,
-    );
+  void _updateQuery([Query<TQueryData>? resolved]) {
+    final query = resolved ??
+        _client.queryCache.build<TQueryData>(
+          _client,
+          _options.queryOptions,
+        );
 
     final prevQuery = _query;
     if (identical(query, prevQuery)) {
@@ -672,8 +734,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _currentQueryInitialState = query.state;
 
     if (hasListeners) {
+      final lifetime = _lifetime;
       prevQuery?.removeObserver(this);
-      query.addObserver(this);
+      if (hasListeners && lifetime == _lifetime && identical(_query, query)) {
+        query.addObserver(this);
+      }
     }
   }
 
@@ -719,6 +784,17 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   DefaultedQueryOptions<Object?> get observerQueryOptions =>
       _options.queryOptions;
 }
+
+typedef _SelectionSnapshot<TInput, TOutput> = ({
+  Object? error,
+  StackTrace? stackTrace,
+  DateTime? updatedAt,
+  TOutput Function(TInput)? select,
+  TOutput? result,
+  bool hasResult,
+  TInput? input,
+  bool hasInput,
+});
 
 /// The refetch rules, as questions asked of one observer's options about one
 /// query. They were five free functions over `Query<Object?>` at the end of

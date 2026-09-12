@@ -142,6 +142,7 @@ class MutationCache
   final List<Mutation<Object?, Object?, Object?>> _mutations =
       <Mutation<Object?, Object?, Object?>>[];
   int _nextMutationId = 1;
+  final Map<Object, Mutation<Object?, Object?, Object?>> _scopeOwners = {};
 
   /// Every mutation in the cache, in submission order, as a copy: safe to
   /// iterate while removing. Upstream's `getAll`.
@@ -167,20 +168,7 @@ class MutationCache
     DefaultedMutationOptions<TData, TVariables, TOnMutateResult> options, {
     MutationState<TData, TVariables, TOnMutateResult>? state,
   }) {
-    if (state != null &&
-        state.status == MutationStatus.pending &&
-        !state.hasVariables &&
-        null is! TVariables) {
-      throw ArgumentError.value(
-        state,
-        'state',
-        'A MutationState restored through MutationCache.build with status == '
-            'pending must have hasVariables == true when TVariables '
-            '($TVariables) is not nullable: continuing it means running the '
-            'mutation function, and there is nothing to run it with. This is '
-            'the persistence door; check what was persisted',
-      );
-    }
+    state?.validate();
     final mutation = Mutation<TData, TVariables, TOnMutateResult>(
       client: client,
       cache: this,
@@ -204,7 +192,13 @@ class MutationCache
   /// Appends [mutation] to the cache and emits [MutationAdded]. [build] is the
   /// usual way in; this is upstream's `add`, for a mutation constructed by
   /// hand.
+  /// Adding the same instance twice is a no-op. An instance previously
+  /// removed from the cache is terminal and throws [StateError].
   void add(Mutation<Object?, Object?, Object?> mutation) {
+    if (_mutations.contains(mutation)) return;
+    if (mutation.isRemoved) {
+      throw StateError('A removed Mutation cannot be added again.');
+    }
     _mutations.add(mutation);
     notify(MutationAdded(mutation));
   }
@@ -312,16 +306,19 @@ class MutationCache
     if (scope == null) {
       return true;
     }
-    // Upstream's rule exactly: a scoped mutation may run when no mutation in
-    // its scope is pending, or when it is itself the *first* pending one (the
-    // continue case). Stopping at the mutation's own position let one built
-    // earlier start while one built later was already running.
+    final owner = _scopeOwners[scope];
+    if (owner != null) return identical(owner, mutation);
+    // Preserve restored/pending queue order, but reserve the owner before a
+    // pending notification can reenter. Cache insertion order alone can let
+    // an earlier idle entry overtake a transport that already started.
     for (final other in _mutations) {
       if (_scopeOf(other) == scope &&
           other.state.status == MutationStatus.pending) {
-        return identical(other, mutation);
+        if (!identical(other, mutation)) return false;
+        break;
       }
     }
+    _scopeOwners[scope] = mutation;
     return true;
   }
 
@@ -332,6 +329,8 @@ class MutationCache
     if (scope == null) {
       return;
     }
+    if (identical(_scopeOwners[scope], mutation)) _scopeOwners.remove(scope);
+    if (_scopeOwners.containsKey(scope)) return;
     for (final other in _mutations) {
       if (!identical(other, mutation) &&
           _scopeOf(other) == scope &&

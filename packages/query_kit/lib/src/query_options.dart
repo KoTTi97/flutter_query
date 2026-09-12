@@ -88,14 +88,16 @@ typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
 ///
 /// Unset, the port applies `replaceEqualDeep`: data that is deep-equal to the
 /// previous data keeps the previous instance, so an unchanged refetch notifies
-/// nobody. Lists are shared element by element; maps, sets and typed models
-/// are shared whole, by their own `==`. Set this to `(_, next) => next` to
+/// nobody for unchanged data alone. Lists are shared element by element;
+/// maps and sets are compared deeply and shared whole, while typed models
+/// use their own `==`. Set this to `(_, next) => next` to
 /// turn sharing off — upstream's `structuralSharing: false` — or to a function
 /// of your own to reconcile typed models yourself
 /// (https://github.com/KoTTi97/flutter_query/issues/12). The hook governs the
-/// cache write; what `select` and `placeholderData` produce always goes
-/// through `replaceEqualDeep`, because the hook is typed on the cache's data
-/// and a selector's output is another type.
+/// cache write and unselected placeholder data. Selected output goes through
+/// `replaceEqualDeep`, because the hook is typed on the raw data and a
+/// selector's output can be another type. After removing a selector, an
+/// unselected placeholder receives no previous raw value from that selection.
 ///
 /// [previous] is `null` when nothing has been cached yet. With a nullable
 /// `TQueryData` the hook cannot tell that apart from a previous value that

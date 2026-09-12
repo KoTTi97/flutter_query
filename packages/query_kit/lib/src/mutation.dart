@@ -212,6 +212,19 @@ final class MutationContinueAction extends MutationAction {
 /// A mutation's state at one point in time.
 @immutable
 final class MutationState<TData, TVariables, TOnMutateResult> {
+  /// Validates restored variables before a mutation or cache build accepts
+  /// them. Nullable variables may be absent; nonnullable pending ones may not.
+  @internal
+  void validate() {
+    if ((status == MutationStatus.pending &&
+            !hasVariables &&
+            null is! TVariables) ||
+        (hasVariables && variables is! TVariables)) {
+      throw ArgumentError.value(this, 'state',
+          'A pending MutationState must have variables compatible with $TVariables.');
+    }
+  }
+
   /// Creates a state; with no arguments, the idle state a fresh mutation
   /// starts in.
   const MutationState({
@@ -364,6 +377,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   })  : _cache = cache,
         _options = options,
         _state = state ?? MutationState<TData, TVariables, TOnMutateResult>() {
+    _state.validate();
     updateGcTime(options.gcTime);
     scheduleGc();
   }
@@ -379,9 +393,9 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult> _options;
 
-  /// The options in force, fully resolved. The mutation function and the retry
-  /// settings are read from here per attempt, so an update during a run takes
-  /// effect on the next one.
+  /// The options in force, fully resolved. The mutation function is read per
+  /// attempt and callbacks when invoked. Retry, retry delay, network mode and
+  /// scheduling scope are captured for each run; updates apply to later runs.
   DefaultedMutationOptions<TData, TVariables, TOnMutateResult> get options =>
       _options;
 
@@ -536,7 +550,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// being awaited (ninth review, 2026-09-10, C4).
   @internal
   bool get canResume => _retryer != null
-      ? canContinue(_options.networkMode, client.onlineManager)
+      ? canContinue(_retryer!.networkMode, client.onlineManager)
       : canFetch(_options.networkMode, client.onlineManager);
 
   /// Cancels the pending collection, and stops this mutation re-arming one.
@@ -562,9 +576,17 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     // `onError` rollback, writing into the cache `clear()` just emptied
     // (ninth review, 2026-09-10, C11; see `QueryClient.clear`).
     _retryer?.cancelRetry(immediately: true);
+    if (_execution == null && _state.status == MutationStatus.pending) {
+      // A restored queue head has no retryer/finally to release its waiters.
+      _cache.onMutationSettled(_erased);
+    }
   }
 
   bool _removed = false;
+
+  /// Whether the cache permanently removed this entry.
+  @internal
+  bool get isRemoved => _removed;
 
   @override
   void scheduleGc() {
@@ -587,11 +609,18 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// Runs the mutation function once, with everything around it. Completes
   /// after the callbacks have run and the settled state is dispatched.
   Future<TData> execute(TVariables variables) {
-    // `_run` builds the retryer before its first `await`, so by the time it
-    // hands its future back the run is already the current one.
-    final run = _run(variables);
-    _execution = run;
-    return run;
+    final current = _execution;
+    if (current != null) return current;
+    // Install before _run can synchronously publish pending/onMutate events.
+    // Reentrant execution of this instance joins its existing run; separate
+    // mutation calls use separate cache entries.
+    final operation = Completer<TData>();
+    _execution = operation.future;
+    _run(variables).then(operation.complete,
+        onError: (Object error, StackTrace stackTrace) {
+      operation.completeError(error, stackTrace);
+    }).ignore();
+    return operation.future;
   }
 
   Future<TData> _run(TVariables variables) async {
@@ -782,6 +811,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
     client.notifyManager.batch(() {
       for (final observer in List<MutationObserverRef>.of(_observers)) {
+        if (!_observers.contains(observer)) continue;
         observer.onMutationUpdate(action);
       }
       _cache.onMutationStateUpdated(_erased, action);

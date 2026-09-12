@@ -2711,7 +2711,7 @@ suite does not have to go looking:
 |---|---|---|
 | `data === undefined` runtime guard in `Query.fetch` | impossible: `Future<T>` with non-nullable `T` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
 | `hashKey` string identity, `queryKeyHashFn` | `QueryKey` is a value type; the string is a debug view | [#8](https://github.com/KoTTi97/flutter_query/issues/8) |
-| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; the typed hook replaces it for the cache write, and `(_, next) => next` is `false`; `select` and placeholder output always go through `replaceEqualDeep` | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
+| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; the typed hook replaces it for the cache write, and `(_, next) => next` is `false`; selected output goes through `replaceEqualDeep`; unselected placeholders use the raw-data sharing hook | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
 | `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `MutationFunctionContext` (a mutation function's second argument) | not ported: `MutationFn` takes variables only |  [#14](https://github.com/KoTTi97/flutter_query/issues/14) |
@@ -4102,3 +4102,43 @@ watched fail is a guess:
 The check runs inside the existing `doc snippet tests` step in **both**
 `gates` and `floors`, so CI gained no step. 50 fences, 13 pages, 48 marked
 regions in five twin files.
+
+
+## Core operation ownership before first release (2026-09-12)
+
+The review of `15dd9a0`, revalidated against `d7ef2d3`, found gaps between
+otherwise covered actions. [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md)
+records the contracts and upstream comparison. No ported assertion changed;
+59 permanent acceptance tests were added in four `release_*_regressions_test.dart`
+files, including independently discovered transition cases. Baseline 589 VM
+tests becomes 648. Diagnostic probes asserting broken behavior were converted
+to desired-contract assertions before being adopted.
+
+| Findings | Repair and acceptance evidence |
+| --- | --- |
+| R01 query run ownership | QER3/QER8/QER13: cancellation cannot alter successor status, data or signal consumption; third callers deduplicate. Transition cases also revoke writes on reset inside sharing, with and without a successor. |
+| R02 scope serialization | MU1/MU8/MU12: explicit scope owner preserves exclusivity, inverse build/start order, synchronous optimistic callbacks and awaited settled callbacks. Removing a restored unstarted head releases waiters; removing an active owner retains exclusivity until settlement. |
+| R03 mutation invocation ownership | MU2: latest call owns its matching callbacks and sole attachment. Independent transition case proves reset during resubscription stays idle. |
+| R04 result callable ownership | OI02: equal-result replacement refetches the new key. Value equality cannot retain the old action target. |
+| R05 selection provenance | OI01 plus transition cases: optimistic previews use separate selector input/result/error memo; abandoned failing previews do not poison committed placeholders; repeated equal-output previews retain correct input provenance. |
+| R06 reentrant state delivery | OI03/OI06/MU5: nested state changes supersede older deliveries; final listener state agrees with current state. Cache event delivery remains per event. |
+| R07 observer lifetime | OI04 and transition cases: destroy from fetch/attach/detach callbacks cannot rearm polling or attach an observer to an obsolete query; nested switches retain only the final query attachment. |
+| R08 registration identity | OI05/OI16/OI17/QER18 and remove/readd control: each handle and dispatch snapshot tracks its own entry; duplicates and stale handles are independent. |
+| R09 selected placeholder types | OI13: removing a widening selector never casts selected output back to raw data; unselected raw sharing receives only a compatible unselected predecessor. |
+| R10 resume network rule | MU3: resume selection uses the active retryer's captured rule, not subsequently replaced options. |
+| R11 retry teardown | QER1/QER2: reentrant cancel/clear during retry callbacks leaves no delayed timer or post-removal failure action. |
+| R12 restored payload validation | QER9–11/QER14, MU9 and constructor transition test: constructors/build/setState share validation; present null for nonnullable types is rejected before timers/entries; nullable null remains supported. |
+| R13 mutation identity in cache | MU4: duplicate add is idempotent; no destroyed duplicate remains after collection. |
+| R14 lifecycle error isolation | QER7/QER17: throwing refetch policies report their errors without stranding independent paused work. Existing QER12 manager isolation remains green. |
+| V01 retry lifetime | QER16 preserves a nondefault cached retry when imperative retry is omitted; MU6 explicitly pins run-snapshotted mutation retry. ADR-0003 and public docs distinguish live functions/hooks from snapshotted settings. |
+| V02/V03 construction/removal | QER4–6: re-add of removed objects is rejected; reentrant seed writes retain the canonical entry; removal before transport startup prevents detached work. |
+| V04/V05 boundaries | OI07 pins committed infinite paging actions during a preview. Custom collection equality requires explicit sharing; no generic arbitrary-comparator guarantee is claimed. |
+| Optional robustness accepted | OI08 isolates queued notify callbacks; OI14 rejects key/type changes before committing observer options. |
+| D01–D04 documentation | Removed blanket compile-time dynamic-inference guarantee; dynamic polling returns Duration/null; disabled cached queries may remain successful; direct observer subscriptions are synchronous; placeholder-sharing docs match typed behavior. |
+
+Provenance matters: upstream direct execution also reproduces stale query
+settlement and crossed MutationAdded callbacks. The scope inversion exists
+upstream too, while Dart's deliberate synchronous optimistic path exposes the
+ordinary nested observer sequence sooner. Registry identities, result action
+ownership and generic payload validation are Dart obligations. The original
+pin stays `50680b98c`; known upstream defects do not become required behavior.
