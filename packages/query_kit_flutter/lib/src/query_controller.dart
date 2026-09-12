@@ -16,6 +16,7 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:query_kit/query_kit.dart';
 
+import 'controller_lifetime.dart';
 import 'notify_gate.dart';
 
 /// A controller whose readers have to compare more than its `value`.
@@ -108,22 +109,25 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
 
   final QueryObserver<TQueryData, TData> _observer;
   QueryObserverOptionsBase<TQueryData, TData>? _options;
-  void Function()? _unsubscribe;
-  bool _disposed = false;
 
-  /// Set while the first subscription is being made, so a listener added from
-  /// inside that subscription's own notification does not make a second one.
-  bool _subscribing = false;
-
-  /// What the listeners have already seen; see [NotifyGate].
-  final NotifyGate<Object?> _gate = NotifyGate<Object?>.byValue();
+  /// Subscribed while listened to, and never told twice about the same state
+  /// — see [ControllerLifetime] and [NotifyGate].
+  late final ControllerLifetime<Object?> _life = ControllerLifetime<Object?>(
+    gate: NotifyGate<Object?>.byValue(),
+    read: () => observedStateOf(this),
+    subscribe: (deliver) => _observer.subscribe(
+      client.notifyManager.batchCalls<QueryResult<TData>>((_) => deliver()),
+    ),
+    hasListeners: () => hasListeners,
+    notify: notifyListeners,
+  );
 
   /// The observer underneath, for the operations the controller does not
   /// mirror (`refetch`, `currentQuery`).
   QueryObserver<TQueryData, TData> get observer => _observer;
 
   /// Whether [dispose] has run.
-  bool get isDisposed => _disposed;
+  bool get isDisposed => _life.isDisposed;
 
   /// A plain query shows its result and nothing else.
   @override
@@ -139,7 +143,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// every widget style shows on its first build. Once subscribed, the value
   /// is the observer's own, kept current by its notifications.
   @override
-  QueryResult<TData> get value => _unsubscribe == null && !_disposed
+  QueryResult<TData> get value => !_life.isSubscribed && !_life.isDisposed
       ? optimisticValue
       : _observer.currentResult;
 
@@ -171,62 +175,20 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    // `_subscribing` closes the window `_unsubscribe` alone leaves open: the
-    // subscribe below can notify synchronously, a listener called there may
-    // add another one, and that nested call would still see no handle and
-    // subscribe a second time — one of the two handles then overwritten and
-    // lost, leaving an observer attached for good (third review,
-    // 2026-09-10).
-    if (_unsubscribe != null || _disposed || _subscribing) {
-      return;
-    }
-    _subscribing = true;
-    _gate.seed(observedStateOf(this));
-    final void Function() unsubscribe;
-    try {
-      unsubscribe = _observer.subscribe(
-        client.notifyManager.batchCalls<QueryResult<TData>>((_) => _notify()),
-      );
-    } finally {
-      _subscribing = false;
-    }
-    // Subscribing can notify on the spot, and a listener may leave inside its
-    // first notification. The handle is only kept while someone still wants
-    // it; otherwise the observer would stay attached with nobody to tell.
-    if (!hasListeners || _disposed) {
-      unsubscribe();
-    } else {
-      _unsubscribe = unsubscribe;
-    }
+    _life.listenerAdded();
   }
 
   @override
   void removeListener(VoidCallback listener) {
     super.removeListener(listener);
-    if (!hasListeners) {
-      _unsubscribe?.call();
-      _unsubscribe = null;
-    }
-  }
-
-  /// Delivered through the notify manager, so it can land after the frame
-  /// that was building — or after the controller went away. Dropped when it
-  /// carries the state the listeners already have ([NotifyGate]).
-  void _notify() {
-    if (_disposed || !hasListeners || !_gate.moved(observedStateOf(this))) {
-      return;
-    }
-    notifyListeners();
+    _life.listenerRemoved();
   }
 
   @override
   void dispose() {
-    if (_disposed) {
+    if (!_life.dispose()) {
       return;
     }
-    _disposed = true;
-    _unsubscribe?.call();
-    _unsubscribe = null;
     _observer.destroy();
     super.dispose();
   }
@@ -392,16 +354,20 @@ class MutationController<TData, TVariables, TOnMutateResult>
   final QueryClient client;
 
   final MutationObserver<TData, TVariables, TOnMutateResult> _observer;
-  void Function()? _unsubscribe;
-  bool _disposed = false;
 
-  /// See [QueryController] on the same field: one subscription, even when a
-  /// listener added from inside the first notification races it.
-  bool _subscribing = false;
-
-  /// See [QueryController] on the same field, and [NotifyGate].
-  final NotifyGate<MutationResult<TData, TVariables>> _gate =
-      NotifyGate<MutationResult<TData, TVariables>>.byValue();
+  /// See [QueryController] on the same field: one [ControllerLifetime], which
+  /// is where every guard this dance needs lives.
+  late final ControllerLifetime<MutationResult<TData, TVariables>> _life =
+      ControllerLifetime<MutationResult<TData, TVariables>>(
+    gate: NotifyGate<MutationResult<TData, TVariables>>.byValue(),
+    read: () => value,
+    subscribe: (deliver) => _observer.subscribe(
+      client.notifyManager
+          .batchCalls<MutationResult<TData, TVariables>>((_) => deliver()),
+    ),
+    hasListeners: () => hasListeners,
+    notify: notifyListeners,
+  );
 
   /// The observer underneath, for what the controller does not mirror — the
   /// defaulted `options` it runs with, for one.
@@ -409,7 +375,7 @@ class MutationController<TData, TVariables, TOnMutateResult>
       _observer;
 
   /// Whether [dispose] has run.
-  bool get isDisposed => _disposed;
+  bool get isDisposed => _life.isDisposed;
 
   @override
   MutationResult<TData, TVariables> get value => _observer.currentResult;
@@ -445,7 +411,7 @@ class MutationController<TData, TVariables, TOnMutateResult>
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,
   }) {
-    if (_disposed) {
+    if (_life.isDisposed) {
       return client.mutationCache
           .build<TData, TVariables, TOnMutateResult>(client, _observer.options)
           .execute(variables);
@@ -459,54 +425,20 @@ class MutationController<TData, TVariables, TOnMutateResult>
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    // Reentrancy, exactly as in [QueryController.addListener]; see there.
-    if (_unsubscribe != null || _disposed || _subscribing) {
-      return;
-    }
-    _subscribing = true;
-    _gate.seed(value);
-    final void Function() unsubscribe;
-    try {
-      unsubscribe = _observer.subscribe(
-        client.notifyManager
-            .batchCalls<MutationResult<TData, TVariables>>((_) => _notify()),
-      );
-    } finally {
-      _subscribing = false;
-    }
-    if (!hasListeners || _disposed) {
-      unsubscribe();
-    } else {
-      _unsubscribe = unsubscribe;
-    }
+    _life.listenerAdded();
   }
 
   @override
   void removeListener(VoidCallback listener) {
     super.removeListener(listener);
-    if (!hasListeners) {
-      _unsubscribe?.call();
-      _unsubscribe = null;
-    }
-  }
-
-  /// See [QueryController] on the same method: dropped when it carries the
-  /// result the listeners already have ([NotifyGate]).
-  void _notify() {
-    if (_disposed || !hasListeners || !_gate.moved(value)) {
-      return;
-    }
-    notifyListeners();
+    _life.listenerRemoved();
   }
 
   @override
   void dispose() {
-    if (_disposed) {
+    if (!_life.dispose()) {
       return;
     }
-    _disposed = true;
-    _unsubscribe?.call();
-    _unsubscribe = null;
     // Detach whether or not anyone ever listened: `mutateAsync` attaches the
     // observer to its mutation regardless, and a mutation with an observer
     // left behind is never collected.

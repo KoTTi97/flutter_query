@@ -4,6 +4,7 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:query_kit/query_kit.dart';
 
+import 'controller_lifetime.dart';
 import 'notify_gate.dart';
 
 /// Selected mutation values, subscribed only while something listens.
@@ -20,13 +21,26 @@ class MutationStateController<TSelected> extends ChangeNotifier
   /// The client whose mutations are selected.
   final QueryClient client;
   final MutationStateObserver<TSelected> _observer;
-  void Function()? _unsubscribe;
-  bool _disposed = false;
 
-  /// What the listeners have already seen; see [NotifyGate]. Element-wise,
-  /// because the value is a list — though the selection is structurally
-  /// shared, so an unchanged one is usually the *same* list.
-  final NotifyGate<List<TSelected>> _gate = NotifyGate.elementWise<TSelected>();
+  /// Subscribed while listened to, and never told twice about the same
+  /// selection — see [ControllerLifetime]. The gate is element-wise, because
+  /// the value is a list — though the selection is structurally shared, so an
+  /// unchanged one is usually the *same* list.
+  ///
+  /// This controller is the one that had neither the reentrancy guard nor the
+  /// drop-the-handle check; sharing the lifetime is what gave it both, and
+  /// nothing in its behaviour moved, because a `MutationStateObserver` has no
+  /// first notification to re-enter from (C15, and see the notes' C50 row).
+  late final ControllerLifetime<List<TSelected>> _life =
+      ControllerLifetime<List<TSelected>>(
+    gate: NotifyGate.elementWise<TSelected>(),
+    read: () => value,
+    subscribe: (deliver) => _observer.subscribe(
+      (_) => client.notifyManager.schedule(deliver),
+    ),
+    hasListeners: () => hasListeners,
+    notify: notifyListeners,
+  );
 
   @override
   List<TSelected> get value => _observer.currentResult;
@@ -41,35 +55,18 @@ class MutationStateController<TSelected> extends ChangeNotifier
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    if (_unsubscribe != null || _disposed) return;
-    _gate.seed(value);
-    _unsubscribe = _observer.subscribe((_) {
-      client.notifyManager.schedule(_notifyIfMoved);
-    });
-  }
-
-  /// Notifies only if the selection moved — the same guarantee the other
-  /// controllers make. See [NotifyGate].
-  void _notifyIfMoved() {
-    if (_disposed || !hasListeners || !_gate.moved(value)) return;
-    notifyListeners();
+    _life.listenerAdded();
   }
 
   @override
   void removeListener(VoidCallback listener) {
     super.removeListener(listener);
-    if (!hasListeners) {
-      _unsubscribe?.call();
-      _unsubscribe = null;
-    }
+    _life.listenerRemoved();
   }
 
   @override
   void dispose() {
-    if (_disposed) return;
-    _disposed = true;
-    _unsubscribe?.call();
-    _unsubscribe = null;
+    if (!_life.dispose()) return;
     _observer.destroy();
     super.dispose();
   }

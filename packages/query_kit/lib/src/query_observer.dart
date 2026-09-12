@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:clock/clock.dart';
 import 'package:meta/meta.dart';
 
+import 'listener_registry.dart';
 import 'option_values.dart';
 import 'query.dart';
 import 'query_client.dart';
@@ -53,37 +54,26 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   @protected
   QueryClient get client => _client;
 
-  // Observers manage their own listeners instead of extending `Subscribable`:
+  // Observers hold a `ListenerRegistry` instead of extending `Subscribable`:
   // Dart has no declaration-site variance, and `Subscribable<void
   // Function(QueryResult<TData>)>` puts TData in a contravariant position of a
-  // superinterface, which the language forbids. Composition costs a dozen
-  // lines and keeps the listener type exact.
-  final List<QueryObserverListener<TData>> _listeners =
-      <QueryObserverListener<TData>>[];
+  // superinterface, which the language forbids. A field has no such rule, so
+  // composition keeps the listener type exact — and the registry is the same
+  // one `Subscribable` itself holds (C50).
+  final ListenerRegistry<QueryObserverListener<TData>> _listeners =
+      ListenerRegistry<QueryObserverListener<TData>>();
 
   /// Whether anyone is subscribed — upstream's "mounted". Fetch-on-mount, the
   /// stale timer and the polling timer only run while this is true.
-  bool get hasListeners => _listeners.isNotEmpty;
+  bool get hasListeners => _listeners.hasListeners;
 
   /// Registers [listener] and returns the function that removes it again.
   ///
-  /// Each handle removes its own registration, once: called twice it removes
-  /// nothing more, as `Subscribable`'s handles already promised. Unguarded,
-  /// a second call took another registration of the same listener with it
-  /// and ran the last-listener teardown under a subscriber still present
-  /// (ninth review, 2026-09-10, C6).
+  /// Each handle removes its own registration, once — see [ListenerRegistry].
   void Function() subscribe(QueryObserverListener<TData> listener) {
-    _listeners.add(listener);
+    final remove = _listeners.add(listener, onRemoved: _onUnsubscribe);
     _onSubscribe();
-    var removed = false;
-    return () {
-      if (removed) {
-        return;
-      }
-      removed = true;
-      _listeners.remove(listener);
-      _onUnsubscribe();
-    };
+    return remove;
   }
 
   late DefaultedQueryObserverOptions<TQueryData, TData> _options;
@@ -657,16 +647,12 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _previousResult = nextResult;
 
     _client.notifyManager.batch(() {
-      for (final listener in List.of(_listeners)) {
-        // A listener's throw is the listener's problem, not the query's:
-        // reaching `Query.fetch` it would be recorded as the fetch's error.
-        // Reported to the zone, the way the mutation callbacks already are.
-        try {
-          listener(_currentResult);
-        } catch (error, stackTrace) {
-          Zone.current.handleUncaughtError(error, stackTrace);
-        }
-      }
+      // A listener's throw is the listener's problem, not the query's:
+      // reaching `Query.fetch` it would be recorded as the fetch's error.
+      // Reported to the zone, the way the mutation callbacks already are —
+      // and a listener an earlier one unsubscribed is not called at all
+      // ([ListenerRegistry.notify]).
+      _listeners.notify((listener) => listener(_currentResult));
       _client.queryCache.notifyObserverResultsUpdated(_currentQuery);
     });
   }

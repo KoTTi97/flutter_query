@@ -584,6 +584,126 @@ void main() {
     });
   });
 
+  // C50: the four controllers write the same subscribe-while-listened dance,
+  // and only one of its guards — `QueryController`'s drop-the-handle check,
+  // F09 above — was reached by a case. These are the three others that can be
+  // reached at all. The notification has to land while `subscribe` is still
+  // on the stack, so each case installs the scheduler that delivers on the
+  // spot — which is what the provider's own does outside a build — and puts
+  // the controller in the one state whose first notification the gate cannot
+  // predict: an observer that moved on while it was detached.
+  //
+  // `QueriesController` and `MutationStateController` have no such state, so
+  // their copies of these guards are unreachable and there is no case here
+  // for them; see the notes' C50 row.
+  group('C50 the controller guards the suite did not reach', () {
+    testWidgets(
+        'a listener that subscribes another inside its first notification '
+        'leaves one subscription', (tester) async {
+      final client = newClient()
+        ..notifyManager.setScheduler((callback) => callback());
+      final controller = QueryController<int, int>.observing(
+        client,
+        QueryObserver<int, int>(
+          client,
+          QueryObserverOptions(queryKey: key, enabled: Enabled.no),
+        ),
+      );
+      // As F09: attach and let go, then change the data behind the detached
+      // observer, so the next subscribe notifies synchronously.
+      void noop() {}
+      controller
+        ..addListener(noop)
+        ..removeListener(noop);
+      client.setQueryData<int>(key, 5);
+
+      void nested() {}
+      late VoidCallback listener;
+      listener = () => controller.addListener(nested);
+      try {
+        controller.addListener(listener);
+        controller
+          ..removeListener(listener)
+          ..removeListener(nested);
+        // Two subscriptions and one handle kept would leave the observer
+        // attached with nobody listening to the controller.
+        expect(controller.observer.hasListeners, isFalse);
+        expect(client.queryCache.get<int>(key)!.observersCount, 0);
+      } finally {
+        controller.dispose();
+        client.clear();
+        await tester.pump();
+      }
+    });
+
+    testWidgets(
+        'a mutation listener that subscribes another inside its first '
+        'notification leaves one subscription', (tester) async {
+      final client = newClient()
+        ..notifyManager.setScheduler((callback) => callback());
+      final settle = Completer<int>();
+      final controller = MutationController<int, int, void>(
+        client,
+        MutationOptions(mutationFn: (_) => settle.future),
+      );
+      // Let the mutation settle while the observer is detached: the next
+      // subscribe re-attaches, finds a result that moved, and notifies on the
+      // spot.
+      void noop() {}
+      controller.addListener(noop);
+      final run = controller.mutateAsync(1);
+      await tester.pump();
+      controller.removeListener(noop);
+      settle.complete(7);
+      await run;
+
+      void nested() {}
+      late VoidCallback listener;
+      listener = () => controller.addListener(nested);
+      try {
+        controller.addListener(listener);
+        controller
+          ..removeListener(listener)
+          ..removeListener(nested);
+        expect(client.mutationCache.mutations.single.observers, isEmpty);
+      } finally {
+        controller.dispose();
+        client.clear();
+        await tester.pump();
+      }
+    });
+
+    testWidgets(
+        'a mutation listener that leaves inside its first notification '
+        'unsubscribes', (tester) async {
+      final client = newClient()
+        ..notifyManager.setScheduler((callback) => callback());
+      final settle = Completer<int>();
+      final controller = MutationController<int, int, void>(
+        client,
+        MutationOptions(mutationFn: (_) => settle.future),
+      );
+      void noop() {}
+      controller.addListener(noop);
+      final run = controller.mutateAsync(1);
+      await tester.pump();
+      controller.removeListener(noop);
+      settle.complete(7);
+      await run;
+
+      late VoidCallback listener;
+      listener = () => controller.removeListener(listener);
+      try {
+        controller.addListener(listener);
+        expect(client.mutationCache.mutations.single.observers, isEmpty);
+      } finally {
+        controller.dispose();
+        client.clear();
+        await tester.pump();
+      }
+    });
+  });
+
   group('F10 initial lifecycle state', () {
     queryWidgetTest('a provider mounted in a hidden app starts unfocused',
         (tester, client) async {

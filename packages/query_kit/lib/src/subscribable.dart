@@ -3,52 +3,48 @@ library;
 
 import 'package:meta/meta.dart';
 
+import 'listener_registry.dart';
+
 /// A minimal listener registry with hooks for the first and last listener.
 ///
 /// Upstream returns an unsubscribe closure from [subscribe]; so do we, because
 /// the alternative — handing back the listener and asking callers to pass it to
 /// `unsubscribe` — makes anonymous closures unremovable.
+///
+/// The list itself, the once-only handle and the notification loop are
+/// [ListenerRegistry], which the four observers hold as well; this class is
+/// upstream's name for it plus the two hooks (C50,
+/// https://github.com/KoTTi97/flutter_query/issues/59).
 abstract class Subscribable<TListener extends Function> {
-  /// A `List`, where upstream keeps a `Set`.
-  ///
-  /// In JavaScript two functions are never equal, so a `Set` there is only an
-  /// insertion-ordered list that cannot hold the *same* closure twice. In
-  /// Dart a tear-off of one method on one object is `==` to itself, so two
-  /// independent subscribers passing `cache.onEvent` collapsed into a single
-  /// entry — and the first of them to unsubscribe silenced the other. A list
-  /// keeps one entry per `subscribe`, which is what the returned handle
-  /// promises to remove (eighth review, 2026-09-10). The observers already
-  /// kept a list for this reason.
-  final List<TListener> _listeners = <TListener>[];
+  final ListenerRegistry<TListener> _registry = ListenerRegistry<TListener>();
 
-  /// The listeners currently registered, in subscription order. Subclasses
-  /// iterate a copy when notifying, since a listener may unsubscribe mid-loop.
+  /// The listeners currently registered, in subscription order, read-only.
+  /// Subclasses notifying by hand iterate this; [notifyListeners] is the loop
+  /// that skips a listener an earlier one removed.
   @protected
-  List<TListener> get listeners => _listeners;
+  List<TListener> get listeners => _registry.listeners;
 
   /// Whether at least one listener is registered — what tells a manager to keep
   /// its platform event source installed.
-  bool get hasListeners => _listeners.isNotEmpty;
+  bool get hasListeners => _registry.hasListeners;
 
   /// Registers [listener] and returns the function that removes it again.
   ///
   /// Subscribing the same function twice registers it twice; each handle
   /// removes its own registration, and calling one twice removes nothing the
-  /// second time.
+  /// second time. See [ListenerRegistry] for why.
   void Function() subscribe(TListener listener) {
-    _listeners.add(listener);
+    final remove = _registry.add(listener, onRemoved: onUnsubscribe);
     onSubscribe();
-    var removed = false;
-    return () {
-      if (removed) {
-        return;
-      }
-      removed = true;
-      // By identity, so one handle never takes another's registration.
-      _listeners.remove(listener);
-      onUnsubscribe();
-    };
+    return remove;
   }
+
+  /// Calls every listener through [deliver]. See [ListenerRegistry.notify]:
+  /// a listener an earlier one removed is skipped, and a throw is reported to
+  /// the zone rather than escaping into whatever produced the event.
+  @protected
+  void notifyListeners(void Function(TListener listener) deliver) =>
+      _registry.notify(deliver);
 
   /// Called after every [subscribe]. Subclasses use it to install their event
   /// source when the first listener arrives.

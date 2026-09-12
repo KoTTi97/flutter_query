@@ -247,15 +247,8 @@ class MutationCache
   /// reported to the zone and the rest still run. Unisolated, a devtools or
   /// logging subscriber that threw on a `failed` action blew up the retryer's
   /// loop and left the mutation pending forever.
-  void notify(MutationCacheEvent event) {
-    for (final listener in List.of(listeners)) {
-      try {
-        listener(event);
-      } catch (error, stackTrace) {
-        Zone.current.handleUncaughtError(error, stackTrace);
-      }
-    }
-  }
+  void notify(MutationCacheEvent event) =>
+      notifyListeners((listener) => listener(event));
 
   /// Releases every paused mutation that can run right now.
   ///

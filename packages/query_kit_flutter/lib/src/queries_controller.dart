@@ -4,6 +4,7 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:query_kit/query_kit.dart';
 
+import 'controller_lifetime.dart';
 import 'notify_gate.dart';
 
 /// An ordered query-result list, observed only while listeners are attached.
@@ -17,20 +18,27 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
   /// The client all queries in this collection use.
   final QueryClient client;
   final QueriesObserver<TQueryData, TData> _observer;
-  void Function()? _unsubscribe;
-  bool _disposed = false;
-  bool _subscribing = false;
 
-  /// What the listeners have already seen; see [NotifyGate]. Element-wise,
-  /// because [value] is a `List` — identity, not value, equality — while the
+  /// Subscribed while listened to, and never told twice about the same
+  /// results — see [ControllerLifetime]. The gate is element-wise, because
+  /// [value] is a `List` — identity, not value, equality — while the
   /// `QueryResult`s in it carry `==`.
-  final NotifyGate<List<QueryResult<TData>>> _gate =
-      NotifyGate.elementWise<QueryResult<TData>>();
+  late final ControllerLifetime<List<QueryResult<TData>>> _life =
+      ControllerLifetime<List<QueryResult<TData>>>(
+    gate: NotifyGate.elementWise<QueryResult<TData>>(),
+    read: () => value,
+    subscribe: (deliver) => _observer.subscribe(
+      (_) => client.notifyManager.schedule(deliver),
+    ),
+    hasListeners: () => hasListeners,
+    notify: notifyListeners,
+  );
 
   @override
-  List<QueryResult<TData>> get value => !_observer.hasListeners && !_disposed
-      ? _observer.getOptimisticResult()
-      : _observer.currentResult;
+  List<QueryResult<TData>> get value =>
+      !_observer.hasListeners && !_life.isDisposed
+          ? _observer.getOptimisticResult()
+          : _observer.currentResult;
 
   /// The collection's core observer, including its underlying observers.
   QueriesObserver<TQueryData, TData> get observer => _observer;
@@ -42,46 +50,18 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    if (_unsubscribe != null || _disposed || _subscribing) return;
-    _subscribing = true;
-    _gate.seed(value);
-    try {
-      final unsubscribe = _observer.subscribe((_) {
-        client.notifyManager.schedule(_notifyIfMoved);
-      });
-      if (_disposed || !hasListeners) {
-        unsubscribe();
-      } else {
-        _unsubscribe = unsubscribe;
-      }
-    } finally {
-      _subscribing = false;
-    }
-  }
-
-  /// Notifies only if a result in the collection moved — the same guarantee
-  /// the other controllers make, element-wise because the value is a list.
-  /// See [NotifyGate].
-  void _notifyIfMoved() {
-    if (_disposed || !hasListeners || !_gate.moved(value)) return;
-    notifyListeners();
+    _life.listenerAdded();
   }
 
   @override
   void removeListener(VoidCallback listener) {
     super.removeListener(listener);
-    if (!hasListeners) {
-      _unsubscribe?.call();
-      _unsubscribe = null;
-    }
+    _life.listenerRemoved();
   }
 
   @override
   void dispose() {
-    if (_disposed) return;
-    _disposed = true;
-    _unsubscribe?.call();
-    _unsubscribe = null;
+    if (!_life.dispose()) return;
     _observer.destroy();
     super.dispose();
   }

@@ -1,9 +1,8 @@
 /// Cache-wide mutation selection, analogous to upstream's `useMutationState`.
 library;
 
-import 'dart:async';
-
 import 'filters.dart';
+import 'listener_registry.dart';
 import 'mutation.dart';
 import 'query_client.dart';
 import 'structural_sharing.dart';
@@ -32,11 +31,12 @@ class MutationStateObserver<TSelected> {
   MutationFilters _filters;
   MutationStateSelect<TSelected> _select;
   List<TSelected> _result = List<TSelected>.unmodifiable(<TSelected>[]);
-  final List<void Function(List<TSelected>)> _listeners = [];
+  final ListenerRegistry<void Function(List<TSelected>)> _listeners =
+      ListenerRegistry<void Function(List<TSelected>)>();
   void Function()? _unsubscribe;
 
   /// Whether the observer currently follows cache events.
-  bool get hasListeners => _listeners.isNotEmpty;
+  bool get hasListeners => _listeners.hasListeners;
 
   /// The selected values. Reads without listeners refresh from the cache.
   List<TSelected> get currentResult {
@@ -60,17 +60,12 @@ class MutationStateObserver<TSelected> {
       _update(notify: false);
       _unsubscribe = _client.mutationCache.subscribe((_) => _update());
     }
-    _listeners.add(listener);
-    var subscribed = true;
-    return () {
-      if (!subscribed) return;
-      subscribed = false;
-      _listeners.remove(listener);
+    return _listeners.add(listener, onRemoved: () {
       if (!hasListeners) {
         _unsubscribe?.call();
         _unsubscribe = null;
       }
-    };
+    });
   }
 
   void _update({bool notify = true}) {
@@ -81,14 +76,7 @@ class MutationStateObserver<TSelected> {
     _result = List<TSelected>.unmodifiable(shared);
     if (notify) {
       final result = _result;
-      for (final listener in List.of(_listeners)) {
-        if (!_listeners.contains(listener)) continue;
-        try {
-          listener(result);
-        } catch (error, stackTrace) {
-          Zone.current.handleUncaughtError(error, stackTrace);
-        }
-      }
+      _listeners.notify((listener) => listener(result));
     }
   }
 

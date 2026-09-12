@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 
+import 'listener_registry.dart';
 import 'mutation.dart';
 import 'mutation_options.dart';
 import 'mutation_result.dart';
@@ -36,14 +37,15 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
 
   // See the note in QueryObserver: Dart's variance rules stop an observer from
   // extending `Subscribable` with a listener type that mentions its own type
-  // parameters.
-  final List<MutationObserverListener<TData, TVariables>> _listeners =
-      <MutationObserverListener<TData, TVariables>>[];
+  // parameters, so it holds the same registry as a field instead (C50).
+  final ListenerRegistry<MutationObserverListener<TData, TVariables>>
+      _listeners =
+      ListenerRegistry<MutationObserverListener<TData, TVariables>>();
 
   /// Whether anyone is subscribed. Per-call callbacks only run while this is
   /// true — a `mutate` from a widget that has since gone must not call back
   /// into it.
-  bool get hasListeners => _listeners.isNotEmpty;
+  bool get hasListeners => _listeners.hasListeners;
 
   /// Registers [listener] and returns the function that removes it again. The
   /// first listener re-attaches the observer to the mutation it was watching
@@ -51,7 +53,12 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// starts the mutation's `gcTime` clock.
   void Function() subscribe(
       MutationObserverListener<TData, TVariables> listener) {
-    _listeners.add(listener);
+    // Once only, as the query observer's handles — see [ListenerRegistry].
+    final remove = _listeners.add(listener, onRemoved: () {
+      if (!hasListeners) {
+        _currentMutation?.removeObserver(this);
+      }
+    });
     if (_listeners.length == 1) {
       // Re-attaching after an unsubscribe: the mutation may have moved on, or
       // even settled, while nobody was watching.
@@ -61,20 +68,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
         _updateResult(mutation.state);
       }
     }
-    // Once only, as the query observer's handles: a second call removed
-    // another registration of the same listener and detached the observer
-    // under a subscriber still present (ninth review, 2026-09-10, C6).
-    var removed = false;
-    return () {
-      if (removed) {
-        return;
-      }
-      removed = true;
-      _listeners.remove(listener);
-      if (!hasListeners) {
-        _currentMutation?.removeObserver(this);
-      }
-    };
+    return remove;
   }
 
   late DefaultedMutationOptions<TData, TVariables, TOnMutateResult> _options;
@@ -209,15 +203,8 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// reported to the zone, and the rest still run. Unisolated, a listener
   /// throwing on a `failed` action escaped into the retryer's loop, and one
   /// throwing on `success` turned the success into the error path.
-  void _notifyListeners() {
-    for (final listener in List.of(_listeners)) {
-      try {
-        listener(_currentResult);
-      } catch (error, stackTrace) {
-        Zone.current.handleUncaughtError(error, stackTrace);
-      }
-    }
-  }
+  void _notifyListeners() =>
+      _listeners.notify((listener) => listener(_currentResult));
 
   void _notifyCallCallbacks(
     MutationAction action,

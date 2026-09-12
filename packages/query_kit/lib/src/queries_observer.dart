@@ -1,9 +1,9 @@
 /// Homogeneous adaptation of upstream `queriesObserver.ts` at `50680b98c`.
 library;
 
-import 'dart:async';
 import 'dart:collection';
 
+import 'listener_registry.dart';
 import 'query_client.dart';
 import 'query_key.dart';
 import 'query_observer.dart';
@@ -27,12 +27,13 @@ class QueriesObserver<TQueryData, TData> {
   final Map<QueryObserver<TQueryData, TData>, void Function()> _subscriptions =
       Map.identity();
   final Set<QueryObserver<TQueryData, TData>> _subscribing = Set.identity();
-  final List<void Function(List<QueryResult<TData>>)> _listeners = [];
+  final ListenerRegistry<void Function(List<QueryResult<TData>>)> _listeners =
+      ListenerRegistry<void Function(List<QueryResult<TData>>)>();
   List<QueryResult<TData>> _result = List.unmodifiable(<QueryResult<TData>>[]);
   int _updating = 0;
 
   /// Whether this collection has active subscribers.
-  bool get hasListeners => _listeners.isNotEmpty;
+  bool get hasListeners => _listeners.hasListeners;
 
   /// The latest result for each query, in input order.
   List<QueryResult<TData>> get currentResult => _result;
@@ -50,20 +51,16 @@ class QueriesObserver<TQueryData, TData> {
 
   /// Registers a listener and starts each enabled query independently.
   void Function() subscribe(void Function(List<QueryResult<TData>>) listener) {
-    _listeners.add(listener);
+    final remove = _listeners.add(listener, onRemoved: () {
+      if (!hasListeners) _detach();
+    });
     if (_listeners.length == 1) {
       for (final observer in List.of(_observers)) {
         _subscribeObserver(observer);
       }
       _collect();
     }
-    var subscribed = true;
-    return () {
-      if (!subscribed) return;
-      subscribed = false;
-      _listeners.remove(listener);
-      if (!hasListeners) _detach();
-    };
+    return remove;
   }
 
   void _subscribeObserver(QueryObserver<TQueryData, TData> observer) {
@@ -158,14 +155,7 @@ class QueriesObserver<TQueryData, TData> {
     }
     _result = List.unmodifiable(next);
     final result = _result;
-    for (final listener in List.of(_listeners)) {
-      if (!_listeners.contains(listener)) continue;
-      try {
-        listener(result);
-      } catch (error, stackTrace) {
-        Zone.current.handleUncaughtError(error, stackTrace);
-      }
-    }
+    _listeners.notify((listener) => listener(result));
   }
 
   void _detach() {

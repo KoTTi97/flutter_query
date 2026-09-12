@@ -2673,6 +2673,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | `isRefetching`/`isRefetchError` corrected for page fetches on the infinite *result* | on `InfiniteQueryObserver` / `InfiniteQueryController`, next to the other paging flags | third review, 2026-09-09 |
 | `{ pages, pageParams }` is walked by `replaceEqualDeep` as a plain object | `InfiniteData` is special-cased: each list shared on its own, the whole kept when both are | fourth review, 2026-09-09 |
 | a cache listener that throws during a dispatch escapes into the retryer, and the fetch never settles | cache and mutation-observer listeners are isolated and reported to the zone; a throw reaching a retryer hook is the fetch's error | fourth review, 2026-09-09 |
+| a focus or online listener that throws escapes into whatever raised the event (the app lifecycle observer, a connectivity stream) | isolated and reported to the zone, like every other listener: all eight notification loops are now `ListenerRegistry.notify` | ninth review, 2026-09-10 (C50) |
 | `onSubscribe` leaves the result stale after joining a running fetch (the React adapter re-reads) | refreshed on subscribe when the query's state moved on | fourth review, 2026-09-09 |
 | a standing `select` error is stamped `Date.now()` on every result | stamped once, when the selector threw | fourth review, 2026-09-09 |
 | `MutationResult.context` (what `onMutate` returned) | not on `MutationResult`: the rollback handle goes to `onError`/`onSettled`, and a third type parameter on the sealed result would tax every `switch` for it | A2, fourth review 2026-09-09 |
@@ -3091,3 +3092,110 @@ most visibly, a `ValueListenableBuilder` over a controller no longer rebuilds
 for the fetch its own subscription starts. A listener that relied on being
 called per observer event rather than per change should read `fetchStatus`,
 which is inside the equality."*
+
+### C50 — one listener registry, and one controller lifetime ([#59](https://github.com/KoTTi97/flutter_query/issues/59))
+
+**Naming the six, which §8 did not.** There are **five** hand-written listener
+registries, all in the core — `Subscribable` (which `QueryCache`,
+`MutationCache`, `OnlineManager` and `AppFocusManager` extend), `QueryObserver`,
+`MutationObserver`, `QueriesObserver`, `MutationStateObserver` — and **four**
+hand-written *controller lifetimes* in the binding: `QueryController`,
+`MutationController`, `QueriesController`, `MutationStateController`. The four
+are not registries at all: `ChangeNotifier` keeps their listener list. What
+they duplicate is the dance around it — subscribe on the first listener,
+unsubscribe on the last, drop the handle if the first notification left,
+seed the gate before subscribing. §8's "6×" is the two groups added together
+and one short; they are **two different shapes and they got two modules**.
+
+**The two gaps §8 named are both already closed, and neither by this ticket.**
+Measured at the review's own commit `f6a9ddd`: the two registries missing the
+once-only unsubscribe handle were `QueryObserver` and `MutationObserver`, and
+**C6 (`57b4aae`) fixed both** — by copying `Subscribable`'s `removed` flag into
+each, which is precisely the argument for this module: the base class already
+had the guard and the fix could not reach the copies. The one place missing a
+reentrancy guard is `MutationStateController`, which lacked *both* the
+`_subscribing` flag and the drop-the-handle check the other three controllers
+have — and, as C15 found, it is **unreachable**: `MutationStateObserver.subscribe`
+delivers no first notification (it calls `_update(notify: false)` and subscribes
+to a cache whose `onSubscribe` is a no-op), so nothing can re-enter. It has both
+guards now because it shares the lifetime, and nothing in its behaviour moved.
+
+**One gap §8 did not name, and it was reachable.** Six of the eight
+notification loops — both observers, both caches, both managers — iterated a
+copy of the listener list and then called *every* listener in it, including one
+an earlier listener had just unsubscribed. Upstream's `Set.forEach` skips it;
+`QueriesObserver` and `MutationStateObserver` restored that with a
+`contains` check and the other six did not. The shared loop has it, and two
+cases in `port_specifics_test.dart` pin it — "an observer listener unsubscribed
+by an earlier one is not called" and its cache twin, both verified red against
+the loop without the check.
+
+**Is `Subscribable` the wrong base for a controller? The question does not
+arise, and the one it replaces is decided by the language.** The four observers
+cannot extend `Subscribable` at all: `Subscribable<void
+Function(QueryResult<TData>)>` puts `TData` in a contravariant position of a
+superinterface, which Dart forbids outright (no declaration-site variance). A
+*field* has no such rule. So the registry moved out of `Subscribable` into
+`ListenerRegistry`, which `Subscribable` now holds and the four observers hold
+too — upstream's class keeps its name, its interface and its ported suite, and
+gains one protected member (`notifyListeners`, the shared loop).
+
+**What moved.**
+
+- `packages/query_kit/lib/src/listener_registry.dart` — `ListenerRegistry<TListener>`
+  (not exported): the list, `length`/`hasListeners`, `add` returning the
+  once-only handle with an `onRemoved` hook, `notify`, `clear`. Four facts live
+  in it and nowhere else: a `List` rather than a `Set`, a handle that removes
+  its own registration once, a listener removed mid-notification that is not
+  called, and a listener's throw reported to the zone. What the *first* and
+  *last* listener mean stays at the call site, because it differs in all five
+  holders.
+- `packages/query_kit_flutter/lib/src/controller_lifetime.dart` —
+  `ControllerLifetime<S>` (not exported): `listenerAdded`, `listenerRemoved`,
+  `dispose`, plus `isSubscribed`/`isDisposed` for the optimistic-value read.
+  It **composes** `NotifyGate` rather than replacing it — the gate is seeded
+  inside `listenerAdded`, before the subscription that provokes the first
+  notification, which is the one place that seeding is correct. Composition,
+  not a mixin or a base class, for `NotifyGate`'s own reason plus one more:
+  `hasListeners` and `notifyListeners` are `@protected` on `ChangeNotifier`, so
+  they reach a collaborator only as tear-offs made inside the controller.
+
+`QueryController.addListener`/`removeListener`/`_notify`/`dispose` and
+`MutationController`'s were byte-for-byte identical bar the `batchCalls` type
+argument, the `_gate.seed` argument and their comments — 33 code lines each.
+All four controllers are now three one-line overrides and one field. Library
+code: **+157 / −321** over eleven files, the two new modules included.
+
+**Coverage, probed before anything moved.** The six guards across the four
+controllers were broken one at a time against the 115-test binding suite: only
+`QueryController`'s drop-the-handle check failed anything (F09). Of the five
+uncovered, **three are reachable** and got a case each in
+`review_regressions_test.dart` (group "C50 the controller guards the suite did
+not reach"), every one verified red against exactly the guard it names:
+`QueryController`'s reentrancy guard, and `MutationController`'s reentrancy
+guard and drop-the-handle check. **Two are not reachable**, and that is the
+finding rather than a missing test: since C49 the gate is seeded with what a
+listener arriving now would read, so the only notification that can land while
+`subscribe` is on the stack — the first one — is exactly the one the gate
+drops. A controller escapes that only when its pre-subscribe read is *stale*:
+`QueryController.observing` (no options, so no optimistic read) and
+`MutationController` (whose observer detaches from a mutation that then settles
+unwatched). `QueriesController` always reads optimistically, and every fixture
+built for it was dropped by its own gate — the intermediate list the collection
+reports while its second observer is still unsubscribed is coalesced by the
+notify manager's queue and arrives already caught up. `MutationStateController`
+has no first notification at all (C15).
+
+**One decided divergence, in the table above.** `OnlineManager.setOnline` and
+`AppFocusManager.onFocus` did not isolate a throwing listener — upstream does
+not either — while the caches and observers have since the fourth review. On
+the shared loop they now do, for the same reason that decided the caches: a
+throwing subscriber otherwise escapes into whatever raised the event, here the
+app lifecycle observer or a connectivity stream.
+
+**What proves the behaviour did not change.** The core's ported suites,
+unrewritten — `subscribable_test.dart`'s 9 upstream cases plus its two
+port-only ones pass byte-for-byte against the delegating `Subscribable`. Core
+**587 → 589** (the two skip-removed regressions), binding **115 → 118** (the
+three reachable guards), showcase 217, task manager 16, doc snippets 2, all
+green; `dart analyze --fatal-infos` and `dart format` clean.

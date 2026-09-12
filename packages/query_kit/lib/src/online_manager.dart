@@ -55,9 +55,7 @@ class OnlineManager extends Subscribable<void Function(bool online)> {
     final changed = _online != online;
     if (changed) {
       _online = online;
-      for (final listener in List.of(listeners)) {
-        listener(online);
-      }
+      notifyListeners((listener) => listener(online));
     }
   }
 }

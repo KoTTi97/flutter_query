@@ -104,8 +104,6 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   void onFocus({bool refetchQueries = true}) {
     _shouldRefetchOnFocus = refetchQueries;
     final focused = isFocused();
-    for (final listener in List.of(listeners)) {
-      listener(focused);
-    }
+    notifyListeners((listener) => listener(focused));
   }
 }

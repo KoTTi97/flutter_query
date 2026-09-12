@@ -2953,6 +2953,54 @@ void ninthReview() {
     foreign.clear();
     client.clear();
   });
+
+  // C50: every listener list in the core is now one `ListenerRegistry`, and
+  // its loop skips a listener an earlier one removed — which is what
+  // upstream's `Set.forEach` does and what six of the eight hand-written
+  // loops did not.
+  testFakeAsync(
+      'an observer listener unsubscribed by an earlier one is not '
+      'called', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    client.setQueryData<int>(key, 1);
+    final observer = QueryObserver<int, int>(
+      client,
+      QueryObserverOptions<int>(queryKey: key, enabled: Enabled.no),
+    );
+    late void Function() removeSecond;
+    final seenBySecond = <int?>[];
+    final removeFirst = observer.subscribe((_) => removeSecond());
+    removeSecond = observer.subscribe((result) {
+      seenBySecond.add(result.dataOrNull);
+    });
+
+    client.setQueryData<int>(key, 2);
+    await time.advance(Duration.zero);
+
+    expect(seenBySecond, isEmpty,
+        reason: 'the first listener unsubscribed it before it was reached');
+    removeFirst();
+    observer.destroy();
+    client.clear();
+  });
+
+  testFakeAsync('a cache listener unsubscribed by an earlier one is not called',
+      (time) async {
+    final client = testClient();
+    final key = queryKey();
+    late void Function() removeSecond;
+    final seenBySecond = <QueryCacheEvent>[];
+    final removeFirst = client.queryCache.subscribe((_) => removeSecond());
+    removeSecond = client.queryCache.subscribe(seenBySecond.add);
+
+    client.setQueryData<int>(key, 1);
+    await time.advance(Duration.zero);
+
+    expect(seenBySecond, isEmpty);
+    removeFirst();
+    client.clear();
+  });
 }
 
 /// The eight members [Query] asks of an observer, answered with the quietest

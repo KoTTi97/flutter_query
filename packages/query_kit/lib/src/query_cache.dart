@@ -1,8 +1,6 @@
 /// Port of `query-core/src/queryCache.ts` at upstream `50680b98c`.
 library;
 
-import 'dart:async';
-
 import 'package:meta/meta.dart';
 
 import 'filters.dart';
@@ -296,15 +294,8 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// reported to the zone and the rest still run. Unisolated, a devtools or
   /// logging subscriber that threw on a `failed` action blew up the retryer's
   /// loop and left the fetch pending forever (fourth review, 2026-09-09).
-  void notify(QueryCacheEvent event) {
-    for (final listener in List.of(listeners)) {
-      try {
-        listener(event);
-      } catch (error, stackTrace) {
-        Zone.current.handleUncaughtError(error, stackTrace);
-      }
-    }
-  }
+  void notify(QueryCacheEvent event) =>
+      notifyListeners((listener) => listener(event));
 
   /// Emits [QueryObserverAdded]. Called by [Query.addObserver] through
   /// [QueryCacheRef]; not for user code.
