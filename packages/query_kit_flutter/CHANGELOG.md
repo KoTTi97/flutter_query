@@ -52,8 +52,9 @@ cache-wide mutation state.
   `detached` are not, and `inactive` is read per platform — focused on iOS,
   Android and Fuchsia, unfocused on macOS, Windows and Linux. `isAppShown`
   overrides the mapping, and a changed one applies without a remount.
-- Connectivity is opt-in: `onlineStatus` takes any `Stream<bool>`, and
-  `initialOnlineStatus` says what a stream cannot before its first event.
+- Connectivity is opt-in: `onlineStatus` takes one `OnlineStatus` —
+  `OnlineStatus.fixed(online)`, or `OnlineStatus.stream(changes, initial: …)`
+  where `initial` says what a stream cannot before its first event.
   Nothing is installed by default.
 - A result that arrives inside a build is delivered after the frame; outside
   one, at once.

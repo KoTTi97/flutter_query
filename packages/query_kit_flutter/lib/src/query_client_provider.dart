@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:query_kit/query_kit.dart';
 
+import 'online_status.dart';
 import 'query_context.dart';
 
 /// Provides a [QueryClient] to the widgets below it, and wires the client to
@@ -35,10 +36,11 @@ import 'query_context.dart';
 ///    installation is counted per manager, so providers whose lifetimes
 ///    overlap without nesting (siblings, or an old and a new one for a frame)
 ///    cannot uninstall each other's.
-/// 3. **Connectivity, only if you bring it.** Pass [onlineStatus] and the
-///    client follows it. Nothing is installed by default and no connectivity
-///    package is a dependency — see the README for the `connectivity_plus`
-///    snippet.
+/// 3. **Connectivity, only if you bring it.** Pass [onlineStatus] — an
+///    [OnlineStatus.fixed] value, or an [OnlineStatus.stream] with the
+///    assumption to start from — and the client follows it. Nothing is
+///    installed by default and no connectivity package is a dependency — see
+///    the README for the `connectivity_plus` snippet.
 class QueryClientProvider extends StatefulWidget {
   /// Creates and owns a client for this widget's lifetime. Rebuilding with a
   /// different [create] callback keeps the client; change [key] to replace it.
@@ -47,8 +49,7 @@ class QueryClientProvider extends StatefulWidget {
     Key? key,
     required QueryClient Function() create,
     required Widget child,
-    Stream<bool>? onlineStatus,
-    bool? initialOnlineStatus,
+    OnlineStatus? onlineStatus,
     bool observeAppLifecycle = true,
     bool Function(AppLifecycleState state)? isAppShown,
   }) =>
@@ -56,7 +57,6 @@ class QueryClientProvider extends StatefulWidget {
         key: key,
         create: create,
         onlineStatus: onlineStatus,
-        initialOnlineStatus: initialOnlineStatus,
         isAppShown: isAppShown,
         observeAppLifecycle: observeAppLifecycle,
         child: child,
@@ -70,7 +70,6 @@ class QueryClientProvider extends StatefulWidget {
     required this.client,
     required this.child,
     this.onlineStatus,
-    this.initialOnlineStatus,
     this.observeAppLifecycle = true,
     this.isAppShown,
   });
@@ -85,22 +84,34 @@ class QueryClientProvider extends StatefulWidget {
   /// them.
   final Widget child;
 
-  /// Optional connectivity signal. `true` means "assume the network is
-  /// reachable".
-  final Stream<bool>? onlineStatus;
-
-  /// What to assume until [onlineStatus] says otherwise.
+  /// Optional connectivity, as one value: [OnlineStatus.fixed] for a client
+  /// with no source of its own, [OnlineStatus.stream] for one that follows a
+  /// stream from a stated starting assumption. `true` means "assume the
+  /// network is reachable".
   ///
-  /// A `Stream` has no current value, so a provider that only listens starts
-  /// out believing the default — online — however long the first event takes.
-  /// An app launched in airplane mode then fetches once against a network
-  /// that is not there. Most connectivity packages answer that question
-  /// directly (`connectivity_plus`'s `checkConnectivity()`); pass the answer
-  /// here and the client starts from it. `null` keeps the client's own
-  /// starting value (third review, 2026-09-10).
-  final bool? initialOnlineStatus;
+  /// `null` brings nothing and the client keeps its own default, which is
+  /// online. [OnlineStatus.initial] is applied whenever a client is given
+  /// this status: at mount, to a client that arrives on a later build, and on
+  /// any later build that changes the status — with one exception, one stream
+  /// swapped for another, where the client already has a verdict from a live
+  /// source and rewinding it to `initial` would flicker for anyone building
+  /// their stream in `build`. That is also why a [OnlineStatus.fixed] works
+  /// as a live switch: having no stream, applying it is the only way it can
+  /// reach the client (third review, 2026-09-10; reshaped from the
+  /// `Stream` + `initialOnlineStatus` pair by
+  /// https://github.com/KoTTi97/flutter_query/issues/60).
+  final OnlineStatus? onlineStatus;
 
   /// Whether to map the app's lifecycle onto the client's focus state.
+  ///
+  /// Turn it **off** when you install a focus source of your own with
+  /// `client.focusManager.setEventListener(...)`. The two are alternatives,
+  /// not layers: both write through `setFocused`, so with both installed the
+  /// last writer wins and neither can see the other's verdict. The lifecycle
+  /// listener is this binding's equivalent of the browser listener upstream
+  /// installs by default, and `setEventListener` is the seam for a focus
+  /// source that is not the app lifecycle
+  /// (https://github.com/KoTTi97/flutter_query/issues/60).
   final bool observeAppLifecycle;
 
   /// Which [AppLifecycleState]s count as "the user is looking at the app",
@@ -159,15 +170,13 @@ class _OwnedQueryClientProvider extends StatefulWidget {
     required this.create,
     required this.child,
     required this.onlineStatus,
-    required this.initialOnlineStatus,
     required this.observeAppLifecycle,
     required this.isAppShown,
   });
 
   final QueryClient Function() create;
   final Widget child;
-  final Stream<bool>? onlineStatus;
-  final bool? initialOnlineStatus;
+  final OnlineStatus? onlineStatus;
   final bool observeAppLifecycle;
   final bool Function(AppLifecycleState state)? isAppShown;
 
@@ -189,7 +198,6 @@ class _OwnedQueryClientProviderState extends State<_OwnedQueryClientProvider> {
   Widget build(BuildContext context) => QueryClientProvider(
         client: _client,
         onlineStatus: widget.onlineStatus,
-        initialOnlineStatus: widget.initialOnlineStatus,
         observeAppLifecycle: widget.observeAppLifecycle,
         isAppShown: widget.isAppShown,
         child: widget.child,
@@ -214,7 +222,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     if (widget.observeAppLifecycle) {
       _observeLifecycle(widget.client);
     }
-    _applyInitialOnlineStatus(widget.client);
+    _applyOnlineStatus(widget.client);
     _follow(widget.onlineStatus);
   }
 
@@ -265,19 +273,19 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     _lifecycle = null;
   }
 
-  /// Subscribes to [onlineStatus] — once per stream object, never again for
-  /// a new client. The handler reads `widget.client` at delivery time, so a
-  /// client switch re-points it for free; cancelling and listening again
-  /// would throw on a single-subscription stream (`Stream has already been
-  /// listened to`), and the parameter type promises nothing about broadcast
-  /// (fourth review, 2026-09-09).
-  void _follow(Stream<bool>? onlineStatus) {
+  /// Subscribes to [onlineStatus]'s changes — once per stream object, never
+  /// again for a new client. The handler reads `widget.client` at delivery
+  /// time, so a client switch re-points it for free; cancelling and listening
+  /// again would throw on a single-subscription stream (`Stream has already
+  /// been listened to`), and [OnlineStatusStream.changes] promises nothing
+  /// about broadcast (fourth review, 2026-09-09).
+  void _follow(OnlineStatus? onlineStatus) {
     _onlineSubscription?.cancel();
     // What the old stream last said dies with it. Carrying it to a client
     // that arrives later would pin that client offline with nothing left to
     // put it back online (third review, 2026-09-10).
     _lastOnline = null;
-    _onlineSubscription = onlineStatus?.listen(
+    _onlineSubscription = onlineStatus?.changes?.listen(
       _onOnline,
       // A stream error is the stream's problem, not the app's: reported the
       // way Flutter reports a build error, not thrown into the zone.
@@ -293,11 +301,13 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     );
   }
 
-  /// The starting assumption, before [_follow]'s stream has said anything.
-  void _applyInitialOnlineStatus(QueryClient client) {
-    final initial = widget.initialOnlineStatus;
-    if (initial != null) {
-      client.onlineManager.setOnline(initial);
+  /// Tells [client] what the current [QueryClientProvider.onlineStatus] says,
+  /// before [_follow]'s stream has said anything. `null` tells it nothing —
+  /// a client with no status keeps its own default.
+  void _applyOnlineStatus(QueryClient client) {
+    final status = widget.onlineStatus;
+    if (status != null) {
+      client.onlineManager.setOnline(status.initial);
     }
   }
 
@@ -414,7 +424,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       _stopObservingLifecycle();
       _unmountClient(oldWidget.client);
       _mountClient(widget.client);
-      _applyInitialOnlineStatus(widget.client);
+      _applyOnlineStatus(widget.client);
       // The stream will not repeat itself for the newcomer, so it starts from
       // what the stream last said — but only while it is *the same* stream
       // still running. A connectivity source that has been taken away speaks
@@ -439,6 +449,20 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       _applyCurrentLifecycleState(widget.client);
     }
     if (oldWidget.onlineStatus != widget.onlineStatus) {
+      // A changed status reaches the client as it stands — except when one
+      // stream is swapped for another, where the client already has a verdict
+      // from a live source and `initial` is the wrong thing to rewind it to.
+      // Anyone building their stream in `build` hands the provider a new
+      // stream object every rebuild (the class doc's own example does not,
+      // but M6 proves the provider survives it), and re-applying `initial`
+      // there would yank the client back online between each rebuild and the
+      // new stream's first event. A fixed status has no such source: applying
+      // it here is the only way it can reach the client at all.
+      if (!clientChanged &&
+          !(oldWidget.onlineStatus is OnlineStatusStream &&
+              widget.onlineStatus is OnlineStatusStream)) {
+        _applyOnlineStatus(widget.client);
+      }
       _follow(widget.onlineStatus);
     }
   }

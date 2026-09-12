@@ -113,6 +113,28 @@ Widget providerThatOwnsItsClient() => QueryClientProvider.create(
       child: const MaterialApp(home: TasksScreen()),
     );
 
+// --- Guides / Lifecycle and connectivity ------------------------------------
+
+/// A client whose focus comes from a `setEventListener` adapter of its own.
+/// The `connectivity_plus` sample on the same page stays prose-only, but this
+/// one and the fixed status below need nothing beyond Flutter.
+Widget providerWithItsOwnFocusSource(QueryClient client) => QueryClientProvider(
+      client: client,
+      // The lifecycle listener and a setEventListener adapter are two sources
+      // of focus for one manager. Pick one.
+      observeAppLifecycle: false,
+      child: const MaterialApp(home: TasksScreen()),
+    );
+
+/// Connectivity with no stream behind it: the value *is* the verdict, and a
+/// changed one reaches the client on the rebuild that changes it.
+Widget providerWithAFixedOnlineStatus(QueryClient client, bool online) =>
+    QueryClientProvider(
+      client: client,
+      onlineStatus: OnlineStatus.fixed(online),
+      child: const MaterialApp(home: TasksScreen()),
+    );
+
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
 

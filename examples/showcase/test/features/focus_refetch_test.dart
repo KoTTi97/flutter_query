@@ -350,7 +350,7 @@ void main() {
     });
 
     showcaseTest(
-        'initialOnlineStatus offline: entry C mounts paused and fetches once '
+        'OnlineStatus.fixed(false): entry C mounts paused and fetches once '
         'its switch puts it online', (tester, h) async {
       await openThreshold(tester, h, 'none');
       expect(facts('reader-c', 'online=true'), findsOneWidget);

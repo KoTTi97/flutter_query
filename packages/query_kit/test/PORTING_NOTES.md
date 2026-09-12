@@ -3199,3 +3199,92 @@ port-only ones pass byte-for-byte against the delegating `Subscribable`. Core
 **587 → 589** (the two skip-removed regressions), binding **115 → 118** (the
 three reachable guards), showcase 217, task manager 16, doc snippets 2, all
 green; `dart analyze --fatal-infos` and `dart format` clean.
+
+### C51 — the focus and online seam, applied ([#60](https://github.com/KoTTi97/flutter_query/issues/60), [#61](https://github.com/KoTTi97/flutter_query/issues/61))
+
+**Re-measured.** §8's "16× in Binding-Tests" for `observeAppLifecycle: false` is
+**10 occurrences in 3 files** — `binding_test.dart` 1,
+`functional_improvements_test.dart` 2, `review_regressions_test.dart` 7 — the
+rest having gone into `test/harness.dart` with C45 (#42). The finding's premise
+is a third smaller than it was, which is why the focus half is a documentation
+change and not a refactor.
+
+**Focus: no adapter, and that is the resolution.** The binding keeps
+`client.focusManager.setFocused(...)` from its `AppLifecycleListener`.
+`setEventListener` is a *user* extension point — upstream's own browser
+listener lives inside the manager, and the seam is what it tells React Native
+users to call with `AppState` — so the Flutter analogue of the built-in
+listener is the provider, not an adapter written against the seam. Making the
+binding an adapter would need a *clearing* form of `setEventListener` in a
+ported module (a disposed provider otherwise leaves a setup closed over a dead
+`State`, to be reinstalled by `onSubscribe` at the next mount) and would put
+C17's decided behaviour — the mapping read at delivery time, a changed
+`isAppShown` re-applied to the current state — inside a setup closure.
+**What was actually wrong** is that a user's `setEventListener` and the
+provider's listener both write through `setFocused`, silently, each overwriting
+the other's verdict, and nothing anywhere said that `observeAppLifecycle:
+false` is the resolution. Now three places do: `observeAppLifecycle`'s dartdoc,
+`AppFocusManager`'s class doc (which had half-gestured at it), and the site's
+*Lifecycle and connectivity* page, whose new "Bringing your own focus source"
+section carries the compiled snippet. No focus wiring changed;
+`refetchMinBackgroundDuration` is untouched and no `focus_manager_test.dart`
+case moved.
+
+**Online: the pair became one value.** `QueryClientProvider`'s
+`onlineStatus: Stream<bool>` + `initialOnlineStatus: bool?` are replaced by one
+`OnlineStatus` (`query_kit_flutter/lib/src/online_status.dart`, exported) —
+`OnlineStatus.fixed(online)` and `OnlineStatus.stream(changes, initial:)`, with
+`initial` **required**, because "what do you assume until the first event" is
+exactly the question the two-parameter shape let a caller skip and it is one
+word to answer. It is the house shape for an option with modes (#10:
+`StaleTime`, `GcTime`, `Enabled`, `RefetchOn`) and follows those types'
+conventions: sealed, `final` variants, value equality, `hashCode`, `toString`,
+dartdoc naming the modes. `null` still means "bring nothing, the client assumes
+online". One parameter on the constructor and on `QueryClientProvider.create`
+where there were two; `_OwnedQueryClientProvider` follows.
+
+**One rule that could not be stated before.** `initial` is applied whenever a
+client is *given* the status — at mount, and to a client arriving on a later
+build — and now on any later build that changes it, **except** one stream
+swapped for another, where the client already has a verdict from a live source.
+That exception is what keeps M6's per-build stream from being yanked back to
+`initial` between each rebuild and the new stream's first event; the
+non-exception is what makes `OnlineStatus.fixed` work as a live switch, since
+with no stream, applying it is the only way it can reach the client at all.
+The `_follow` comment the fourth review (2026-09-09) left is carried across
+unchanged in substance: subscribed once per stream object, the handler reading
+`widget.client` at delivery time, because cancelling and re-listening would
+throw on a single-subscription stream.
+
+**What moved at the call sites.** `test/harness.dart`'s `app()` (two named
+parameters to one), `binding_test.dart` ×1, `review_regressions_test.dart` ×4
+(R07 ×2, M6, B2's `_provided`), and the showcase's `focus_refetch` screen,
+whose entry-C knob is an `OnlineStatus.fixed` now — its `ValueKey` still
+carries the value, so it is still a fresh client per pick and the widget and
+end-to-end cases see exactly what they saw. Prose followed everywhere it was
+named: the binding README's `connectivity_plus` snippet, its CHANGELOG line,
+the site's *Lifecycle and connectivity* and *Coming from React Query*, the
+showcase README and the `offline` screen's notice, and the two Dart samples the
+new site section adds are compiled in `examples/doc_snippets/`.
+
+**Cover what you add.** Five cases, group `C51 one OnlineStatus instead of a
+pair` in `review_regressions_test.dart`, each verified red against the branch
+it names: a fixed status at mount (red with `_applyOnlineStatus` gutted), a
+changed fixed status applied to the client as it stands (red with the
+`didUpdateWidget` branch removed), one stream swapped for another keeping the
+last verdict (red with the exception removed), an equal status not listening
+twice to a single-subscription stream (red with `OnlineStatusStream`'s `==`
+dropped), and the value semantics themselves.
+
+**On the tag.** 0.1.0 is unpublished, so the breaking parameter change is free.
+Were it not, the changelog line would read: *`QueryClientProvider`'s
+`onlineStatus` now takes an `OnlineStatus` and `initialOnlineStatus` is gone —
+`onlineStatus: s` becomes `onlineStatus: OnlineStatus.stream(s, initial: true)`,
+and `initialOnlineStatus: b` alone becomes `onlineStatus: OnlineStatus.fixed(b)`.*
+
+**What proves the behaviour did not change.** Every ported `focus_manager_test`
+and `online_manager_test` case unmodified; core **589**, binding **118 → 123**
+(the five new cases, nothing rewritten), showcase 217, task manager 16, doc
+snippets 2, all green; `dart analyze --fatal-infos` and `dart format` clean.
+The showcase's `focus_refetch` e2e spec changed only in a test *title* — no
+locator, no step, no backend scenario.

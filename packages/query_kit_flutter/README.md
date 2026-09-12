@@ -331,7 +331,10 @@ That does three things while it is mounted:
   "unfocused" would refetch the world on the way back; on macOS, Windows and
   Linux it is precisely the window losing focus — the event
   `refetchOnWindowFocus` is named after — and counts as unfocused. Pass
-  `isAppShown` to decide it yourself.
+  `isAppShown` to decide it yourself, or `observeAppLifecycle: false` to turn
+  the source off — which is what you do when you install a focus source of
+  your own with `client.focusManager.setEventListener(...)`, since the two
+  are alternatives and the last writer through `setFocused` wins.
 - **A build-aware scheduler.** Results are delivered right away outside a
   build — a tap handler or a resolved future is where Flutter expects a
   `setState`, and one `pump` in a test shows the new result — and after the
@@ -344,30 +347,34 @@ That does three things while it is mounted:
 
 Nothing is installed by default; the client assumes it is online, which is what
 upstream does with no listener, and a fetch that cannot reach the network simply
-fails and retries. If you want link-state awareness, pass a stream — six lines
-with `connectivity_plus`, which stays *your* dependency:
+fails and retries. If you want link-state awareness, pass an `OnlineStatus` —
+one value with two modes, `OnlineStatus.fixed(online)` for a client with no
+source of its own and `OnlineStatus.stream(changes, initial: …)` for one that
+follows a stream. Six lines with `connectivity_plus`, which stays *your*
+dependency:
 
 ```dart
 // Built once — a stream built in `build` would be a new one on every rebuild,
 // and the provider would resubscribe each time.
-final onlineStatus = Connectivity()
+final connectivity = Connectivity()
     .onConnectivityChanged
     .map((results) => !results.contains(ConnectivityResult.none));
 
 QueryClientProvider(
   client: client,
-  onlineStatus: onlineStatus,
+  onlineStatus: OnlineStatus.stream(connectivity, initial: online),
   child: const MyApp(),
 )
 ```
 
+`initial` is required because a `Stream` has no current value: a provider that
+only listens believes the default — online — however long the first event
+takes, and an app launched in airplane mode then fetches once against a network
+that is not there. `Connectivity().checkConnectivity()` answers it at startup.
 Any `Stream<bool>` will do, single-subscription included: the provider
-subscribes once, and a swapped client inherits the last value the stream
-reported. The stream reports changes; the state the device is already in comes from
-`Connectivity().checkConnectivity()`, which you can feed to
-`client.onlineManager.setOnline` once at startup. Worth knowing:
-`connectivity_plus` reports a *link*, not reachability. A phone on hotel wifi
-with a captive portal reports "connected".
+subscribes once per stream, and a swapped client inherits the last value the
+stream reported. Worth knowing: `connectivity_plus` reports a *link*, not
+reachability. A phone on hotel wifi with a captive portal reports "connected".
 
 ## Signals, hooks and other reactive packages
 

@@ -6,7 +6,7 @@
 /// (https://github.com/KoTTi97/flutter_query/issues/21), so a client nobody
 /// tells otherwise believes it is online — which is what upstream does with
 /// no listener too. A real app hands `QueryClientProvider` an
-/// `onlineStatus` stream; this screen calls
+/// `OnlineStatus.stream`; this screen calls
 /// `client.onlineManager.setOnline` by hand, which is exactly what upstream's
 /// devtools "mock offline behavior" button does.
 ///
@@ -206,8 +206,9 @@ class _OfflineScreenState extends State<OfflineScreen>
             'no connectivity package — so a client nobody tells otherwise '
             'believes it is online, and this switch is the whole source of '
             'the online state here. A real app passes '
-            'QueryClientProvider(onlineStatus: …) a Stream<bool>; six lines '
-            'with connectivity_plus, which stays your dependency.',
+            'QueryClientProvider(onlineStatus: OnlineStatus.stream(…, '
+            'initial: …)); six lines with connectivity_plus, which stays '
+            'your dependency.',
           ),
         ),
         SectionCard(

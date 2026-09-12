@@ -17,6 +17,16 @@ typedef FocusSetup = void Function() Function(
 /// directly (https://github.com/KoTTi97/flutter_query/issues/19) — or through
 /// a [setEventListener] adapter of your own, for a focus source that is not
 /// the app lifecycle.
+///
+/// **The two are alternatives, not layers.** A [setEventListener] adapter
+/// writes through [setFocused] exactly as the binding's lifecycle listener
+/// does, so with both installed the last writer wins and neither can see the
+/// other's verdict. Installing your own adapter therefore goes with
+/// `QueryClientProvider(observeAppLifecycle: false)`, which is what turns the
+/// lifecycle source off (https://github.com/KoTTi97/flutter_query/issues/60).
+/// This mirrors upstream, where the browser's `visibilitychange` listener is
+/// the built-in default and `setEventListener` is what a React Native app
+/// calls with `AppState`.
 class AppFocusManager extends Subscribable<void Function(bool focused)> {
   /// Creates a manager. [refetchMinBackgroundDuration] suppresses new focus
   /// refetches after shorter absences, without blocking paused work resuming.

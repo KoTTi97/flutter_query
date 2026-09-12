@@ -276,7 +276,7 @@ void main() {
       await tester.pumpWidget(QueryClientProvider(
         client: first,
         observeAppLifecycle: false,
-        onlineStatus: online.stream,
+        onlineStatus: OnlineStatus.stream(online.stream, initial: true),
         child: const SizedBox(),
       ));
       online.add(false);
@@ -302,14 +302,14 @@ void main() {
       await online.close();
     });
 
-    queryWidgetTest('initialOnlineStatus answers what a Stream cannot',
-        (tester, client) async {
+    queryWidgetTest(
+        'OnlineStatus.stream\'s initial answers what a Stream '
+        'cannot', (tester, client) async {
       final online = StreamController<bool>.broadcast();
       await tester.pumpWidget(QueryClientProvider(
         client: client,
         observeAppLifecycle: false,
-        onlineStatus: online.stream,
-        initialOnlineStatus: false,
+        onlineStatus: OnlineStatus.stream(online.stream, initial: false),
         child: const SizedBox(),
       ));
       // Before the stream has said anything at all.
@@ -901,7 +901,7 @@ void main() {
     }, createClient: newClient);
   });
 
-  group('M6 a new onlineStatus stream per build', () {
+  group('M6 a new OnlineStatus.stream per build', () {
     queryWidgetTest('rebinds the subscription and nothing else',
         (tester, client) async {
       var listens = 0;
@@ -916,7 +916,7 @@ void main() {
 
       Widget build() => QueryClientProvider(
             client: client,
-            onlineStatus: status(),
+            onlineStatus: OnlineStatus.stream(status(), initial: true),
             child: const SizedBox(),
           );
       await tester.pumpWidget(build());
@@ -1033,7 +1033,7 @@ void main() {
   // ---------------------------------------------------------------------------
   // Fourth review, 2026-09-09.
 
-  group('B2 a single-subscription onlineStatus stream', () {
+  group('B2 a single-subscription OnlineStatus.stream', () {
     queryWidgetTest('survives a client switch, which inherits the last value',
         (tester, a) async {
       final b = tester.adopt(newClient());
@@ -1939,6 +1939,110 @@ void main() {
       }
     }, createClient: newClient);
   });
+
+  group('C51 one OnlineStatus instead of a pair', () {
+    // The `Stream<bool>` + `initialOnlineStatus` pair became one sealed value
+    // (https://github.com/KoTTi97/flutter_query/issues/60). The stream form's
+    // two branches were already pinned by B2, R07 and M6; these are the
+    // fixed form, the value semantics the new type has to have, and the one
+    // rule that could not be written before — what a swapped stream does to a
+    // client that already has a verdict.
+    Widget provided(QueryClient client, OnlineStatus? status) =>
+        QueryClientProvider(
+          client: client,
+          observeAppLifecycle: false,
+          onlineStatus: status,
+          child: const SizedBox(),
+        );
+
+    queryWidgetTest('a fixed status is the verdict at mount',
+        (tester, client) async {
+      await tester
+          .pumpWidget(provided(client, const OnlineStatus.fixed(false)));
+      expect(client.onlineManager.isOnline(), isFalse);
+    }, createClient: newClient);
+
+    queryWidgetTest('a changed fixed status reaches the client as it stands',
+        (tester, client) async {
+      await tester
+          .pumpWidget(provided(client, const OnlineStatus.fixed(false)));
+      expect(client.onlineManager.isOnline(), isFalse);
+
+      // No new client, and a fixed status has no stream: applying it on the
+      // rebuild is the only way it can reach the client at all.
+      await tester.pumpWidget(provided(client, const OnlineStatus.fixed(true)));
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isTrue);
+    }, createClient: newClient);
+
+    queryWidgetTest('one stream swapped for another keeps the last verdict',
+        (tester, client) async {
+      final first = StreamController<bool>.broadcast();
+      final second = StreamController<bool>.broadcast();
+      addTearDown(first.close);
+      addTearDown(second.close);
+
+      await tester.pumpWidget(
+          provided(client, OnlineStatus.stream(first.stream, initial: true)));
+      first.add(false);
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isFalse);
+
+      // The new source has not spoken yet; rewinding to its `initial` would
+      // put the client back online for anyone who builds their stream in
+      // `build`, which is a new stream object every rebuild (M6).
+      await tester.pumpWidget(
+          provided(client, OnlineStatus.stream(second.stream, initial: true)));
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isFalse);
+
+      second.add(true);
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isTrue);
+    }, createClient: newClient);
+
+    queryWidgetTest('an equal status does not listen to the stream twice',
+        (tester, client) async {
+      // Not broadcast: a second `listen` throws. The provider compares the
+      // whole value now, so a status rebuilt around the same stream has to
+      // compare equal or this is `Stream has already been listened to`.
+      final online = StreamController<bool>();
+      addTearDown(online.close);
+
+      Widget build() =>
+          provided(client, OnlineStatus.stream(online.stream, initial: true));
+      await tester.pumpWidget(build());
+      await tester.pumpWidget(build());
+      await tester.pumpWidget(build());
+      expect(tester.takeException(), isNull);
+
+      online.add(false);
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isFalse);
+    }, createClient: newClient);
+
+    test('the value semantics every option with modes has', () {
+      const fixed = OnlineStatus.fixed(false);
+      expect(fixed, const OnlineStatus.fixed(false));
+      expect(fixed.hashCode, const OnlineStatus.fixed(false).hashCode);
+      expect(fixed, isNot(const OnlineStatus.fixed(true)));
+      expect(fixed.initial, isFalse);
+      expect(fixed.changes, isNull);
+      expect(fixed.toString(), 'OnlineStatus.fixed(false)');
+
+      final changes = const Stream<bool>.empty();
+      final status = OnlineStatus.stream(changes, initial: false);
+      expect(status, OnlineStatus.stream(changes, initial: false));
+      expect(status.hashCode,
+          OnlineStatus.stream(changes, initial: false).hashCode);
+      // The assumption is part of the value: two providers differing only in
+      // it tell their clients two different things at mount.
+      expect(status, isNot(OnlineStatus.stream(changes, initial: true)));
+      expect(status.initial, isFalse);
+      expect(status.changes, same(changes));
+      expect(status.toString(), contains('initial: false'));
+    });
+  });
 }
 
 /// The two keyless styles reading one query with a `buildWhen`.
@@ -2051,7 +2155,7 @@ Widget _provided(QueryClient client, Stream<bool> online) =>
     QueryClientProvider(
       client: client,
       observeAppLifecycle: false,
-      onlineStatus: online,
+      onlineStatus: OnlineStatus.stream(online, initial: true),
       child: const SizedBox(),
     );
 

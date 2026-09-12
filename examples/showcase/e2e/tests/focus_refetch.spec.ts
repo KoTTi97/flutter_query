@@ -290,7 +290,7 @@ test('isAppShown: under hidden a window blur is an absence, under shown it is no
   expect(await scenario.count('GET', /^\/api\/counter$/)).toBe(2)
 })
 
-test('initialOnlineStatus offline: entry C mounts paused and fetches once its switch puts it online', async ({
+test('OnlineStatus.fixed(false): entry C mounts paused and fetches once its switch puts it online', async ({
   page,
   open,
   scenario,

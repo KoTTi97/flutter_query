@@ -67,8 +67,8 @@ when a shared thing nearly fits.
 | `auto-refetching` | `RefetchInterval`, in the foreground and not | `auto-refetching` |
 | `retry` | every `RetryPolicy` (`never`, `times`, `always`, `when`) and `RetryDelay` (`fixed`, `exponential`, `dynamic`), `failureCount`, loading versus refetch errors | — |
 | `cancellation` | `signal` to the transport, `cancelQueries`, search-as-you-type | — |
-| `offline` | `NetworkMode`, paused mutations, `resumePausedMutations`, `onlineStatus`, `refetchOnReconnect` | `offline` |
-| `focus-refetch` | `RefetchOn` for focus and mount, `refetchMinBackgroundDuration`, and the provider's own knobs on a nested `QueryClientProvider.create`: `isAppShown`, `initialOnlineStatus`, `maybeOf` | — |
+| `offline` | `NetworkMode`, paused mutations, `resumePausedMutations`, `OnlineStatus`, `refetchOnReconnect` | `offline` |
+| `focus-refetch` | `RefetchOn` for focus and mount, `refetchMinBackgroundDuration`, and the provider's own knobs on a nested `QueryClientProvider.create`: `isAppShown`, `onlineStatus`, `maybeOf` | — |
 | `four-call-styles` | the same query through `context.query`, `QueryBuilder`, `QueryMixin`, `QueryController`, plus `QueryListener` for a side effect and a batched write through `NotifyManager.shared`; the mutation and infinite counterparts — `MutationListener`, `context.infiniteQuery`, `watchInfiniteQuery`, `InfiniteQueryListener`, `client.observeInfinite` | — |
 | `global-callbacks` | `QueryCache`/`MutationCache` callbacks, `meta` | — |
 | `cache-inspector` | every entry and event of both caches, live | (devtools) |

@@ -34,9 +34,33 @@ there.
 The seam is `isAppShown`, if your app disagrees with either reading.
 :::
 
-`initialOnlineStatus` and `isAppShown` exist for the same reason: what a
+`OnlineStatus`'s `initial` and `isAppShown` exist for the same reason: what a
 `Stream` cannot tell you before its first event, and what the platform default
 cannot know about your app.
+
+### Bringing your own focus source
+
+The client's focus manager has a seam of its own,
+`client.focusManager.setEventListener(...)`, for a focus source that is not the
+app lifecycle. **It is an alternative to the provider's listener, not a layer
+on top of it.** Both write through `setFocused`, so with both installed the
+last writer wins and neither can see the other's verdict. If you install one,
+turn the other off:
+
+```dart
+QueryClientProvider(
+  client: client,
+  // The lifecycle listener and a setEventListener adapter are two sources of
+  // focus for one manager. Pick one.
+  observeAppLifecycle: false,
+  child: const MyApp(),
+)
+```
+
+This is the same division upstream has: the browser's `visibilitychange`
+listener is the built-in default, and `setEventListener` is what a React
+Native app calls with `AppState`. Here the `AppLifecycleListener` is the
+built-in default and `setEventListener` is yours.
 
 ### Suppressing pointless refetches
 
@@ -64,31 +88,54 @@ Nothing is installed by default. The client assumes it is online — which is
 what upstream does with no listener — and a fetch that cannot reach the network
 simply fails and retries.
 
-If you want link-state awareness, pass a stream. Six lines with
-`connectivity_plus`, which stays **your** dependency:
+If you want link-state awareness, pass an `OnlineStatus` — one value with two
+modes, the shape every option with modes has here:
+
+| | |
+|---|---|
+| `OnlineStatus.fixed(online)` | this is the state, no source of changes — a test, a desktop build, a switch of your own |
+| `OnlineStatus.stream(changes, initial: …)` | follow `changes`, and assume `initial` until the first event |
+
+`initial` is **required** on the stream form, because a `Stream` has no current
+value: a provider that only listens starts out believing the default — online —
+however long the first event takes, and an app launched in airplane mode then
+fetches once against a network that is not there. Most connectivity packages
+answer the question directly.
+
+Six lines with `connectivity_plus`, which stays **your** dependency:
 
 ```dart
 // Built once. A stream built in `build` would be a new one on every rebuild,
 // and the provider would resubscribe each time.
-final onlineStatus = Connectivity()
+final connectivity = Connectivity()
     .onConnectivityChanged
     .map((results) => !results.contains(ConnectivityResult.none));
 
 QueryClientProvider(
   client: client,
-  onlineStatus: onlineStatus,
+  onlineStatus: OnlineStatus.stream(connectivity, initial: online),
   child: const MyApp(),
 )
 ```
 
-Any `Stream<bool>` will do, single-subscription included: the provider
-subscribes once, and a swapped client inherits the last value the stream
-reported.
+where `online` is what `Connectivity().checkConnectivity()` answered at
+startup. Any `Stream<bool>` will do, single-subscription included: the provider
+subscribes once per stream, and a swapped client inherits the last value the
+stream reported.
 
-The stream reports **changes**; the state the device is already in comes from
-`Connectivity().checkConnectivity()`, which you can feed to
-`client.onlineManager.setOnline` once at startup — or pass as
-`initialOnlineStatus`.
+With no stream at all, a fixed status is the whole verdict, and a changed one
+reaches the client on the rebuild that changes it:
+
+```dart
+QueryClientProvider(
+  client: client,
+  onlineStatus: OnlineStatus.fixed(online),
+  child: const MyApp(),
+)
+```
+
+`null` — the default — brings nothing, and the client keeps believing it is
+online.
 
 :::warning A link is not reachability
 `connectivity_plus` reports a *link*, not the internet. A phone on hotel wifi

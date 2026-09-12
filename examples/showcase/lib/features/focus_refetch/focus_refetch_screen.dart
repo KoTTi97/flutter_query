@@ -31,7 +31,7 @@
 /// runs on a client of its own under a nested `QueryClientProvider.create`:
 /// the provider builds the client, owns it, and clears it when it unmounts,
 /// and a different `key` is a different client — which is how the threshold
-/// knob and the `initialOnlineStatus` knob swap it. Because the client is its
+/// knob and the `OnlineStatus.fixed` knob swap it. Because the client is its
 /// own, so is the cache: entry C counts its own fetches off
 /// `queryCache.subscribe` rather than through the app's `QueryDebugStrip`,
 /// which reads the app client's counters.
@@ -40,9 +40,10 @@
 /// `isAppShown` is the mapping from lifecycle states to focus: `platform` is
 /// the built-in one, `shown` and `hidden` say what `inactive` means outright,
 /// and the mapping given on the latest build is the one in force, without a
-/// new client. `initialOnlineStatus` is what the client assumes before any
-/// connectivity source has spoken: `offline` mounts entry C paused, and its
-/// own `Entry C online` switch is the source that lets the fetch continue.
+/// new client. `onlineStatus` is the connectivity the provider brings, as one
+/// value: entry C has no stream, so it passes an `OnlineStatus.fixed` —
+/// `offline` mounts entry C paused, and its own `Entry C online` switch is
+/// the source that lets the fetch continue.
 /// And `QueryClientProvider.maybeOf` — `of` for a widget that can do without
 /// a provider — answers with the nearest one: the app's client on the screen,
 /// entry C's under the nested provider, as the `nearest=` facts show.
@@ -71,7 +72,7 @@
 /// to focused on the test binding's default platform, Android, so it is no
 /// absence at all — changes nothing under either; under `isAppShown`
 /// `hidden` the same blip *is* an absence and refetches, under `shown` it is
-/// not, whatever the platform; `initialOnlineStatus` `offline` mounts entry C
+/// not, whatever the platform; `OnlineStatus.fixed(false)` mounts entry C
 /// with its fetch paused and no request sent until its switch puts it online;
 /// and `maybeOf` names the app's client on the screen and entry C's below.
 /// The threshold is measured with `package:clock`, which under a widget test
@@ -259,8 +260,10 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
   /// later build is applied to the client as it stands.
   InactiveRule _inactiveRule = InactiveRule.platform;
 
-  /// Entry C's `initialOnlineStatus`. In the key: it is what a client assumes
-  /// at its mount, so showing it again means a new client.
+  /// Entry C's `OnlineStatus.fixed`. In the key: the point on show is what a
+  /// client assumes at its *mount*, so showing it again means a new client.
+  /// (A fixed status reaches a client on a later build too — see the
+  /// provider's dartdoc; the key is what makes this a mount every time.)
   bool _initialOnline = true;
 
   late final ShowcaseApi _api;
@@ -608,8 +611,9 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                'initialOnlineStatus: what the client assumes before any '
-                'connectivity source has spoken — online, unless told '
+                'onlineStatus: what the client assumes before any '
+                'connectivity source has spoken — OnlineStatus.fixed here, '
+                'since entry C has no stream; online, unless told '
                 'otherwise. offline mounts a new entry C with its first fetch '
                 'paused and nothing sent; the Entry C online switch below is '
                 'its connectivity source, and turning it on lets the fetch '
@@ -627,7 +631,7 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
                   '${_initialOnline ? 'online' : 'offline'}',
                 ),
                 create: () => _newThresholdClient(_minBackground),
-                initialOnlineStatus: _initialOnline,
+                onlineStatus: OnlineStatus.fixed(_initialOnline),
                 isAppShown: isAppShownFor(_inactiveRule),
                 child: _ThresholdEntry(api: _api, appClient: _client),
               ),

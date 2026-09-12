@@ -101,14 +101,12 @@ Widget app(
   QueryClient client,
   Widget child, {
   bool observeAppLifecycle = false,
-  Stream<bool>? onlineStatus,
-  bool? initialOnlineStatus,
+  OnlineStatus? onlineStatus,
 }) =>
     QueryClientProvider(
       client: client,
       observeAppLifecycle: observeAppLifecycle,
       onlineStatus: onlineStatus,
-      initialOnlineStatus: initialOnlineStatus,
       child: MaterialApp(home: Scaffold(body: child)),
     );
 

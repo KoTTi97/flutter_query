@@ -299,7 +299,7 @@ void main() {
       expect(() => client.focusManager.setFocused(false), returnsNormally);
     });
 
-    queryWidgetTest('follows an onlineStatus stream when given one',
+    queryWidgetTest('follows an OnlineStatus.stream when given one',
         (tester, client) async {
       final online = StreamController<bool>.broadcast();
       addTearDown(online.close);
@@ -307,7 +307,7 @@ void main() {
       await tester.pumpWidget(QueryClientProvider(
         client: client,
         observeAppLifecycle: false,
-        onlineStatus: online.stream,
+        onlineStatus: OnlineStatus.stream(online.stream, initial: true),
         child: const MaterialApp(home: Text('hi')),
       ));
 

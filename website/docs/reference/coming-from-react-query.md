@@ -142,7 +142,7 @@ file — each starts with what it shows and how it is proven:
 | cache callbacks, `meta` | `global-callbacks` |
 | a list of queries (`useQueries`) | `query-collections` |
 | cache-wide mutation state (`useMutationState`) | `mutation-state` |
-| the provider's knobs — `QueryClientProvider.create`, `isAppShown`, `initialOnlineStatus`, `maybeOf` | `focus-refetch` |
+| the provider's knobs — `QueryClientProvider.create`, `isAppShown`, `onlineStatus`, `maybeOf` | `focus-refetch` |
 | the errors the port adds — `QueryDataTypeError`, `MissingMutationFunctionError` | `diagnostics` |
 
 ## Not here at all
