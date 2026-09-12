@@ -3820,7 +3820,7 @@ reader *on this screen* that passes a predicate, and points at `build-when`.
 catalogue counts in the root README and `website/docs/project/examples.md` go
 27 → 28.
 
-### C57 — `lib/shared/` split by ticket history rather than by seam ([#69](https://github.com/KoTTi97/flutter_query/issues/69))
+### C55/C56, follow-on — `lib/shared/` split by ticket history rather than by seam ([#69](https://github.com/KoTTi97/flutter_query/issues/69))
 
 The one ticket of this map with **nothing duplicated to point at**: every file
 in `examples/showcase/lib/shared/` was already the only copy of what it holds.
@@ -3917,3 +3917,47 @@ so the same `Size(800, 1800)` means two different logical windows depending on
 the file — a `test/` hygiene question, and normalising it would change what
 every one of those 102 call sites renders, which is the rewrite this map's
 invariant forbids.
+
+### The map's own result (2026-09-12, `c344a91`)
+
+Nineteen tickets, nineteen commits, every §8 row closed. What is worth keeping
+from the map rather than from any one ticket:
+
+**A structural finding is a hypothesis, not a measurement.** Every ticket
+re-measured, and most of §8's numbers were wrong in one direction or the
+other: C47's shared lines were ~110, not the deep-dive's 120/130 nor §8's
+corrected ~94; C48's "two record in `build`, two in a notification" was simply
+false, and the uniformity it got backwards is *why* one class fits; C50's "6×"
+added five core registries to four binding controller lifetimes, which are not
+registries at all; C51's "16×" was 10 in 3 files; C56's "≥8 spellings" was 52
+sites in 13 label forms over six label→key relations; C57's "19 handlers in
+`routes.ts`" was two files added together; C58's "135/203 identical" was 85
+substantial lines; C59's "four sets" were five; and C56's premise about the
+task manager was wrong outright — that app has no semantics groups to unify.
+Two findings pointed at things that were not defects at all
+(`DefaultedQueryObserverOptions.queryOptions`, the `*Ref` seams), and one
+named two gaps that were already closed or unreachable while missing a third
+that was neither.
+
+**The refactors found bugs the reviews had not.** `QueryCacheRef`'s missing
+observer pair (a query built by a foreign cache splitting its events across
+two caches); six of eight notify loops calling a listener an earlier one had
+just unsubscribed; and ten drifts between the two examples' fakes and the
+servers they stand in for — a fake that answered a delete for a task that was
+never there, a `errorRate: 2` accepted silently, a `FakeBackend(latency:)` the
+constructor overwrote. Not one of them was in §8.
+
+**The coverage probe was the map's most productive habit.** Every extraction
+ticket broke each branch it was about to move and checked whether anything
+went red. It found regions no test reached in five separate tickets — the
+mixin's ambiguity assertion, its repeat-read check, the `(#infinite, …, id)`
+tuple, `QuerySelectBuilder`'s whole rebuild decision, `buildWhen` on both
+plain-query builders — each of which was covered *before* the refactor, not
+after.
+
+**Nothing was rewritten to fit.** The rule held for all nineteen tickets: core
+586 → 589, binding 98 → 128, showcase 217 → 238 (+24 contract, +7 catalogue),
+task manager 16 → 31, and the only existing test whose behaviour moved was
+F08/F09's fixture, which had manufactured its first notification out of data
+the caller could already read — exactly what the C49 gate drops. The
+reentrancy it pins is untouched.

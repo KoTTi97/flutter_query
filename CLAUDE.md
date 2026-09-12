@@ -5,14 +5,14 @@ A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
 **behavioural fidelity proven by porting the upstream test suite**, so fidelity
 work is first-class here, not an add-on.
 
-## Where the work stands (2026-09-11)
+## Where the work stands (2026-09-12)
 
 | Phase | State |
 |---|---|
-| **`packages/query_kit/`** — the pure-Dart core | **done, nine times reviewed.** 586 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
-| **`packages/query_kit_flutter/`** — the Flutter binding | **done, nine times reviewed.** 98 tests behind one harness (`test/harness.dart`); four equal call styles for queries, infinite queries and mutations, no dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
-| **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46).** 27 screens, 217 widget tests against a dio fake of the backend and 163 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 17 cases against fake and server. It found two library bugs no ported test could reach |
-| **`examples/task_manager/`** — the acceptance demo, one whole app | **done, kept as is.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, and 9 Playwright end-to-end tests in a real browser against its real express backend; iOS and web generated |
+| **`packages/query_kit/`** — the pure-Dart core | **done, nine times reviewed, then restructured by map #49.** 589 tests, run on the VM and compiled to JavaScript, every applicable upstream suite ported, analyzer clean at `--fatal-infos`, every public member documented |
+| **`packages/query_kit_flutter/`** — the Flutter binding | **done, nine times reviewed, then restructured by map #49.** 128 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
+| **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46; deduplicated 2026-09-12, map #49).** 28 screens, 238 widget tests against a dio fake of the backend and 169 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 24 cases against fake and server, and `catalogue_test.dart`, which holds the **five** per-feature artefact sets level. It found two library bugs no ported test could reach |
+| **`examples/task_manager/`** — the acceptance demo, one whole app | **done.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, **15 contract cases** run against its fake and its real server (map #49 — twelve of the fourteen were red against the fake), and 9 Playwright end-to-end tests in a real browser against that server; iOS and web generated |
 
 The core covers queries, mutations, infinite queries, the observers, the client
 and the caches. Its fidelity audit — every ported case, every omission with its
@@ -21,7 +21,8 @@ reason — is
 and it is the first thing to read before touching a ported suite. Nine
 review rounds — one on 2026-09-08, four on 2026-09-09, three on 2026-09-10,
 and the ninth of `f6a9ddd`, four reviews consolidated as C1–C59 and worked
-off by map #33 on 2026-09-11 — found some 100 bugs between them, none caught
+off by map #33 (C1–C46, 2026-09-11) and map #49 (C47–C59, 2026-09-12) —
+found some 100 bugs between them, none caught
 by a ported case; their regressions live in
 `port_specifics_test.dart` and `port_lifecycle_test.dart` (core) and
 `review_regressions_test.dart` (binding),
@@ -30,7 +31,12 @@ reproducing it before anything is changed** — two of the second review's own
 reproductions did not exercise the code they claimed to, four claims of
 2026-09-10 could not be reproduced at all, and the ninth round's C15 and C29
 joined them; the notes record why, because an unreproduced report is worth
-writing down too.
+writing down too. Map #49 went further and **re-measured every finding it
+worked**: most of §8's counts were wrong in one direction or the other — one
+was a third too high, one understated a problem by a factor of six, one added
+two unrelated things together, one named a duplicate in an example that has
+none — so a structural row is a hypothesis, not a measurement, and its own row
+in the notes says what was actually counted.
 
 ```bash
 cd packages/query_kit && dart test
@@ -77,7 +83,12 @@ Nothing is published yet; the order, tags and the pub.dev-side switch are in
 one self-contained directory per feature under `lib/features/`, a
 `QueryDebugStrip` per cache entry a test reads, no clock in any assertion,
 one backend scenario per end-to-end test (`x-scenario`), and the widget-test
-harness `showcaseTest` in `test/harness.dart`.
+harness `showcaseTest` in `test/harness.dart`. Since map #49 it also says what
+earns a file a place in `lib/shared/` — one subject, more than one feature
+calling it, and a member with a single caller belongs with that caller — and
+the four modules there are the vocabulary a new screen composes rather than
+copies: `fact_group.dart` (what a test **reads**), `controls.dart` (what a
+test **presses**), `chrome.dart` (neither) and `cache_listener.dart`.
 
 **Widget tests need one extra step.** A `QueryClient` outlives the tree and owns
 `gcTime` timers; Flutter's test binding asserts no timer is pending when the
@@ -105,8 +116,26 @@ every session; the wayfinding operations are in
 [issue #33](https://github.com/KoTTi97/flutter_query/issues/33) (release
 0.1.0), worked off the ninth review's findings C1–C46 — two of them as ADRs
 under [`docs/adr/`](docs/adr/) — and ended at the wizard's door with the
-release commit (#47); C47–C59, the structural findings, are the seed of the
-next map. Map #1's Notes and Decisions remain in force.
+release commit (#47). Its own successor,
+[issue #49](https://github.com/KoTTi97/flutter_query/issues/49), took the
+structural findings **C47–C59** that #33 had ruled out of its scope and worked
+all nineteen of its tickets through on 2026-09-12, ending at `60173bb`. The
+Notes and Decisions of all three remain in force.
+
+**What map #49 changed, in one paragraph**, because it touched almost every
+module: the binding's two reader registries are one `ReadSet` and its six
+rebuild decisions one `ReadEntry`; the four call styles are equal *in fact* —
+every read takes a `buildWhen` and no controller notifies for a notification
+that carries nothing (`NotifyGate`); one `ListenerRegistry` and one
+`ControllerLifetime` replace the hand-written ones; `QueryCacheRef` gained the
+observer pair its mutation twin already had, so a `Query` has one path to its
+cache; the refetch rules live on the options as `_RefetchRules`; the
+provider's connectivity pair is one sealed `OnlineStatus`; and both examples
+grew a **contract test run against their real server**, which found ten drifts
+between a fake and the backend it stands in for. Its audit trail is the
+"Structural work after the ninth review (C47–C59)" section of PORTING_NOTES,
+one row per ticket, and its rule was that a suite may not be rewritten to fit
+a refactor — so **every count below only went up**.
 
 What the map settles:
 
