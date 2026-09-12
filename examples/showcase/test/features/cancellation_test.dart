@@ -23,10 +23,7 @@ void tall(WidgetTester tester) {
 
 /// A card's fact by the group it is in: `status=` is also what a debug strip
 /// says about the same entry.
-Finder cardFact(String label, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('facts-$label')),
-      matching: find.text(text),
-    );
+Finder cardFact(String label, String text) => factIn('$label facts', text);
 
 Finder button(String label) => find.ancestor(
       of: find.text(label),

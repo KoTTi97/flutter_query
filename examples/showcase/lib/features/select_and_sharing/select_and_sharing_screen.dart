@@ -63,6 +63,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -320,12 +321,9 @@ class _ReaderRow extends StatelessWidget {
       QueryError(:final error, staleData: null) => <String>['error=$error'],
       QuerySuccess() || QueryError() => facts(),
     };
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: 'reader $id',
+    return SemanticsGroup(
+      name: 'reader $id',
       child: Padding(
-        key: ValueKey<String>('reader-$id'),
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,14 +342,7 @@ class _ReaderRow extends StatelessWidget {
               runSpacing: 2,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
-                for (final value in values)
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                    ),
-                  ),
+                FactList(values, dense: true),
                 Pill('builds=${counter.builds}'),
                 Pill(
                   'data builds=${counter.dataBuilds}',

@@ -52,6 +52,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -238,9 +239,7 @@ class _CancellationScreenState extends State<CancellationScreen>
           const SizedBox(height: 12),
           // A row folds its buttons into one semantics node otherwise, and
           // each button is found by the name its label gives it.
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
+          SemanticsGroup(
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -275,8 +274,9 @@ class _CancellationScreenState extends State<CancellationScreen>
             style: small,
           ),
           const SizedBox(height: 12),
-          _Facts(
-            label: 'slow',
+          FactGroup(
+            name: 'slow facts',
+            dense: true,
             facts: <String>[
               'fetchStatus=${posts.fetchStatus.name}',
               'status=${posts.status.name}',
@@ -318,8 +318,9 @@ class _CancellationScreenState extends State<CancellationScreen>
               builder: (context, results) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _Facts(
-                    label: 'search',
+                  FactGroup(
+                    name: 'search facts',
+                    dense: true,
                     facts: <String>[
                       'needle=${_needle.isEmpty ? 'none' : _needle}',
                       'searching=${results.isFetching}',
@@ -354,41 +355,6 @@ class _CancellationScreenState extends State<CancellationScreen>
               ),
             ),
           ],
-        ),
-      );
-}
-
-/// A card's `key=value` facts, in a group of their own.
-///
-/// `status=` and `fetchStatus=` are also what a debug strip says, so a lookup
-/// has to be able to name which set it means.
-class _Facts extends StatelessWidget {
-  const _Facts({required this.label, required this.facts});
-
-  final String label;
-  final List<String> facts;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: '$label facts',
-        child: Container(
-          key: ValueKey<String>('facts-$label'),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 2,
-            children: <Widget>[
-              for (final fact in facts)
-                Text(
-                  fact,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                  ),
-                ),
-            ],
-          ),
         ),
       );
 }

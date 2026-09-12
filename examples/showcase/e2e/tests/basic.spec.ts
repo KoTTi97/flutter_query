@@ -1,13 +1,13 @@
 import type { Page } from '@playwright/test'
 
-import { expect, fact, holdRequest, test } from './fixtures'
+import { expect, fact, group, holdRequest, test } from './fixtures'
 
 const post3Title = 'Code review: setup guide'
 
 // One row of the list is a semantics group `post <id>`: the title is a button
 // inside it, and the `cached` mark, when the cache holds the post, a text of
 // its own next to the button.
-const row = (page: Page, id: number) => page.getByRole('group', { name: `post ${id}`, exact: true })
+const row = (page: Page, id: number) => group(page, `post ${id}`)
 const cachedMarkOf = (page: Page, id: number) => row(page, id).getByText('cached', { exact: true })
 const openPost = (page: Page, title: string) => page.getByRole('button', { name: title, exact: true }).click()
 const backToList = (page: Page) => page.getByRole('button', { name: 'Back to list', exact: true }).click()

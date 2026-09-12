@@ -27,6 +27,7 @@ import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/cache_stats.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -113,9 +114,7 @@ class _ParallelQueriesScreenState extends State<ParallelQueriesScreen> {
         children: <Widget>[
           // Explicit child nodes: a list row folds every plain text inside
           // it into one label, and `fetching=<n>` is read as an exact text.
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
+          SemanticsGroup(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ListenableBuilder(

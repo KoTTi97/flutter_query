@@ -16,10 +16,7 @@ import '../harness.dart';
 
 /// One of the list's own facts (`pages=2`, `hasNextPage=false`) — scoped,
 /// because the strip's facts sit in the same screen.
-Finder listFact(String text) => find.descendant(
-      of: find.byKey(const ValueKey<String>('projects-facts')),
-      matching: find.text(text),
-    );
+Finder listFact(String text) => factIn('projects facts', text);
 
 Finder loadMore() => find.widgetWithText(FilledButton, 'Load more');
 

@@ -2615,6 +2615,93 @@ across sixteen feature screens, plus ~250 lines of shared module.
 is the deliberate exception to "one self-contained directory per feature", and
 the third copy moves.
 
+### C56 — one fact-group convention for the showcase and both test layers ([#51](https://github.com/KoTTi97/flutter_query/issues/51))
+
+**Measured** on `3d2141a`, not taken from §8. `Semantics(container: true,
+explicitChildNodes: true)` appears **52 times in 26 files**. Twenty-one carry
+no label — they exist only so a row of controls does not fold into one
+node — and **31 are named**. Those 31 spell the group *twice*, once as the
+semantics label the end-to-end suite reads and once as a widget key the widget
+tests read, and the relation between the two was invented per site: **13 label
+forms** (`debug x`, `x facts`, `facts x`, `x`, `reader x`, `mutation x`,
+`mutation #x`, `infinite x`, `entry x`, `detail x`, `post x`, `todo x`, and
+bare literals) over **six different label-to-key relations** — identity (4
+sites), spaces-to-hyphens (16), append `-facts` (6), reorder (`x facts` →
+`facts-x`, 1), insert `-row-` (3) and drop the `#` (1). §8's "≥8 spellings"
+is confirmed and, counted this way, understated.
+
+The test side: **19 of 28 widget-test files** declared a finder of their own
+that hard-codes one of those key spellings (§8 said 16 of 26; `f76a812` and
+`3d2141a` have moved the tree since), across **35 `find.descendant` sites**;
+and **34 `getByRole('group', …)` locators in 18 end-to-end files** (§8 said
+~28 in 16), every one of them `{ name, exact: true }`.
+
+**What moved.** One module, `examples/showcase/lib/shared/fact_group.dart`,
+three widgets:
+
+- `SemanticsGroup({String? name, required Widget child})` — the group. **The
+  name is one string**: it is the semantics label *and* `ValueKey<String>(name)`
+  on the group itself, so nothing downstream derives a second spelling. Unnamed
+  it is just the grouping, which is what the 21 label-less sites wanted.
+- `FactList(List<String> facts, {bool dense})` — the `key=value` texts, one
+  node each, in the one monospace style (`monoStyle`/`monoStyleSmall` moved here
+  from `controls.dart`, which now depends on this module rather than the other
+  way round).
+- `FactGroup({required String name, required List<String> facts, bool dense})`
+  — `SemanticsGroup` around a `FactList`, which is what 14 of the named sites
+  were by hand. A group that also carries a heading, a control or a nested
+  reader composes the other two instead of growing a parameter here; six do.
+
+All 52 sites go through it, so `grep -r 'container: true' lib` now has exactly
+one hit — the invariant, in the shape `f76a812` used for the phase dance.
+`QueryDebugStrip` is a `SemanticsGroup` named `debug <label>` around a heading
+and a dense `FactList`; it stays its own widget because it is the one group
+about the *cache* rather than about the screen. Seven private `_Facts` classes
+went away, their group names now visible at the call site rather than assembled
+inside a per-screen widget; `auto_refetching`'s interval knob was byte-for-byte
+`knobButton` and now calls it. `knobButton`'s
+`semanticsKey:` is `name:` and `knob`'s visible label is `title:`, so "the
+group's name" is one word everywhere.
+
+The test layers get the same pair twice: `groupNamed(name)` / `factIn(name,
+text)` in `test/harness.dart`, `group(page, name)` / `factIn(page, name, text)`
+in `e2e/tests/fixtures.ts`. Every one of the 19 local widget finders and all 34
+end-to-end locators go through them; `strip` and `fact` on both sides are now
+one line over the pair.
+
+**No group name changed.** That was the deciding constraint, not an accident:
+the names are proven by *running* 163 browser specs, so a convention that
+renames them buys a tidier string at the price of a suite-wide rewrite it
+cannot check by reading. The rule instead makes the **key** derived, because a
+key is read only by the widget tests in this repository and by nothing else at
+all. Every `getByRole('group', { name })` in the end-to-end suite passes the
+same string it passed before.
+
+**What was deliberately left.** The **task manager does not come along**: §8
+assumed it has "a smaller version of the same idea", and it does not — its lib
+has **zero** `Semantics(container:)` and its one `_Fact` is a Progress/Estimate
+label-value row of the product surface, with no name, no key and no test
+reading it through a group. Its single `getByRole('group')` locator matches a
+`ListTile` row Flutter names by itself. There is nothing there to unify, and
+a shared package between two examples was already refused on
+[#52](https://github.com/KoTTi97/flutter_query/issues/52). `offline`'s `_Knob`
+and `initial-and-placeholder`'s lazy-seed knob stay their own widgets: they
+already obey the one-name rule and differ from `knobButton` by a deliberate
+button style, which #50 had already ruled on.
+
+**What proves the behaviour did not change.** `flutter test` in the showcase:
+**231 passed, 24 skipped**, the identical run to the one taken before anything
+was touched. And **163 Playwright end-to-end specs green against the real
+express backend in Chromium** — run, not reasoned about, because the change
+moves exactly the `Semantics` containers that suite reads. **Not one test case
+body changed**: the `test/` diff is finder *declarations* only, and the `e2e/`
+diff is locator helpers only. Task manager 31 green, unmodified. Net across
+the 25 existing screen and shared files: **+234 / −614**, against 145 lines of
+new module.
+`examples/showcase/README.md` gained the convention — one name per group, both
+layers through the shared helpers, and `container: true` never written out
+again.
+
 ## Deliberate divergences that will show up in later suites
 
 These are decided, not accidental; each is listed here so a reader of a ported

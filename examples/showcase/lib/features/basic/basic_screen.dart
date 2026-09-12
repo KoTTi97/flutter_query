@@ -22,6 +22,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -164,14 +165,11 @@ class _PostRow extends StatelessWidget {
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => SemanticsGroup(
         // A named group per row, so a test can ask for row 3's mark and
         // nobody else's; the mark stays a text of its own outside the button.
-        container: true,
-        explicitChildNodes: true,
-        label: 'post ${post.id}',
+        name: 'post ${post.id}',
         child: Row(
-          key: ValueKey<String>('post-row-${post.id}'),
           children: <Widget>[
             Expanded(
               child: MergeSemantics(

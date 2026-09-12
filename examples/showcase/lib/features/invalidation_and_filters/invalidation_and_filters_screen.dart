@@ -35,6 +35,7 @@ import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -282,9 +283,7 @@ class _InvalidationAndFiltersScreenState
           title: 'Operations',
           // Explicit child nodes: a row folds every plain text inside it into
           // one label, and `matched=<n>` is read as an exact text.
-          child: Semantics(
-            container: true,
-            explicitChildNodes: true,
+          child: SemanticsGroup(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
@@ -387,9 +386,7 @@ class _InvalidationAndFiltersScreenState
         ),
         SectionCard(
           title: 'The cache',
-          child: Semantics(
-            container: true,
-            explicitChildNodes: true,
+          child: SemanticsGroup(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[

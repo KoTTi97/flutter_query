@@ -28,7 +28,9 @@ import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
+import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -154,28 +156,11 @@ class _AutoRefetchingScreenState extends State<AutoRefetchingScreen> {
               // Scrolls sideways rather than overflowing on a narrow phone.
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: Semantics(
-                  container: true,
-                  explicitChildNodes: true,
-                  label: 'interval',
-                  child: SegmentedButton<RefetchInterval>(
-                    key: const ValueKey<String>('interval'),
-                    showSelectedIcon: false,
-                    style: const ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    segments: <ButtonSegment<RefetchInterval>>[
-                      for (final (label, value) in _intervals)
-                        ButtonSegment<RefetchInterval>(
-                          value: value,
-                          label: Text(label),
-                        ),
-                    ],
-                    selected: <RefetchInterval>{_interval},
-                    onSelectionChanged: (selection) =>
-                        setState(() => _interval = selection.single),
-                  ),
+                child: knobButton<RefetchInterval>(
+                  name: 'interval',
+                  choices: _intervals,
+                  selected: _interval,
+                  onChanged: (value) => setState(() => _interval = value),
                 ),
               ),
               const SizedBox(height: 4),
@@ -203,9 +188,7 @@ class _AutoRefetchingScreenState extends State<AutoRefetchingScreen> {
                 style: small,
               ),
               const SizedBox(height: 8),
-              Semantics(
-                container: true,
-                explicitChildNodes: true,
+              SemanticsGroup(
                 child: Wrap(
                   spacing: 12,
                   runSpacing: 8,
@@ -270,9 +253,7 @@ class _TicksCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
+          SemanticsGroup(
             child: Wrap(
               spacing: 12,
               runSpacing: 8,

@@ -1,10 +1,9 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, test } from './fixtures'
+import { expect, fact, factIn, test } from './fixtures'
 
 // One fact of a card, by its group and exact text — `status=error` is said by
 // the mutation's facts and by the strip alike.
-const factOf = (page: Page, label: string, text: string) =>
-  page.getByRole('group', { name: `facts ${label}`, exact: true }).getByText(text, { exact: true })
+const factOf = (page: Page, label: string, text: string) => factIn(page, `facts ${label}`, text)
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 

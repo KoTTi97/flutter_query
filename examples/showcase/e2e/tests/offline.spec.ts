@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, test } from './fixtures'
+import { expect, fact, group, test } from './fixtures'
 
 // The connection card, the strip, the add card, the list and the three
 // explanations are taller than the default viewport, and the scaffold's list
@@ -10,7 +10,7 @@ const TODOS = /^\/api\/todos$/
 
 /// The screen's own facts, the group next to the cache strip: `online=false`,
 /// `query fetchStatus=paused`, `mutation isPaused=true`.
-const facts = (page: Page) => page.getByRole('group', { name: 'facts offline', exact: true })
+const facts = (page: Page) => group(page, 'facts offline')
 
 const say = (page: Page, text: string) => facts(page).getByText(text, { exact: true })
 
@@ -27,7 +27,7 @@ async function setOnline(page: Page, online: boolean) {
 // A segment of one knob: the network mode and the reconnect knob both have
 // an `always`, so the knob's group comes first.
 const pick = (page: Page, knob: 'network-mode' | 'on-reconnect', label: string) =>
-  page.getByRole('group', { name: knob, exact: true }).getByRole('radio', { name: label, exact: true }).click()
+  group(page, knob).getByRole('radio', { name: label, exact: true }).click()
 
 const pickMode = (page: Page, mode: string) => pick(page, 'network-mode', mode)
 

@@ -75,6 +75,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -473,7 +474,7 @@ class _ReaderCard extends StatelessWidget {
 
   final String note;
 
-  /// The semantics group is `reader <name>`, the widget key `reader-<name>`.
+  /// The group is `reader <name>`, in both test layers.
   final String name;
 
   final QueryResult<List<Post>> result;
@@ -498,21 +499,14 @@ class _ReaderCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(note),
           const SizedBox(height: 8),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: 'reader $name',
-            child: Wrap(
-              key: ValueKey<String>('reader-$name'),
-              spacing: 12,
-              runSpacing: 4,
-              children: <Widget>[
-                Text(posts, style: monoStyle),
-                Text('status=${result.status.name}', style: monoStyle),
-                Text('fetching=${result.isFetching}', style: monoStyle),
-                Text('builds=$builds', style: monoStyle),
-              ],
-            ),
+          FactGroup(
+            name: 'reader $name',
+            facts: <String>[
+              posts,
+              'status=${result.status.name}',
+              'fetching=${result.isFetching}',
+              'builds=$builds',
+            ],
           ),
           if (result case QueryError(:final error)) ...<Widget>[
             const SizedBox(height: 8),
@@ -702,23 +696,16 @@ class _ListenerCardState extends State<_ListenerCard> {
               'one transition, straight to the second value.',
             ),
             const SizedBox(height: 12),
-            Semantics(
-              container: true,
-              explicitChildNodes: true,
-              label: 'listener',
+            SemanticsGroup(
+              name: 'listener',
               child: Column(
-                key: const ValueKey<String>('listener-facts'),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 4,
-                    children: <Widget>[
-                      Text('listener-calls=$_calls', style: monoStyle),
-                      Text('listener-skips=$_skips', style: monoStyle),
-                      Text('last=$_last', style: monoStyle),
-                    ],
-                  ),
+                  FactList(<String>[
+                    'listener-calls=$_calls',
+                    'listener-skips=$_skips',
+                    'last=$_last',
+                  ]),
                   const SizedBox(height: 4),
                   for (final line in _log) Text(line, style: monoStyle),
                   const SizedBox(height: 8),
@@ -918,8 +905,7 @@ class _MutationPanel extends StatelessWidget {
 
   final String code;
 
-  /// The semantics group is `mutation <name>`, the widget key
-  /// `mutation-<name>`.
+  /// The group is `mutation <name>`, in both test layers.
   final String name;
 
   final String label;
@@ -942,23 +928,14 @@ class _MutationPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: 'mutation $name',
-            child: Wrap(
-              key: ValueKey<String>('mutation-$name'),
-              spacing: 12,
-              runSpacing: 4,
-              children: <Widget>[
-                Text('status=${result.status.name}', style: monoStyle),
-                if (result case MutationSuccess(:final data))
-                  Text('data=$data', style: monoStyle),
-                if (result case MutationError(:final error))
-                  Text('error=$error', style: monoStyle),
-                for (final fact in extraFacts) Text(fact, style: monoStyle),
-              ],
-            ),
+          FactGroup(
+            name: 'mutation $name',
+            facts: <String>[
+              'status=${result.status.name}',
+              if (result case MutationSuccess(:final data)) 'data=$data',
+              if (result case MutationError(:final error)) 'error=$error',
+              ...extraFacts,
+            ],
           ),
         ],
       );
@@ -1024,19 +1001,20 @@ class _InfiniteRow extends StatelessWidget {
         children: <Widget>[
           Text(code, style: monoStyle),
           const SizedBox(height: 4),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: 'infinite $name',
+          SemanticsGroup(
+            name: 'infinite $name',
+            // Not a bare [FactGroup]: one card puts a button beside the facts,
+            // and it belongs inside the group the test addresses.
             child: Wrap(
-              key: ValueKey<String>('infinite-$name'),
               spacing: 12,
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
-                Text('pages=${_pagesOf(result)}', style: monoStyle),
-                Text('status=${result.status.name}', style: monoStyle),
-                for (final fact in extraFacts) Text(fact, style: monoStyle),
+                FactList(<String>[
+                  'pages=${_pagesOf(result)}',
+                  'status=${result.status.name}',
+                  ...extraFacts,
+                ]),
                 ...trailing,
               ],
             ),

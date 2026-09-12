@@ -54,6 +54,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -194,10 +195,8 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
   /// observes the entry.
   Widget _infinitePrefetchCard() => SectionCard(
         title: 'An infinite prefetch',
-        child: Semantics(
-          container: true,
-          explicitChildNodes: true,
-          label: 'infinite prefetch',
+        child: SemanticsGroup(
+          name: 'infinite prefetch',
           child: CacheListener(
             builder: (context) {
               final cached = QueryClientProvider.of(context)
@@ -206,7 +205,6 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
                       .fold<int>(0, (n, page) => n + page.items.length) ??
                   0;
               return Column(
-                key: const ValueKey<String>('infinite-prefetch'),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   const Text(
@@ -294,10 +292,8 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
   /// the strips are: the background refresh has no observer to announce it.
   Widget _readsCard() => SectionCard(
         title: 'Imperative reads',
-        child: Semantics(
-          container: true,
-          explicitChildNodes: true,
-          label: 'reads',
+        child: SemanticsGroup(
+          name: 'reads',
           child: CacheListener(
             builder: (context) {
               final client = QueryClientProvider.of(context);
@@ -305,7 +301,6 @@ class _PrefetchingScreenState extends State<PrefetchingScreen> {
               final requests =
                   ShowcaseScope.of(context).stats.fetchesOf(counterKey);
               return Column(
-                key: const ValueKey<String>('reads'),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Wrap(
@@ -498,14 +493,11 @@ class _PostRow extends StatelessWidget {
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => SemanticsGroup(
         // A group per row, so a test can tie the pill to its post; explicit
         // children keep the texts and buttons findable on their own.
-        container: true,
-        explicitChildNodes: true,
-        label: 'post ${post.id}',
+        name: 'post ${post.id}',
         child: Row(
-          key: ValueKey<String>('post-row-${post.id}'),
           children: <Widget>[
             Expanded(child: Text('${post.id} · ${post.title}')),
             if (prefetched) ...<Widget>[

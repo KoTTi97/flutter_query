@@ -15,20 +15,14 @@ import '../harness.dart';
 
 /// One fact of a reader's own group (`todos-reader`, `editor`, `backend`,
 /// `add`) — scoped, because the strips show an `isStale=` of their own.
-Finder reader(String group, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('$group-facts')),
-      matching: find.text(text),
-    );
+Finder reader(String group, String text) => factIn(group, text);
 
 /// A segment of one knob, by its label — three knobs have a `0`.
-Finder segment(String knob, String label) => find.descendant(
-      of: find.byKey(ValueKey<String>(knob)),
-      matching: find.text(label),
-    );
+Finder segment(String knob, String label) => factIn(knob, label);
 
 /// The row of todo [id]. Its text is also in the editor's field once the
 /// editor is open, so a row is found through its key, never by text alone.
-Finder row(int id) => find.byKey(ValueKey<String>('todo-row-$id'));
+Finder row(int id) => groupNamed('todo $id');
 
 Finder rowText(int id, String text) =>
     find.descendant(of: row(id), matching: find.text(text));

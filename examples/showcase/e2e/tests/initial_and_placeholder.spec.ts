@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, holdRequest, test } from './fixtures'
+import { expect, fact, factIn, group, holdRequest, test } from './fixtures'
 
 // Four cards and their strips are taller than the default viewport, and the
 // scaffold's list only builds — and the semantics tree only carries — what is
@@ -8,8 +8,7 @@ test.use({ viewport: { width: 1280, height: 2600 } })
 
 /// The `detail <card>` group: each card's title and facts, kept apart because
 /// two cards show `isPlaceholderData=false` at once.
-const detail = (page: Page, card: string, text: string) =>
-  page.getByRole('group', { name: `detail ${card}`, exact: true }).getByText(text, { exact: true })
+const detail = (page: Page, card: string, text: string) => factIn(page, `detail ${card}`, text)
 
 test('a detail seeded from a fresh list costs no request', async ({ page, open, scenario }) => {
   await open('/initial-and-placeholder')
@@ -125,9 +124,7 @@ test('a switched key fetches the new post and settles on it', async ({ page, ope
 
 // Card D's mode button: `off` until a test picks one, so nothing on this
 // screen seeds post 8 or post 9 by itself.
-const pickMode = (page: Page, label: string) =>
-  page
-    .getByRole('group', { name: 'lazy-seed mode', exact: true })
+const pickMode = (page: Page, label: string) => group(page, 'lazy-seed mode')
     .getByRole('radio', { name: label, exact: true })
     .click()
 

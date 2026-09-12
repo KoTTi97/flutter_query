@@ -1,10 +1,11 @@
 /// A strip of facts about one cache entry, under every feature screen.
 ///
-/// It is how a test reads the cache from the screen: a widget test finds the
-/// strip by its key and a fact by its exact text; the end-to-end suite finds
-/// the semantics group `debug <label>` and the same exact text inside it. No
-/// stopwatch needed to know whether a fetch happened, whether the entry is
-/// stale, or how many observers hold it.
+/// It is how a test reads the cache from the screen. The strip is a
+/// [SemanticsGroup] named `debug <label>` — one name for both layers, the house
+/// convention (C56): a widget test asks `groupNamed('debug <label>')` and the
+/// end-to-end suite `getByRole('group', { name: 'debug <label>' })`, and each
+/// fact is an exact text inside it. No stopwatch needed to know whether a fetch
+/// happened, whether the entry is stale, or how many observers hold it.
 ///
 /// Event-driven, never ticking: it rebuilds on the cache's own events (through
 /// [CacheListener], which is built on [CacheStats] and has listened since the
@@ -18,6 +19,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'cache_listener.dart';
 import 'cache_stats.dart';
 import 'controls.dart';
+import 'fact_group.dart';
 import 'scope.dart';
 
 class QueryDebugStrip extends StatelessWidget {
@@ -30,8 +32,7 @@ class QueryDebugStrip extends StatelessWidget {
   /// The cache entry to watch.
   final QueryKey queryKey;
 
-  /// A short, stable name: the semantics group is `debug <label>` and the
-  /// widget key `debug-<label>`.
+  /// A short, stable name: the group is `debug <label>`, in both test layers.
   final String label;
 
   /// An entry that has never been fetched reads as an en dash rather than as a
@@ -65,12 +66,9 @@ class QueryDebugStrip extends StatelessWidget {
     ];
 
     final scheme = Theme.of(context).colorScheme;
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: 'debug $label',
+    return SemanticsGroup(
+      name: 'debug $label',
       child: Container(
-        key: ValueKey<String>('debug-$label'),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
@@ -85,13 +83,7 @@ class QueryDebugStrip extends StatelessWidget {
               style: Theme.of(context).textTheme.labelSmall,
             ),
             const SizedBox(height: 4),
-            Wrap(
-              spacing: 12,
-              runSpacing: 2,
-              children: <Widget>[
-                for (final fact in facts) Text(fact, style: monoStyleSmall),
-              ],
-            ),
+            FactList(facts, dense: true),
           ],
         ),
       ),

@@ -1,12 +1,12 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, snackBar, test } from './fixtures'
+import { expect, fact, group, snackBar, test } from './fixtures'
 
 // Three strips, two cards and a growing log: taller than the default viewport,
 // and a lazily built list only has the rows in view.
 test.use({ viewport: { width: 1280, height: 1800 } })
 
 /// The callback log: a semantics group whose lines are exact leaf texts.
-const logGroup = (page: Page) => page.getByRole('group', { name: 'callback log', exact: true })
+const logGroup = (page: Page) => group(page, 'callback log')
 const logLine = (page: Page, text: string) => logGroup(page).getByText(text, { exact: true })
 
 /// Asserts the lines are on screen and stacked in this order, top to bottom —

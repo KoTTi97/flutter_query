@@ -157,7 +157,7 @@ void main() {
     // Switched off, the controller is disposed and its observers go.
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey<String>('summary-facts')), findsNothing);
+    expect(groupNamed('summary'), findsNothing);
     for (final id in <int>[1, 2, 3, 4]) {
       expect(h.fact('post-$id', 'observers=1'), findsOneWidget);
     }

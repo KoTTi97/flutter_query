@@ -40,6 +40,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -397,12 +398,9 @@ class _GlobalCallbacksScreenState extends State<GlobalCallbacksScreen>
                 const SizedBox(height: 4),
                 // Its own semantics group, like a strip: a test finds the
                 // group and each line as an exact text inside it.
-                Semantics(
-                  container: true,
-                  explicitChildNodes: true,
-                  label: 'callback log',
+                SemanticsGroup(
+                  name: 'callback log',
                   child: Column(
-                    key: const ValueKey<String>('callback-log'),
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       for (final line in _log)
@@ -441,9 +439,7 @@ class _QueryRow extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
+  Widget build(BuildContext context) => SemanticsGroup(
         child: Wrap(
           spacing: 12,
           runSpacing: 8,
@@ -479,9 +475,7 @@ class _MutationsCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Semantics(
-          container: true,
-          explicitChildNodes: true,
+        SemanticsGroup(
           child: Wrap(
             spacing: 12,
             runSpacing: 8,

@@ -14,17 +14,11 @@ import '../harness.dart';
 
 /// One of the reader's own facts (`status=error`, `failureCount=2`) — scoped,
 /// because the strip shows a `status=` of its own.
-Finder reader(String text) => find.descendant(
-      of: find.byKey(const ValueKey<String>('reader-facts')),
-      matching: find.text(text),
-    );
+Finder reader(String text) => factIn('reader', text);
 
 /// A segment of one knob, by its label: `fail-next` and `retry` both have a
 /// `2`, so the knob's own key comes first.
-Finder segment(String knob, String label) => find.descendant(
-      of: find.byKey(ValueKey<String>(knob)),
-      matching: find.text(label),
-    );
+Finder segment(String knob, String label) => factIn(knob, label);
 
 /// The screen is taller than the default 800×600 test window, and a
 /// `ListView` only builds what is near the viewport.

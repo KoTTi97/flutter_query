@@ -22,10 +22,7 @@ Future<void> openScreen(WidgetTester tester, Harness h) async {
 /// Picks an interval. Never followed by `pumpAndSettle`: the tap may arm the
 /// poll.
 Future<void> pickInterval(WidgetTester tester, String label) async {
-  await tester.tap(find.descendant(
-    of: find.byKey(const ValueKey<String>('interval')),
-    matching: find.text(label),
-  ));
+  await tester.tap(factIn('interval', label));
   await tester.pump();
 }
 

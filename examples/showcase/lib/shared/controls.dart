@@ -1,5 +1,5 @@
-/// The controls more than one feature screen drives itself with, and the two
-/// formats they print in.
+/// The controls more than one feature screen drives itself with, and the clock
+/// they print times in.
 ///
 /// Every one of these was copied between feature directories until the
 /// review's C55 counted the copies: the toolbar four times, the action button
@@ -11,17 +11,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-/// The monospace style the fact texts are printed in.
-///
-/// A fact is read by its exact string in both test layers, so the font matters
-/// only to a human; what it buys is that `status=success` and `status=error`
-/// are the same width and the wrap does not jump.
-const TextStyle monoStyle = TextStyle(fontFamily: 'monospace', fontSize: 13);
-
-/// [monoStyle] a point smaller, for the screens that print a table of facts
-/// rather than a handful.
-const TextStyle monoStyleSmall =
-    TextStyle(fontFamily: 'monospace', fontSize: 12);
+import 'fact_group.dart';
 
 /// A local wall clock as `hh:mm:ss`.
 ///
@@ -43,9 +33,7 @@ class Toolbar extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
+  Widget build(BuildContext context) => SemanticsGroup(
         child: Wrap(spacing: 8, runSpacing: 8, children: children),
       );
 }
@@ -107,20 +95,20 @@ class ActionButton extends StatelessWidget {
 /// The knob itself: a compact [SegmentedButton] in a named semantics group, so
 /// a test can pick this knob's `2` apart from another knob's.
 ///
+/// [name] is the group's one name in the sense of [SemanticsGroup.name] — the
+/// string both test layers address the knob by.
+///
 /// A function rather than a widget class, so that what a screen builds is
 /// exactly what it built when each screen carried its own copy.
 Widget knobButton<T extends Object>({
-  required String semanticsKey,
+  required String name,
   required List<(String, T)> choices,
   required T selected,
   required ValueChanged<T> onChanged,
 }) =>
-    Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: semanticsKey,
+    SemanticsGroup(
+      name: name,
       child: SegmentedButton<T>(
-        key: ValueKey<String>(semanticsKey),
         showSelectedIcon: false,
         style: const ButtonStyle(
           visualDensity: VisualDensity.compact,
@@ -135,7 +123,8 @@ Widget knobButton<T extends Object>({
       ),
     );
 
-/// One knob, stacked: its name above [knobButton].
+/// One knob, stacked: its [title] above [knobButton], which the group [name]
+/// goes to.
 ///
 /// The shape for a knob that is a row of a stretched `Column` — it takes the
 /// full width and scrolls sideways rather than overflowing on a narrow phone.
@@ -143,8 +132,8 @@ Widget knobButton<T extends Object>({
 /// carry an unbounded scroller, so that screen composes [knobButton] itself.
 Widget knob<T extends Object>(
   BuildContext context, {
+  required String title,
   required String name,
-  required String semanticsKey,
   required List<(String, T)> choices,
   required T selected,
   required ValueChanged<T> onChanged,
@@ -152,13 +141,13 @@ Widget knob<T extends Object>(
     Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(name, style: Theme.of(context).textTheme.labelLarge),
+        Text(title, style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 4),
         // Scrolls sideways rather than overflowing on a narrow phone.
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: knobButton<T>(
-            semanticsKey: semanticsKey,
+            name: name,
             choices: choices,
             selected: selected,
             onChanged: onChanged,

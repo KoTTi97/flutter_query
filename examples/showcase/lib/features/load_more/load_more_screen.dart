@@ -34,6 +34,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -216,9 +217,7 @@ class _ProjectListState extends State<_ProjectList> {
 
         return SectionCard(
           title: 'Projects',
-          trailing: Semantics(
-            container: true,
-            explicitChildNodes: true,
+          trailing: SemanticsGroup(
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
@@ -240,12 +239,16 @@ class _ProjectListState extends State<_ProjectList> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _Facts(<String>[
-                'pages=${data?.pages.length ?? 0}',
-                'rows=${rows.length}',
-                'hasNextPage=${projects.hasNextPage}',
-                'isFetchingNextPage=${projects.isFetchingNextPage}',
-              ]),
+              FactGroup(
+                name: 'projects facts',
+                dense: true,
+                facts: <String>[
+                  'pages=${data?.pages.length ?? 0}',
+                  'rows=${rows.length}',
+                  'hasNextPage=${projects.hasNextPage}',
+                  'isFetchingNextPage=${projects.isFetchingNextPage}',
+                ],
+              ),
               const SizedBox(height: 8),
               if (result case QueryError(:final error, staleData: null))
                 Notice('$error', error: true)
@@ -274,9 +277,7 @@ class _ProjectListState extends State<_ProjectList> {
                 ),
               ],
               const SizedBox(height: 8),
-              Semantics(
-                container: true,
-                explicitChildNodes: true,
+              SemanticsGroup(
                 child: Row(
                   children: <Widget>[
                     FilledButton(
@@ -297,32 +298,6 @@ class _ProjectListState extends State<_ProjectList> {
       },
     );
   }
-}
-
-/// The paging facts as exact `key=value` texts, in a group of their own so
-/// the strip's facts and these never look alike to a test.
-class _Facts extends StatelessWidget {
-  const _Facts(this.facts);
-
-  final List<String> facts;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: 'projects facts',
-        child: Wrap(
-          key: const ValueKey<String>('projects-facts'),
-          spacing: 12,
-          children: <Widget>[
-            for (final fact in facts)
-              Text(
-                fact,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-          ],
-        ),
-      );
 }
 
 class _ProjectRow extends StatelessWidget {
@@ -402,24 +377,13 @@ class _AboutView extends StatelessWidget {
             'read of the cache, no observer, no request.',
           ),
           const SizedBox(height: 8),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: 'about facts',
-            child: Wrap(
-              key: const ValueKey<String>('about-facts'),
-              spacing: 12,
-              children: <Widget>[
-                Text(
-                  'cached pages=${cached?.pages.length ?? 0}',
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                ),
-                Text(
-                  'cached rows=$rows',
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                ),
-              ],
-            ),
+          FactGroup(
+            name: 'about facts',
+            dense: true,
+            facts: <String>[
+              'cached pages=${cached?.pages.length ?? 0}',
+              'cached rows=$rows',
+            ],
           ),
           const SizedBox(height: 8),
           const Text(

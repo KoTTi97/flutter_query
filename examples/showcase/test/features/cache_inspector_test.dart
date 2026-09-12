@@ -21,7 +21,7 @@ void tall(WidgetTester tester) {
 /// The log's lines, top to bottom — the order the events arrived in.
 List<String> logLines(WidgetTester tester) => tester
     .widgetList<Text>(find.descendant(
-      of: find.byKey(const ValueKey<String>('event-log')),
+      of: groupNamed('event log'),
       matching: find.byType(Text),
     ))
     .map((text) => text.data!)
@@ -42,17 +42,14 @@ bool inOrder(List<String> log, List<String> lines) {
 }
 
 /// One row of the entries table, by the key's `debugString`.
-Finder entry(String key) => find.byKey(ValueKey<String>('entry-$key'));
+Finder entry(String key) => groupNamed('entry $key');
 
 /// One fact inside that row: two rows carry the same fact names, so nothing
 /// is looked up unscoped.
 Finder entryFact(String key, String text) =>
     find.descendant(of: entry(key), matching: find.text(text));
 
-Finder mutationFact(int id, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('mutation-$id')),
-      matching: find.text(text),
-    );
+Finder mutationFact(int id, String text) => factIn('mutation #$id', text);
 
 const String postsKey = '["posts"]';
 const String todosKey = '["todos"]';

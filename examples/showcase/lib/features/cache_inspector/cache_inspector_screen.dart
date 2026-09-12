@@ -37,6 +37,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/controls.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -309,9 +310,7 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Semantics(
-                container: true,
-                explicitChildNodes: true,
+              SemanticsGroup(
                 child: Wrap(
                   spacing: 12,
                   runSpacing: 8,
@@ -439,12 +438,9 @@ class _CacheInspectorScreenState extends State<CacheInspectorScreen>
               const SizedBox(height: 4),
               // Its own semantics group, like a debug strip: a test finds the
               // group and each line as an exact text inside it.
-              Semantics(
-                container: true,
-                explicitChildNodes: true,
-                label: 'event log',
+              SemanticsGroup(
+                name: 'event log',
                 child: Column(
-                  key: const ValueKey<String>('event-log'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     if (_log.isEmpty)
@@ -491,9 +487,9 @@ class _Reader<T> extends StatelessWidget {
 /// One row of the entries table: the key, its facts as texts of their own,
 /// and the three buttons that act on it.
 ///
-/// A named semantics group per row, and a widget key to match, so a test can
-/// ask for one row's `status=` and not another's — two rows carry the same
-/// fact names, and unscoped they would collide.
+/// A named group per row, so a test can ask for one row's `status=` and not
+/// another's — two rows carry the same fact names, and unscoped they would
+/// collide.
 class _EntryRow extends StatelessWidget {
   const _EntryRow({
     required this.query,
@@ -520,25 +516,16 @@ class _EntryRow extends StatelessWidget {
       'dataUpdatedAt=${_clock(state.dataUpdatedAt)}',
     ];
 
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: 'entry $key',
+    return SemanticsGroup(
+      name: 'entry $key',
       child: Padding(
-        key: ValueKey<String>('entry-$key'),
         padding: const EdgeInsets.only(bottom: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(key, style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 4),
-            Wrap(
-              spacing: 12,
-              runSpacing: 2,
-              children: <Widget>[
-                for (final fact in facts) Text(fact, style: monoStyleSmall),
-              ],
-            ),
+            FactList(facts, dense: true),
             const SizedBox(height: 4),
             Wrap(
               spacing: 8,
@@ -576,12 +563,9 @@ class _MutationRow extends StatelessWidget {
       'failureCount=${state.failureCount}',
     ];
 
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: 'mutation #${mutation.mutationId}',
+    return SemanticsGroup(
+      name: 'mutation #${mutation.mutationId}',
       child: Padding(
-        key: ValueKey<String>('mutation-${mutation.mutationId}'),
         padding: const EdgeInsets.only(bottom: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,13 +575,7 @@ class _MutationRow extends StatelessWidget {
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 4),
-            Wrap(
-              spacing: 12,
-              runSpacing: 2,
-              children: <Widget>[
-                for (final fact in facts) Text(fact, style: monoStyleSmall),
-              ],
-            ),
+            FactList(facts, dense: true),
           ],
         ),
       ),

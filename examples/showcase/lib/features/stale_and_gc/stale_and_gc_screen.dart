@@ -33,6 +33,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -249,8 +250,8 @@ class _StaleAndGcScreenState extends State<StaleAndGcScreen> {
               const Divider(height: 24),
               knob<StaleTime>(
                 context,
-                name: 'Stale time',
-                semanticsKey: 'stale-time',
+                title: 'Stale time',
+                name: 'stale-time',
                 choices: _staleTimes,
                 selected: _staleTime,
                 onChanged: (value) {
@@ -268,8 +269,8 @@ class _StaleAndGcScreenState extends State<StaleAndGcScreen> {
               const SizedBox(height: 8),
               knob<GcTime>(
                 context,
-                name: 'GC time',
-                semanticsKey: 'gc-time',
+                title: 'GC time',
+                name: 'gc-time',
                 choices: _gcTimes,
                 selected: _gcTime,
                 onChanged: (value) {
@@ -308,25 +309,7 @@ class _Reading extends StatelessWidget {
         children: <Widget>[
           child,
           const SizedBox(height: 8),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: 'reader',
-            child: Wrap(
-              key: const ValueKey<String>('reader-facts'),
-              spacing: 12,
-              children: <Widget>[
-                for (final fact in facts)
-                  Text(
-                    fact,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          FactGroup(name: 'reader', facts: facts, dense: true),
         ],
       );
 }

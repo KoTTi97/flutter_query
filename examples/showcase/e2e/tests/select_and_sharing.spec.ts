@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, holdRequest, test } from './fixtures'
+import { expect, fact, group, holdRequest, test } from './fixtures'
 
 // The five readers of the one entry, by the id of their semantics group.
 const readers = ['context', 'builder', 'mixin', 'controller', 'raw'] as const
@@ -7,7 +7,7 @@ type Reader = (typeof readers)[number]
 
 /// One reader's row: a semantics group named `reader <id>`, the way a debug
 /// strip is `debug <label>`.
-const reader = (page: Page, id: Reader) => page.getByRole('group', { name: `reader ${id}`, exact: true })
+const reader = (page: Page, id: Reader) => group(page, `reader ${id}`)
 
 type Counters = { builds: number; dataBuilds: number }
 

@@ -70,6 +70,7 @@ import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -236,7 +237,7 @@ class _OfflineScreenState extends State<OfflineScreen>
               // Each segmented button in a named semantics group: this one
               // and the reconnect knob both have an `always`.
               _Knob<NetworkMode>(
-                semanticsKey: 'network-mode',
+                name: 'network-mode',
                 segments: const <ButtonSegment<NetworkMode>>[
                   ButtonSegment<NetworkMode>(
                     value: NetworkMode.online,
@@ -258,7 +259,7 @@ class _OfflineScreenState extends State<OfflineScreen>
               const Text('On reconnect'),
               const SizedBox(height: 4),
               _Knob<RefetchOn>(
-                semanticsKey: 'on-reconnect',
+                name: 'on-reconnect',
                 segments: const <ButtonSegment<RefetchOn>>[
                   ButtonSegment<RefetchOn>(
                     value: RefetchOn.never,
@@ -298,8 +299,9 @@ class _OfflineScreenState extends State<OfflineScreen>
                 ],
               ),
               const SizedBox(height: 8),
-              _Facts(
-                <String>[
+              FactGroup(
+                name: 'facts offline',
+                facts: <String>[
                   'online=$online',
                   'query fetchStatus=${todos.fetchStatus.name}',
                   'mutation status=${mutation.status.name}',
@@ -308,7 +310,6 @@ class _OfflineScreenState extends State<OfflineScreen>
                   'mutations paused=$paused',
                   'todos=${rows.length}',
                 ],
-                label: 'offline',
               ),
               const SizedBox(height: 8),
               const Text(
@@ -406,54 +407,25 @@ class _OfflineScreenState extends State<OfflineScreen>
 /// knob's `always` apart from another's.
 class _Knob<T extends Object> extends StatelessWidget {
   const _Knob({
-    required this.semanticsKey,
+    required this.name,
     required this.segments,
     required this.selected,
     required this.onChanged,
   });
 
-  final String semanticsKey;
+  final String name;
   final List<ButtonSegment<T>> segments;
   final T selected;
   final ValueChanged<T> onChanged;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: semanticsKey,
+  Widget build(BuildContext context) => SemanticsGroup(
+        name: name,
         child: SegmentedButton<T>(
-          key: ValueKey<String>(semanticsKey),
           showSelectedIcon: false,
           segments: segments,
           selected: <T>{selected},
           onSelectionChanged: (selection) => onChanged(selection.first),
-        ),
-      );
-}
-
-/// `key=value` texts, one node each, inside a group a test can address — the
-/// strip below says what the cache holds, these say what the screen sees.
-class _Facts extends StatelessWidget {
-  const _Facts(this.facts, {required this.label});
-
-  final List<String> facts;
-
-  /// The semantics group is `facts <label>`, the widget key `facts-<label>`.
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: 'facts $label',
-        child: Wrap(
-          key: ValueKey<String>('facts-$label'),
-          spacing: 12,
-          runSpacing: 4,
-          children: <Widget>[
-            for (final fact in facts) Text(fact, style: monoStyle),
-          ],
         ),
       );
 }

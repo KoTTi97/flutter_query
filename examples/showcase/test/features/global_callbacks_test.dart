@@ -20,7 +20,7 @@ void tall(WidgetTester tester) {
 /// The log's lines, top to bottom — the order the callbacks ran in.
 List<String> logLines(WidgetTester tester) => tester
     .widgetList<Text>(find.descendant(
-      of: find.byKey(const ValueKey<String>('callback-log')),
+      of: groupNamed('callback log'),
       matching: find.byType(Text),
     ))
     .map((text) => text.data!)

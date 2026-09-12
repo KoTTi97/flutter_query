@@ -32,6 +32,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -142,11 +143,9 @@ class _PaginationScreenState extends State<PaginationScreen> {
         SectionCard(
           title: 'Pages',
           trailing: result.isFetching ? const Pill('loading') : null,
-          child: Semantics(
+          child: SemanticsGroup(
             // Explicit children keep each button and each `key=value` text a
             // node of its own rather than folded into the row.
-            container: true,
-            explicitChildNodes: true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[

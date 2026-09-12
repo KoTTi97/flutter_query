@@ -5,24 +5,17 @@
 /// stale timer and the entry's gc timer.
 library;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../harness.dart';
 
 /// One of the reader's own facts (`reader=attached`, `serial=1`,
 /// `isStale=true`) — scoped, because the strip shows an `isStale=` of its own.
-Finder reader(String text) => find.descendant(
-      of: find.byKey(const ValueKey<String>('reader-facts')),
-      matching: find.text(text),
-    );
+Finder reader(String text) => factIn('reader', text);
 
 /// A segment of the stale-time or the gc-time button, by its label — both
 /// have a `5 s`.
-Finder segment(String group, String label) => find.descendant(
-      of: find.byKey(ValueKey<String>(group)),
-      matching: find.text(label),
-    );
+Finder segment(String group, String label) => factIn(group, label);
 
 Future<void> tapTooltip(WidgetTester tester, String tooltip) async {
   await tester.tap(find.byTooltip(tooltip));

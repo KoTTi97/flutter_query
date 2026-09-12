@@ -43,8 +43,10 @@ contained means a feature never reaches into another feature's directory, not
 that it re-types the app's own furniture: the backend client (`api.dart`), the
 models, the scope, the theme and `SectionCard`/`Pill`/`Notice`, the debug
 strip, `CacheListener` and its `PhaseSafeRebuild` mixin (`cache_listener.dart`),
-and the `Toolbar`/`ActionButton`/`knob` controls with the `monoStyle` and
-`hhmmss` formats (`controls.dart`). The rule for adding to it: **the third copy
+the `SemanticsGroup`/`FactGroup`/`FactList` a screen publishes its facts with
+and the `monoStyle` they print in (`fact_group.dart`), and the
+`Toolbar`/`ActionButton`/`knob` controls with the `hhmmss` format
+(`controls.dart`). The rule for adding to it: **the third copy
 moves.** Two screens that happen to look alike stay two screens — the fourth
 knob is a `Wrap` cell rather than a row of a stretched `Column`, so it composes
 `knobButton` itself and says why in its dartdoc, which is the shape to copy
@@ -147,10 +149,20 @@ fully parallel and nothing a test does is visible to another. Flutter web
 paints to a canvas, so the tests read the **semantics tree**, switched on by
 `--dart-define=E2E=true`. What that means for writing one:
 
-- A screen's **debug strip** is a semantics group `debug <label>` whose facts
-  are exact leaf texts: `fact(page, 'post', 'fetchStatus=idle')`. That is how
-  a test reads the cache — whether a fetch happened, whether an entry is stale,
-  how many observers hold it — without a stopwatch.
+- **A group is named once, and the name is what both test layers use.** A
+  screen publishes facts through `SemanticsGroup` / `FactGroup`
+  (`lib/shared/fact_group.dart`): the one `name` it is given becomes the
+  semantics label *and* the widget key, so `group(page, 'reader alpha')` here
+  and `groupNamed('reader alpha')` in `test/harness.dart` address the same
+  thing. Every locator goes through `group` / `factIn` in `tests/fixtures.ts`
+  and every finder through `groupNamed` / `factIn` in the harness — nothing
+  writes `getByRole('group', …)` or `find.byKey` for a group of its own.
+- A screen's **debug strip** is such a group, named `debug <label>`, whose
+  facts are exact leaf texts: `fact(page, 'post', 'fetchStatus=idle')`. That is
+  how a test reads the cache — whether a fetch happened, whether an entry is
+  stale, how many observers hold it — without a stopwatch. **One per cache
+  entry a test reads**, and it is the only named group that is about the cache
+  rather than about the screen.
 - **Nothing asserts on a clock.** To prove something shows *before* the
   backend answers, `holdRequest(page, glob)` holds the request in the browser
   and releases it after the assertion. Counts are asserted through the
@@ -187,11 +199,14 @@ Rules that cost someone a debugging session, in the order they bite:
   a text button is not** — there the visible label is the name, and
   `Tooltip(message: …, excludeFromSemantics: true)` keeps the hover text
   without touching the tree. Several controls in one row can fold into the
-  row's node: wrap a toolbar in `Semantics(container: true,
-  explicitChildNodes: true)`.
-- **Two facts named `status=` collide.** Put a card's facts in a named
-  semantics group and read them inside it, the way the strips do. A
-  `SectionCard` title must not repeat a control's label either.
+  row's node: wrap a toolbar in `SemanticsGroup(child: …)` — or in `Toolbar`,
+  which is that plus the `Wrap`.
+- **Two facts named `status=` collide.** Put a card's facts in a `FactGroup`
+  and read them inside it, the way the strips do. Never write
+  `Semantics(container: true, explicitChildNodes: true)` out again — `grep -r
+  'container: true' lib` has exactly one hit, in `fact_group.dart`, and that is
+  the invariant. A `SectionCard` title must not repeat a control's label
+  either.
 - **A subscription to a cache for rebuilds must filter to state-changing
   events.** Every build re-applies a reader's options, an inline `queryFn`
   closure is never equal, and `QueryObserverOptionsUpdated` then fires once

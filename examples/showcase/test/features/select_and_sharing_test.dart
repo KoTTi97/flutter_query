@@ -24,10 +24,7 @@ const List<String> readers = <String>[
 ];
 
 /// One exact text inside the reader's row.
-Finder inReader(String id, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('reader-$id')),
-      matching: find.text(text),
-    );
+Finder inReader(String id, String text) => factIn('reader $id', text);
 
 void expectBuilds(String name, Map<String, int> expected) {
   for (final entry in expected.entries) {

@@ -1,4 +1,4 @@
-import { expect, fact, holdRequest, test, type Page } from './fixtures'
+import { expect, fact, factIn, holdRequest, test, type Page } from './fixtures'
 
 // Four cards and a strip: taller than the default viewport, and a lazily
 // built list only has what is in view.
@@ -8,8 +8,7 @@ const INCREMENT = '**/api/counter/increment*'
 
 /// A mutation's facts live in the group `mutation <label>`, because
 /// `status=success` is also what the counter's strip says about the query.
-const mutation = (page: Page, label: string, text: string) =>
-  page.getByRole('group', { name: `mutation ${label}`, exact: true }).getByText(text, { exact: true })
+const mutation = (page: Page, label: string, text: string) => factIn(page, `mutation ${label}`, text)
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 

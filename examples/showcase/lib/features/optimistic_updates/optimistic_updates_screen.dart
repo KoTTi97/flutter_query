@@ -38,6 +38,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -351,9 +352,7 @@ class _TodoCard extends StatelessWidget {
       title: title,
       // Explicit child nodes: two buttons in one row would otherwise fold
       // into a single semantics node, and the tests find each by name.
-      trailing: Semantics(
-        container: true,
-        explicitChildNodes: true,
+      trailing: SemanticsGroup(
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -369,9 +368,7 @@ class _TodoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
+          SemanticsGroup(
             child: Wrap(
               spacing: 12,
               children: <Widget>[

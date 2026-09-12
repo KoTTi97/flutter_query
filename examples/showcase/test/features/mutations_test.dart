@@ -20,10 +20,8 @@ void tall(WidgetTester tester) {
 /// uses two of them, so this goes by the shared base.
 /// One of the mutation facts, by the group it is in and its exact text —
 /// `status=success` is also what the counter's strip says about the query.
-Finder mutationFact(String label, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('mutation-$label')),
-      matching: find.text(text),
-    );
+Finder mutationFact(String label, String text) =>
+    factIn('mutation $label', text);
 
 Finder button(String label) => find.ancestor(
       of: find.text(label),

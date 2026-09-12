@@ -29,6 +29,7 @@ import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/scope.dart';
@@ -339,7 +340,7 @@ class _ReaderState extends State<_Reader> with QueryMixin {
                 ],
               ),
               const SizedBox(height: 8),
-              _Facts(facts, label: 'increment'),
+              FactGroup(name: 'mutation increment', facts: facts),
               if (_asyncResult != null) ...<Widget>[
                 const SizedBox(height: 8),
                 Text(_asyncResult!, style: monoStyle),
@@ -423,15 +424,15 @@ class _ReaderState extends State<_Reader> with QueryMixin {
               const SizedBox(height: 8),
               ListenableBuilder(
                 listenable: _pairs,
-                builder: (context, _) => _Facts(
-                  <String>[
+                builder: (context, _) => FactGroup(
+                  name: 'mutation pairs',
+                  facts: <String>[
                     'first=${_first.value.status.name}',
                     'second=${_second.value.status.name}',
                     'secondPaused=${_second.value.isPaused}',
                     'third=${_third.value.status.name}',
                     'fourth=${_fourth.value.status.name}',
                   ],
-                  label: 'pairs',
                 ),
               ),
             ],
@@ -469,34 +470,6 @@ class _ReaderState extends State<_Reader> with QueryMixin {
   }
 }
 
-/// `key=value` texts, one node each, in a group a test can address — the
-/// strip below says `status=success` about the query, and these say it
-/// about the mutation.
-class _Facts extends StatelessWidget {
-  const _Facts(this.facts, {required this.label});
-
-  final List<String> facts;
-
-  /// The semantics group is `mutation <label>`, the widget key
-  /// `mutation-<label>`.
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: 'mutation $label',
-        child: Wrap(
-          key: ValueKey<String>('mutation-$label'),
-          spacing: 12,
-          runSpacing: 4,
-          children: <Widget>[
-            for (final fact in facts) Text(fact, style: monoStyle),
-          ],
-        ),
-      );
-}
-
 /// The callback log, one line per text.
 class _LogPanel extends StatelessWidget {
   const _LogPanel(this.lines);
@@ -511,9 +484,7 @@ class _LogPanel extends StatelessWidget {
           color: Theme.of(context).colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Semantics(
-          container: true,
-          explicitChildNodes: true,
+        child: SemanticsGroup(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[

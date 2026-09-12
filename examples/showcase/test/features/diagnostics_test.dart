@@ -11,10 +11,7 @@ import '../harness.dart';
 
 /// One fact of a card, by its group and exact text — `status=error` is said
 /// by the mutation's facts and by the strip alike.
-Finder factOf(String label, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('facts-$label')),
-      matching: find.text(text),
-    );
+Finder factOf(String label, String text) => factIn('facts $label', text);
 
 /// Two cards and a strip: the second card's buttons sit below the default
 /// 600 px window, and a lazily built list has nothing there.

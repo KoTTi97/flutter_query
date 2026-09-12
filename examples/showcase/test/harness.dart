@@ -48,13 +48,27 @@ class Harness {
   /// (`/api/...`, exact or a `RegExp`).
   int requests(String method, Pattern path) => backend.count(method, path);
 
-  /// The debug strip labelled [label].
-  Finder strip(String label) => find.byKey(ValueKey<String>('debug-$label'));
+  /// The debug strip labelled [label]: the group named `debug <label>`.
+  Finder strip(String label) => groupNamed('debug $label');
 
   /// One fact inside the strip, by its exact text: `fetchStatus=idle`.
-  Finder fact(String label, String text) =>
-      find.descendant(of: strip(label), matching: find.text(text));
+  Finder fact(String label, String text) => factIn('debug $label', text);
 }
+
+/// The semantics group named [name], by the key `SemanticsGroup` derives from
+/// that one name (`lib/shared/fact_group.dart`).
+///
+/// The same string the end-to-end suite passes to
+/// `getByRole('group', { name })`, so a group is addressed by one name in both
+/// layers and a screen spells it once (C56, #51).
+Finder groupNamed(String name) => find.byKey(ValueKey<String>(name));
+
+/// One fact inside the group named [name], by its exact text.
+///
+/// `status=success` is said by a reader's facts and by a strip alike, so a
+/// lookup always names which group it means.
+Finder factIn(String name, String text) =>
+    find.descendant(of: groupNamed(name), matching: find.text(text));
 
 /// `testWidgets` plus the cleanup a `QueryClient` needs: it owns `gcTime`
 /// timers, and the test binding checks for pending timers before any

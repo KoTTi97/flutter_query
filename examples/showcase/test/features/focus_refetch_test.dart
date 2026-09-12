@@ -12,16 +12,10 @@ import '../harness.dart';
 
 /// One entry's own facts (`serial=3`, `isStale=false`, `reader=attached`) —
 /// scoped, because the other entry and both strips show an `isStale=` too.
-Finder facts(String group, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('$group-facts')),
-      matching: find.text(text),
-    );
+Finder facts(String group, String text) => factIn(group, text);
 
 /// A segment of one knob, by its label: three of them have a `never`.
-Finder segment(String knob, String label) => find.descendant(
-      of: find.byKey(ValueKey<String>(knob)),
-      matching: find.text(label),
-    );
+Finder segment(String knob, String label) => factIn(knob, label);
 
 Future<void> pick(WidgetTester tester, String knob, String label) async {
   await tester.tap(segment(knob, label));

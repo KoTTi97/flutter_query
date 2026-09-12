@@ -35,6 +35,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/scope.dart';
@@ -178,14 +179,14 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              _Facts(
-                <String>[
+              FactGroup(
+                name: 'facts typed',
+                facts: <String>[
                   'read=$_read',
                   'write=$_write',
                   'expected=$_expected',
                   'actual=$_actual',
                 ],
-                label: 'typed',
               ),
             ],
           ),
@@ -253,15 +254,15 @@ class _NoFunctionCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _Facts(
-          <String>[
+        FactGroup(
+          name: 'facts no-function',
+          facts: <String>[
             'status=${result.status.name}',
             if (result case MutationError(:final error))
               'error=${_nameOf(error)}',
             if (result case MutationSuccess(:final data)) 'data=$data',
             'default=${defaultRegistered ? 'registered' : 'none'}',
           ],
-          label: 'no-function',
         ),
         if (result case MutationError(:final error)) ...<Widget>[
           const SizedBox(height: 8),
@@ -270,30 +271,4 @@ class _NoFunctionCard extends StatelessWidget {
       ],
     );
   }
-}
-
-/// `key=value` texts, one node each, in a group a test can address — the
-/// strip says `status=success` about the query, these about the calls.
-class _Facts extends StatelessWidget {
-  const _Facts(this.facts, {required this.label});
-
-  final List<String> facts;
-
-  /// The semantics group is `facts <label>`, the widget key `facts-<label>`.
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: 'facts $label',
-        child: Wrap(
-          key: ValueKey<String>('facts-$label'),
-          spacing: 12,
-          runSpacing: 4,
-          children: <Widget>[
-            for (final fact in facts) Text(fact, style: monoStyle),
-          ],
-        ),
-      );
 }

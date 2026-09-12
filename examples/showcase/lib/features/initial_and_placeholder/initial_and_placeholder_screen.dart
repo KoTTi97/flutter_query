@@ -50,6 +50,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -421,12 +422,9 @@ class _InitialAndPlaceholderScreenState
               const SizedBox(height: 12),
               // Explicit child nodes: without them the three segments fold
               // into one label and `fresh` is not a text a test can read.
-              Semantics(
-                container: true,
-                explicitChildNodes: true,
-                label: 'lazy-seed mode',
+              SemanticsGroup(
+                name: 'lazy-seed mode',
                 child: SegmentedButton<LazySeedMode>(
-                  key: const ValueKey<String>('lazy-seed-mode'),
                   showSelectedIcon: false,
                   segments: const <ButtonSegment<LazySeedMode>>[
                     ButtonSegment<LazySeedMode>(
@@ -516,9 +514,9 @@ class _PostsList extends StatelessWidget {
 /// One post's title and the facts a test reads, or a skeleton while it has
 /// nothing to show.
 ///
-/// A semantics group named `detail <card>` (widget key `detail-<card>`), the
-/// way the debug strip is one: two cards show `isPlaceholderData=false` at
-/// once, and a test has to say which one it means.
+/// A group named `detail <card>`, the way the debug strip is one: two cards
+/// show `isPlaceholderData=false` at once, and a test has to say which one it
+/// means.
 class _PostDetail extends StatelessWidget {
   const _PostDetail(this.post, {required this.card, required this.facts});
 
@@ -527,12 +525,9 @@ class _PostDetail extends StatelessWidget {
   final List<String> facts;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: 'detail $card',
+  Widget build(BuildContext context) => SemanticsGroup(
+        name: 'detail $card',
         child: Column(
-          key: ValueKey<String>('detail-$card'),
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             switch (post) {
@@ -549,15 +544,10 @@ class _PostDetail extends StatelessWidget {
             const SizedBox(height: 4),
             Wrap(
               spacing: 12,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
-                for (final fact in facts)
-                  Text(
-                    fact,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                    ),
-                  ),
+                FactList(facts, dense: true),
                 if (post.isFetching) const Pill('fetching'),
               ],
             ),

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-import { expect, fact, holdRequest, test, type LogEntry } from './fixtures'
+import { expect, fact, factIn, holdRequest, test, type LogEntry } from './fixtures'
 
 // The screen is read whole — the strip, the facts, the 360-pixel list and
 // the button below it — and a 720-tall window cuts the button off. Only what
@@ -9,14 +9,12 @@ test.use({ viewport: { width: 1280, height: 1100 } })
 
 // The list's own facts live in a semantics group of their own, because the
 // strip's facts sit in the same screen.
-const listFact = (page: Page, text: string) =>
-  page.getByRole('group', { name: 'projects facts', exact: true }).getByText(text, { exact: true })
+const listFact = (page: Page, text: string) => factIn(page, 'projects facts', text)
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 
 // The About view's facts, read off the cache with `getInfiniteQueryData`.
-const aboutFact = (page: Page, text: string) =>
-  page.getByRole('group', { name: 'about facts', exact: true }).getByText(text, { exact: true })
+const aboutFact = (page: Page, text: string) => factIn(page, 'about facts', text)
 
 /// How many project requests asked for `cursor` — the path is the same for
 /// every page, only the query string tells them apart.

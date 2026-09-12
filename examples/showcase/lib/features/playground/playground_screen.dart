@@ -56,6 +56,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -291,8 +292,8 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
   /// the same widget in both.
   Widget _knob<T extends Object>(
     BuildContext context, {
+    required String title,
     required String name,
-    required String semanticsKey,
     required List<(String, T)> choices,
     required T selected,
     required ValueChanged<T> onChanged,
@@ -301,10 +302,10 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(name, style: Theme.of(context).textTheme.labelLarge),
+          Text(title, style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
           knobButton<T>(
-            semanticsKey: semanticsKey,
+            name: name,
             choices: choices,
             selected: selected,
             onChanged: onChanged,
@@ -326,32 +327,32 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
             children: <Widget>[
               _knob<StaleTime>(
                 context,
-                name: 'Stale time',
-                semanticsKey: 'stale-time',
+                title: 'Stale time',
+                name: 'stale-time',
                 choices: _staleTimes,
                 selected: _staleTime,
                 onChanged: (value) => _changeDefaults(() => _staleTime = value),
               ),
               _knob<GcTime>(
                 context,
-                name: 'GC time',
-                semanticsKey: 'gc-time',
+                title: 'GC time',
+                name: 'gc-time',
                 choices: _gcTimes,
                 selected: _gcTime,
                 onChanged: (value) => _changeDefaults(() => _gcTime = value),
               ),
               _knob<Duration>(
                 context,
-                name: 'Latency',
-                semanticsKey: 'latency',
+                title: 'Latency',
+                name: 'latency',
                 choices: _latencies,
                 selected: _latency,
                 onChanged: (value) => _changeScenario(() => _latency = value),
               ),
               _knob<double>(
                 context,
-                name: 'Error rate',
-                semanticsKey: 'error-rate',
+                title: 'Error rate',
+                name: 'error-rate',
                 choices: _errorRates,
                 selected: _errorRate,
                 onChanged: (value) => _changeScenario(() => _errorRate = value),
@@ -368,8 +369,9 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
             style: small,
           ),
           const SizedBox(height: 8),
-          _Facts(
-            label: 'backend',
+          FactGroup(
+            name: 'backend',
+            dense: true,
             facts: <String>[
               if (applied == null)
                 'backend=pending'
@@ -418,8 +420,9 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _Facts(
-            label: 'todos-reader',
+          FactGroup(
+            name: 'todos-reader',
+            dense: true,
             facts: <String>[
               'status=${todos.status.name}',
               'failureCount=${todos.failureCount}',
@@ -490,8 +493,9 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
             ],
           ),
           const SizedBox(height: 8),
-          _Facts(
-            label: 'add',
+          FactGroup(
+            name: 'add',
+            dense: true,
             facts: <String>['adding=${adding.status.name}'],
           ),
           if (adding case MutationError(:final error)) ...<Widget>[
@@ -553,12 +557,9 @@ class _TodoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: 'todo ${todo.id}',
+    return SemanticsGroup(
+      name: 'todo ${todo.id}',
       child: Row(
-        key: ValueKey<String>('todo-row-${todo.id}'),
         children: <Widget>[
           Icon(
             todo.done ? Icons.check_circle : Icons.radio_button_unchecked,
@@ -663,8 +664,9 @@ class _TodoEditorState extends State<_TodoEditor> with QueryMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _Facts(
-            label: 'editor',
+          FactGroup(
+            name: 'editor',
+            dense: true,
             facts: <String>[
               'editing=$id',
               'status=${todo.status.name}',
@@ -723,32 +725,4 @@ class _TodoEditorState extends State<_TodoEditor> with QueryMixin {
       ),
     );
   }
-}
-
-/// A reader's own facts as `key=value` texts in a semantics group of their
-/// own, so a test tells the reader's `isStale` apart from the strip's.
-class _Facts extends StatelessWidget {
-  const _Facts({required this.label, required this.facts});
-
-  final String label;
-  final List<String> facts;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: label,
-        child: Wrap(
-          key: ValueKey<String>('$label-facts'),
-          spacing: 12,
-          runSpacing: 2,
-          children: <Widget>[
-            for (final fact in facts)
-              Text(
-                fact,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-          ],
-        ),
-      );
 }

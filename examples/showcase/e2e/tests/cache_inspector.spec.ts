@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, holdRequest, test } from './fixtures'
+import { expect, factIn, group, holdRequest, test } from './fixtures'
 
 // Two tables, a growing log and the readers: taller than the default
 // viewport, and `FeatureScaffold`'s lazy list never builds what is below the
@@ -12,13 +12,12 @@ const missingKey = '["posts",999]'
 
 // One row of the entries table is a semantics group `entry <key>`: two rows
 // carry the same fact names, so nothing is read unscoped.
-const entry = (page: Page, key: string) => page.getByRole('group', { name: `entry ${key}`, exact: true })
+const entry = (page: Page, key: string) => group(page, `entry ${key}`)
 const entryFact = (page: Page, key: string, text: string) => entry(page, key).getByText(text, { exact: true })
 
-const mutationFact = (page: Page, id: number, text: string) =>
-  page.getByRole('group', { name: `mutation #${id}`, exact: true }).getByText(text, { exact: true })
+const mutationFact = (page: Page, id: number, text: string) => factIn(page, `mutation #${id}`, text)
 
-const logGroup = (page: Page) => page.getByRole('group', { name: 'event log', exact: true })
+const logGroup = (page: Page) => group(page, 'event log')
 // The same line appears again on every later fetch, so which occurrence is
 // meant has to be said: the first one for events a test triggered from an
 // empty cache, the last for a round that follows earlier ones.

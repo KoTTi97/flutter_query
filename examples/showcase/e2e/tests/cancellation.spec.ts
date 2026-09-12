@@ -1,4 +1,4 @@
-import { expect, fact, strip, test, type Page } from './fixtures'
+import { expect, fact, factIn, strip, test, type Page } from './fixtures'
 
 // Two cards and up to three strips: taller than the default viewport, and a
 // lazily built list only has what is in view.
@@ -9,11 +9,9 @@ const SEARCH = /^\/api\/search$/
 
 /// A card's facts live in a group of their own, because `status=` and
 /// `fetchStatus=` are also what the debug strips say about the same entries.
-const slow = (page: Page, text: string) =>
-  page.getByRole('group', { name: 'slow facts', exact: true }).getByText(text, { exact: true })
+const slow = (page: Page, text: string) => factIn(page, 'slow facts', text)
 
-const searched = (page: Page, text: string) =>
-  page.getByRole('group', { name: 'search facts', exact: true }).getByText(text, { exact: true })
+const searched = (page: Page, text: string) => factIn(page, 'search facts', text)
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 

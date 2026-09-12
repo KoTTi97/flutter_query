@@ -37,6 +37,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -133,9 +134,7 @@ class _QueryCollectionsScreenState extends State<QueryCollectionsScreen> {
           ),
         ),
         // The ids, as an exact text a test can read without counting cards.
-        Semantics(
-          container: true,
-          explicitChildNodes: true,
+        SemanticsGroup(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Text(
@@ -256,24 +255,12 @@ class _SummaryReaderState extends State<_SummaryReader> {
         final results = controller.value;
         final ready = results.where((result) => result.isSuccess).length;
         final failed = results.where((result) => result.isError).length;
-        return Semantics(
-          container: true,
-          explicitChildNodes: true,
-          label: 'summary',
-          child: Wrap(
-            key: const ValueKey<String>('summary-facts'),
-            spacing: 12,
-            children: <Widget>[
-              Text(
-                'ready=$ready/${results.length}',
-                style: const TextStyle(fontFamily: 'monospace'),
-              ),
-              Text(
-                'failed=$failed',
-                style: const TextStyle(fontFamily: 'monospace'),
-              ),
-            ],
-          ),
+        return FactGroup(
+          name: 'summary',
+          facts: <String>[
+            'ready=$ready/${results.length}',
+            'failed=$failed',
+          ],
         );
       },
     );

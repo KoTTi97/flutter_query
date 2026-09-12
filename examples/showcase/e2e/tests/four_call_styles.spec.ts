@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-import { expect, fact, holdRequest, test } from './fixtures'
+import { expect, fact, factIn, group, holdRequest, test } from './fixtures'
 
 // Eight cards and three strips: taller than the default viewport, and a
 // lazily built list only has what is in view.
@@ -13,21 +13,17 @@ const readers = ['context', 'builder', 'mixin', 'controller', 'observer'] as con
 
 /// One reader's fact: `posts=30` and `status=success` are said by five cards
 /// and by the strip, so nothing here can be found by text alone.
-const reader = (page: Page, name: string, text: string) =>
-  page.getByRole('group', { name: `reader ${name}`, exact: true }).getByText(text, { exact: true })
+const reader = (page: Page, name: string, text: string) => factIn(page, `reader ${name}`, text)
 
 /// One fact of the listener card. `child-builds=1` is in the same group,
 /// said by the child the listener hands back.
-const listener = (page: Page, text: string) =>
-  page.getByRole('group', { name: 'listener', exact: true }).getByText(text, { exact: true })
+const listener = (page: Page, text: string) => factIn(page, 'listener', text)
 
-const mutation = (page: Page, name: string, text: string) =>
-  page.getByRole('group', { name: `mutation ${name}`, exact: true }).getByText(text, { exact: true })
+const mutation = (page: Page, name: string, text: string) => factIn(page, `mutation ${name}`, text)
 
 /// One fact of card 8's reader called `name`: `pages=1` is said by all three
 /// and `status=success` by the strip too.
-const infinite = (page: Page, name: string, text: string) =>
-  page.getByRole('group', { name: `infinite ${name}`, exact: true }).getByText(text, { exact: true })
+const infinite = (page: Page, name: string, text: string) => factIn(page, `infinite ${name}`, text)
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 
@@ -39,8 +35,7 @@ async function expectEveryReader(page: Page, text: string) {
 
 /// How many times the card called `name` has built, read off the card.
 async function buildsOf(page: Page, name: string) {
-  const text = await page
-    .getByRole('group', { name: `reader ${name}`, exact: true })
+  const text = await group(page, `reader ${name}`)
     .getByText(/^builds=\d+$/)
     .textContent()
   return Number(/builds=(\d+)/.exec(text ?? '')![1])

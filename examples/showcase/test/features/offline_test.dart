@@ -39,10 +39,7 @@ Future<void> setOnline(WidgetTester tester, {required bool online}) async {
 /// A segment of one knob, by its label: the network mode and the reconnect
 /// knob both have an `always`, so the knob's own key comes first.
 Future<void> pick(WidgetTester tester, String knob, String label) async {
-  await tester.tap(find.descendant(
-    of: find.byKey(ValueKey<String>(knob)),
-    matching: find.text(label),
-  ));
+  await tester.tap(factIn(knob, label));
   await tester.pump();
 }
 

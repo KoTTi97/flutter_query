@@ -17,10 +17,7 @@ import 'package:showcase/shared/theme.dart';
 import '../harness.dart';
 
 /// The `prefetched` pill inside post [id]'s row, and nowhere else.
-Finder prefetchedPill(int id) => find.descendant(
-      of: find.byKey(ValueKey<String>('post-row-$id')),
-      matching: find.text('prefetched'),
-    );
+Finder prefetchedPill(int id) => factIn('post $id', 'prefetched');
 
 Query<Object?>? entryOf(Harness h, int id) => h.client.queryCache
     .find(filters: QueryFilters(queryKey: ShowcaseKeys.post(id)));
@@ -39,10 +36,7 @@ void taller(WidgetTester tester) {
 }
 
 /// One fact of the imperative-read card, by its exact text.
-Finder readFact(String text) => find.descendant(
-      of: find.byKey(const ValueKey<String>('reads')),
-      matching: find.text(text),
-    );
+Finder readFact(String text) => factIn('reads', text);
 
 /// A view tall enough to reach the infinite-prefetch card and its strip at
 /// the very bottom: 800×1900 logical.
@@ -52,10 +46,7 @@ void tallest(WidgetTester tester) {
 }
 
 /// One fact of the infinite-prefetch card, by its exact text.
-Finder infiniteFact(String text) => find.descendant(
-      of: find.byKey(const ValueKey<String>('infinite-prefetch')),
-      matching: find.text(text),
-    );
+Finder infiniteFact(String text) => factIn('infinite prefetch', text);
 
 /// Puts a value in the counter's cache entry, and moves the server's counter
 /// past it: from here a read's answer says whether it came from the cache

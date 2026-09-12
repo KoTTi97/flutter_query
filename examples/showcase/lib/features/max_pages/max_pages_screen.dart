@@ -33,6 +33,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -173,9 +174,7 @@ class _WindowCard extends StatelessWidget {
           // Explicit child nodes: a row of buttons and texts folds into one
           // semantics node otherwise, and every `key=value` here is read as
           // an exact text.
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
+          SemanticsGroup(
             child: Wrap(
               spacing: 12,
               runSpacing: 4,
@@ -192,9 +191,7 @@ class _WindowCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
+          SemanticsGroup(
             child: Wrap(
               spacing: 8,
               runSpacing: 8,

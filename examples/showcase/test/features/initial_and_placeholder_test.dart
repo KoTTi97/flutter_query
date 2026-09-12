@@ -10,10 +10,7 @@ import 'package:showcase/shared/theme.dart';
 import '../harness.dart';
 
 /// One text inside the `detail <card>` group.
-Finder detail(String card, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('detail-$card')),
-      matching: find.text(text),
-    );
+Finder detail(String card, String text) => factIn('detail $card', text);
 
 /// Cards B and C ask the backend for a slow answer on purpose (one second
 /// and 750 ms), and `pumpAndSettle` does not wait on the fake's timers; this
@@ -24,10 +21,7 @@ Future<void> settleDelayed(WidgetTester tester) async {
 }
 
 /// One segment of card D's mode button, by its label.
-Finder mode(String label) => find.descendant(
-      of: find.byKey(const ValueKey<String>('lazy-seed-mode')),
-      matching: find.text(label),
-    );
+Finder mode(String label) => factIn('lazy-seed mode', label);
 
 /// Opens the screen on a view tall enough for all three cards and their
 /// strips: the scaffold's list builds only what is in view, and the default

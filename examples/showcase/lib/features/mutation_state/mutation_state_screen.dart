@@ -26,6 +26,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import '../../shared/api.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -139,9 +140,7 @@ class _MutationStateScreenState extends State<MutationStateScreen> {
                     Notice('$error', error: true),
                   QuerySuccess(:final data) ||
                   QueryError(staleData: final data!) =>
-                    Semantics(
-                      container: true,
-                      explicitChildNodes: true,
+                    SemanticsGroup(
                       child: Text(
                         'todos=${data.length}',
                         style: const TextStyle(fontFamily: 'monospace'),
@@ -190,9 +189,7 @@ class _SavingBadgeState extends State<_SavingBadge> {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Semantics(
-          container: true,
-          explicitChildNodes: true,
+        child: SemanticsGroup(
           child: ListenableBuilder(
             listenable: _statuses,
             builder: (context, _) {

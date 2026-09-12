@@ -1,7 +1,6 @@
 /// The `basic` screen against the fake backend.
 library;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:showcase/shared/api.dart';
@@ -12,7 +11,7 @@ import '../harness.dart';
 
 const String post3Title = 'Code review: setup guide';
 
-Finder row(int id) => find.byKey(ValueKey<String>('post-row-$id'));
+Finder row(int id) => groupNamed('post $id');
 
 Finder cachedMarkOf(int id) =>
     find.descendant(of: row(id), matching: find.text('cached'));

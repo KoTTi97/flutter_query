@@ -77,11 +77,24 @@ export const test = base.extend<{ scenario: Scenario; open: (route: string) => P
 export { expect }
 export type { Page }
 
-/// The debug strip labelled `label`: a semantics group whose facts are exact
-/// leaf texts, `status=success`, `fetchStatus=idle`, `fetches=2`.
-export const strip = (page: Page, label: string) => page.getByRole('group', { name: `debug ${label}`, exact: true })
+/// The semantics group named `name`.
+///
+/// One name addresses a group in both test layers: the screen publishes it
+/// once through `SemanticsGroup` (`lib/shared/fact_group.dart`), which is the
+/// semantics label read here and the widget key `groupNamed` reads in
+/// `test/harness.dart` (C56, #51). Every group locator in this suite goes
+/// through this function, so `getByRole('group', …)` is written once.
+export const group = (page: Page, name: string) => page.getByRole('group', { name, exact: true })
 
-export const fact = (page: Page, label: string, text: string) => strip(page, label).getByText(text, { exact: true })
+/// One fact inside that group, by its exact leaf text: `status=success`,
+/// `fetchStatus=idle`, `fetches=2`.
+export const factIn = (page: Page, name: string, text: string) => group(page, name).getByText(text, { exact: true })
+
+/// The debug strip labelled `label`: the group named `debug <label>`, the one
+/// group that is about the cache rather than about the screen.
+export const strip = (page: Page, label: string) => group(page, `debug ${label}`)
+
+export const fact = (page: Page, label: string, text: string) => factIn(page, `debug ${label}`, text)
 
 /// A SnackBar's text, or any other live region's. Flutter web renders a
 /// `liveRegion` twice: as its node in the semantics tree, and — for a few

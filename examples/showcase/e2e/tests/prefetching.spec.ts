@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-import { expect, fact, holdRequest, test } from './fixtures'
+import { expect, fact, factIn, group, holdRequest, test } from './fixtures'
 
 // The screen is read whole — the list card and both debug strips — and a
 // 720-tall window cuts the second strip off. Only what is on screen is in
@@ -9,7 +9,7 @@ test.use({ viewport: { width: 1280, height: 960 } })
 
 /// Post `id`'s row: a semantics group of its own, so the `prefetched` pill
 /// can be tied to its post.
-const row = (page: Page, id: number) => page.getByRole('group', { name: `post ${id}`, exact: true })
+const row = (page: Page, id: number) => group(page, `post ${id}`)
 
 test('a prefetch is one request and marks the row while nobody observes the entry', async ({ page, open, scenario }) => {
   await open('/prefetching')
@@ -114,7 +114,7 @@ test.describe('imperative reads', () => {
 
   /// The imperative-read card: a semantics group of its own, so `returned=0`
   /// cannot be confused with a fact of a debug strip.
-  const reads = (page: Page) => page.getByRole('group', { name: 'reads', exact: true })
+  const reads = (page: Page) => group(page, 'reads')
   const readFact = (page: Page, text: string) => reads(page).getByText(text, { exact: true })
 
   /// Puts a value in the counter's cache entry and moves the server's counter
@@ -196,8 +196,7 @@ test.describe('imperative reads', () => {
 test.describe('the infinite twin', () => {
   test.use({ viewport: { width: 1280, height: 2000 } })
 
-  const infinite = (page: Page, text: string) =>
-    page.getByRole('group', { name: 'infinite prefetch', exact: true }).getByText(text, { exact: true })
+  const infinite = (page: Page, text: string) => factIn(page, 'infinite prefetch', text)
 
   test('an infinite prefetch is one request for the first page, held by nobody; a second is a no-op', async ({
     page,

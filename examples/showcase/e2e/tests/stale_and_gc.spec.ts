@@ -1,16 +1,15 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, holdRequest, test } from './fixtures'
+import { expect, fact, factIn, group, holdRequest, test } from './fixtures'
 
 // The reader's own facts live in a semantics group of their own, because the
 // strip shows an `isStale=` too.
-const reader = (page: Page, text: string) =>
-  page.getByRole('group', { name: 'reader', exact: true }).getByText(text, { exact: true })
+const reader = (page: Page, text: string) => factIn(page, 'reader', text)
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 
 // A segment of one knob: both knobs have a `5 s`, so the knob's group first.
 const pick = (page: Page, knob: 'stale-time' | 'gc-time', label: string) =>
-  page.getByRole('group', { name: knob, exact: true }).getByRole('radio', { name: label, exact: true }).click()
+  group(page, knob).getByRole('radio', { name: label, exact: true }).click()
 
 // Detaches and re-attaches the reader: a fresh observer, so a mount.
 async function reattach(page: Page) {

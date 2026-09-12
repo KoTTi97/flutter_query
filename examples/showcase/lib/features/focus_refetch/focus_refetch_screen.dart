@@ -87,6 +87,7 @@ import '../../shared/api.dart';
 import '../../shared/cache_listener.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -408,8 +409,9 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
                 value: _client.focusManager.isFocused(),
                 onChanged: _setFocused,
               ),
-              _Facts(
-                group: 'focus-state',
+              FactGroup(
+                name: 'focus-state',
+                dense: true,
                 facts: <String>[
                   'focused=${_client.focusManager.isFocused()}',
                   // `maybeOf` on the screen's own context: the app's provider
@@ -420,8 +422,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               const Divider(height: 24),
               knob<StaleTime>(
                 context,
-                name: 'Stale time',
-                semanticsKey: 'stale-time',
+                title: 'Stale time',
+                name: 'stale-time',
                 choices: _staleTimes,
                 selected: _staleTime,
                 onChanged: (value) {
@@ -456,8 +458,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               const Divider(height: 24),
               knob<RefetchOn>(
                 context,
-                name: 'On focus',
-                semanticsKey: 'on-focus-a',
+                title: 'On focus',
+                name: 'on-focus-a',
                 choices: _onFocusChoices,
                 selected: _onFocusA,
                 onChanged: (value) {
@@ -520,8 +522,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               const Divider(height: 24),
               knob<RefetchOn>(
                 context,
-                name: 'On focus',
-                semanticsKey: 'on-focus-b',
+                title: 'On focus',
+                name: 'on-focus-b',
                 choices: _onFocusChoices,
                 selected: _onFocusB,
                 onChanged: (value) {
@@ -532,8 +534,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               const SizedBox(height: 8),
               knob<RefetchOn>(
                 context,
-                name: 'On mount',
-                semanticsKey: 'on-mount-b',
+                title: 'On mount',
+                name: 'on-mount-b',
                 choices: _onMountChoices,
                 selected: _onMountB,
                 onChanged: (value) {
@@ -574,8 +576,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               const SizedBox(height: 12),
               knob<Duration>(
                 context,
-                name: 'Min background',
-                semanticsKey: 'min-background',
+                title: 'Min background',
+                name: 'min-background',
                 choices: _minBackgrounds,
                 selected: _minBackground,
                 onChanged: (value) => setState(() => _minBackground = value),
@@ -583,8 +585,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               const SizedBox(height: 12),
               knob<InactiveRule>(
                 context,
-                name: 'Inactive is',
-                semanticsKey: 'inactive-is',
+                title: 'Inactive is',
+                name: 'inactive-is',
                 choices: _inactiveRules,
                 selected: _inactiveRule,
                 onChanged: (value) => setState(() => _inactiveRule = value),
@@ -603,8 +605,8 @@ class _FocusRefetchScreenState extends State<FocusRefetchScreen>
               const SizedBox(height: 12),
               knob<bool>(
                 context,
-                name: 'Initial online status',
-                semanticsKey: 'initial-online',
+                title: 'Initial online status',
+                name: 'initial-online',
                 choices: _initialOnlineChoices,
                 selected: _initialOnline,
                 onChanged: (value) => setState(() => _initialOnline = value),
@@ -796,34 +798,7 @@ class _Reading extends StatelessWidget {
         children: <Widget>[
           child,
           const SizedBox(height: 8),
-          _Facts(group: group, facts: facts),
+          FactGroup(name: group, facts: facts, dense: true),
         ],
-      );
-}
-
-/// A row of `key=value` texts in a semantics group of its own: both entries
-/// show an `isStale=`, and so does every strip.
-class _Facts extends StatelessWidget {
-  const _Facts({required this.group, required this.facts});
-
-  final String group;
-  final List<String> facts;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: group,
-        child: Wrap(
-          key: ValueKey<String>('$group-facts'),
-          spacing: 12,
-          children: <Widget>[
-            for (final fact in facts)
-              Text(
-                fact,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-          ],
-        ),
       );
 }

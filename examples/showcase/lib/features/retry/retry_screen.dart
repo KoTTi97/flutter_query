@@ -38,6 +38,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 import '../../shared/api.dart';
 import '../../shared/controls.dart';
 import '../../shared/debug_strip.dart';
+import '../../shared/fact_group.dart';
 import '../../shared/feature.dart';
 import '../../shared/feature_scaffold.dart';
 import '../../shared/models.dart';
@@ -271,8 +272,8 @@ class _RetryScreenState extends State<RetryScreen> {
             children: <Widget>[
               knob<RetryPolicy>(
                 context,
-                name: 'Retry',
-                semanticsKey: 'retry',
+                title: 'Retry',
+                name: 'retry',
                 choices: _retries,
                 selected: _retry,
                 onChanged: (value) {
@@ -292,8 +293,8 @@ class _RetryScreenState extends State<RetryScreen> {
               const SizedBox(height: 8),
               knob<RetryDelay>(
                 context,
-                name: 'Delay',
-                semanticsKey: 'delay',
+                title: 'Delay',
+                name: 'delay',
                 choices: _delays,
                 selected: _delay,
                 onChanged: (value) {
@@ -334,8 +335,8 @@ class _RetryScreenState extends State<RetryScreen> {
             children: <Widget>[
               knob<int>(
                 context,
-                name: 'Fail the next',
-                semanticsKey: 'fail-next',
+                title: 'Fail the next',
+                name: 'fail-next',
                 choices: _counts,
                 selected: _failNext,
                 onChanged: (value) => setState(() => _failNext = value),
@@ -343,8 +344,8 @@ class _RetryScreenState extends State<RetryScreen> {
               const SizedBox(height: 8),
               knob<int>(
                 context,
-                name: 'Status',
-                semanticsKey: 'status',
+                title: 'Status',
+                name: 'status',
                 choices: _statuses,
                 selected: _status,
                 onChanged: (value) => setState(() => _status = value),
@@ -466,25 +467,7 @@ class _Reading extends StatelessWidget {
         children: <Widget>[
           child,
           const SizedBox(height: 8),
-          Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: 'reader',
-            child: Wrap(
-              key: const ValueKey<String>('reader-facts'),
-              spacing: 12,
-              children: <Widget>[
-                for (final fact in facts)
-                  Text(
-                    fact,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          FactGroup(name: 'reader', facts: facts, dense: true),
         ],
       );
 }

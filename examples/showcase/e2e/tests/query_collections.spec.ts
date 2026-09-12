@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, fact, holdRequest, test } from './fixtures'
+import { expect, fact, factIn, holdRequest, test } from './fixtures'
 
 // The cards and the strips stack up; the summary line sits between them.
 test.use({ viewport: { width: 1280, height: 2200 } })
@@ -7,8 +7,7 @@ test.use({ viewport: { width: 1280, height: 2200 } })
 const initial = [1, 2, 3]
 
 /// The summary reader's facts, in their own group.
-const summary = (page: Page, text: string) =>
-  page.getByRole('group', { name: 'summary', exact: true }).getByText(text, { exact: true })
+const summary = (page: Page, text: string) => factIn(page, 'summary', text)
 
 test('the collection fetches every member once, in parallel', async ({ page, open, scenario }) => {
   // Held before the screen opens: a sequential collection would show one.

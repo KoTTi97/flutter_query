@@ -26,29 +26,17 @@ const List<String> readers = <String>[
 /// One reader's fact, by the group it is in and its exact text — `posts=30`
 /// and `status=success` are said by five cards and by the strip, so nothing
 /// here can be found by text alone.
-Finder readerFact(String name, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('reader-$name')),
-      matching: find.text(text),
-    );
+Finder readerFact(String name, String text) => factIn('reader $name', text);
 
 /// One fact of the listener card, by its exact text. `child-builds=1` is in
 /// the same group, said by the child the listener hands back.
-Finder listenerFact(String text) => find.descendant(
-      of: find.byKey(const ValueKey<String>('listener-facts')),
-      matching: find.text(text),
-    );
+Finder listenerFact(String text) => factIn('listener', text);
 
-Finder mutationFact(String name, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('mutation-$name')),
-      matching: find.text(text),
-    );
+Finder mutationFact(String name, String text) => factIn('mutation $name', text);
 
 /// One fact of card 8's reader called [name]: `pages=1` is said by all three
 /// and `status=success` by the strip too.
-Finder infiniteFact(String name, String text) => find.descendant(
-      of: find.byKey(ValueKey<String>('infinite-$name')),
-      matching: find.text(text),
-    );
+Finder infiniteFact(String name, String text) => factIn('infinite $name', text);
 
 Finder button(String label) => find.ancestor(
       of: find.text(label),
@@ -67,7 +55,7 @@ void expectEveryReader(String text) {
 int buildsOf(WidgetTester tester, String name) {
   final text = tester
       .widgetList<Text>(find.descendant(
-        of: find.byKey(ValueKey<String>('reader-$name')),
+        of: groupNamed('reader $name'),
         matching: find.byType(Text),
       ))
       .map((widget) => widget.data)
