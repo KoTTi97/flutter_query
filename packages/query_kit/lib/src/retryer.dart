@@ -277,6 +277,7 @@ class Retryer<TData> {
   /// for good. Left alone, a 30-second backoff would outlive the cache it was
   /// fetching for, and Flutter's widget tests assert that no timer does.
   Future<void> _sleep(Duration delay) {
+    if (isResolved || _isRetryCancelledImmediately) return Future<void>.value();
     final completer = Completer<void>();
     _delayCompleter = completer;
     _delayTimer = Timer(clampTimerDuration(delay), () {
@@ -333,14 +334,31 @@ class Retryer<TData> {
           _reject(error, stackTrace: stackTrace);
           return;
         }
+        if (isResolved) return;
+        if (_isRetryCancelled) {
+          _reject(error, stackTrace: stackTrace);
+          return;
+        }
         delay = retryDelay.resolve(_failureCount, error);
       } catch (policyError, policyStackTrace) {
         _reject(policyError, stackTrace: policyStackTrace);
         return;
       }
 
+      if (isResolved) return;
+      if (_isRetryCancelled) {
+        _reject(error, stackTrace: stackTrace);
+        return;
+      }
+
       _failureCount++;
       if (!_hook(() => onFail?.call(_failureCount, error, stackTrace))) {
+        return;
+      }
+
+      if (isResolved) return;
+      if (_isRetryCancelledImmediately) {
+        _reject(error, stackTrace: stackTrace);
         return;
       }
 

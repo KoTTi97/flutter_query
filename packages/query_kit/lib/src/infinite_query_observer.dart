@@ -220,6 +220,10 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
 
   /// The result these options would produce right now — the infinite twin of
   /// [QueryObserver.getOptimisticResult], for a binding's first build.
+  ///
+  /// This does not commit the query or its options. [hasNextPage],
+  /// [hasPreviousPage] and paging actions continue to describe the committed
+  /// query until [setInfiniteOptions] applies the previewed options.
   QueryResult<TData> getOptimisticInfiniteResult(
     InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) =>

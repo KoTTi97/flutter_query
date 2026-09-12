@@ -25,6 +25,9 @@ import 'package:meta/meta.dart';
 /// `==`/`hashCode` (freezed, Equatable, or written by hand). A debug-only
 /// assertion rejects parts that use identity equality, because such a key can
 /// never match a second, equal key.
+/// User objects are retained, not cloned: their equality and hash values must
+/// remain immutable for the key's lifetime. Collection graphs must be acyclic;
+/// cyclic input is unsupported. Map keys must also have stable value equality.
 ///
 /// Parts compare with `==`, and `1 == 1.0` holds in Dart on every platform,
 /// so `QueryKey([1])` and `QueryKey([1.0])` are the same key — not a web
@@ -44,7 +47,8 @@ final class QueryKey {
     );
   }
 
-  /// The key's parts, deeply unmodifiable.
+  /// The key's parts, with nested collections copied into unmodifiable ones.
+  /// User objects remain responsible for their own immutability.
   final List<Object?> parts;
 
   /// A key with [more] appended — the idiom for deriving a detail key from a

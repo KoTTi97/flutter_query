@@ -25,11 +25,12 @@ typedef BatchNotifyFunction = void Function(void Function() callback);
 ///   without one creates its own; apps that want upstream's single shared
 ///   queue pass [NotifyManager.shared] to every client.
 ///
-/// What a [batch] guarantees: callbacks that go through [schedule] — an
-/// observer's listener notifications, and whatever the scheduler defers —
-/// are held until the outermost batch ends and delivered in one round. It
-/// does not defer the core's own synchronous plumbing: cache listeners and
-/// the observers' `onQueryUpdate` run per dispatch, batch or not.
+/// A [batch] holds callbacks submitted through [schedule] or [batchCalls]
+/// until the outermost batch ends, then delivers them through the scheduler.
+/// Direct observer subscriptions, cache listeners and `onQueryUpdate` remain
+/// synchronous per dispatch. Wrap a subscription with [batchCalls] when its
+/// delivery should be deferred. A throwing callback in a queued batch is
+/// reported to the zone and does not discard later callbacks in that batch.
 class NotifyManager {
   /// Creates an independent queue with the default microtask scheduler.
   NotifyManager();
@@ -87,7 +88,11 @@ class NotifyManager {
     _scheduleFn(() {
       _batchNotifyFn(() {
         for (final callback in pending) {
-          _notifyFn(callback);
+          try {
+            _notifyFn(callback);
+          } catch (error, stackTrace) {
+            Zone.current.handleUncaughtError(error, stackTrace);
+          }
         }
       });
     });

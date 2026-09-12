@@ -205,18 +205,7 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     DefaultedQueryOptions<TQueryData> options, {
     QueryState<TQueryData>? state,
   }) {
-    if (state != null &&
-        state.status == QueryStatus.success &&
-        !state.hasData) {
-      throw ArgumentError.value(
-        state,
-        'state',
-        'A QueryState restored through QueryCache.build with status == '
-            'success must have hasData == true: a success state is one that '
-            'holds data. This is the persistence door; check what was '
-            'persisted for ${options.queryKey}',
-      );
-    }
+    state?.validate();
     final existing = get<TQueryData>(options.queryKey);
     if (existing != null) {
       return existing;
@@ -229,6 +218,13 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
       options: options,
       state: state,
     );
+    // InitialData.compute may synchronously populate this key. That entry,
+    // rather than the losing constructor, is the cache's canonical query.
+    final canonical = get<TQueryData>(options.queryKey);
+    if (canonical != null) {
+      query.markRemoved();
+      return canonical;
+    }
     add(query);
     return query;
   }
@@ -237,7 +233,13 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// already present keeps the query it has; nothing is replaced. [build] is
   /// the usual way in — this is upstream's `add`, for a query constructed by
   /// hand.
+  /// A previously removed instance is terminal and throws [StateError]; use
+  /// [build] to create a fresh entry for the same key.
   void add(Query<Object?> query) {
+    if (query.isRemoved) {
+      throw StateError(
+          'A removed Query cannot be added again: ${query.queryKey}');
+    }
     if (!_queries.containsKey(query.queryKey)) {
       _queries[query.queryKey] = query;
       notify(QueryAdded(query));

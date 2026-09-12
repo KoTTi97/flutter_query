@@ -31,6 +31,7 @@ class QueriesObserver<TQueryData, TData> {
       ListenerRegistry<void Function(List<QueryResult<TData>>)>();
   List<QueryResult<TData>> _result = List.unmodifiable(<QueryResult<TData>>[]);
   int _updating = 0;
+  int _resultRevision = 0;
 
   /// Whether this collection has active subscribers.
   bool get hasListeners => _listeners.hasListeners;
@@ -149,13 +150,16 @@ class QueriesObserver<TQueryData, TData> {
       for (var i = 0; i < _observers.length; i++) _observers[i].currentResult,
     ];
     if (next.length == _result.length &&
-        Iterable<int>.generate(next.length)
-            .every((i) => next[i] == _result[i])) {
+        Iterable<int>.generate(next.length).every((i) =>
+            next[i] == _result[i] && next[i].refetch == _result[i].refetch)) {
       return;
     }
     _result = List.unmodifiable(next);
     final result = _result;
-    _listeners.notify((listener) => listener(result));
+    final revision = ++_resultRevision;
+    _listeners.notify((listener) {
+      if (revision == _resultRevision) listener(result);
+    });
   }
 
   void _detach() {
@@ -168,6 +172,7 @@ class QueriesObserver<TQueryData, TData> {
 
   /// Releases listeners and every underlying observer.
   void destroy() {
+    _resultRevision++;
     _listeners.clear();
     _detach();
     for (final observer in _observers) {

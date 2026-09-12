@@ -8,19 +8,39 @@ observers, the client and both caches, with no Flutter dependency.
 
 The claim it makes is fidelity. Upstream's own test suite is ported case for
 case — 17 suites, 409 of their 535 cases, every omitted case listed by name
-with its reason in `test/PORTING_NOTES.md` — and run on the VM and compiled
-to JavaScript: 586 tests in all, the regressions of nine review rounds and of
-the two example apps included. Closeness to upstream is a tiebreaker, not a
+with its reason in `test/PORTING_NOTES.md`. The complete core suite now has
+648 VM tests; 645 also run compiled to JavaScript (three barrel checks are
+VM-only), including pre-release ownership regressions and cases found by the
+example apps. Closeness to upstream is a tiebreaker, not a
 goal: where a Dart idiom is better the port diverges, and every divergence is
 a row of the notes' table. The ones a user meets first:
+
+**Pre-release correctness fixes**
+
+- Canceled or reset query operations cannot overwrite a successor; late signal
+  reads stay with their own fetch, and reentrant retry teardown leaves no timer.
+- Mutation scopes remain exclusive through completion callbacks, including
+  reentrant submission and removal. Per-call callbacks retain matching
+  variables and results; reset and resubscription preserve observer ownership.
+- Observer key changes retain the correct refetch targets. Optimistic selector
+  previews cannot poison committed selection/placeholder state, and disposed
+  observers cannot reattach or restart polling from an older callback frame.
+- Subscription handles identify individual registrations; reentrant state
+  notifications cannot end with an obsolete snapshot.
+- Restored payloads are validated at every state-entry boundary. Removed cache
+  objects cannot be re-added; adding an existing mutation again is a no-op.
+- Lifecycle policy errors are isolated so unrelated paused work can continue.
+  Retry/network option lifetimes, placeholder sharing and synchronous direct
+  subscriptions are now documented explicitly (ADR-0003).
 
 **Types and options**
 
 - Two options shapes, not one (ADR-0001): `QueryObserverOptions<TData>` has
   no `select` and one type slot, anchored by `queryFn`;
   `QuerySelectOptions<TQueryData, TData>` has a *required* `select`. Mirrored
-  for infinite queries. A literal that would infer its data type to `dynamic`
-  is a compile error, not a `Query<dynamic>` in the cache.
+  for infinite queries. Without a query function or an expected type, an
+  options literal still needs an explicit type argument; Dart can otherwise
+  infer `dynamic`. Consumer strict-inference lints provide an additional check.
 - Every option union is a sealed value type — `StaleTime`, `GcTime`,
   `Enabled`, `RetryPolicy`, `RetryDelay`, `RefetchOn`, `RefetchInterval`,
   `InitialData`, `PlaceholderData` — printing as its source form. `null` means

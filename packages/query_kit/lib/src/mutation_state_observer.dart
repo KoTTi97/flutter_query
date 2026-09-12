@@ -76,12 +76,18 @@ class MutationStateObserver<TSelected> {
     _result = List<TSelected>.unmodifiable(shared);
     if (notify) {
       final result = _result;
-      _listeners.notify((listener) => listener(result));
+      final revision = ++_resultRevision;
+      _listeners.notify((listener) {
+        if (revision == _resultRevision) listener(result);
+      });
     }
   }
 
+  int _resultRevision = 0;
+
   /// Removes all listeners and releases the cache subscription.
   void destroy() {
+    _resultRevision++;
     _listeners.clear();
     _unsubscribe?.call();
     _unsubscribe = null;

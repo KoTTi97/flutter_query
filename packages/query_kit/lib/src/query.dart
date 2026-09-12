@@ -306,6 +306,7 @@ class Query<TQueryData> extends Removable {
     QueryState<TQueryData>? state,
   })  : _cache = cache,
         _options = options {
+    state?.validate();
     _initialState = _defaultState(options);
     _state = state ?? _initialState;
     updateGcTime(options.gcTime);
@@ -334,6 +335,8 @@ class Query<TQueryData> extends Removable {
   /// The options in force, fully resolved. They are the last options any
   /// observer or fetch handed in; `queryFn`, `retry`, `networkMode` and the
   /// like are read from here at fetch time.
+  /// An imperative client fetch that omits retry preserves the entry's retry
+  /// policy and uses its no-retry override only for that fetch.
   DefaultedQueryOptions<TQueryData> get options => _options;
 
   late QueryState<TQueryData> _state;
@@ -366,6 +369,8 @@ class Query<TQueryData> extends Removable {
   Completer<TQueryData>? _operation;
   QueryState<TQueryData>? _revertState;
   bool _signalConsumed = false;
+  QueryCancelToken? _activeSignal;
+  int _fetchGeneration = 0;
 
   /// The options' `meta`, as upstream exposes it on the query for cache
   /// listeners and devtools.
@@ -393,7 +398,8 @@ class Query<TQueryData> extends Removable {
     // is not fetching.
     if (!_state.hasData) {
       final defaultState = _defaultState(options);
-      if (defaultState.hasData) {
+      if (_removed) return;
+      if (!_state.hasData && defaultState.hasData) {
         setState(
           _state.copyWith(
             hasData: true,
@@ -422,12 +428,17 @@ class Query<TQueryData> extends Removable {
     TQueryData newData, {
     DateTime? updatedAt,
     bool manual = false,
+    bool Function()? canCommit,
   }) {
     final sharing = _options.structuralSharing;
     final previous = _state.hasData ? _state.data : null;
     final data = sharing == null
         ? replaceEqualDeep<TQueryData>(previous, newData)
         : sharing(previous, newData);
+
+    // Sharing is user code and may reset/remove this entry or start another
+    // fetch. A transport result commits only while its run still owns it.
+    if (canCommit != null && !canCommit()) return data;
 
     _dispatch(
       QuerySuccessAction<TQueryData>(
@@ -452,15 +463,7 @@ class Query<TQueryData> extends Removable {
   /// would let a release build accept the state and fail later somewhere that
   /// says nothing about where it came from (eighth review, 2026-09-10).
   void setState(QueryState<TQueryData> state) {
-    if (state.status == QueryStatus.success && !state.hasData) {
-      throw ArgumentError.value(
-        state,
-        'state',
-        'A QueryState with status == success must have hasData == true. '
-            'This is the persistence and devtools door; check what was '
-            'restored for $queryKey',
-      );
-    }
+    state.validate();
     _dispatch(QuerySetStateAction<TQueryData>(state));
   }
 
@@ -482,6 +485,7 @@ class Query<TQueryData> extends Removable {
   /// review, 2026-09-10, C9). Upstream dispatches nothing after a silent
   /// cancel; a removed query dispatches nothing here either.
   Future<void> cancel({bool revert = false, bool silent = false}) async {
+    _fetchGeneration++;
     final cancelled = _retryer;
     final pending = cancelled?.future;
     cancelled?.cancel(revert: revert, silent: silent);
@@ -532,6 +536,11 @@ class Query<TQueryData> extends Removable {
 
   bool _removed = false;
 
+  /// Whether the cache permanently removed this entry. Removed entries cannot
+  /// be registered or fetched again; observers resolve a fresh cache entry.
+  @internal
+  bool get isRemoved => _removed;
+
   @override
   void scheduleGc() {
     if (_removed) {
@@ -542,6 +551,10 @@ class Query<TQueryData> extends Removable {
 
   /// Back to the state this query was created with.
   void reset() {
+    // Reset revokes write authority even when the transport already resolved
+    // and cancel can no longer reject its retryer (for example inside sharing).
+    _operation = null;
+    _activeSignal = null;
     destroy();
     setState(_initialState);
     // `destroy` dropped the gc timer. Upstream never re-arms it, so a reset
@@ -621,12 +634,18 @@ class Query<TQueryData> extends Removable {
   /// the chance to resume. Called by the cache's `onFocus`; not for user code.
   @internal
   void onFocus({bool refetchQueries = true}) {
+    if (_removed) return;
     if (refetchQueries) {
-      for (final observer in _observers) {
-        if (observer.shouldFetchOnWindowFocus()) {
-          observer.refetchOnEvent();
-          break;
-        }
+      for (final observer in List<QueryObserverRef>.of(_observers)) {
+        if (!_observers.contains(observer)) continue;
+        var refetched = false;
+        _runCacheHook(() {
+          if (observer.shouldFetchOnWindowFocus()) {
+            observer.refetchOnEvent();
+            refetched = true;
+          }
+        });
+        if (refetched) break;
       }
     }
     // Outside the guard on purpose: a short absence suppresses *new* fetches,
@@ -639,11 +658,17 @@ class Query<TQueryData> extends Removable {
   /// the chance to resume. Called by the cache's `onOnline`; not for user code.
   @internal
   void onOnline() {
-    for (final observer in _observers) {
-      if (observer.shouldFetchOnReconnect()) {
-        observer.refetchOnEvent();
-        break;
-      }
+    if (_removed) return;
+    for (final observer in List<QueryObserverRef>.of(_observers)) {
+      if (!_observers.contains(observer)) continue;
+      var refetched = false;
+      _runCacheHook(() {
+        if (observer.shouldFetchOnReconnect()) {
+          observer.refetchOnEvent();
+          refetched = true;
+        }
+      });
+      if (refetched) break;
     }
     _retryer?.continueFetch().ignore();
   }
@@ -716,6 +741,9 @@ class Query<TQueryData> extends Removable {
     DefaultedQueryOptions<TQueryData>? options,
     FetchOptions<TQueryData>? fetchOptions,
   }) {
+    if (_removed) {
+      return Future<TQueryData>.error(const CancelledError(silent: true));
+    }
     if (_state.fetchStatus != FetchStatus.idle &&
         _retryer?.status != RetryerStatus.rejected) {
       if (_state.hasData && (fetchOptions?.cancelRefetch ?? false)) {
@@ -734,9 +762,22 @@ class Query<TQueryData> extends Removable {
       }
     }
 
+    final generation = ++_fetchGeneration;
+    Future<TQueryData>? superseded() {
+      if (_removed || generation != _fetchGeneration) {
+        return _removed
+            ? Future<TQueryData>.error(const CancelledError(silent: true))
+            : _operation?.future ??
+                Future<TQueryData>.error(const CancelledError(silent: true));
+      }
+      return null;
+    }
+
     if (options != null) {
       setOptions(options);
     }
+    final afterOptions = superseded();
+    if (afterOptions != null) return afterOptions;
 
     // A query created by setQueryData or restored from persistence has no
     // query function of its own; borrow one from an observer.
@@ -750,8 +791,15 @@ class Query<TQueryData> extends Removable {
       }
     }
 
+    final afterBorrow = superseded();
+    if (afterBorrow != null) return afterBorrow;
+
     final cancelToken = QueryCancelToken();
+    _activeSignal = cancelToken;
     _signalConsumed = false;
+    void signalRead() {
+      if (identical(_activeSignal, cancelToken)) _signalConsumed = true;
+    }
 
     Future<TQueryData> runQueryFn() async {
       final queryFn = _options.queryFn;
@@ -763,12 +811,12 @@ class Query<TQueryData> extends Removable {
         queryKey: queryKey,
         signal: cancelToken,
         meta: _options.meta,
-        onSignalRead: () => _signalConsumed = true,
+        onSignalRead: signalRead,
       );
       // Reset per attempt, exactly where upstream resets it: a retry that
       // never touches the token is as uncancellable as a first try that
       // did not.
-      _signalConsumed = false;
+      if (identical(_activeSignal, cancelToken)) _signalConsumed = false;
       return queryFn(context);
     }
 
@@ -780,10 +828,12 @@ class Query<TQueryData> extends Removable {
       fetchOptions: fetchOptions,
       fetchFn: runQueryFn,
       signal: cancelToken,
-      onSignalRead: () => _signalConsumed = true,
+      onSignalRead: signalRead,
     );
 
     _options.behavior?.onFetch(context, this);
+    final afterBehavior = superseded();
+    if (afterBehavior != null) return afterBehavior;
 
     // Whether the attempt can only end in `MissingQueryFunctionError`: no
     // query function, and no behaviour that replaced the fetch with its own
@@ -850,9 +900,19 @@ class Query<TQueryData> extends Removable {
   ) async {
     try {
       final data = await retryer.start();
-      setData(data);
+      if (!identical(_operation, operation) || _removed) {
+        operation.complete(data);
+        return;
+      }
+      var committed = false;
+      setData(data, canCommit: () {
+        committed = identical(_operation, operation) && !_removed;
+        return committed;
+      });
       operation.complete(data);
-      _runCacheHook(() => _cache.onQueryFetchSuccess(this, data));
+      if (committed) {
+        _runCacheHook(() => _cache.onQueryFetchSuccess(this, data));
+      }
     } catch (error, stackTrace) {
       if (error is CancelledError) {
         if (error.silent) {
@@ -869,7 +929,7 @@ class Query<TQueryData> extends Removable {
           }
           return;
         } else if (error.revert) {
-          if (_state.hasData) {
+          if (identical(_operation, operation) && _state.hasData) {
             operation.complete(_state.data as TQueryData);
           } else {
             operation.completeError(error, stackTrace);
@@ -877,15 +937,19 @@ class Query<TQueryData> extends Removable {
           return;
         }
       }
-      _dispatch(QueryErrorAction(error, stackTrace));
+      final ownsState = identical(_operation, operation) && !_removed;
+      if (ownsState) _dispatch(QueryErrorAction(error, stackTrace));
       operation.completeError(error, stackTrace);
-      _runCacheHook(() => _cache.onQueryFetchError(this, error, stackTrace));
+      if (ownsState) {
+        _runCacheHook(() => _cache.onQueryFetchError(this, error, stackTrace));
+      }
     } finally {
       if (identical(_retryer, retryer)) {
         _retryer = null;
       }
       if (identical(_operation, operation)) {
         _operation = null;
+        _activeSignal = null;
       }
       // Only when nobody is watching, the rule the mutation side settled on
       // in the fourth review: an observer leaving arms the timer in

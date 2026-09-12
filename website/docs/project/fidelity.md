@@ -103,7 +103,7 @@ two agree.
 
 | | |
 |---|---|
-| core | **589** tests, on the Dart VM and compiled to JavaScript |
+| core | **648** Dart VM tests; **645** also compiled to JavaScript (three barrel checks are VM-only) |
 | binding | **128** tests, widget tests behind one harness |
 | showcase | **214** widget tests + **169** Playwright tests in Chromium |
 | task manager | **16** widget tests + **9** Playwright tests |

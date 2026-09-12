@@ -66,9 +66,10 @@ that decided each one. The ones you are most likely to notice:
   upstream's behaviour.
 - **Two options shapes, not one.** `QueryObserverOptions<TData>` has no
   `select` and one type slot; `QuerySelectOptions<TQueryData, TData>` has a
-  required one. Upstream's one object with an optional `select` let a
-  literal without one infer its data type to `dynamic`; here that is a
-  compile error — [ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md).
+  required one. This removes the otherwise unanchored selected-data type
+  argument. A literal without a query function or an expected type still
+  needs an explicit type argument to avoid `dynamic` —
+  [ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md).
 - **Every filter parameter is a named `filters:`.**
 - **A `Set` of listeners does not port.** Dart tear-offs compare equal
   (`watcher.onEvent == watcher.onEvent` is `true`, which is never true in JS),

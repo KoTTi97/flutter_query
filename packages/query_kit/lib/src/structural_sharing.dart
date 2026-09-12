@@ -23,6 +23,11 @@ import 'infinite_query.dart';
 /// typed `Map<Object?, Object?>` would not be the caller's `Map<String, int>`.
 /// A list can be copied with `toList()`, which keeps its element type.
 ///
+/// Collection comparison assumes standard element/key equality. Maps or sets
+/// with custom comparators or equality policies require a custom
+/// `structuralSharing` hook (or `(_, next) => next`) when those policies or
+/// their key representations must be preserved.
+///
 /// A [TypedData] list — `Uint8List`, `Float32List` and the rest — is a leaf,
 /// as a `Uint8Array` is for upstream: compared with `==` (identity, for
 /// those), never walked. `Uint8List.toList()` is a plain `List<int>`, so a

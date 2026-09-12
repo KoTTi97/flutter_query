@@ -50,6 +50,17 @@ enum FetchStatus {
 /// (https://github.com/KoTTi97/flutter_query/issues/17).
 @immutable
 final class QueryState<TQueryData> {
+  /// Validates a state before a query, cache build or state replacement accepts
+  /// it. Presence flags must agree with both success and the payload's type.
+  @internal
+  void validate() {
+    if ((status == QueryStatus.success && !hasData) ||
+        (hasData && data is! TQueryData)) {
+      throw ArgumentError.value(this, 'state',
+          'A successful QueryState must hold data compatible with $TQueryData.');
+    }
+  }
+
   /// The initial state unless told otherwise: pending, idle, no data, every
   /// counter at zero. Each argument is the field of the same name.
   const QueryState({

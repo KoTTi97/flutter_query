@@ -519,12 +519,10 @@ class QueryClient {
   /// throws before anything is written. The filtered twin of
   /// [updateQueryData], upstream's `setQueriesData`.
   ///
-  /// The writes run in one [NotifyManager.batch], which guarantees exactly
-  /// what upstream's does: callbacks that go through the manager's scheduler
-  /// — an observer's listeners, the binding's rebuilds — are held until the
-  /// batch ends and delivered in one round. Cache listeners and the
-  /// observers' own `onQueryUpdate` are called synchronously per write, as
-  /// they are for every dispatch.
+  /// The writes run in one [NotifyManager.batch]. Only callbacks submitted
+  /// through `schedule` or `batchCalls` are deferred until the batch ends.
+  /// Direct observer subscriptions, cache listeners and `onQueryUpdate` run
+  /// synchronously for each write.
   List<(QueryKey, TQueryData?)> updateQueriesData<TQueryData>(
     TQueryData? Function(TQueryData? previous) updater, {
     required QueryFilters filters,
@@ -732,7 +730,13 @@ class QueryClient {
       // attempt after one `client.query` (fifth review, 2026-09-09).
       final retryConfigured = options.retry ?? defaults.retry;
       final fetch = query.fetch(
-        options: defaulted,
+        options: retryConfigured == null
+            ? _defaultQueryOptionsWith<TQueryData>(
+                options.copyWith(retry: query.options.retry),
+                options.queryKey,
+                defaults,
+              )
+            : defaulted,
         fetchOptions: FetchOptions<TQueryData>(
           retry: retryConfigured == null ? RetryPolicy.never : null,
         ),

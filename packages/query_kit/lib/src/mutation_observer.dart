@@ -64,8 +64,13 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
       // even settled, while nobody was watching.
       final mutation = _currentMutation;
       if (mutation != null) {
+        final invocation = _invocation;
         mutation.addObserver(this);
-        _updateResult(mutation.state);
+        if (invocation == _invocation &&
+            identical(_currentMutation, mutation) &&
+            hasListeners) {
+          _updateResult(mutation.state);
+        }
       }
     }
     return remove;
@@ -80,6 +85,8 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   Mutation<TData, TVariables, TOnMutateResult>? _currentMutation;
   late MutationResult<TData, TVariables> _currentResult;
   MutateCallbacks<TData, TVariables, TOnMutateResult>? _callCallbacks;
+  int _invocation = 0;
+  int _resultRevision = 0;
 
   /// The most recently computed result — idle until the first `mutate`, then
   /// whatever the observed mutation's state maps to.
@@ -140,13 +147,20 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,
   }) {
-    _callCallbacks = callbacks;
-
-    _currentMutation?.removeObserver(this);
+    final invocation = ++_invocation;
+    final options = _options;
+    final previous = _currentMutation;
+    _currentMutation = null;
+    _callCallbacks = null;
+    previous?.removeObserver(this);
     final mutation = _client.mutationCache
-        .build<TData, TVariables, TOnMutateResult>(_client, _options);
-    _currentMutation = mutation;
-    mutation.addObserver(this);
+        .build<TData, TVariables, TOnMutateResult>(_client, options);
+    if (invocation == _invocation) {
+      _currentMutation = mutation;
+      _callCallbacks = callbacks;
+      mutation.addObserver(this);
+      if (invocation != _invocation) mutation.removeObserver(this);
+    }
 
     return mutation.execute(variables);
   }
@@ -156,9 +170,14 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// The mutation itself keeps running and still fires its own callbacks; this
   /// observer just stops reflecting it, and the next `mutate` builds a new one.
   void reset() {
-    _currentMutation?.removeObserver(this);
+    final invocation = ++_invocation;
+    final previous = _currentMutation;
     _currentMutation = null;
-    _updateResult(MutationState<TData, TVariables, TOnMutateResult>());
+    _callCallbacks = null;
+    previous?.removeObserver(this);
+    if (invocation == _invocation) {
+      _updateResult(MutationState<TData, TVariables, TOnMutateResult>());
+    }
   }
 
   /// Stops observing for good: drops every listener and leaves the mutation,
@@ -169,9 +188,13 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// mutation that ran without listeners keeps an observer nobody will ever
   /// remove and can never be collected.
   void destroy() {
+    _invocation++;
+    _resultRevision++;
     _listeners.clear();
-    _currentMutation?.removeObserver(this);
+    final previous = _currentMutation;
     _currentMutation = null;
+    _callCallbacks = null;
+    previous?.removeObserver(this);
   }
 
   @override
@@ -185,6 +208,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     final next = _createResult(state.status, state);
     final changed = next != _currentResult;
     _currentResult = next;
+    final revision = ++_resultRevision;
 
     // Per-call callbacks first, then the listeners — upstream's order, and it
     // matters: a listener may start the next mutation from inside its
@@ -193,7 +217,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     // `onSuccess`.
     _client.notifyManager.batch(() {
       _notifyCallCallbacks(action, state);
-      if (changed) {
+      if (changed && revision == _resultRevision) {
         _notifyListeners();
       }
     });
@@ -203,8 +227,13 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// reported to the zone, and the rest still run. Unisolated, a listener
   /// throwing on a `failed` action escaped into the retryer's loop, and one
   /// throwing on `success` turned the success into the error path.
-  void _notifyListeners() =>
-      _listeners.notify((listener) => listener(_currentResult));
+  void _notifyListeners() {
+    final revision = _resultRevision;
+    final result = _currentResult;
+    _listeners.notify((listener) {
+      if (revision == _resultRevision) listener(result);
+    });
+  }
 
   void _notifyCallCallbacks(
     MutationAction action,
@@ -278,6 +307,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
       return;
     }
     _currentResult = next;
+    _resultRevision++;
 
     _client.notifyManager.batch(_notifyListeners);
   }

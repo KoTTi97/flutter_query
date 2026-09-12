@@ -3,7 +3,6 @@
 library;
 
 import 'dart:async';
-import 'dart:collection';
 
 /// A list of listeners, the handles that remove them, and the loop that calls
 /// them.
@@ -45,10 +44,11 @@ import 'dart:collection';
 /// every holder and stay at the call site, where [length] and [hasListeners]
 /// answer for them.
 class ListenerRegistry<TListener extends Function> {
-  final List<TListener> _listeners = <TListener>[];
+  final List<_Registration<TListener>> _listeners = [];
 
   /// The listeners currently registered, in subscription order, read-only.
-  List<TListener> get listeners => UnmodifiableListView<TListener>(_listeners);
+  List<TListener> get listeners =>
+      List.unmodifiable(_listeners.map((entry) => entry.listener));
 
   /// How many registrations there are — one per [add], even when the same
   /// function was added twice. `== 1` is how a holder spots the first one.
@@ -63,14 +63,14 @@ class ListenerRegistry<TListener extends Function> {
   /// The handle is once-only: a second call removes nothing and does not run
   /// [onRemoved] again.
   void Function() add(TListener listener, {void Function()? onRemoved}) {
-    _listeners.add(listener);
-    var removed = false;
+    final entry = _Registration(listener);
+    _listeners.add(entry);
     return () {
-      if (removed) {
+      if (!entry.active) {
         return;
       }
-      removed = true;
-      _listeners.remove(listener);
+      entry.active = false;
+      _listeners.remove(entry);
       onRemoved?.call();
     };
   }
@@ -78,19 +78,30 @@ class ListenerRegistry<TListener extends Function> {
   /// Calls every listener through [deliver], skipping any that an earlier one
   /// removed and reporting a throw to the zone.
   void notify(void Function(TListener listener) deliver) {
-    for (final listener in List<TListener>.of(_listeners)) {
-      if (!_listeners.contains(listener)) {
+    for (final entry in List<_Registration<TListener>>.of(_listeners)) {
+      if (!entry.active) {
         continue;
       }
       try {
-        deliver(listener);
+        deliver(entry.listener);
       } catch (error, stackTrace) {
         Zone.current.handleUncaughtError(error, stackTrace);
       }
     }
   }
 
-  /// Drops every registration. The handles already handed out stay valid and
-  /// still run their `onRemoved`, removing nothing.
-  void clear() => _listeners.clear();
+  /// Drops every registration. Earlier handles become no-ops, including their
+  /// removal hooks, and cannot affect a later registration of the same callback.
+  void clear() {
+    for (final entry in _listeners) {
+      entry.active = false;
+    }
+    _listeners.clear();
+  }
+}
+
+class _Registration<TListener extends Function> {
+  _Registration(this.listener);
+  final TListener listener;
+  bool active = true;
 }
