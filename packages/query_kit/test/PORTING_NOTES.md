@@ -4010,3 +4010,95 @@ was worth a line in this table.
 
 **Nothing about the library changed.** The gate ran in full anyway, because the
 numbers being wrong is the only way to discover that they are.
+
+### Phase 1: a fence is checked against its twin, or it fails ([#72](https://github.com/KoTTi97/flutter_query/issues/72))
+
+`website/README.md` claimed: *"Every Dart sample appears in
+`examples/doc_snippets/` … A sample and its twin are kept identical; **that is
+the only reason to trust either**."* Nothing checked the second sentence. The
+twins compiled, so a sample could not name a method that had been deleted —
+but a fence could drift from its twin by a renamed parameter, a dropped line
+or a whole rewritten body, and both halves would still be green. Fifty fences,
+none verified.
+
+**`examples/doc_snippets/test/site_fences_test.dart`** (six cases) is the
+check. A twin marks a region, the fence names it on its metastring —
+`` ```dart snippet="guides/rebuilds.md#select-counts" `` — and the metastring
+is used rather than a nearby HTML comment because an editor can move a comment
+away from its fence and cannot move an attribute off it. Docusaurus passes
+unknown metastring keys through, so nothing about rendering changes: the built
+page contains **zero** occurrences of `snippet`, and the `language-dart`
+highlighting is untouched.
+
+**Writing the check refuted the claim it was meant to enforce.** About a third
+of the fences were never identical to their twin, and should not be. A page
+introducing `QueryBuilder` shows
+
+```
+builder: (context, result) => switch (result) { /* … */ },
+```
+
+on purpose — four lines about one thing — and spelling the switch out to
+satisfy a checker would make the page worse. So the check has three tiers
+instead of one:
+
+| | what it guarantees |
+|---|---|
+| `snippet="<id>"` | exact, character for character, once the block's own indentation is out of the way. **39 fences** |
+| `snippet="excerpt: <id>"` | the id resolves, so the sample is anchored to code that compiles and a deleted twin is caught; the lines are not compared, and the fence must show a visible `…`. **6 fences** |
+| `snippet="prose-only: <reason>"` | no twin, reason recorded. **5 fences** — three third-party packages and the two bare `import` lines |
+
+Two allowances, both narrow and both load-bearing. The comparison **dedents**
+both sides, which is what lets a marker sit inside a method body while the
+page shows the sample flush left — the difference between a twin shaped like
+the page and one shaped like Dart. And the twin's last line may carry the
+trailing `;` or `,` that makes it a *statement* where the page shows an
+*expression*; without it, every widget sample would need either a stray
+semicolon on the page or a declaration wrapper it does not need. Exactly one
+character, at the end, and only that one.
+
+The `excerpt` tier needs its own guard, or it is a way to silence a drift —
+mark the fence an excerpt and the line comparison stops running. So a sixth
+case requires an excerpt to *look* elided: **`every excerpt says so, with an
+ellipsis a reader can see`**.
+
+**What the pass found, beyond the drift it was built for.** Neither of these
+would have been caught by compiling the twins alone, because both were on the
+page only:
+
+- `guides/the-query-client.md` called `api.get(context.queryKey)` — a method
+  `Api` does not have.
+- `guides/mutations.md` showed `mutationFn: (String name) => api.addTask(name)`,
+  a closure this repository's own lint set rejects (`unnecessary_lambdas`);
+  the sample three pages earlier already used the tearoff.
+
+And two structural results worth keeping:
+
+- **The pure-Dart page's twin used a Flutter function.** `guides/pure-dart.md`
+  shows `print`; its twin used `debugPrint`, which is
+  `package:flutter/foundation.dart` — on a page whose whole claim is that the
+  core works without Flutter. The samples moved to
+  `examples/doc_snippets/lib/pure_dart.dart`, the one twin file that does not
+  import Flutter, with `avoid_print` off for that file alone. The analyzer is
+  now what proves the page's premise.
+- **The two application roots became real entrypoints.** A Dart library holds
+  one `main`, and `getting-started/first-query.md` shows two roots, so
+  `app_root.dart` and `app_root_owning_its_client.dart` hold one each. The
+  page's second sample had shown `child: const MyApp()` with no `MyApp`
+  anywhere; there is one now, and it compiles as written.
+
+**Probed, three ways, before this was called done** — a guard nobody has
+watched fail is a guess:
+
+1. One character changed in a fence (`s.done` → `s.isDone`): fails, naming
+   `guides/rebuilds.md:23`, the twin's line, and the first differing line of
+   the sample.
+2. A marker pair deleted and a region id misspelt: the orphan case names the
+   region shown on no page, and the resolution case names both fences whose id
+   no twin marks.
+3. An exact fence re-marked `excerpt:` to silence it: the ellipsis case
+   refuses it.
+
+The check runs inside the existing `doc snippet tests` step in **both**
+`gates` and `floors`, so CI gained no step. 50 fences, 13 pages, 48 marked
+regions in five twin files.

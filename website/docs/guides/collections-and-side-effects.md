@@ -14,20 +14,23 @@ among them, because none of them is a way of *reading* one query.
 `QueriesBuilder` observes a list that may change length or order — upstream's
 `useQueries`, minus the heterogeneous tuple.
 
-```dart
-QueriesBuilder<Task, String>(
-  queries: [
-    for (final id in visibleIds)
-      QuerySelectOptions<Task, String>(
-        queryKey: QueryKey(<Object?>['tasks', id]),
-        queryFn: (context) => api.getTask(id, signal: context.signal),
-        select: (task) => task.name,
+```dart snippet="guides/collections-and-side-effects.md#queries-builder"
+Widget queriesBuilderSample(List<String> visibleIds) =>
+    QueriesBuilder<Task, String>(
+      queries: <QuerySelectOptions<Task, String>>[
+        for (final id in visibleIds)
+          QuerySelectOptions<Task, String>(
+            queryKey: taskKey(id),
+            queryFn: (context) => api.getTask(id, signal: context.signal),
+            select: (task) => task.name,
+          ),
+      ],
+      builder: (context, results) => Column(
+        children: <Widget>[
+          for (final result in results) Text(result.dataOrNull ?? '…'),
+        ],
       ),
-  ],
-  builder: (context, results) => Column(children: [
-    for (final result in results) Text(result.dataOrNull ?? '…'),
-  ]),
-)
+    );
 ```
 
 - **Observers are reused by key and occurrence**, so reordering the list starts
@@ -47,14 +50,16 @@ Flutter.
 on a controller they **borrow** — the owner still disposes it — and never
 rebuild their `child`.
 
-```dart
-QueryListener<Task, Task>(
-  controller: task,
-  listenWhen: (previous, next) => previous.errorOrNull != next.errorOrNull,
-  listener: (context, result) => ScaffoldMessenger.of(context)
-      .showSnackBar(const SnackBar(content: Text('Task unreachable'))),
-  child: const TaskTile(),
-)
+```dart snippet="guides/collections-and-side-effects.md#listener"
+Widget queryListenerSample(QueryController<Task, Task> task) =>
+    QueryListener<Task, Task>(
+      controller: task,
+      listenWhen: (previous, next) => previous.errorOrNull != next.errorOrNull,
+      listener: (context, result) => ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task unreachable')),
+      ),
+      child: const SizedBox.shrink(),
+    );
 ```
 
 Two properties make these safe for navigation and snackbars, which is the whole
@@ -74,7 +79,7 @@ genuinely different jobs.)
 `MutationStateController` reads every mutation matching a filter through a
 `select` — upstream's `useMutationState`:
 
-```dart
+```dart snippet="guides/collections-and-side-effects.md#mutation-state"
 final saving = MutationStateController<int>(
   client,
   filters: const MutationFilters(status: MutationStatus.pending),

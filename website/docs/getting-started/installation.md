@@ -22,7 +22,7 @@ flutter pub add query_kit_flutter
 
 That pulls in `query_kit` as well; you get the whole surface from one import.
 
-```dart
+```dart snippet="prose-only: the one import line, which every other sample already shows in context"
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 ```
 
@@ -39,7 +39,7 @@ A CLI, a server, a shared package with no Flutter in it:
 dart pub add query_kit
 ```
 
-```dart
+```dart snippet="prose-only: the one import line, which every other sample already shows in context"
 import 'package:query_kit/query_kit.dart';
 ```
 

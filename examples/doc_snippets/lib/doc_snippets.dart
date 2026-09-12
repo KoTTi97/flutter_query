@@ -80,7 +80,9 @@ class Api {
 
 final Api api = Api();
 
+// >>> getting-started/first-query.md#key
 final QueryKey tasksKey = QueryKey(<Object?>['tasks']);
+// <<<
 
 QueryKey taskKey(String id) => QueryKey(<Object?>['tasks', id]);
 
@@ -88,53 +90,55 @@ QueryKey taskKey(String id) => QueryKey(<Object?>['tasks', id]);
 // getting-started/first-query.md
 // ---------------------------------------------------------------------------
 
+// >>> getting-started/first-query.md#options
 QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
       staleTime: const StaleTime.duration(Duration(seconds: 30)),
     );
+// <<<
 
+// >>> guides/options.md#plain
 QueryObserverOptions<Task> taskQuery(String id) => QueryObserverOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
     );
+// <<<
 
-void mainWithProvider() {
-  runApp(
-    QueryClientProvider(
-      client: QueryClient(),
-      child: const MaterialApp(home: TasksScreen()),
-    ),
-  );
-}
-
-Widget providerThatOwnsItsClient() => QueryClientProvider.create(
-      create: QueryClient.new,
-      child: const MaterialApp(home: TasksScreen()),
-    );
+// The page's two application roots are whole entrypoints, so each lives in
+// its own file: `app_root.dart` and `app_root_owning_its_client.dart`. A Dart
+// library holds one `main`.
 
 // --- Guides / Lifecycle and connectivity ------------------------------------
 
-/// A client whose focus comes from a `setEventListener` adapter of its own.
-/// The `connectivity_plus` sample on the same page stays prose-only, but this
-/// one and the fixed status below need nothing beyond Flutter.
-Widget providerWithItsOwnFocusSource(QueryClient client) => QueryClientProvider(
-      client: client,
-      // The lifecycle listener and a setEventListener adapter are two sources
-      // of focus for one manager. Pick one.
-      observeAppLifecycle: false,
-      child: const MaterialApp(home: TasksScreen()),
-    );
+/// The page's two providers that need nothing beyond Flutter — a focus source
+/// of its own, and a connectivity verdict with no stream behind it. Its
+/// `connectivity_plus` sample stays prose-only, for the reason at the top of
+/// this file.
+///
+/// A list rather than two functions, because the page shows each as the
+/// *expression* a reader drops into their own tree, and a list element is
+/// the one place a bare widget expression is also valid Dart.
+List<Widget> lifecycleProviders(QueryClient client, bool online) => <Widget>[
+      // >>> guides/lifecycle-and-connectivity.md#own-focus-source
+      QueryClientProvider(
+        client: client,
+        // The lifecycle listener and a setEventListener adapter are two sources
+        // of focus for one manager. Pick one.
+        observeAppLifecycle: false,
+        child: const MyApp(),
+      ),
+      // <<<
+      // >>> guides/lifecycle-and-connectivity.md#fixed-online-status
+      QueryClientProvider(
+        client: client,
+        onlineStatus: OnlineStatus.fixed(online),
+        child: const MyApp(),
+      ),
+      // <<<
+    ];
 
-/// Connectivity with no stream behind it: the value *is* the verdict, and a
-/// changed one reaches the client on the rebuild that changes it.
-Widget providerWithAFixedOnlineStatus(QueryClient client, bool online) =>
-    QueryClientProvider(
-      client: client,
-      onlineStatus: OnlineStatus.fixed(online),
-      child: const MaterialApp(home: TasksScreen()),
-    );
-
+// >>> getting-started/first-query.md#screen
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
 
@@ -156,10 +160,12 @@ class TasksScreen extends StatelessWidget {
     );
   }
 }
+// <<<
 
 class AddTaskButton extends StatelessWidget {
   const AddTaskButton({super.key});
 
+  // >>> getting-started/first-query.md#mutation
   @override
   Widget build(BuildContext context) {
     // Take the client here, in build — not inside the callback. A mutation
@@ -182,14 +188,16 @@ class AddTaskButton extends StatelessWidget {
       child: Text(add.value.isPending ? 'Adding…' : 'Add'),
     );
   }
+  // <<<
 }
 
 // ---------------------------------------------------------------------------
 // guides/reading-a-query.md — the four call styles
 // ---------------------------------------------------------------------------
 
-class TaskScreenContext extends StatelessWidget {
-  const TaskScreenContext(this.id, {super.key});
+// >>> guides/reading-a-query.md#context-query
+class TaskScreen extends StatelessWidget {
+  const TaskScreen(this.id, {super.key});
 
   final String id;
 
@@ -204,7 +212,9 @@ class TaskScreenContext extends StatelessWidget {
     };
   }
 }
+// <<<
 
+// >>> guides/reading-a-query.md#builder
 Widget taskScreenBuilder(String id) => QueryBuilder<Task>(
       options: taskQuery(id),
       builder: (context, result) => switch (result) {
@@ -214,6 +224,7 @@ Widget taskScreenBuilder(String id) => QueryBuilder<Task>(
           ErrorBanner(error, staleData),
       },
     );
+// <<<
 
 class TaskScreenMixin extends StatefulWidget {
   const TaskScreenMixin(this.id, {super.key});
@@ -224,6 +235,7 @@ class TaskScreenMixin extends StatefulWidget {
   State<TaskScreenMixin> createState() => _TaskScreenMixinState();
 }
 
+// >>> guides/reading-a-query.md#mixin
 class _TaskScreenMixinState extends State<TaskScreenMixin> with QueryMixin {
   @override
   Widget build(BuildContext context) {
@@ -241,6 +253,7 @@ class _TaskScreenMixinState extends State<TaskScreenMixin> with QueryMixin {
     );
   }
 }
+// <<<
 
 /// A read whose key the screen switches needs an `id:`, so the observer
 /// follows the key and `keepPrevious` has a previous.
@@ -256,7 +269,10 @@ class PagedReader extends StatefulWidget {
 class _PagedReaderState extends State<PagedReader> with QueryMixin {
   @override
   Widget build(BuildContext context) {
+    // >>> guides/reading-a-query.md#switched-key
+    // With an id, the observer follows the key — so keepPrevious has a previous.
     final page = watchQuery(pageQuery(widget.page), id: 'page');
+    // <<<
     return Text('${page.dataOrNull?.length ?? 0} rows');
   }
 }
@@ -267,10 +283,12 @@ QueryObserverOptions<List<Post>> pageQuery(int page) => QueryObserverOptions(
       placeholderData: PlaceholderData.compute((previous, _) => previous),
     );
 
-QueryController<Task, Task> controllerStyle(QueryClient client, String id) {
+void controllerStyle(QueryClient client, String id) {
+  // >>> guides/reading-a-query.md#controller
   final task = QueryController.create(client, taskQuery(id));
   // … task.value, task.addListener, task.refetch() …
-  return task;
+  task.dispose();
+  // <<<
 }
 
 // ---------------------------------------------------------------------------
@@ -278,12 +296,15 @@ QueryController<Task, Task> controllerStyle(QueryClient client, String id) {
 // ---------------------------------------------------------------------------
 
 /// The two shapes side by side; `taskQuery` above is the plain one.
+// >>> guides/options.md#select
 QuerySelectOptions<Task, String> taskNameQuery(String id) => QuerySelectOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
       select: (task) => task.name,
     );
+// <<<
 
+// >>> guides/options.md#enabled
 QueryObserverOptions<List<Comment>> commentsQuery(
   String? postId,
 ) =>
@@ -292,23 +313,28 @@ QueryObserverOptions<List<Comment>> commentsQuery(
       queryFn: (context) => api.comments(postId!),
       enabled: postId == null ? Enabled.no : Enabled.yes,
     );
+// <<<
 
 QueryObserverOptions<Task> withoutStructuralSharing(String id) =>
     QueryObserverOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id),
-      structuralSharing: (previous, next) => next,
+      // >>> guides/options.md#structural-sharing
+      structuralSharing: (previous, next) => next, // upstream's `false`
+      // <<<
     );
 
 // ---------------------------------------------------------------------------
 // guides/rebuilds.md
 // ---------------------------------------------------------------------------
 
+// >>> guides/rebuilds.md#select
 QuerySelectOptions<List<Task>, int> doneCountQuery() => QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
       select: (tasks) => tasks.where((s) => s.done).length,
     );
+// <<<
 
 /// A record has value equality already, which makes it the easy pick for a
 /// `select` output.
@@ -316,27 +342,33 @@ QuerySelectOptions<List<Task>, ({int done, int total})> doneRecordQuery() =>
     QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
+      // >>> guides/rebuilds.md#record-select
       select: (data) => (
         done: data.where((s) => s.done).length,
         total: data.length,
       ),
+      // <<<
     );
 
+// >>> guides/rebuilds.md#build-when-builder
 Widget buildWhenSample(String id) => QueryBuilder<Task>(
       options: taskQuery(id),
       buildWhen: (previous, current) =>
           previous.dataOrNull != current.dataOrNull,
       builder: (context, result) => Text(result.dataOrNull?.name ?? '…'),
     );
+// <<<
 
 /// The same predicate on a keyless read: one implementation for all twelve
 /// places that take one (C49, https://github.com/KoTTi97/flutter_query/issues/55,
 /// and its mutation follow-on, https://github.com/KoTTi97/flutter_query/issues/67).
 QueryResult<Task> keylessBuildWhenSample(BuildContext context, String id) {
+  // >>> guides/rebuilds.md#build-when-keyless
   final task = context.query(
     taskQuery(id),
     buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
   );
+  // <<<
   return task;
 }
 
@@ -347,8 +379,27 @@ QueryResult<Task> keylessBuildWhenSample(BuildContext context, String id) {
 MutationOptions<void, String, void> renameTask(String id) =>
     MutationOptions.simple(mutationFn: (String name) => api.rename(id, name));
 
+/// The page's first mutation: the controller a read hands back, and what the
+/// two halves of it are for.
+void readAMutation(BuildContext context, QueryClient client) {
+  // >>> guides/mutations.md#read
+  final add = context.mutation(
+    MutationOptions.simple(
+      mutationFn: api.addTask,
+      onSuccess: (_, __, ___) => client.invalidateQueries(
+        filters: QueryFilters(queryKey: tasksKey),
+      ),
+    ),
+  );
+
+  // … add.value is the MutationResult; add.mutate(vars) starts it.
+  // <<<
+  add.reset();
+}
+
 /// The optimistic shape: `onMutate` snapshots and patches, and what it returns
 /// is the rollback handle `onError` and `onSettled` receive.
+// >>> guides/mutations.md#optimistic
 MutationOptions<Task, String, Task?> renameOptimistically(
   QueryClient client,
   String id,
@@ -373,6 +424,7 @@ MutationOptions<Task, String, Task?> renameOptimistically(
         filters: QueryFilters(queryKey: taskKey(id)),
       ),
     );
+// <<<
 
 /// The mutation reads take the same predicate, and it is the only narrowing a
 /// mutation reader has (https://github.com/KoTTi97/flutter_query/issues/67).
@@ -380,12 +432,14 @@ MutationController<void, String, void> mutationBuildWhenSample(
   BuildContext context,
   String id,
 ) {
+  // >>> guides/rebuilds.md#build-when-mutation
   final rename = context.mutation(
     renameTask(id),
     // A retrying run moves `failureCount` while it stays pending; a spinner
     // does not care which attempt it is on.
     buildWhen: (previous, current) => previous.status != current.status,
   );
+  // <<<
   return rename;
 }
 
@@ -393,19 +447,23 @@ void mutateWithPerCallCallbacks(
   MutationController<void, String, void> add,
   BuildContext context,
 ) {
+  // >>> guides/mutations.md#per-call-callbacks
   add.mutate(
     'New task',
     callbacks: MutateCallbacks<void, String, void>(
       onSuccess: (data, vars, _) => Navigator.of(context).pop(),
     ),
   );
+  // <<<
 }
 
+// >>> guides/mutations.md#scope
 MutationOptions<void, String, void> serialisedWrite(String id) =>
     MutationOptions.simple(
       mutationFn: (String name) => api.rename(id, name),
       scope: const MutationScope('task-writes'),
     );
+// <<<
 
 // ---------------------------------------------------------------------------
 // guides/infinite-queries.md
@@ -414,6 +472,7 @@ MutationOptions<void, String, void> serialisedWrite(String id) =>
 /// What an *observer* takes: the plain shape, whose data is the whole
 /// `InfiniteData<List<Post>, int>`. `InfiniteQuerySelectOptions` is the
 /// shape with a required `select` over it.
+// >>> guides/infinite-queries.md#options
 InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
     InfiniteQueryObserverOptions<List<Post>, int>(
       queryKey: QueryKey(<Object?>['feed']),
@@ -422,6 +481,7 @@ InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
       getNextPageParam: (page, pages, pageParam, pageParams) =>
           page.isEmpty ? null : pageParam + page.length,
     );
+// <<<
 
 /// What `QueryClient.query` takes: no observer, so no `select`, so two type
 /// arguments.
@@ -439,12 +499,21 @@ class Feed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // >>> guides/infinite-queries.md#read
     final feed = context.infiniteQuery(feedQuery());
+    // or watchInfiniteQuery(...), InfiniteQueryBuilder(...), InfiniteQueryController
 
     final posts = feed.value.dataOrNull?.flatten<Post>() ?? const <Post>[];
     if (feed.hasNextPage && !feed.isFetchingNextPage) {
       feed.fetchNextPage().ignore();
     }
+    // <<<
+
+    // The page's other read: the pages as pages, rather than flattened.
+    // >>> guides/infinite-queries.md#pages
+    final pages = feed.value.dataOrNull?.pages ?? const <List<Post>>[];
+    // <<<
+    debugPrint('${pages.length} pages');
 
     return ListView(
       children: <Widget>[for (final post in posts) Text(post.title)],
@@ -457,11 +526,14 @@ class Feed extends StatelessWidget {
 /// where the last request was made and require the view to have moved.
 mixin LoadMoreOnScroll<T extends StatefulWidget> on State<T> {
   final ScrollController scrollController = ScrollController();
+  // >>> guides/infinite-queries.md#asked-at
   double? _askedAt;
+  // <<<
 
   InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>
       get feed;
 
+  // >>> guides/infinite-queries.md#on-scroll
   void onScroll() {
     final position = scrollController.position;
     if (position.extentAfter < 400 &&
@@ -472,20 +544,27 @@ mixin LoadMoreOnScroll<T extends StatefulWidget> on State<T> {
       feed.fetchNextPage().ignore();
     }
   }
+  // <<<
 }
 
 // ---------------------------------------------------------------------------
 // guides/the-query-client.md
 // ---------------------------------------------------------------------------
 
-Future<List<Task>> fetchImperatively(QueryClient client) => client.query(
-      QueryOptions<List<Task>>(
-        queryKey: tasksKey,
-        queryFn: (context) => api.listTasks(signal: context.signal),
-      ),
-    );
+Future<List<Task>> fetchImperatively(QueryClient client) async {
+  // >>> guides/the-query-client.md#imperative
+  final tasks = await client.query<List<Task>>(
+    QueryOptions<List<Task>>(
+      queryKey: tasksKey,
+      queryFn: (context) => api.listTasks(signal: context.signal),
+    ),
+  );
+  // <<<
+  return tasks;
+}
 
 void filterSamples(QueryClient client) {
+  // >>> guides/the-query-client.md#filters
   client.invalidateQueries(filters: QueryFilters(queryKey: tasksKey)).ignore();
   client.removeQueries(
     filters: QueryFilters(queryKey: tasksKey, exact: true),
@@ -497,9 +576,11 @@ void filterSamples(QueryClient client) {
       .resetQueries(
           filters: QueryFilters(predicate: (query) => query.isStale()))
       .ignore();
+  // <<<
 }
 
 void cacheWriteSamples(QueryClient client, String id, Task task) {
+  // >>> guides/the-query-client.md#cache-writes
   client.getQueryData<List<Task>>(tasksKey);
   client.setQueryData<Task>(taskKey(id), task);
   client.updateQueryData<Task>(
@@ -510,9 +591,11 @@ void cacheWriteSamples(QueryClient client, String id, Task task) {
     (previous) => previous?.copyWith(name: 'Renamed'),
     filters: QueryFilters(queryKey: tasksKey),
   );
+  // <<<
 }
 
 QueryClient clientWithDefaults() {
+  // >>> guides/the-query-client.md#defaults
   final client = QueryClient(
     defaultOptions: DefaultOptions(
       queries: QueryDefaults(
@@ -526,14 +609,26 @@ QueryClient clientWithDefaults() {
     QueryKey(<Object?>['tasks']),
     QueryDefaults(queryFn: (context) => api.listTasks()),
   );
+  // <<<
 
   return client;
+}
+
+/// The page's last sample: the three calls whose timing is yours, not the
+/// provider's.
+void theMountContract(QueryClient client) {
+  // >>> guides/the-query-client.md#mount-contract
+  client.mount(); // once, at start-up
+  client.unmount(); // to balance your own mount()
+  client.clear(); // at the end: drop the caches and their timers
+  // <<<
 }
 
 // ---------------------------------------------------------------------------
 // guides/collections-and-side-effects.md
 // ---------------------------------------------------------------------------
 
+// >>> guides/collections-and-side-effects.md#queries-builder
 Widget queriesBuilderSample(List<String> visibleIds) =>
     QueriesBuilder<Task, String>(
       queries: <QuerySelectOptions<Task, String>>[
@@ -550,7 +645,9 @@ Widget queriesBuilderSample(List<String> visibleIds) =>
         ],
       ),
     );
+// <<<
 
+// >>> guides/collections-and-side-effects.md#listener
 Widget queryListenerSample(QueryController<Task, Task> task) =>
     QueryListener<Task, Task>(
       controller: task,
@@ -560,41 +657,37 @@ Widget queryListenerSample(QueryController<Task, Task> task) =>
       ),
       child: const SizedBox.shrink(),
     );
+// <<<
 
-MutationStateController<int> writesInFlight(QueryClient client) =>
-    MutationStateController<int>(
-      client,
-      filters: const MutationFilters(status: MutationStatus.pending),
-      select: (mutation) => 1,
-    );
-
-// ---------------------------------------------------------------------------
-// guides/pure-dart.md — the parts that do not need `dart:io`
-// ---------------------------------------------------------------------------
-
-void Function() observeWithoutFlutter(QueryClient client, String id) {
-  final observer = client.observe<Task, Task>(
-    QueryObserverOptions<Task>(
-      queryKey: taskKey(id),
-      queryFn: (context) => api.getTask(id, signal: context.signal),
-    ),
+MutationStateController<int> writesInFlight(QueryClient client) {
+  // >>> guides/collections-and-side-effects.md#mutation-state
+  final saving = MutationStateController<int>(
+    client,
+    filters: const MutationFilters(status: MutationStatus.pending),
+    select: (mutation) => 1,
   );
-
-  return observer.subscribe((result) {
-    switch (result) {
-      case QueryPending():
-        debugPrint('loading');
-      case QuerySuccess(:final data):
-        debugPrint(data.name);
-      case QueryError(:final error, :final staleData):
-        debugPrint('$error (still showing ${staleData?.name})');
-    }
-  });
+  // saving.value.length is "how many writes are in flight"
+  // <<<
+  return saving;
 }
+
+// ---------------------------------------------------------------------------
+// guides/pure-dart.md lives in `pure_dart.dart`: it is the one twin that must
+// not import Flutter, because that is the page's whole claim.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // The two leaf widgets the samples above render into.
 // ---------------------------------------------------------------------------
+
+/// What the pages call the rest of the application. Concrete, so a sample
+/// that shows `child: const MyApp()` compiles as written.
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => const MaterialApp(home: TasksScreen());
+}
 
 class TaskCard extends StatelessWidget {
   const TaskCard(this.task, {super.key});

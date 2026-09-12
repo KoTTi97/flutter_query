@@ -23,11 +23,50 @@ of building it in CI.
   still that one pass that would move it, this directory included, so do not
   write it in a way the pass cannot find.
 - **Every Dart sample appears in `examples/doc_snippets/`**, compiled and
-  analyzed at `--fatal-infos` in CI, under a comment naming the page it is on.
-  A sample and its twin are kept identical; that is the only reason to trust
-  either. The exceptions are the samples that need a third-party package
-  (`dio`, `connectivity_plus`, `signals_flutter`) — neither published package
-  may depend on one, so those stay prose-only.
+  analyzed at `--fatal-infos` in CI — and **a test checks that it still
+  matches the page**, which nothing did until
+  [#72](https://github.com/KoTTi97/flutter_query/issues/72). A twin marks the
+  region a page shows, and the fence names it:
+
+  ```dart
+  // >>> guides/rebuilds.md#select-counts
+  select: (tasks) => tasks.where((s) => s.done).length,
+  // <<<
+  ```
+
+  ````md
+  ```dart snippet="guides/rebuilds.md#select-counts"
+  ````
+
+  The id rides on the fence's metastring rather than a nearby HTML comment,
+  because an editor can move a comment away from its fence and cannot move an
+  attribute off it. Docusaurus passes unknown metastring keys through, so it
+  changes nothing about rendering. A fence that shows two declarations names
+  both, separated by whitespace, and they are compared with a blank line
+  between.
+
+  Three forms, and `examples/doc_snippets/test/site_fences_test.dart` keeps
+  them honest:
+
+  | | what is checked |
+  |---|---|
+  | `snippet="<id>"` | **exact**, character for character, once the block's own indentation is out of the way — plus one allowance: the twin's last line may carry the trailing `;` or `,` that makes it a statement where the page shows an expression |
+  | `snippet="excerpt: <id>"` | the id resolves, so the sample is anchored to code that compiles; the lines are not compared, and the fence **must** show a `…` — which is what stops `excerpt:` becoming a way to silence a real drift |
+  | `snippet="prose-only: <reason>"` | no twin, and the reason is recorded rather than remembered. Every current one is a third-party package (`dio`, `connectivity_plus`, `signals_flutter`) that neither published package may depend on |
+
+  It stands at **39 exact, 6 excerpts, 5 prose-only** across 50 fences and 13
+  pages, against 48 marked regions. Writing the check is what found that the
+  old claim — *"a sample and its twin are kept identical"* — was never true of
+  about a third of them, and should not have been: a page introducing
+  `QueryBuilder` shows `builder: (context, result) => switch (result) { /* … */ }`
+  on purpose, and spelling the switch out to satisfy a checker would make the
+  page worse.
+
+  Two things the same pass turned up, both fixed rather than declared
+  excerpts: `the-query-client.md` called an `api.get` that does not exist, and
+  `mutations.md` showed a closure this repository's own lints reject
+  (`unnecessary_lambdas`). Neither would have been caught by compiling the
+  twins alone.
 - **Numbers are measured, not remembered.** The test counts on the landing
   page and in `docs/project/fidelity.md` come from actual runs. If you cannot
   re-measure one, do not restate it.

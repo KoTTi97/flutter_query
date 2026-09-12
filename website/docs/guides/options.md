@@ -34,14 +34,13 @@ written inline infers its types: from `queryFn` on the plain shape, from
 without it silently became `Query<dynamic>` in the cache. A `select` that
 keeps the type is still a select and still goes on `QuerySelectOptions`.
 
-```dart
+```dart snippet="guides/options.md#plain guides/options.md#select"
 QueryObserverOptions<Task> taskQuery(String id) => QueryObserverOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
     );
 
-QuerySelectOptions<Task, String> taskNameQuery(String id) =>
-    QuerySelectOptions(
+QuerySelectOptions<Task, String> taskNameQuery(String id) => QuerySelectOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
       select: (task) => task.name,
@@ -90,12 +89,15 @@ A client owns its gc timers, which is why a widget test has to
 | `Enabled.yes` / `Enabled.no` | constants, not constructors |
 | `Enabled.when((query) => …)` | computed — this is the dependent-query tool |
 
-```dart
-QueryObserverOptions<List<Comment>>(
-  queryKey: QueryKey(<Object?>['posts', postId, 'comments']),
-  queryFn: (context) => api.comments(postId!),
-  enabled: postId == null ? Enabled.no : Enabled.yes,
-)
+```dart snippet="guides/options.md#enabled"
+QueryObserverOptions<List<Comment>> commentsQuery(
+  String? postId,
+) =>
+    QueryObserverOptions(
+      queryKey: QueryKey(<Object?>['posts', postId, 'comments']),
+      queryFn: (context) => api.comments(postId!),
+      enabled: postId == null ? Enabled.no : Enabled.yes,
+    );
 ```
 
 A disabled query does not fetch, stays `pending`, and keeps whatever it has
@@ -205,8 +207,8 @@ Lists are shared element by element; maps and sets are kept whole when deeply
 equal; everything else is compared with `==`. **A typed model therefore needs
 `==` and `hashCode`** — without them every fetch produces a new value.
 
-```dart
-structuralSharing: (previous, next) => next,   // upstream's `false`
+```dart snippet="guides/options.md#structural-sharing"
+structuralSharing: (previous, next) => next, // upstream's `false`
 ```
 
 ## Where each one is on screen

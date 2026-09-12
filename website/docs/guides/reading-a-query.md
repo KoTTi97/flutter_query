@@ -17,8 +17,9 @@ one key and shows that five readers still cost one request.
 
 ## `context.query(...)`
 
-```dart
+```dart snippet="excerpt: guides/reading-a-query.md#context-query"
 class TaskScreen extends StatelessWidget {
+  // … the id and its constructor …
   @override
   Widget build(BuildContext context) {
     final task = context.query(taskQuery(id));
@@ -57,7 +58,7 @@ Things to know:
 
 ## `QueryBuilder`
 
-```dart
+```dart snippet="excerpt: guides/reading-a-query.md#builder"
 QueryBuilder<Task>(
   options: taskQuery(id),
   builder: (context, result) => switch (result) { /* … */ },
@@ -75,7 +76,7 @@ mutations included.
 
 ## `QueryMixin`
 
-```dart
+```dart snippet="excerpt: guides/reading-a-query.md#mixin"
 class _TaskScreenState extends State<TaskScreen> with QueryMixin {
   @override
   Widget build(BuildContext context) {
@@ -102,7 +103,7 @@ because a `State` is one reader.
 
 An `id:` is then the read's identity, which matters when the key changes:
 
-```dart
+```dart snippet="guides/reading-a-query.md#switched-key"
 // With an id, the observer follows the key — so keepPrevious has a previous.
 final page = watchQuery(pageQuery(widget.page), id: 'page');
 ```
@@ -115,7 +116,7 @@ and the placeholder has nothing previous to show.
 
 ## `QueryController`
 
-```dart
+```dart snippet="guides/reading-a-query.md#controller"
 final task = QueryController.create(client, taskQuery(id));
 // … task.value, task.addListener, task.refetch() …
 task.dispose();
@@ -163,7 +164,7 @@ Not dependencies here, and not planned as such. Because a controller is a
 `ValueListenable`, a signals package reads it with whatever it offers for
 listenables — `signals_flutter` has `valueListenableToSignal`, for one:
 
-```dart
+```dart snippet="prose-only: needs signals_flutter, which neither published package may depend on"
 final task = QueryController.create(client, taskQuery(id));
 final signal = valueListenableToSignal(task);        // signals_flutter
 final done = computed(() => signal.value.dataOrNull?.done ?? false);

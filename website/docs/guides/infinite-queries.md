@@ -10,14 +10,15 @@ A query whose data is a *list of pages*. Same four call styles; the difference
 is that the function is `pageFn` rather than `queryFn`, and it receives a typed
 page context.
 
-```dart
-InfiniteQueryObserverOptions<List<Post>, int>(
-  queryKey: QueryKey(<Object?>['feed']),
-  pageFn: (context) => api.feed(cursor: context.pageParam),
-  initialPageParam: 0,
-  getNextPageParam: (page, pages, pageParam, pageParams) =>
-      page.isEmpty ? null : pageParam + page.length,
-)
+```dart snippet="guides/infinite-queries.md#options"
+InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
+    InfiniteQueryObserverOptions<List<Post>, int>(
+      queryKey: QueryKey(<Object?>['feed']),
+      pageFn: (context) => api.feed(cursor: context.pageParam),
+      initialPageParam: 0,
+      getNextPageParam: (page, pages, pageParam, pageParams) =>
+          page.isEmpty ? null : pageParam + page.length,
+    );
 ```
 
 :::note Two shapes, as with plain queries
@@ -51,7 +52,7 @@ Every style hands back a controller for an infinite query, because the paging
 surface is not part of the sealed result — the result keeps one shape whether
 a query pages or not.
 
-```dart
+```dart snippet="guides/infinite-queries.md#read"
 final feed = context.infiniteQuery(feedQuery());
 // or watchInfiniteQuery(...), InfiniteQueryBuilder(...), InfiniteQueryController
 
@@ -76,7 +77,7 @@ length and in the same order: `pages[i]` was fetched with `pageParams[i]`.
 
 For the common case where a page is itself a list:
 
-```dart
+```dart snippet="guides/infinite-queries.md#pages"
 final pages = feed.value.dataOrNull?.pages ?? const <List<Post>>[];
 ```
 
@@ -98,7 +99,7 @@ again, and how many pages you get depends on how fast the machine is.
 
 Remember where the last request was made and require the view to have moved:
 
-```dart
+```dart snippet="guides/infinite-queries.md#asked-at guides/infinite-queries.md#on-scroll"
 double? _askedAt;
 
 void onScroll() {

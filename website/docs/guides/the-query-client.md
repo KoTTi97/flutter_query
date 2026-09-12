@@ -14,7 +14,7 @@ imperative goes through it.
 Upstream has `fetchQuery`, `prefetchQuery` and `ensureQueryData`, all three now
 deprecated there. Here it is one:
 
-```dart
+```dart snippet="guides/the-query-client.md#imperative"
 final tasks = await client.query<List<Task>>(
   QueryOptions<List<Task>>(
     queryKey: tasksKey,
@@ -43,11 +43,18 @@ fetch is awaited as usual.
 deliberate divergence from upstream's positional object, and it makes the call
 sites read the same everywhere.
 
-```dart
-client.invalidateQueries(filters: QueryFilters(queryKey: tasksKey));
-client.removeQueries(filters: QueryFilters(queryKey: tasksKey, exact: true));
-client.refetchQueries(filters: QueryFilters(type: QueryTypeFilter.active));
-client.resetQueries(filters: QueryFilters(predicate: (query) => query.isStale()));
+```dart snippet="guides/the-query-client.md#filters"
+client.invalidateQueries(filters: QueryFilters(queryKey: tasksKey)).ignore();
+client.removeQueries(
+  filters: QueryFilters(queryKey: tasksKey, exact: true),
+);
+client
+    .refetchQueries(filters: QueryFilters(type: QueryTypeFilter.active))
+    .ignore();
+client
+    .resetQueries(
+        filters: QueryFilters(predicate: (query) => query.isStale()))
+    .ignore();
 ```
 
 `QueryFilters` takes `queryKey` (a **prefix** unless `exact: true`), `exact`,
@@ -59,7 +66,7 @@ to **exact**, while the bulk operations default to prefix.
 
 ## Reading and writing the cache
 
-```dart
+```dart snippet="excerpt: guides/the-query-client.md#cache-writes"
 final tasks = client.getQueryData<List<Task>>(tasksKey);
 client.setQueryData<Task>(taskKey(id), task);
 client.updateQueryData<Task>(taskKey(id), (previous) => previous?.copyWith(…));
@@ -85,7 +92,7 @@ you out when porting JavaScript, and it is catching a real bug.
 
 Two levels, and a key-specific default sits above the client-wide one:
 
-```dart
+```dart snippet="guides/the-query-client.md#defaults"
 final client = QueryClient(
   defaultOptions: DefaultOptions(
     queries: QueryDefaults(
@@ -97,7 +104,7 @@ final client = QueryClient(
 
 client.setQueryDefaults(
   QueryKey(<Object?>['tasks']),
-  QueryDefaults(queryFn: (context) => api.get(context.queryKey)),
+  QueryDefaults(queryFn: (context) => api.listTasks()),
 );
 ```
 
@@ -113,7 +120,7 @@ produce them, so nothing downstream can be handed half-resolved options.
 A query function receives `context.signal`, a `QueryCancelToken`. Dart has no
 ecosystem-wide cancellation primitive, so `onCancel` is the interop point:
 
-```dart
+```dart snippet="prose-only: needs dio, which neither published package may depend on"
 Future<List<Task>> listTasks(QueryFunctionContext context) {
   final token = CancelToken();                     // dio
   context.signal.onCancel(token.cancel);
@@ -131,10 +138,10 @@ back to `idle` too rather than left `fetching` forever.
 
 ## The mount contract
 
-```dart
-client.mount();     // once, at start-up
-client.unmount();   // to balance your own mount()
-client.clear();     // at the end: drop the caches and their timers
+```dart snippet="guides/the-query-client.md#mount-contract"
+client.mount(); // once, at start-up
+client.unmount(); // to balance your own mount()
+client.clear(); // at the end: drop the caches and their timers
 ```
 
 Without a mount, **nothing** reacts to the app returning to the foreground or

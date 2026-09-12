@@ -11,7 +11,7 @@ query, and a widget that reads it.
 
 ## 1. A client at the root
 
-```dart
+```dart snippet="getting-started/first-query.md#main"
 void main() {
   runApp(
     QueryClientProvider(
@@ -31,11 +31,15 @@ If you want the provider to own the client as well, use
 `QueryClientProvider.create`, which builds it and `clear()`s it when the tree
 comes down:
 
-```dart
-QueryClientProvider.create(
-  create: QueryClient.new,
-  child: const MyApp(),
-);
+```dart snippet="getting-started/first-query.md#main-owning-its-client"
+void main() {
+  runApp(
+    QueryClientProvider.create(
+      create: QueryClient.new,
+      child: const MaterialApp(home: TasksScreen()),
+    ),
+  );
+}
 ```
 
 ## 2. Describe the query once
@@ -43,11 +47,10 @@ QueryClientProvider.create(
 Put the options behind a function. Nothing forces this, but it is what makes
 the same query readable from several widgets without drift:
 
-```dart
-final tasksKey = QueryKey(<Object?>['tasks']);
+```dart snippet="getting-started/first-query.md#key getting-started/first-query.md#options"
+final QueryKey tasksKey = QueryKey(<Object?>['tasks']);
 
-QueryObserverOptions<List<Task>> tasksQuery() =>
-    QueryObserverOptions(
+QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
       staleTime: const StaleTime.duration(Duration(seconds: 30)),
@@ -86,7 +89,7 @@ every field. [Options](../guides/options.md) has the full set.
 
 ## 3. Read it
 
-```dart
+```dart snippet="getting-started/first-query.md#screen"
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
 
@@ -100,7 +103,9 @@ class TasksScreen extends StatelessWidget {
         QueryPending() => const Center(child: CircularProgressIndicator()),
         QueryError(:final error) => Center(child: Text('$error')),
         QuerySuccess(:final data) => ListView(
-            children: [for (final task in data) TaskTile(task)],
+            children: <Widget>[
+              for (final task in data) TaskTile(task),
+            ],
           ),
       },
     );
@@ -119,7 +124,7 @@ The other three are a builder widget, a `State` mixin and a plain
 
 ## 4. Write something, and invalidate
 
-```dart
+```dart snippet="getting-started/first-query.md#mutation"
 @override
 Widget build(BuildContext context) {
   // Take the client here, in build — not inside the callback. A mutation

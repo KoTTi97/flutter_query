@@ -20,12 +20,12 @@ A `select` runs at the observer. A fetch that brings back data whose
 `data` is unchanged and anything compared on it (a `buildWhen` over
 `dataOrNull`, a child keyed on the data) sees no change.
 
-```dart
-QuerySelectOptions<List<Task>, int>(
-  queryKey: tasksKey,
-  queryFn: (context) => api.listTasks(signal: context.signal),
-  select: (tasks) => tasks.where((s) => s.done).length,
-)
+```dart snippet="guides/rebuilds.md#select"
+QuerySelectOptions<List<Task>, int> doneCountQuery() => QuerySelectOptions(
+      queryKey: tasksKey,
+      queryFn: (context) => api.listTasks(signal: context.signal),
+      select: (tasks) => tasks.where((s) => s.done).length,
+    );
 ```
 
 What `select` does **not** narrow is the rest of the result. A widget is handed
@@ -51,7 +51,7 @@ For the part `select` does control, equality is `==`:
 Give such a model `==`, or select a list or a scalar. Dart **records** already
 have value equality, which makes them the easy pick:
 
-```dart
+```dart snippet="guides/rebuilds.md#record-select"
 select: (data) => (
   done: data.where((s) => s.done).length,
   total: data.length,
@@ -66,7 +66,7 @@ On every builder — `QueryBuilder`, `QuerySelectBuilder`,
 `context.query`, `context.selectQuery`, `context.infiniteQuery`,
 `context.mutation`.
 
-```dart
+```dart snippet="excerpt: guides/rebuilds.md#build-when-builder"
 QueryBuilder<Task>(
   options: taskQuery(id),
   buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
@@ -74,7 +74,7 @@ QueryBuilder<Task>(
 )
 ```
 
-```dart
+```dart snippet="guides/rebuilds.md#build-when-keyless"
 final task = context.query(
   taskQuery(id),
   buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
@@ -110,7 +110,7 @@ compare and the reader is showing the stale half.
 The same predicate over a `MutationResult`, and it is the *only* narrowing a
 mutation reader has: there is no `select` on a mutation.
 
-```dart
+```dart snippet="guides/rebuilds.md#build-when-mutation"
 final rename = context.mutation(
   renameTask(id),
   // A retrying run moves `failureCount` while it stays pending; a spinner

@@ -55,7 +55,7 @@ proven](project/fidelity.md).
 
 ## What it looks like
 
-```dart
+```dart snippet="guides/reading-a-query.md#context-query"
 class TaskScreen extends StatelessWidget {
   const TaskScreen(this.id, {super.key});
 
@@ -67,7 +67,8 @@ class TaskScreen extends StatelessWidget {
     return switch (task) {
       QueryPending() => const CircularProgressIndicator(),
       QuerySuccess(:final data) => TaskCard(data),
-      QueryError(:final error, :final staleData) => ErrorBanner(error, staleData),
+      QueryError(:final error, :final staleData) =>
+        ErrorBanner(error, staleData),
     };
   }
 }

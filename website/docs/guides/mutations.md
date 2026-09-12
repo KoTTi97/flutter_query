@@ -11,10 +11,10 @@ A mutation is a write. It has the same four call styles as a query —
 `MutationController` — and every one of them hands back a **controller**,
 because you need `mutate` as well as the state.
 
-```dart
+```dart snippet="guides/mutations.md#read"
 final add = context.mutation(
   MutationOptions.simple(
-    mutationFn: (String name) => api.addTask(name),
+    mutationFn: api.addTask,
     onSuccess: (_, __, ___) => client.invalidateQueries(
       filters: QueryFilters(queryKey: tasksKey),
     ),
@@ -48,7 +48,7 @@ cannot fix one type argument of a constructor and leave the rest to inference.
 
 Per-call callbacks ride along, and run *after* the options' own:
 
-```dart
+```dart snippet="guides/mutations.md#per-call-callbacks"
 add.mutate(
   'New task',
   callbacks: MutateCallbacks<void, String, void>(
@@ -69,25 +69,31 @@ goes away.
 **From the cache, with rollback.** `onMutate` snapshots and patches; whatever it
 returns is handed to `onError` and `onSettled` as their last argument:
 
-```dart
-MutationOptions<Task, String, Task?>(
-  mutationFn: (name) => api.rename(id, name),
-  onMutate: (name) async {
-    await client.cancelQueries(filters: QueryFilters(queryKey: taskKey(id)));
-    final previous = client.getQueryData<Task>(taskKey(id));
-    client.updateQueryData<Task>(
-      taskKey(id),
-      (task) => task?.copyWith(name: name),
+```dart snippet="guides/mutations.md#optimistic"
+MutationOptions<Task, String, Task?> renameOptimistically(
+  QueryClient client,
+  String id,
+) =>
+    MutationOptions<Task, String, Task?>(
+      mutationFn: (name) => api.rename(id, name),
+      onMutate: (name) async {
+        await client.cancelQueries(
+          filters: QueryFilters(queryKey: taskKey(id)),
+        );
+        final previous = client.getQueryData<Task>(taskKey(id));
+        client.updateQueryData<Task>(
+          taskKey(id),
+          (task) => task?.copyWith(name: name),
+        );
+        return previous; // the rollback handle
+      },
+      onError: (error, stack, name, previous) {
+        if (previous != null) client.setQueryData(taskKey(id), previous);
+      },
+      onSettled: (_, __, ___, ____, _____) => client.invalidateQueries(
+        filters: QueryFilters(queryKey: taskKey(id)),
+      ),
     );
-    return previous;                       // the rollback handle
-  },
-  onError: (error, stack, name, previous) {
-    if (previous != null) client.setQueryData(taskKey(id), previous);
-  },
-  onSettled: (_, __, ___, ____, _____) => client.invalidateQueries(
-    filters: QueryFilters(queryKey: taskKey(id)),
-  ),
-)
 ```
 
 The `cancelQueries` first is not optional: an in-flight refetch that lands after
@@ -106,7 +112,7 @@ slow.
 Disposing a controller does not cancel the mutation. That has one practical
 consequence, and it bites everyone once:
 
-```dart
+```dart snippet="excerpt: getting-started/first-query.md#mutation"
 @override
 Widget build(BuildContext context) {
   // Take the client HERE, not inside onSuccess. The callback can run after
@@ -131,7 +137,7 @@ since [#67](https://github.com/KoTTi97/flutter_query/issues/67), the two
 keyless reads. It is the only narrowing a mutation reader has: there is no
 `select` on a mutation.
 
-```dart
+```dart snippet="guides/rebuilds.md#build-when-mutation"
 final rename = context.mutation(
   renameTask(id),
   // A retrying run moves `failureCount` while it stays pending; a spinner
@@ -160,11 +166,12 @@ it.
 Mutations in the same scope run **one at a time**, in the order they were
 started:
 
-```dart
-MutationOptions.simple(
-  mutationFn: (String name) => api.rename(id, name),
-  scope: const MutationScope('task-writes'),
-)
+```dart snippet="guides/mutations.md#scope"
+MutationOptions<void, String, void> serialisedWrite(String id) =>
+    MutationOptions.simple(
+      mutationFn: (String name) => api.rename(id, name),
+      scope: const MutationScope('task-writes'),
+    );
 ```
 
 That is the tool for "two edits of the same row must not race".

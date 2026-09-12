@@ -12,7 +12,7 @@ binding adds is the widget plumbing.
 
 ## Imperative
 
-```dart
+```dart snippet="guides/pure-dart.md#imperative"
 final client = QueryClient();
 client.mount();
 
@@ -27,7 +27,7 @@ final tasks = await client.query<List<Task>>(
 
 ## Reactive
 
-```dart
+```dart snippet="guides/pure-dart.md#observe"
 final observer = client.observe<Task, Task>(
   QueryObserverOptions<Task>(
     queryKey: QueryKey(<Object?>['tasks', id]),

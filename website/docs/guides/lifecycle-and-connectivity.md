@@ -47,11 +47,11 @@ on top of it.** Both write through `setFocused`, so with both installed the
 last writer wins and neither can see the other's verdict. If you install one,
 turn the other off:
 
-```dart
+```dart snippet="guides/lifecycle-and-connectivity.md#own-focus-source"
 QueryClientProvider(
   client: client,
-  // The lifecycle listener and a setEventListener adapter are two sources of
-  // focus for one manager. Pick one.
+  // The lifecycle listener and a setEventListener adapter are two sources
+  // of focus for one manager. Pick one.
   observeAppLifecycle: false,
   child: const MyApp(),
 )
@@ -104,7 +104,7 @@ answer the question directly.
 
 Six lines with `connectivity_plus`, which stays **your** dependency:
 
-```dart
+```dart snippet="prose-only: needs connectivity_plus, which neither published package may depend on"
 // Built once. A stream built in `build` would be a new one on every rebuild,
 // and the provider would resubscribe each time.
 final connectivity = Connectivity()
@@ -126,7 +126,7 @@ stream reported.
 With no stream at all, a fixed status is the whole verdict, and a changed one
 reaches the client on the rebuild that changes it:
 
-```dart
+```dart snippet="guides/lifecycle-and-connectivity.md#fixed-online-status"
 QueryClientProvider(
   client: client,
   onlineStatus: OnlineStatus.fixed(online),

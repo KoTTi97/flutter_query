@@ -18,6 +18,7 @@ void main() {
   // guides/testing.md — the teardown every widget test needs
   // -------------------------------------------------------------------------
 
+  // >>> guides/testing.md#teardown
   testWidgets('the list loads', (tester) async {
     final client = QueryClient();
     await tester.pumpWidget(QueryClientProvider(
@@ -37,11 +38,31 @@ void main() {
     await tester.pump();
     client.clear();
   });
+  // <<<
+
+  // -------------------------------------------------------------------------
+  // guides/testing.md — a fake's latency is a timer, and pumpAndSettle only
+  // pumps while a frame is scheduled
+  // -------------------------------------------------------------------------
+
+  queryWidgetTest('a fake latency is stepped, not settled',
+      (tester, client) async {
+    await tester.pumpWidget(QueryClientProvider(
+      client: client,
+      child: const MaterialApp(home: TasksScreen()),
+    ));
+    // >>> guides/testing.md#stepping-a-fake
+    await tester.pump(const Duration(milliseconds: 300)); // the fake's latency
+    await tester.pumpAndSettle();
+    // <<<
+    expect(find.byType(ListView), findsOneWidget);
+  });
 
   // -------------------------------------------------------------------------
   // guides/testing.md — the harness both examples wrap
   // -------------------------------------------------------------------------
 
+  // >>> guides/testing.md#using-the-harness
   queryWidgetTest('the list loads', (tester, client) async {
     await tester.pumpWidget(QueryClientProvider(
       client: client,
@@ -50,8 +71,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ListView), findsOneWidget);
   });
+  // <<<
 }
 
+// >>> guides/testing.md#harness
 /// `testWidgets` plus the teardown a `QueryClient` needs.
 void queryWidgetTest(
   String description,
@@ -71,3 +94,4 @@ void queryWidgetTest(
     }
   });
 }
+// <<<

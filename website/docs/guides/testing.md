@@ -15,7 +15,7 @@ the cleanup has to happen inside the test body. Get it wrong and the test
 fails with a pending-timer error that says nothing about queries. The end of
 a query widget test is therefore always the same steps:
 
-```dart
+```dart snippet="guides/testing.md#teardown"
 testWidgets('the list loads', (tester) async {
   final client = QueryClient();
   await tester.pumpWidget(QueryClientProvider(
@@ -58,7 +58,7 @@ which CI runs, so they cannot rot.
 
 Written once per test suite, so no case repeats the steps:
 
-```dart
+```dart snippet="guides/testing.md#harness"
 /// `testWidgets` plus the teardown a `QueryClient` needs.
 void queryWidgetTest(
   String description,
@@ -84,7 +84,7 @@ The client is built for the case and taken down after it; pass `createClient`
 to give it `defaultOptions`. A case then reads as the first sample without
 its last five lines:
 
-```dart
+```dart snippet="guides/testing.md#using-the-harness"
 queryWidgetTest('the list loads', (tester, client) async {
   await tester.pumpWidget(QueryClientProvider(
     client: client,
@@ -115,7 +115,7 @@ Two things surprise people, and both come from `testWidgets` running under
 latency is a *timer*, not a frame, and so is a `refetchInterval`. Step them
 explicitly:
 
-```dart
+```dart snippet="guides/testing.md#stepping-a-fake"
 await tester.pump(const Duration(milliseconds: 300)); // the fake's latency
 await tester.pumpAndSettle();
 ```
