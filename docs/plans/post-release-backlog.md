@@ -63,8 +63,13 @@ mutation), MU-07 and DC-16 (both in the divergence table), R3-3 and R3-4
 ## Not the core
 
 The task manager's end-to-end test "shared data stays consistent through
-rename, rollback and network recovery" (`examples/task_manager/e2e/tests/tasks.spec.ts:315`)
-is flaky on `main` and on the review branch alike — two and three of seven
-full-suite runs failed, never when run alone. It fails in a Tab/Shift+Tab focus
-workaround on Flutter web's hidden text input, which never touches `query_kit`.
-The fix belongs in the test: redo the click and focus steps inside the wait.
+rename, rollback and network recovery" was reported flaky on the review's
+baseline and branch alike: two and three of seven full-suite runs failed,
+never when run alone. The failure was in the Tab/Shift+Tab focus workaround
+on Flutter web's semantic text input, before the second mutation.
+
+**Addressed in the 2026-09-13 test follow-up:** the bounded wait now repeats
+focus acquisition and checks both focus and the input listener. Filling,
+submission and business assertions remain outside the retry. The old failure
+counts above remain historical evidence; the new measurements and limitations
+are in [the follow-up report](../research/release-test-follow-up.md).

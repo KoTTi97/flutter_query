@@ -2061,8 +2061,9 @@ void main() {
         // Upstream spies on `queryCache.onFocus` and
         // `mutationCache.resumePausedMutations`. There are no spies here, so
         // this asserts the effect the query half actually has; the mutation
-        // half is unobservable without a paused mutation, and is covered by the
-        // online cases below, which observe a real resumption.
+        // half needs a paused mutation: confidence_sequences_test.dart checks
+        // focus resumption and that refetch waits for the success callback.
+        // The online cases below independently cover reconnect resumption.
         final client = testClient();
         client.mount();
         var calls = 0;

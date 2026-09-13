@@ -290,18 +290,19 @@ test('shared data stays consistent through rename, rollback and network recovery
   await expect(page.getByRole('button', { name: 'Rename', exact: true })).not.toHaveAttribute('aria-disabled', 'true')
   expect((await getTask(request, task.id))?.name).toBe(renamed)
 
-  await field.click()
-  await expect(field).toHaveValue(renamed)
   // After the button click, DOM refocus alone can leave Flutter's input
-  // connection inactive. Traverse away and back with the keyboard, then wait
-  // for its input listener; the retained DOM value does not prove readiness.
-  // This suite runs in Chromium, whose debugger can observe the listener
-  // without changing the app or imposing a machine-dependent sleep.
-  await field.press('Tab')
-  await page.keyboard.press('Shift+Tab')
+  // connection inactive. Retry the focus traversal as well as the readiness
+  // check: polling alone cannot repair a traversal Flutter did not accept.
+  // Chromium's debugger observes the listener without changing the app.
+  // Only focus is retried here; filling and submitting remain outside.
   const editing = await page.context().newCDPSession(page)
   try {
-    await expect.poll(async () => {
+    await expect(async () => {
+      await field.click({ timeout: 1000 })
+      await expect(field).toHaveValue(renamed, { timeout: 1000 })
+      await field.press('Tab', { timeout: 1000 })
+      await page.keyboard.press('Shift+Tab')
+      await expect(field).toBeFocused({ timeout: 1000 })
       const { result } = await editing.send('Runtime.evaluate', {
         expression: `(() => {
           let element = document.activeElement
@@ -311,8 +312,8 @@ test('shared data stays consistent through rename, rollback and network recovery
         includeCommandLineAPI: true,
         returnByValue: true,
       })
-      return result.value
-    }).toBeGreaterThan(0)
+      expect(result.value).toBeGreaterThan(0)
+    }).toPass({ timeout: 15_000, intervals: [100, 250, 500] })
   } finally {
     await editing.detach()
   }

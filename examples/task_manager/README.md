@@ -172,7 +172,10 @@ start (`--dart-define=E2E=true`, see `main.dart`); rows are groups named after
 their task, buttons carry their tooltips, the switch is a `switch` with
 `aria-checked`. Two things worth knowing when adding a test: the semantic
 `<input>` of a text field mirrors its text only once the field has focus, so
-click before you read or `fill`; and the list builds only the rows in view,
+click before you read or `fill`. On refocus, the combined rename test also
+checks that Flutter's input listener is attached. If it is not, the test
+repeats the focus traversal within a bounded wait; it never retries the
+write or its assertions. The list builds only the rows in view,
 which is why the suite runs with a tall viewport and sweeps its own tasks off
 the backend before and after.
 

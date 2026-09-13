@@ -73,9 +73,9 @@ Suites not ported at all, each for one recorded reason:
 `streamedQuery.test.tsx` (experimental upstream; the Dart `Stream` mapping is
 fog).
 
-The totals at the 0.1.0 tag: 17 suites, 414 of their 536 upstream cases
-ported, and `dart test` runs **741** tests on the VM and **737** compiled to
-JavaScript (three barrel checks are VM-only) — the port-only files
+Current totals for 0.1.0: 17 suites, 414 of their 536 upstream cases
+ported, and `dart test` runs **742** tests on the VM and **738** compiled to
+JavaScript (four barrel checks are VM-only) — the port-only files
 (`smoke_test.dart`, `functional_improvements_test.dart`, `barrel_test.dart`,
 `confidence_sequences_test.dart`) and the review regressions
 (`port_specifics_test.dart`, `port_lifecycle_test.dart`, the four
@@ -5598,3 +5598,25 @@ without the fold; the test says so rather than claiming a JavaScript guard.
 
 Measured at the end: `dart test` **741**, `dart test --platform chrome` **737**.
 
+
+
+## Bounded test follow-up (2026-09-13)
+
+One additional case in `confidence_sequences_test.dart` covers the mutation
+half of foreground resumption: a restored paused mutation starts on focus,
+and an observed query waits for both its write and asynchronous success
+callback before refetching the changed server value. Existing focus tests
+in `query_client_test.dart` only asserted query requests; their comments now
+point to this independent behavioural case. It adds no upstream port count.
+
+The new case passes on unchanged production code. A temporary copy that
+bypasses mutation resumption on focus fails with `read:0` instead of `write:7`.
+This is an intentionally introduced fault, not a newly discovered core bug.
+The current suites contain 742 VM / 738 compiled-JavaScript cases; the 33
+bounded sequences also pass on Dart 3.6.2. No production API or contract changes.
+
+The task-manager E2E focus wait now retries focus acquisition rather than
+only inspecting a connection that may never become active. Input, mutation
+submission, request-body checks and rollback checks remain outside that retry.
+The follow-up evidence and scope are recorded in
+[`docs/research/release-test-follow-up.md`](../../../docs/research/release-test-follow-up.md).

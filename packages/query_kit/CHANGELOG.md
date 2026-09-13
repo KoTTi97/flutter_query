@@ -9,8 +9,8 @@ observers, the client and both caches, with no Flutter dependency.
 The claim it makes is fidelity. Upstream's own test suite is ported case for
 case — 17 suites, **414 of their 536** cases, every omitted case accounted for
 in `test/PORTING_NOTES.md` by name or by the upstream block it belongs to,
-with its category and its reason. The complete core suite has **741** VM tests;
-**737** also run compiled to JavaScript (four barrel checks are VM-only),
+with its category and its reason. The complete core suite has **742** VM tests;
+**738** also run compiled to JavaScript (four barrel checks are VM-only),
 including pre-release ownership regressions, the cases found by the example
 apps and 32 bounded confidence sequences over the public API. Closeness to
 upstream is a tiebreaker, not a goal: where a Dart idiom is better the port

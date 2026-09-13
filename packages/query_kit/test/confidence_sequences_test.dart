@@ -311,6 +311,68 @@ void main() {
     expect(time.pendingTimers, 0);
   });
 
+  testFakeAsync('focus resumes a restored mutation before refetching readers',
+      (time) async {
+    final client = testClient()..mount();
+    client.focusManager.setFocused(false);
+    final key = queryKey();
+    final calls = <String>[];
+    final write = Completer<void>();
+    final callback = Completer<void>();
+    var serverValue = 0;
+    client.setQueryData<int>(key, serverValue);
+    final observer = client.observe<int, int>(QueryObserverOptions<int>(
+      queryKey: key,
+      refetchOnMount: RefetchOn.never,
+      queryFn: (_) {
+        calls.add('read:$serverValue');
+        return serverValue;
+      },
+    ));
+    final off = observer.subscribe((_) {});
+    final mutation = client.mutationCache.build<int, int, void>(
+      client,
+      client.defaultMutationOptions(MutationOptions<int, int, void>(
+        mutationFn: (value) async {
+          calls.add('write:$value');
+          await write.future;
+          return serverValue = value;
+        },
+        onSuccess: (_, __, ___) async {
+          calls.add('callback');
+          await callback.future;
+        },
+      )),
+      state: const MutationState<int, int, void>(
+        status: MutationStatus.pending,
+        isPaused: true,
+        hasVariables: true,
+        variables: 7,
+      ),
+    );
+    await time.flushMicrotasks();
+    expect(calls, isEmpty);
+    client.focusManager.setFocused(true);
+    await time.flushMicrotasks();
+    expect(calls, ['write:7']);
+    expect(observer.currentResult.dataOrNull, 0);
+    write.complete();
+    await time.flushMicrotasks();
+    expect(calls, ['write:7', 'callback']);
+    expect(observer.currentResult.dataOrNull, 0);
+    callback.complete();
+    await time.flushMicrotasks();
+    expect(calls, ['write:7', 'callback', 'read:7']);
+    expect(mutation.state.status, MutationStatus.success);
+    expect(observer.currentResult.dataOrNull, 7);
+    expect(observer.currentResult.fetchStatus, FetchStatus.idle);
+    off();
+    observer.destroy();
+    client.unmount();
+    client.clear();
+    expect(time.pendingTimers, 0);
+  });
+
   testFakeAsync('infinite cancelled offline retry cannot corrupt next page',
       (time) async {
     final client = testClient()..mount();
