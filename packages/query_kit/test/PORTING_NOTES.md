@@ -5620,3 +5620,33 @@ only inspecting a connection that may never become active. Input, mutation
 submission, request-body checks and rollback checks remain outside that retry.
 The follow-up evidence and scope are recorded in
 [`docs/research/release-test-follow-up.md`](../../../docs/research/release-test-follow-up.md).
+
+## Flutter binding release fixes (2026-09-16)
+
+The binding deep review reproduced three adapter defects. Eight cases in
+`query_kit_flutter/test/release_regressions_test.dart` failed before these
+fixes and pass afterwards; no ported assertion or core implementation changed.
+
+- **Offline startup:** the provider now applies its initial connectivity
+  snapshot before mapping the current lifecycle to focus. Otherwise focus
+  resumed restored mutations while the client still assumed it was online;
+  a failed write with default retry left the paused queue and was not sent
+  after reconnect. Both fixed and stream snapshots are covered through a
+  successful write after connectivity returns.
+- **Connectivity subscription:** changing only a stream status's `initial`
+  value keeps the subscription and its latest event. Source equality, as
+  used by `OnlineStatusStream`, matters here: `StreamController.stream` can
+  return distinct wrappers for the same underlying source. A replacement
+  client receives the last event directly, without first applying a stale
+  initial assumption. Cases cover both the same and a replacement client,
+  a subsequent client replacement, and delivery of the next stream event.
+- **Collection actions:** the controller's notification gate compares each
+  result together with its refetch callback, matching the core collection
+  observer's comparison. Replacing or reordering queries with equal results
+  now updates a `ValueListenableBuilder`'s captured action. Empty and seeded
+  collections are covered, while reapplying an unchanged list still causes
+  no rebuild.
+
+The binding suite now has **136 passing tests** (128 existing + 8 new).
+These are binding-specific regressions, not additional upstream ports, and
+introduce no public API or dependency changes.

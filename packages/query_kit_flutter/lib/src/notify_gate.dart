@@ -28,9 +28,10 @@
 /// not a guess: a `QueryResult`'s `==` covers its data, its error and an
 /// identity tuple down to `fetchStatus`, `isStale` and `failureCount`, and an
 /// infinite query's `observedState` adds the paging flags that live beside
-/// the result. Two equal states differ in nothing a listener could act on —
-/// one that wants to know a fetch *happened* reads `fetchStatus`, which is
-/// inside the equality.
+/// the result. Collections also include each result's refetch target, since
+/// equal values may belong to different queries after a list change. A
+/// listener that wants to know a fetch *happened* reads `fetchStatus`, which
+/// is inside the equality.
 library;
 
 import 'package:flutter/foundation.dart';

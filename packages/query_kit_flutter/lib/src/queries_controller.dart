@@ -20,13 +20,13 @@ class QueriesController<TQueryData, TData> extends ChangeNotifier
   final QueriesObserver<TQueryData, TData> _observer;
 
   /// Subscribed while listened to, and never told twice about the same
-  /// results — see [ControllerLifetime]. The gate is element-wise, because
-  /// [value] is a `List` — identity, not value, equality — while the
-  /// `QueryResult`s in it carry `==`.
-  late final ControllerLifetime<List<QueryResult<TData>>> _life =
-      ControllerLifetime<List<QueryResult<TData>>>(
-    gate: NotifyGate.elementWise<QueryResult<TData>>(),
-    read: () => value,
+  /// results — see [ControllerLifetime]. Refetch targets are compared too:
+  /// replacing or reordering equal results must update listeners' actions.
+  late final ControllerLifetime<List<(QueryResult<TData>, QueryRefetch<TData>)>>
+      _life =
+      ControllerLifetime<List<(QueryResult<TData>, QueryRefetch<TData>)>>(
+    gate: NotifyGate.elementWise<(QueryResult<TData>, QueryRefetch<TData>)>(),
+    read: () => [for (final result in value) (result, result.refetch)],
     subscribe: (deliver) => _observer.subscribe(
       (_) => client.notifyManager.schedule(deliver),
     ),

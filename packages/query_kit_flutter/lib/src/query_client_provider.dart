@@ -218,10 +218,12 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   void initState() {
     super.initState();
     _mountClient(widget.client);
+    // Initial focus can resume restored mutations synchronously. It must
+    // already see the connectivity snapshot supplied by the provider.
+    _applyOnlineStatus(widget.client);
     if (widget.observeAppLifecycle) {
       _observeLifecycle(widget.client);
     }
-    _applyOnlineStatus(widget.client);
     _follow(widget.onlineStatus);
   }
 
@@ -419,19 +421,22 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     // `onlineStatus` object — which a stream built in a parent's `build` is
     // on every rebuild — would unmount and remount the client each time.
     final clientChanged = oldWidget.client != widget.client;
+    final sameStream = widget.onlineStatus?.changes != null &&
+        oldWidget.onlineStatus?.changes == widget.onlineStatus?.changes;
     if (clientChanged) {
       _stopObservingLifecycle();
       _unmountClient(oldWidget.client);
       _mountClient(widget.client);
-      _applyOnlineStatus(widget.client);
       // The stream will not repeat itself for the newcomer, so it starts from
       // what the stream last said — but only while it is *the same* stream
       // still running. A connectivity source that has been taken away speaks
       // for nobody, and a value it left behind would pin a later client
       // offline with nothing able to put it back (third review, 2026-09-10).
       final lastOnline = _lastOnline;
-      if (lastOnline != null && oldWidget.onlineStatus == widget.onlineStatus) {
+      if (lastOnline != null && sameStream) {
         widget.client.onlineManager.setOnline(lastOnline);
+      } else {
+        _applyOnlineStatus(widget.client);
       }
     }
     if (clientChanged ||
@@ -462,7 +467,9 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
               widget.onlineStatus is OnlineStatusStream)) {
         _applyOnlineStatus(widget.client);
       }
-      _follow(widget.onlineStatus);
+      // Changing only `initial` does not replace the source or its latest
+      // event. A single-subscription stream cannot be listened to again.
+      if (!sameStream) _follow(widget.onlineStatus);
     }
   }
 
