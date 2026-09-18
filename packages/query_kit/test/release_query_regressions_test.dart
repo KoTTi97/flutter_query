@@ -3,7 +3,73 @@ import 'package:query_kit/query_kit.dart';
 import 'package:test/test.dart';
 import 'test_utils.dart';
 
+sealed class _Api {
+  const _Api();
+}
+
+final class _Loaded extends _Api {
+  const _Loaded(this.value);
+  final int value;
+}
+
 void main() {
+  // Final review, 2026-09-18, SURF-1. `setQueryData` infers its type argument
+  // from the value, and the exact-type rule made that inferred type binding:
+  // the ordinary optimistic-update spellings threw `QueryDataTypeError`.
+  testFakeAsync(
+      'SURF-1 setQueryData writes a narrower-typed value into an existing '
+      'entry and keeps the entry\'s type', (time) async {
+    final client = testClient();
+    final sealedKey = queryKey();
+    final observer = client.observe<_Api, _Api>(QueryObserverOptions<_Api>(
+      queryKey: sealedKey,
+      queryFn: (_) => const _Loaded(1),
+    ));
+    final seen = <_Api?>[];
+    final unsubscribe = observer.subscribe((r) => seen.add(r.dataOrNull));
+    await time.flushMicrotasks();
+
+    final written = client.setQueryData(sealedKey, const _Loaded(2));
+    expect(written.value, 2);
+    expect((client.getQueryData<_Api>(sealedKey)! as _Loaded).value, 2);
+    expect((seen.last! as _Loaded).value, 2);
+    expect(client.queryCache.peek(sealedKey)!.dataType, _Api);
+
+    final jsonKey = queryKey();
+    client.setQueryData<Map<String, dynamic>>(jsonKey, {'n': 1});
+    client.setQueryData(jsonKey, {'n': 2});
+    expect(client.getQueryData<Map<String, dynamic>>(jsonKey), {'n': 2});
+
+    // A value the entry cannot hold is still refused, cache untouched.
+    expect(() => client.setQueryData(jsonKey, 3),
+        throwsA(isA<QueryDataTypeError>()));
+    expect(() => client.setQueryData(sealedKey, <dynamic>[]),
+        throwsA(isA<QueryDataTypeError>()));
+    expect(client.getQueryData<Map<String, dynamic>>(jsonKey), {'n': 2});
+
+    // Paged data keeps the exact rule: a literal infers narrower type
+    // arguments, and stored, it breaks the next typed `copyWith`.
+    final pagedKey = queryKey();
+    client.setQueryData<InfiniteData<String, int?>>(
+        pagedKey, InfiniteData(pages: const ['a'], pageParams: const [null]));
+    expect(
+        () => client.setQueryData(
+            pagedKey, InfiniteData(pages: ['optimistic'], pageParams: [7])),
+        throwsA(isA<QueryDataTypeError>()));
+    client.updateQueryData<InfiniteData<String, int?>>(
+      pagedKey,
+      (previous) => previous!.copyWith(
+        pages: [...previous.pages, 'b'],
+        pageParams: [...previous.pageParams, null],
+      ),
+    );
+    expect(
+        client.getInfiniteQueryData<String, int?>(pagedKey)!.pages, ['a', 'b']);
+
+    unsubscribe();
+    client.clear();
+  });
+
   testFakeAsync('QER1 clear from failed event leaves no retry timer',
       (time) async {
     final client = testClient();

@@ -47,6 +47,8 @@ alternatives — there is no recommended default, pick per situation:
 | `ensureQueryData({ revalidateIfStale: true })` | `client.query(options, revalidateIfStale: true)` — cached data now, refresh behind it |
 | `useQueries({ queries })` | `QueriesObserver` / `QueriesBuilder`, homogeneous: one data type per collection, `select` when the selected type differs. No `combine` — map the list |
 | `useMutationState({ filters, select })` | `MutationStateObserver` / `MutationStateController` |
+| `useIsFetching(filters)` | `IsFetchingController(client, filters: …)`, a `ValueListenable<int>`; the snapshot is `client.isFetching()` |
+| `useIsMutating(filters)` | a `MutationStateController` filtered on `MutationStatus.pending`, read for its length; the snapshot is `client.isMutating()` |
 | `getQueryData<InfiniteData<…>>(key)` | `getInfiniteQueryData<TPage, TParam>(key)` |
 | `fetchQuery({ select })` | none — `await` the future and map it |
 | `setQueryData(key, value)` | `setQueryData(key, value)` |

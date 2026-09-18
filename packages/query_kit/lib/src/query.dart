@@ -466,6 +466,21 @@ class Query<TQueryData> extends Removable {
     return data;
   }
 
+  /// [setData] for a caller that holds a value but not this query's exact
+  /// type: writes [newData] when it fits [TQueryData] and says whether it did.
+  ///
+  /// `QueryClient.setQueryData` infers its type argument from the value, and a
+  /// value infers narrowly — a `String` for a `String?` query, a sealed
+  /// type's variant for the sealed type. Upstream writes whatever it is
+  /// handed; here the entry keeps its one exact type and takes any value
+  /// that type can hold (final review, 2026-09-18, SURF-1).
+  @internal
+  bool trySetData(Object? newData, {DateTime? updatedAt}) {
+    if (newData is! TQueryData) return false;
+    setData(newData, updatedAt: updatedAt, manual: true);
+    return true;
+  }
+
   /// Replaces this query's state wholesale — the *merge* half of the door
   /// persistence and devtools come through
   /// (https://github.com/KoTTi97/flutter_query/issues/17). Restoring an entry

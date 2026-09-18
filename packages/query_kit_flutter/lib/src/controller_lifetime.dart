@@ -124,5 +124,15 @@ class ControllerLifetime<S> {
       return;
     }
     _notify();
+    // A listener that removes itself *inside* the notification is still
+    // counted by `ChangeNotifier` until the notification ends, so
+    // `listenerRemoved` saw a listener and kept the subscription: it leaked,
+    // and the gate — never advanced while nobody listens, never re-seeded
+    // while subscribed — swallowed the next listener's first real change
+    // (final review, 2026-09-18).
+    if (!_disposed && !_hasListeners()) {
+      _unsubscribe?.call();
+      _unsubscribe = null;
+    }
   }
 }

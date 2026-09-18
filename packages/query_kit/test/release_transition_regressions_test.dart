@@ -5,6 +5,47 @@ import 'package:test/test.dart';
 import 'test_utils.dart';
 
 void main() {
+  // Final review, 2026-09-18, C-P3-2. Upstream's `QueryCache.onFocus` batches
+  // its loop; the port's resume ran each query's refetch unbatched.
+  testFakeAsync('C-P3-2 a focus resume is one flush for a deferred subscriber',
+      (time) async {
+    final client = testClient();
+    client.queryCache
+        .subscribe(client.notifyManager.batchCalls<QueryCacheEvent>((_) {}));
+    client.mount();
+    final unsubscribes = [
+      for (var i = 0; i < 3; i++)
+        client
+            .observe<String, String>(QueryObserverOptions<String>(
+              queryKey: QueryKey(['focus', i]),
+              queryFn: (_) => sleep(ms(5)).then((_) => 'v$i'),
+              staleTime: StaleTime.zero,
+            ))
+            .subscribe((_) {}),
+    ];
+    await time.advance(ms(20));
+    client.focusManager.setFocused(false);
+    await time.flushMicrotasks();
+
+    final base = client.notifyManager.scheduler;
+    var flushes = 0;
+    client.notifyManager.setScheduler((callback) {
+      flushes++;
+      base(callback);
+    });
+    client.focusManager.setFocused(true);
+    await time.flushMicrotasks();
+    expect(flushes, 1, reason: 'three refetches started, one batch');
+    client.notifyManager.setScheduler(base);
+
+    await time.advance(ms(20));
+    for (final unsubscribe in unsubscribes) {
+      unsubscribe();
+    }
+    client.unmount();
+    client.clear();
+  });
+
   testFakeAsync('direct constructors reject invalid restored payloads',
       (time) async {
     final client = testClient();

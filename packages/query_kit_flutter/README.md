@@ -229,7 +229,9 @@ QueriesBuilder<Task, String>(
 Each query fails and settles on its own; one error does not disturb its
 neighbours. `MutationStateController` is the matching read over the mutation
 cache — every mutation matching a filter, through a `select` — for a "saving…"
-badge that no single widget owns.
+badge that no single widget owns. `IsFetchingController` is the query side's:
+a `ValueListenable<int>` of how many queries matching a filter are fetching,
+upstream's `useIsFetching`, for a global loading indicator.
 
 ## What rebuilds, and when
 

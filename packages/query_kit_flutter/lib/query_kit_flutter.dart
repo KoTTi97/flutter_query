@@ -19,6 +19,7 @@ library;
 
 export 'package:query_kit/query_kit.dart';
 
+export 'src/is_fetching_controller.dart';
 export 'src/mutation_state_controller.dart';
 export 'src/online_status.dart';
 export 'src/queries_builder.dart';

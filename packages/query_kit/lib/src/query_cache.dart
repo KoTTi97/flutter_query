@@ -313,6 +313,12 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     throw QueryDataTypeError(queryKey, TQueryData, query.dataType);
   }
 
+  /// The query stored under [queryKey] whatever its data type, for the one
+  /// caller that asks the entry what it can hold rather than naming its type
+  /// (`QueryClient.setQueryData`).
+  @internal
+  Query<Object?>? peek(QueryKey queryKey) => _queries[queryKey];
+
   /// Every query in the cache, as a copy: safe to iterate while removing.
   /// Upstream's `getAll`.
   List<Query<Object?>> get queries => List<Query<Object?>>.of(_queries.values);

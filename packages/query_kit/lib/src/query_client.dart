@@ -387,10 +387,15 @@ class QueryClient {
   /// pre-mutation state. Nobody awaits this future — the managers' listeners
   /// are `void` — so a throw is reported to the zone here rather than left
   /// to surface as an unhandled rejection of a future nobody holds.
+  ///
+  /// [then] runs in one [NotifyManager.batch], as upstream's
+  /// `QueryCache.onFocus` and `onOnline` batch themselves: a resume that
+  /// refetches N queries is one flush for a deferred subscriber, not N
+  /// (final review, 2026-09-18, C-P3-2).
   Future<void> _resumeThen(void Function() then) async {
     try {
       await resumePausedMutations();
-      then();
+      notifyManager.batch(then);
     } catch (error, stackTrace) {
       Zone.current.handleUncaughtError(error, stackTrace);
     }
@@ -477,16 +482,32 @@ class QueryClient {
 
   /// Writes [data] into the cache, creating the entry if needed.
   ///
-  /// The type argument is inferred from [data], and a value infers its
-  /// non-nullable type: `setQueryData(key, 'x')` is a `String` write, which
-  /// a query holding `String?` refuses with [QueryDataTypeError]. Name the
-  /// query's type — `setQueryData<String?>(key, 'x')` (ninth review,
-  /// 2026-09-10, C23).
+  /// The type argument is inferred from [data], and a value infers
+  /// narrowly: `setQueryData(key, 'x')` is a `String` write. An entry that
+  /// already exists takes any value its own type can hold, so that write
+  /// lands in a query holding `String?`, and a sealed type's variant lands in
+  /// a query of the sealed type, as upstream's untyped write does. A value
+  /// the entry cannot hold throws [QueryDataTypeError]. The type argument
+  /// still decides the type of an entry this call *creates* — name it when
+  /// seeding a key before its query exists:
+  /// `setQueryData<List<Todo>>(key, [])`
+  /// (ninth review, 2026-09-10, C23; final review, 2026-09-18, SURF-1).
   TQueryData setQueryData<TQueryData>(
     QueryKey queryKey,
     TQueryData data, {
     DateTime? updatedAt,
   }) {
+    // Not for paged data: an `InfiniteData` inferred from its literals is
+    // narrower in its type arguments, not in its value, and once stored the
+    // next `copyWith` typed for the entry fails its covariant parameter check
+    // with a raw `TypeError`, far from this write. It keeps the loud error.
+    final existing = queryCache.peek(queryKey);
+    if (existing != null &&
+        existing.dataType != TQueryData &&
+        data is! InfiniteData<Object?, Object?> &&
+        existing.trySetData(data, updatedAt: updatedAt)) {
+      return data;
+    }
     final query = queryCache.build<TQueryData>(
       this,
       defaultQueryOptions<TQueryData>(
@@ -578,7 +599,15 @@ class QueryClient {
           .map((query) => query.cancel(revert: revert, silent: silent))
           .toList(),
     );
-    await Future.wait<void>(cancels);
+    // Upstream's promise "never rejects, even if individual cancellations
+    // fail". No public call could be made to fail one (final review,
+    // 2026-09-18, C-P3-3); the guarantee is kept all the same. Each future
+    // gets its own handler, attached before anything is awaited: a bare
+    // `Future.wait` reports a second failure to the zone.
+    await Future.wait<void>([
+      for (final cancel in cancels)
+        cancel.then<void>((_) {}, onError: (Object _) {}),
+    ]);
   }
 
   /// Removes every query matching [filters] from the cache — all of them when

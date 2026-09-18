@@ -17,6 +17,17 @@ The [2026-09-13 test follow-up](docs/research/release-test-follow-up.md) adds
 one foreground-mutation ordering case and repairs the task-manager E2E focus
 wait. It changes no production code and does not reopen the general review.
 
+The [2026-09-18 final functional review](packages/query_kit/test/PORTING_NOTES.md)
+— eight lenses against upstream at the pin, functional only — found no P1 and
+one P2: `setQueryData`'s inferred type argument was binding, so the ordinary
+optimistic-update spellings threw. An existing entry now takes any value its
+own type can hold. It also batched the focus/reconnect resume as upstream
+does and added `IsFetchingController` (upstream's `useIsFetching`). Core
+744 VM / 740 browser tests, binding 138; a fresh pass over the fixes found two
+defects in them, both fixed. The notes' "Final functional review"
+section lists what was reproduced and deliberately left (ADR-0003's scope
+lock among them).
+
 ## Where the work stands (2026-09-12)
 
 | Phase | State |

@@ -3043,17 +3043,18 @@ void ninthReview() {
   });
 
   // C23.9 — `setQueryData(key, 'x')` infers `String` against a query holding
-  // `String?`; the error now names the cure.
+  // `String?`. It threw, and the error named the cure; since the final review
+  // (2026-09-18, SURF-1) an existing entry takes any value its type can hold,
+  // as upstream's untyped write does, so the write lands. A value the entry
+  // cannot hold still throws.
   testFakeAsync(
-      'C23.9 setQueryData against a nullable query names the type argument '
-      'to write', (time) async {
+      'C23.9 setQueryData against a nullable query writes a value that fits '
+      'and refuses one that does not', (time) async {
     final client = testClient();
     final key = queryKey();
     client.setQueryData<String?>(key, null);
-    expect(
-        () => client.setQueryData(key, 'x'),
-        throwsA(isA<QueryDataTypeError>().having((e) => e.toString(), 'message',
-            contains('setQueryData<String?>'))));
+    expect(client.setQueryData(key, 'inferred'), 'inferred');
+    expect(client.getQueryData<String?>(key), 'inferred');
     expect(
         () => client.setQueryData<int>(key, 1),
         throwsA(isA<QueryDataTypeError>().having(

@@ -295,6 +295,106 @@ void main() {
     controller.dispose();
   });
 
+  // Final review, 2026-09-18, B-1: upstream's `useIsFetching`.
+  queryWidgetTest(
+      'is-fetching controller counts live, respects filters and cleans up',
+      (tester, client) async {
+    final all = IsFetchingController(client);
+    final others = IsFetchingController(client,
+        filters: QueryFilters(queryKey: QueryKey(['other'])));
+    expect(client.queryCache.hasListeners, isFalse);
+    var builds = 0;
+    await tester.pumpWidget(app(
+        client,
+        Column(children: [
+          ValueListenableBuilder<int>(
+              valueListenable: all,
+              builder: (_, count, __) {
+                builds++;
+                return Text('all:$count');
+              }),
+          ValueListenableBuilder<int>(
+              valueListenable: others,
+              builder: (_, count, __) => Text('others:$count')),
+        ])));
+    expect(find.text('all:0'), findsOneWidget);
+
+    final responses = [Completer<int>(), Completer<int>()];
+    final fetches = [
+      for (var i = 0; i < 2; i++)
+        client.query<int>(QueryOptions(
+            queryKey: QueryKey(['todos', i]),
+            queryFn: (_) => responses[i].future)),
+    ];
+    await tester.pump();
+    expect(find.text('all:2'), findsOneWidget);
+    expect(find.text('others:0'), findsOneWidget);
+
+    // The settle reaches the listenable a microtask hop after the frame
+    // that completed it, so the count shows on the next one.
+    responses[0].complete(1);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('all:1'), findsOneWidget);
+    responses[1].complete(2);
+    await tester.pump();
+    await tester.pump();
+    await Future.wait(fetches);
+    expect(find.text('all:0'), findsOneWidget);
+
+    // A cache event that leaves the count alone rebuilds nothing.
+    final settled = builds;
+    client.setQueryData<int>(QueryKey(['todos', 0]), 5);
+    await tester.pump();
+    expect(builds, settled);
+
+    await tester.pumpWidget(const SizedBox());
+    expect(client.queryCache.hasListeners, isFalse);
+    all.dispose();
+    others.dispose();
+  });
+
+  // Final review, 2026-09-18: `ChangeNotifier` still counts a listener that
+  // removes itself mid-notification, so the lifetime kept its subscription
+  // and a stale gate, and a later listener's first real change was dropped.
+  queryWidgetTest(
+      'a listener removing itself mid-notification releases the subscription',
+      (tester, client) async {
+    final fetching = IsFetchingController(client);
+    final first = Completer<int>();
+    final firstFetch = client.query<int>(
+        QueryOptions(queryKey: QueryKey(['a']), queryFn: (_) => first.future));
+    await tester.pump();
+    late VoidCallback once;
+    once = () {
+      if (fetching.value == 0) fetching.removeListener(once);
+    };
+    fetching.addListener(once);
+    first.complete(1);
+    await tester.pump();
+    await tester.pump();
+    await firstFetch;
+    expect(client.queryCache.hasListeners, isFalse);
+
+    final second = Completer<int>();
+    final secondFetch = client.query<int>(
+        QueryOptions(queryKey: QueryKey(['b']), queryFn: (_) => second.future));
+    await tester.pump();
+    await tester.pumpWidget(app(
+        client,
+        ValueListenableBuilder<int>(
+            valueListenable: fetching,
+            builder: (_, count, __) => Text('fetching:$count'))));
+    expect(find.text('fetching:1'), findsOneWidget);
+    second.complete(2);
+    await tester.pump();
+    await tester.pump();
+    await secondFetch;
+    expect(find.text('fetching:0'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    fetching.dispose();
+  });
+
   queryWidgetTest('mutation state controller subscribes lazily and cleans up',
       (tester, client) async {
     final key = QueryKey(['mutations']);

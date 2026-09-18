@@ -31,7 +31,8 @@ paging on the controller) and for mutations (`context.mutation`,
 `QueryListener`, `InfiniteQueryListener` and `MutationListener` for side
 effects delivered off the build phase; `QueriesBuilder` and
 `QueriesController` for a list of queries; `MutationStateController` for
-cache-wide mutation state.
+cache-wide mutation state; `IsFetchingController` for the number of queries
+fetching, upstream's `useIsFetching`.
 
 **Options and types** (ADR-0001)
 

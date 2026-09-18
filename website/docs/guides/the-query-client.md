@@ -83,9 +83,16 @@ other type throws `QueryDataTypeError` — **related types included**. `int` and
 `int?` are two types. So are `List<Task>` and `List<Object?>`.
 
 Upstream casts blindly and cannot tell. Here `getQueryData<T>`,
-`getQueriesData<T>`, `setQueryData<T>` and an observer's `TQueryData` all have
-to agree with the key's first use. It is the single most likely thing to catch
-you out when porting JavaScript, and it is catching a real bug.
+`getQueriesData<T>` and an observer's `TQueryData` all have to agree with the
+key's first use. It is the single most likely thing to catch you out when
+porting JavaScript, and it is catching a real bug.
+
+A **write** is the one place a related type is welcome. `setQueryData` infers
+its type from the value, so an entry that already exists takes any value its
+own type can hold — a `String` into a `String?` query, a sealed type's variant
+into a query of the sealed type — and keeps its type. Name the type when the
+write *creates* the entry, as when seeding a key before its query exists:
+`setQueryData<List<Task>>(key, [])`.
 :::
 
 ## Defaults

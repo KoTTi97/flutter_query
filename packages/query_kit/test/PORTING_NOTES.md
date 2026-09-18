@@ -5650,3 +5650,135 @@ fixes and pass afterwards; no ported assertion or core implementation changed.
 The binding suite now has **136 passing tests** (128 existing + 8 new).
 These are binding-specific regressions, not additional upstream ports, and
 introduce no public API or dependency changes.
+
+## Final functional review (2026-09-18)
+
+Eight independent lenses against upstream at the pin — `query`/`retryer`/
+`removable`, `queryObserver`, `queryClient`/`queryCache`/filters/keys,
+mutations, infinite queries and `queriesObserver`, the Flutter binding against
+`react-query`, a public-surface inventory, and a first-time consumer working
+from the READMEs and the site alone. Each lens compared control flow branch by
+branch and ran its own probes (some 190 scenarios between them; the consumer
+lens's 22 mini-screens went green as written, and every doc sample it copied
+compiled). The brief was functional only, upstream as the specification,
+an upstream quirk matched is correct, and overshoot is a finding.
+
+The nested `query/` clone was found at `5bb950be8` (2026-08-25), not at the
+pin; the pin was fetched and checked out before anything was compared.
+
+**No P1. One P2, fixed. Two smaller parity gaps, fixed. Everything else
+faithful or a recorded divergence re-checked and left.** No ported assertion
+changed; one port-only assertion did (C23.9, below).
+
+- **SURF-1 (P2, overshoot) — `setQueryData`'s inferred type was binding.**
+  The exact-type rule (#7, row 28) is right for reads and for the entry's own
+  type, but `setQueryData` infers `TQueryData` from the *value*, and a value
+  infers narrowly: `setQueryData(key, Loaded(2))` against a query of the
+  sealed `ApiResult`, `setQueryData(key, {'n': 2})` against
+  `Map<String, dynamic>`, `setQueryData(key, 'x')` against `String?` — the
+  ordinary optimistic-update spellings — all threw `QueryDataTypeError`, where
+  upstream writes whatever it is handed. Reproduced as reported. Now an
+  existing entry takes any value its own type can hold
+  (`Query.trySetData`, reached through the new `@internal QueryCache.peek`)
+  and keeps its type; a value it cannot hold still throws with the cache
+  untouched, and the type argument still decides the type of an entry the
+  call creates, so `setQueryData(key, [])` before the query exists still
+  needs its type named — a `List<dynamic>` literal is not a `List<Todo>` and
+  no rule can make it one. C23.9 asserted the old throw for `String` into
+  `String?`; it now asserts the write and keeps the refusal of an `int`.
+  Reads, observers, `updateQueryData` and `updateQueriesData` are unchanged.
+  Regression: `SURF-1` in `release_query_regressions_test.dart`.
+- **C-P3-2 — a focus or reconnect resume was unbatched.** Upstream's
+  `QueryCache.onFocus`/`onOnline` wrap their loop in `notifyManager.batch`;
+  the port's ran N refetches as N flushes for a `batchCalls` subscriber
+  (measured: 6 scheduler runs for three queries, against one). No event was
+  lost. `QueryClient._resumeThen` now runs its callback in one batch — at the
+  client, where the notify manager lives, as `clear()` does (QE-03).
+  Regression: `C-P3-2` in `release_transition_regressions_test.dart`.
+- **B-1 — `useIsFetching` had no reactive counterpart, and nothing recorded
+  the omission.** `QueryClient.isFetching` is a snapshot; the showcase had
+  hand-rolled the subscription. The binding gains `IsFetchingController`, a
+  `ValueListenable<int>` over the query cache on the same
+  `ControllerLifetime`/`NotifyGate` pair as `MutationStateController`:
+  subscribed only while listened to, notifying only when the count moves.
+  Its filters are final — a changed filter is another controller — because a
+  notification sent around the gate would leave the gate's memory stale and
+  swallow the next real change. `coming-from-react-query.md` gained the
+  `useIsFetching` and `useIsMutating` rows. Test: `is-fetching controller…`
+  in the binding's `functional_improvements_test.dart`.
+
+Reproduced, and deliberately left:
+
+- **M-1 — a scope stays reserved by a run `clear()` removed.** Upstream's
+  `clear()` empties `#scopes`, so the next mutation of that scope starts at
+  once, beside the discarded request. Here it waits until that request
+  settles. Reproduced (`[start:old]` at 10 ms where upstream shows
+  `start:new`). This is ADR-0003's decision, not an accident — "removing an
+  active owner does not release the scope until its run settles", MU-01's
+  "`_scopeOwners` is deliberately not cleared" — and its cost is a delay,
+  never a stall, against two same-scope requests in flight at once. A fix
+  was written, ran green, and was reverted for that reason.
+- **C-P3-1 — `getQueriesData`/`updateQueriesData` over a prefix of mixed data
+  types throw** (A16). Recorded; `queryCache.findAll` is the untyped read.
+- **SURF-2 — `client.query(…)` without `.ignore()` reports a failed prefetch
+  to the zone**, where upstream's `prefetchQuery` swallows it. Left, and for
+  a better reason than #17 alone: **upstream deprecates `prefetchQuery` and
+  `prefetchInfiniteQuery` at this pin** ("Use queryClient.query(options)
+  instead. You can swallow errors with `.catch(noop)`", `queryClient.ts`),
+  and `client.query(…).ignore()` is that spelling in Dart. An alias was
+  written on 2026-09-19 and removed the same day when the deprecation was
+  read: it would have ported a method upstream is removing.
+- **B-2 — on desktop, `AppLifecycleState.inactive` counts as unfocused**, so
+  an alt-tab refetches stale queries where a browser's `visibilitychange`
+  would not. Documented on `AppFocusManager` and overridable.
+- **INF-P3-2 — a negative `maxPages`** keeps every page here and pins the
+  list at one page upstream. No realistic trigger; not touched.
+
+Reported and not reproduced: **C-P3-3** (`cancelQueries` had no trailing
+catch where upstream's promise never rejects — no public call could be made
+to reject it; the guarantee was added anyway on 2026-09-19, one handler per
+cancellation, as an explicit upstream contract that costs nothing and has no
+failing test to show for it) and, unchanged, **B-3** (`NotifyGate` and `ReadEntry` tracking
+"passed" and "built" separately — the offline→paused→reconnect probe, the one
+shape that would expose a drift, delivered every frame).
+
+The consumer lens found no defect and five points of friction, none a port
+bug: a `MaterialPageRoute` keeps the route below mounted, so "refetch on
+mount" rarely fires on the way back; `await client.query(…)` before the
+first `pump` hangs a widget test under `FakeAsync`; adding a `select` changes
+the entry point (ADR-0001); `keepPrevious` without an `id:` in the context
+and mixin styles has no previous to keep; and the mutation callbacks' long
+positional parameter lists. They are documentation work for after the first
+real project, not release blockers.
+
+**A fresh adversarial pass over the three fixes found two defects, both
+fixed** — the pattern of every earlier round. The batch held under every
+attack (a throwing callback, a throwing listener, unmount and `clear()`
+while the resume was awaited).
+
+- **The SURF-1 write-through let a narrowly inferred `InfiniteData` in.**
+  `setQueryData(key, InfiniteData(pages: ['x'], pageParams: [7]))` infers
+  `InfiniteData<String, int>`, which *is* an `InfiniteData<String, int?>` to
+  Dart's covariant generics, so it was stored — and the next
+  `previous.copyWith(pageParams: [...previous.pageParams, null])` typed for
+  the entry failed its covariant parameter check with a raw `TypeError` in
+  `InfiniteData.copyWith`, far from the write. The library's own paging
+  survived it; user code did not. Paged data is excluded from the
+  write-through and keeps the loud `QueryDataTypeError` at the write, as
+  before the review. The same trap exists in principle for any user generic
+  with a covariant `copyWith`; there the explicit-type path behaves
+  identically, so it is Dart's, not this change's.
+- **A listener that removes itself inside a notification leaked the
+  subscription and left a stale gate** — `ControllerLifetime`, so every
+  controller, and older than this review; the one-shot "wait until idle"
+  listener an `IsFetchingController` invites is what exposed it.
+  `ChangeNotifier` still counts such a listener until the notification
+  ends, so `listenerRemoved` kept the subscription; with nobody listening
+  the gate never advanced, and still subscribed it was never re-seeded, so
+  the next listener's first real change (1 → 0) was judged "not moved" and a
+  loading indicator stuck at 1. `_deliver` now releases the subscription
+  after a notification that left no listener. Test: `a listener removing
+  itself mid-notification…`, red without the fix.
+
+The core suite is **744 VM / 740 browser tests** (742 + SURF-1 + C-P3-2),
+the binding's **138** (136 + B-1 + the lifetime regression).
