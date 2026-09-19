@@ -100,6 +100,21 @@ void main() {
         expect(stored.done, isTrue);
       });
 
+      test(
+          'todos: a rename\'s `from` is logged with the request and not acted on',
+          () async {
+        // The `mutation-cancel` screen sends what it believes the text was.
+        // Neither backend checks it — a wrong one renames all the same — and
+        // both keep it where a test can read it: in the log entry's query.
+        final renamed =
+            await api.updateTodo(1, text: 'Renamed', from: 'Not what it was');
+        expect(renamed, const Todo(id: 1, text: 'Renamed', done: false));
+        final entry = (await api.scenarioRequests()).single;
+        expect('${entry['method']} ${entry['path']} ${entry['status']}',
+            'PATCH /api/todos/1 200');
+        expect(entry['query'], <String, Object?>{'from': 'Not what it was'});
+      });
+
       test('todos: create, update, delete, and the validation', () async {
         expect(await api.todos(), hasLength(3));
         final created = await api.createTodo('Contract');

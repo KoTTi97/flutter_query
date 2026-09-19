@@ -13,6 +13,7 @@ import 'features/basic/basic_screen.dart';
 import 'features/build_when/build_when_screen.dart';
 import 'features/cache_inspector/cache_inspector_screen.dart';
 import 'features/cancellation/cancellation_screen.dart';
+import 'features/combine/combine_screen.dart';
 import 'features/default_query_function/default_query_function_screen.dart';
 import 'features/dependent_queries/dependent_queries_screen.dart';
 import 'features/diagnostics/diagnostics_screen.dart';
@@ -23,6 +24,7 @@ import 'features/initial_and_placeholder/initial_and_placeholder_screen.dart';
 import 'features/invalidation_and_filters/invalidation_and_filters_screen.dart';
 import 'features/load_more/load_more_screen.dart';
 import 'features/max_pages/max_pages_screen.dart';
+import 'features/mutation_cancel/mutation_cancel_screen.dart';
 import 'features/mutation_state/mutation_state_screen.dart';
 import 'features/mutations/mutations_screen.dart';
 import 'features/offline/offline_screen.dart';
@@ -54,6 +56,7 @@ final List<FeatureEntry> featureEntries = <FeatureEntry>[
   FeatureEntry(dependentQueriesFeature, (_) => const DependentQueriesScreen()),
   FeatureEntry(parallelQueriesFeature, (_) => const ParallelQueriesScreen()),
   FeatureEntry(queryCollectionsFeature, (_) => const QueryCollectionsScreen()),
+  FeatureEntry(combineFeature, (_) => const CombineScreen()),
   FeatureEntry(prefetchingFeature, (_) => const PrefetchingScreen()),
   FeatureEntry(selectAndSharingFeature, (_) => const SelectAndSharingScreen()),
   FeatureEntry(buildWhenFeature, (_) => const BuildWhenScreen()),
@@ -66,6 +69,7 @@ final List<FeatureEntry> featureEntries = <FeatureEntry>[
   FeatureEntry(mutationsFeature, (_) => const MutationsScreen()),
   FeatureEntry(
       optimisticUpdatesFeature, (_) => const OptimisticUpdatesScreen()),
+  FeatureEntry(mutationCancelFeature, (_) => const MutationCancelScreen()),
   FeatureEntry(mutationStateFeature, (_) => const MutationStateScreen()),
   FeatureEntry(playgroundFeature, (_) => const PlaygroundScreen()),
   FeatureEntry(invalidationAndFiltersFeature,

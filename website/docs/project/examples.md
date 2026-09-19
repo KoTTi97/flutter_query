@@ -16,7 +16,7 @@ that directory. It is what pub.dev shows on the package page.
 
 ## The showcase
 
-`examples/showcase/` — **every feature of the library as its own screen**, 28
+`examples/showcase/` — **every feature of the library as its own screen**, 30
 of them, against a dummy backend built for the purpose, each with widget tests
 and Playwright end-to-end tests in a real browser. The app is the catalogue;
 the tests are the proof.

@@ -6037,3 +6037,24 @@ Core **770** VM / **766** compiled to JavaScript; binding **144**; doc
 snippets 9; showcase 238 and task manager 32 unchanged. No ported assertion
 changed anywhere in this map.
 
+### The two screens map #81 owed the showcase (2026-09-20)
+
+`combine` and `mutation-cancel`, each with the catalogue's five artefacts;
+30 screens, **247** showcase tests (222 widget + 25 contract), **177**
+Playwright tests. No endpoint was added: the rename's `from` — what
+`context.onMutateResult` knew — rides as a query parameter because the
+scenario log keeps queries, not bodies, and one contract case pins that both
+backends log it and do not act on it. Two things the screens taught, neither
+a defect: after `cancel()` a mutation stays `pending` until the future its
+`onSettled` returned completes — the same order success has, so the rollback
+is visible before `status=error` is; and `resetQueries`/`retry()` run the
+query function the entry already holds, so a failure knob has to be read when
+the request goes out, not baked into the options.
+
+Measured on the way: four existing specs (`cancellation`, three of
+`optimistic_updates`) fail locally on an untouched HEAD too — Playwright's
+`fill()` not reaching Flutter's text field, the flake #49 left undiagnosed —
+and a web build with Flutter 3.41 exposes `SegmentedButton` segments as
+`button` rather than `radio`, which every `getByRole('radio')` spec will meet
+when CI's pinned 3.38.8 moves.
+

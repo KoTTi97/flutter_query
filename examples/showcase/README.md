@@ -89,6 +89,7 @@ caller wants to know.
 | `dependent-queries` | `Enabled.when`: a query that waits for another's data | — |
 | `parallel-queries` | several queries in one widget; `client.isFetching` | — |
 | `query-collections` | `QueriesBuilder` over a list that grows, shrinks and reorders; duplicate keys; partial failure; the same collection as a `QueriesController` | — |
+| `combine` | `(a, b, c).combine(...)` over three reads of three types: the sealed `CombinedResult`, `retry()` for the failed sources only, `refetchError` beside kept data, `isFetching`, and a `CombineMemo` that skips the combiner | — |
 | `prefetching` | `client.query(...).ignore()` before the screen that needs it, `revalidateIfStale`, and `client.infiniteQuery(...).ignore()` for the first page of an infinite one | `prefetching` |
 | `select-and-sharing` | `select`, `QuerySelectBuilder`, `buildWhen`, `structuralSharing`, rebuild counts | — |
 | `build-when` | `buildWhen` on all eight keyless reads, each beside an unfiltered twin; a knob for the predicate, and the build counts either half of a pair reaches | — |
@@ -99,6 +100,7 @@ caller wants to know.
 | `max-pages` | pages in both directions with `maxPages: 3`; the page context's `direction` | `infinite-query-with-max-pages` |
 | `mutations` | `mutate`, `mutateAsync`, `reset`, `isMutating`, per-call callbacks, `MutationScope` | — |
 | `optimistic-updates` | the write shown before the answer, from `variables` and from the cache with rollback | `nextjs-app-optimistic-updates` |
+| `mutation-cancel` | `mutationFnWithContext` — `onMutateResult` sent as `from`, `signal` to the transport — and `cancel()`: a `CancelledError`, rolled back by `onError`, invalidated by `onSettled` | — |
 | `mutation-state` | `MutationStateController`: every running mutation in the cache, read by a widget that owns none | — |
 | `playground` | todos with live stale time, gc time, latency and error rate | `playground` |
 | `invalidation-and-filters` | invalidate, refetch, reset, remove; prefix, exact, `type`, `predicate` | — |
@@ -113,8 +115,9 @@ caller wants to know.
 | `diagnostics` | what the library throws, and when: `QueryDataTypeError` on a read or write of the wrong type, `MissingMutationFunctionError` and its cure `setMutationDefaults` | — |
 
 Not here, because the port does not have them: hydration and persisters,
-`useQueries`' `combine` step (the homogeneous list is `query-collections`
-above), `streamedQuery`, SSR. The reasons are in the core's
+`useQueries`' `combine` option as upstream spells it (the homogeneous list is
+`query-collections` above, and what several reads of different types amount
+to together is `combine`), `streamedQuery`, SSR. The reasons are in the core's
 [PORTING_NOTES](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
 
 No screen presents one of the four call styles as the default; across the

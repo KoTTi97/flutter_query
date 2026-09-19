@@ -24,10 +24,10 @@ const sample = `class TaskScreen extends StatelessWidget {
 // `flutter test` in packages/query_kit_flutter, examples/showcase and
 // examples/task_manager, then `npx playwright test` in each example's e2e/.
 const figures = [
-  { value: '742', label: 'core VM tests; 738 also run compiled to JavaScript' },
-  { value: '128', label: 'widget tests in the binding' },
-  { value: '270', label: 'tests across the two example apps' },
-  { value: '179', label: 'end-to-end tests in a real browser' },
+  { value: '770', label: 'core VM tests; 766 also run compiled to JavaScript' },
+  { value: '144', label: 'widget tests in the binding' },
+  { value: '279', label: 'tests across the two example apps' },
+  { value: '187', label: 'end-to-end tests in a real browser' },
 ]
 
 const points = [

@@ -182,10 +182,17 @@ class ShowcaseApi {
         Todo.fromJson,
       );
 
+  /// [from] is what the caller believes the text was before — the
+  /// `mutation-cancel` screen's `onMutateResult`. The backend does not act on
+  /// it; it rides in the query string so the scenario's request log, which
+  /// keeps queries and not bodies, shows that it was sent. [signal] is a
+  /// mutation's, bridged to dio exactly as a query's is.
   Future<Todo> updateTodo(
     int id, {
     String? text,
     bool? done,
+    String? from,
+    QueryCancelToken? signal,
     Duration? delay,
     int? fail,
   }) =>
@@ -196,7 +203,11 @@ class ShowcaseApi {
             if (text != null) 'text': text,
             if (done != null) 'done': done,
           },
-          queryParameters: _knobs(delay: delay, fail: fail),
+          queryParameters: <String, Object?>{
+            if (from != null) 'from': from,
+            ..._knobs(delay: delay, fail: fail),
+          },
+          cancelToken: bridge(signal),
         ),
         Todo.fromJson,
       );
