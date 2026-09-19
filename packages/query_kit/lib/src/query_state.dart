@@ -121,7 +121,9 @@ final class QueryState<TQueryData> {
 
   /// How many times in a row the query has ended in an error: one more with
   /// every failed fetch — its retries exhausted — and back to zero with the
-  /// next data, fetched or written. Port-only
+  /// next data that is *fetched*. A manual write (`setQueryData`, an optimistic
+  /// patch) leaves it alone, and so does a cancelled fetch: neither says
+  /// anything about whether the source answers. Port-only
   /// (https://github.com/KoTTi97/flutter_query/issues/85): upstream's
   /// `fetchFailureCount` starts over with every fetch and its
   /// [errorUpdateCount] never does, so "stop polling after five failures in a

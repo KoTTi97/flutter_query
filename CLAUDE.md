@@ -44,7 +44,11 @@ has a row per ticket: `(a, b).combine(…)` over a record of results (#82);
 observer's last result, so a rebuild re-evaluates a callback over outside
 state (#84, a divergence); `QueryState.consecutiveErrorCount` and
 `MutationStateObserver.typed` built, closing a prefix and a scope-deadlock
-assertion declined (#85). Core 770 VM / 766 browser, binding 144. The sharing
+assertion declined (#85). The integrator's second report, against `87bc25b`,
+found two defects in that work — a `CombineMemo` blind to what its combiner
+captures (now `keys:`), and a manual write resetting `consecutiveErrorCount`
+— and one claim that did not reproduce; PORTING_NOTES' "Second integration
+report". Core 774 VM / 770 browser, binding 144. The sharing
 trade-off stays discussable on [#86](https://github.com/KoTTi97/flutter_query/issues/86);
 the traps opened the site's `reference/troubleshooting.md`.
 

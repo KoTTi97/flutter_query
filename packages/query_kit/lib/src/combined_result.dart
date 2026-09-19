@@ -166,13 +166,24 @@ final class CombinedData<T> extends CombinedResult<T> {
 /// for a refetch that changed nothing. When it does run, its result is
 /// structurally shared with the previous one, as upstream shares the result of
 /// `combine`.
+///
+/// **The combiner must be a function of the sources and of `keys`, and of
+/// nothing else.** A memo cannot see what a closure captures: a combiner that
+/// filters by a search text it closes over keeps returning the list for the
+/// old text until a source changes. Either do that work on the combined data,
+/// after `combine`, or name what the combiner reads — `keys: [search]` —
+/// which is compared with `==` and re-runs the combiner when it differs
+/// (second integration report, 2026-09-20).
 final class CombineMemo<T> {
   List<Object?>? _inputs;
+  List<Object?>? _keys;
   late T _output;
 
-  T _resolve(List<Object?> inputs, T Function() compute) {
+  T _resolve(List<Object?> inputs, List<Object?>? keys, T Function() compute) {
     final previous = _inputs;
-    if (previous != null && previous.length == inputs.length) {
+    if (previous != null &&
+        previous.length == inputs.length &&
+        _keysEqual(_keys, keys)) {
       var same = true;
       for (var i = 0; i < inputs.length; i++) {
         if (!identical(previous[i], inputs[i])) {
@@ -188,7 +199,23 @@ final class CombineMemo<T> {
     _output =
         previous == null ? computed : replaceEqualDeep<T>(_output, computed);
     _inputs = inputs;
+    _keys = keys == null ? null : List<Object?>.of(keys);
     return _output;
+  }
+
+  static bool _keysEqual(List<Object?>? a, List<Object?>? b) {
+    if (a == null || b == null) {
+      return a == null && b == null;
+    }
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 }
 
@@ -196,6 +223,7 @@ CombinedResult<R> _combine<R>(
   List<QueryResult<Object?>> sources,
   R Function() compute,
   CombineMemo<R>? memo,
+  List<Object?>? keys,
 ) {
   for (final source in sources) {
     if (source
@@ -217,8 +245,8 @@ CombinedResult<R> _combine<R>(
   }
   final data = memo == null
       ? compute()
-      : memo
-          ._resolve([for (final source in sources) source.dataOrNull], compute);
+      : memo._resolve(
+          [for (final source in sources) source.dataOrNull], keys, compute);
   return CombinedData<R>._(sources, data, refetchError, refetchErrorStackTrace);
 }
 
@@ -227,11 +255,13 @@ CombinedResult<R> _combine<R>(
 /// [combine] over two results.
 extension CombineQueryResults2<A, B> on (QueryResult<A>, QueryResult<B>) {
   /// What the two amount to together — see [CombinedResult] for the rules.
-  /// [combiner] runs only when both have data.
+  /// [combiner] runs only when both have data. With a [memo] it must be a
+  /// function of the sources and of [keys] alone — see [CombineMemo]; [keys]
+  /// without a memo does nothing.
   CombinedResult<R> combine<R>(R Function(A a, B b) combiner,
-          {CombineMemo<R>? memo}) =>
+          {CombineMemo<R>? memo, List<Object?>? keys}) =>
       _combine([$1, $2], () => combiner($1.dataOrNull as A, $2.dataOrNull as B),
-          memo);
+          memo, keys);
 }
 
 /// [combine] over three results.
@@ -242,12 +272,13 @@ extension CombineQueryResults3<A, B, C> on (
 ) {
   /// What the three amount to together — see [CombinedResult] for the rules.
   CombinedResult<R> combine<R>(R Function(A a, B b, C c) combiner,
-          {CombineMemo<R>? memo}) =>
+          {CombineMemo<R>? memo, List<Object?>? keys}) =>
       _combine(
           [$1, $2, $3],
           () => combiner(
               $1.dataOrNull as A, $2.dataOrNull as B, $3.dataOrNull as C),
-          memo);
+          memo,
+          keys);
 }
 
 /// [combine] over four results.
@@ -259,12 +290,13 @@ extension CombineQueryResults4<A, B, C, D> on (
 ) {
   /// What the four amount to together — see [CombinedResult] for the rules.
   CombinedResult<R> combine<R>(R Function(A a, B b, C c, D d) combiner,
-          {CombineMemo<R>? memo}) =>
+          {CombineMemo<R>? memo, List<Object?>? keys}) =>
       _combine(
           [$1, $2, $3, $4],
           () => combiner($1.dataOrNull as A, $2.dataOrNull as B,
               $3.dataOrNull as C, $4.dataOrNull as D),
-          memo);
+          memo,
+          keys);
 }
 
 /// [combine] over five results.
@@ -277,12 +309,13 @@ extension CombineQueryResults5<A, B, C, D, E> on (
 ) {
   /// What the five amount to together — see [CombinedResult] for the rules.
   CombinedResult<R> combine<R>(R Function(A a, B b, C c, D d, E e) combiner,
-          {CombineMemo<R>? memo}) =>
+          {CombineMemo<R>? memo, List<Object?>? keys}) =>
       _combine(
           [$1, $2, $3, $4, $5],
           () => combiner($1.dataOrNull as A, $2.dataOrNull as B,
               $3.dataOrNull as C, $4.dataOrNull as D, $5.dataOrNull as E),
-          memo);
+          memo,
+          keys);
 }
 
 /// [combine] over six results. Past six, combine two combinations.
@@ -297,7 +330,8 @@ extension CombineQueryResults6<A, B, C, D, E, F> on (
   /// What the six amount to together — see [CombinedResult] for the rules.
   CombinedResult<R> combine<R>(
           R Function(A a, B b, C c, D d, E e, F f) combiner,
-          {CombineMemo<R>? memo}) =>
+          {CombineMemo<R>? memo,
+          List<Object?>? keys}) =>
       _combine(
           [$1, $2, $3, $4, $5, $6],
           () => combiner(
@@ -307,5 +341,6 @@ extension CombineQueryResults6<A, B, C, D, E, F> on (
               $4.dataOrNull as D,
               $5.dataOrNull as E,
               $6.dataOrNull as F),
-          memo);
+          memo,
+          keys);
 }

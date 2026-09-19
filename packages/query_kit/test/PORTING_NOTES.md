@@ -6058,3 +6058,70 @@ and a web build with Flutter 3.41 exposes `SegmentedButton` segments as
 `button` rather than `radio`, which every `getByRole('radio')` spec will meet
 when CI's pinned 3.38.8 moves.
 
+## Second integration report (2026-09-20, against `87bc25b`)
+
+The integrating app moved to the head map #81 left and reviewed the new
+surface. Three findings and five smaller points; each checked before anything
+changed. Regressions in `integration_feedback_test.dart`. The pattern holds:
+the fixes of one round are the next round's findings — two of these are
+defects in code that was two days old and green.
+
+### A — `CombineMemo` returned stale results for a combiner that captures state: defect, fixed
+
+Reproduced with the reporter's test. The memo keyed on the identity of the
+sources' data alone, so a combiner filtering by a search text it closes over
+kept returning the list for the old text. **Both** of the offered answers were
+taken, because neither alone is enough: the rule — with a memo the combiner is
+a function of the sources and nothing else — is now in the dartdoc and the
+guide, and `combine` takes `keys:`, compared with `==`, for what the combiner
+reads besides. Documentation alone would have left the trap exactly where a
+filtered list invites it; `keys` alone would not tell anyone they need it.
+`keys` without a memo does nothing.
+
+### B — "`destroy()` does not cancel the signal": not reproduced
+
+By reading, the report had a removed or disposed mutation failing with
+`CancelledError` while its request runs on. It does not: `Mutation.destroy`
+calls `cancelRetry(immediately: true)`, which — as its comment has said since
+C11 — lets an attempt **in flight** settle, and rejects on the spot only a run
+that is *paused*, where no request exists to abort; and
+`MutationObserver.destroy` does not touch the mutation at all (a mutation
+outlives its widget, map #1). The probe `B:` pins it: after
+`mutationCache.clear()` the run completes with its data and the signal is not
+cancelled. What was wrong was the sentence on `signal` ("cancelled when the run
+is"), which invited the reading; it now says `cancel()` and nothing else
+cancels it, and why.
+
+### C — a manual write reset `consecutiveErrorCount`: defect, fixed
+
+`QuerySuccessAction` wrote zero for `manual: true` too — #85's own notes said
+"data is data", and that was the error: an optimistic patch is somebody's
+guess and says nothing about whether the device answers, so every tap on an
+unreachable device's switch refilled the give-up budget, precisely when it
+matters. A manual write now leaves the counter alone. The report's second half
+held too: a non-reverting `cancelQueries` dispatches an error action carrying a
+`CancelledError`, which counted as a failure in a row; a cancelled fetch did
+not fail, and no longer counts. `errorUpdateCount` still counts it, as
+upstream's does.
+
+### Smaller points
+
+- **Two functions at once was an assert**, so a release build ran the context
+  one without a word. Now an `ArgumentError` from
+  `QueryClient.defaultMutationOptions`, where every path resolves options; the
+  const constructor cannot throw, and an assert beside it would only make the
+  runtime check untestable.
+- **`MutationOptions.simple` could not reach `mutationFnWithContext`.** It can;
+  the context's `onMutateResult` is `void` there and the signal is the point.
+- **`typed(...)` filters by declared type arguments**, so a mutation from
+  untyped options drops out silently. Inherent — a `Mutation<Object?, …>` cannot
+  be handed over as a `Mutation<Object?, String, …>` whatever its variables
+  are — and now said in the dartdoc and the guide, with the `setOptions`
+  caveat.
+- **A `Map` is shared whole or not at all**, so a cache normalised by id loses
+  every entry's identity when one changes. Known and unchanged (the walk cannot
+  build a map of the caller's types); the guide now says what it costs and what
+  to do.
+
+Counts after: core **774** VM / **770** browser.
+

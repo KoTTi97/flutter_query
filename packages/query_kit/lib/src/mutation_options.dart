@@ -76,8 +76,11 @@ final class MutationFunctionContext<TOnMutateResult> {
   /// `onMutate`, and for a restored mutation whatever was restored.
   final TOnMutateResult? onMutateResult;
 
-  /// Cancelled when the run is, and never otherwise. One token for the whole
-  /// run: a cancelled mutation does not retry.
+  /// Cancelled by `cancel()` — on the mutation, its observer or a controller —
+  /// and by nothing else. One token for the whole run: a cancelled mutation
+  /// does not retry. Removing the mutation from the cache or disposing what
+  /// watches it does **not** cancel it: an attempt in flight is left to
+  /// settle, as upstream leaves it, so there is nothing to abort.
   final QueryCancelToken signal;
 }
 
@@ -174,8 +177,7 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
     this.gcTime,
     this.scope,
     this.meta,
-  }) : assert(mutationFn == null || mutationFnWithContext == null,
-            'Give a mutation one function: mutationFn or mutationFnWithContext.');
+  });
 
   /// Options for a mutation without an [onMutate] step.
   ///
@@ -196,6 +198,7 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
   static MutationOptions<TData, TVariables, void> simple<TData, TVariables>({
     QueryKey? mutationKey,
     MutationFn<TData, TVariables>? mutationFn,
+    MutationFnWithContext<TData, TVariables, void>? mutationFnWithContext,
     OnMutationSuccess<TData, TVariables, void>? onSuccess,
     OnMutationError<TVariables, void>? onError,
     OnMutationSettled<TData, TVariables, void>? onSettled,
@@ -209,6 +212,7 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
       MutationOptions<TData, TVariables, void>(
         mutationKey: mutationKey,
         mutationFn: mutationFn,
+        mutationFnWithContext: mutationFnWithContext,
         onSuccess: onSuccess,
         onError: onError,
         onSettled: onSettled,
@@ -233,7 +237,8 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
   /// [mutationFn] with a second argument: the [MutationFunctionContext] of the
   /// run — the client, `meta`, the key, what [onMutate] returned, and a
   /// `signal` that `Mutation.cancel` cancels. Instead of [mutationFn], never
-  /// beside it; when set it also wins over a function registered with
+  /// beside it — both at once is an [ArgumentError] when the client resolves
+  /// the options, in release builds too; when set it also wins over a function registered with
   /// `setMutationDefaults`, which has no context form.
   ///
   /// A second field rather than a second parameter on [mutationFn], which is

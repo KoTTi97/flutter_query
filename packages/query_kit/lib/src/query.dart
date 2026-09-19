@@ -1133,7 +1133,9 @@ class Query<TQueryData> extends Removable {
           data: data,
           dataUpdatedAt: dataUpdatedAt ?? clock.now(),
           dataUpdateCount: state.dataUpdateCount + 1,
-          consecutiveErrorCount: 0,
+          // A manual write is somebody's guess — an optimistic patch, mostly —
+          // and says nothing about whether the source answers.
+          consecutiveErrorCount: manual ? null : 0,
           isInvalidated: false,
           status: QueryStatus.success,
           clearError: true,
@@ -1151,7 +1153,9 @@ class Query<TQueryData> extends Removable {
           error: error,
           errorStackTrace: stackTrace,
           errorUpdateCount: state.errorUpdateCount + 1,
-          consecutiveErrorCount: state.consecutiveErrorCount + 1,
+          // A cancelled fetch did not fail; nobody waited for its answer.
+          consecutiveErrorCount:
+              error is CancelledError ? null : state.consecutiveErrorCount + 1,
           errorUpdatedAt: clock.now(),
           fetchFailureCount: state.fetchFailureCount + 1,
           fetchFailureReason: error,

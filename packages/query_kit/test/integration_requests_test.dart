@@ -12,7 +12,7 @@ import 'test_utils.dart';
 void main() {
   testFakeAsync(
       'consecutiveErrorCount counts failed fetches in a row, resets with '
-      'data, and can stop a poll', (time) async {
+      'fetched data, and can stop a poll', (time) async {
     final client = testClient();
     final key = queryKey();
     const second = Duration(seconds: 1);
@@ -47,9 +47,10 @@ void main() {
         reason: 'the poll stopped at three in a row');
     expect(client.getQueryState<int>(key)!.errorUpdateCount, 5);
 
-    // Data written by hand is data too.
+    // Data written by hand is a guess, not an answer from the source: the
+    // budget stands (second integration report, C).
     client.setQueryData<int>(key, 0);
-    expect(count(), 0);
+    expect(count(), 3);
 
     unsubscribe();
     client.clear();

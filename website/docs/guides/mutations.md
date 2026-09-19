@@ -156,11 +156,15 @@ wrote finds out what the server really did — which nobody can know otherwise,
 because the request may have arrived. That is why it is not the quiet return
 to the previous state that cancelling a *query* is: a write has no previous
 state to return to. A function that honours the signal aborts its transport;
-one that does not runs on unobserved and its result is discarded. A mutation
+one that does not runs on unobserved and its result is discarded. Only
+`cancel()` cancels the signal: removing a mutation from the cache or disposing
+its controller leaves an attempt in flight to settle, so there is nothing to
+abort. A mutation
 that is paused, queued behind its scope or still in `onMutate` fails the same
 way without its function ever running.
 
-One function per mutation — both at once is an assertion error — and a
+One function per mutation — both at once is an `ArgumentError`, in release
+builds too — and a
 function registered with `setMutationDefaults` has no context form.
 
 ## A mutation outlives its widget
@@ -263,6 +267,17 @@ MutationStateController<String> pendingRenames(QueryClient client) =>
           mutation.state.variables!,
     );
 ```
+
+Two things to know, because an empty list after a filter looks harmless:
+
+- The filter is the mutation's **declared** type arguments, not the runtime
+  type of its variables. A mutation built from options whose types were never
+  written or inferred is a `Mutation<Object?, Object?, Object?>` and is not a
+  `Mutation<Object?, String, Object?>`, whatever it was called with — it drops
+  out silently. Options with a typed `mutationFn` infer correctly; check the
+  ones assembled from pieces.
+- A later `setOptions` on the controller replaces filter and select with
+  untyped ones.
 
 ## Defaults
 

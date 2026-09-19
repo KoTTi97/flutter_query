@@ -187,7 +187,9 @@ focused; by default it stops.
 
 To give up after failures in a row, read `consecutiveErrorCount` from the
 query's state: one more with every fetch that ends in an error (its retries
-exhausted), back to zero with the next data. Upstream has no such counter —
+exhausted), back to zero with the next data that is **fetched**. A manual
+write — an optimistic patch — leaves it alone, and so does a cancelled fetch:
+neither says whether the source answers. Upstream has no such counter —
 `fetchFailureCount` starts over with every fetch and `errorUpdateCount` never
 does.
 
@@ -239,6 +241,12 @@ kept, so `==` downstream stays true and nothing rebuilds unnecessarily.
 Lists are shared element by element; maps and sets are kept whole when deeply
 equal; everything else is compared with `==`. **A typed model therefore needs
 `==` and `hashCode`** — without them every fetch produces a new value.
+
+"Kept whole" cuts both ways: a `Map<Id, Dto>` in which one entry changed is
+replaced whole, and every entry's instance with it — Dart cannot rebuild a map
+of your key and value types from inside the walk, as it can a list. If you
+cache normalised by id and rely on instance identity, cache a list, or share
+the map yourself in a `structuralSharing` hook.
 
 A rebuilt list is growable only if the one that came in was. A list that
 cannot grow — fixed-length or unmodifiable — is rebuilt as a **fixed-length**

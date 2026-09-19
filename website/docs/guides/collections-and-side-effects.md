@@ -101,6 +101,13 @@ every source holds the identical data instance — which structural sharing
 makes the normal case for a refetch that changed nothing — and an equal
 result keeps its instance, as upstream shares the output of `combine`.
 
+**With a memo, the combiner must be a function of the sources and nothing
+else.** A memo cannot see what a closure captures: a combiner that filters by a
+search text it closes over keeps returning the list for the *old* text until a
+source changes. Do that work on the combined data, after `combine` — or name
+what the combiner reads with `keys: [search]`, which is compared with `==` and
+re-runs the combiner when it differs.
+
 ## Side effects
 
 `QueryListener`, `InfiniteQueryListener` and `MutationListener` run a callback

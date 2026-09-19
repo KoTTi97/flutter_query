@@ -1113,6 +1113,12 @@ class QueryClient {
       defaultMutationOptions<TData, TVariables, TOnMutateResult>(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) {
+    if (options.mutationFn != null && options.mutationFnWithContext != null) {
+      // Not an assert: two functions where one runs is wrong in a release
+      // build too, and there the context one would win without a word.
+      throw ArgumentError(
+          'Give a mutation one function: mutationFn or mutationFnWithContext.');
+    }
     final mutationKey = options.mutationKey;
     final defaults =
         (_defaultOptions.mutations ?? const MutationDefaults()).mergedWith(

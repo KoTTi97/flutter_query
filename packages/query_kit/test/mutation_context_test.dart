@@ -190,13 +190,17 @@ void main() {
     client.clear();
   });
 
-  test('one function, not two', () {
+  test('one function, not two — an ArgumentError, not an assert', () {
+    final client = testClient();
     expect(
-        () => MutationOptions<int, int, void>(
+        () => MutationObserver<int, int, void>(
+            client,
+            MutationOptions(
               mutationFn: (v) => v,
               mutationFnWithContext: (v, _) => v,
-            ),
-        throwsA(isA<AssertionError>()));
+            )),
+        throwsArgumentError);
+    client.clear();
   });
 
   testFakeAsync(

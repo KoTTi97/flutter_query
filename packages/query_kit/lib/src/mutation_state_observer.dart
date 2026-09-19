@@ -75,7 +75,11 @@ class MutationStateObserver<TSelected> {
   /// );
   /// ```
   ///
-  /// A later [setOptions] replaces filters and select with untyped ones.
+  /// The filter is a mutation's *declared* type arguments, not the runtime
+  /// type of its variables: one built from options whose types were never
+  /// written or inferred is a `Mutation<Object?, Object?, Object?>` and drops
+  /// out silently. A later [setOptions] replaces filters and select with
+  /// untyped ones.
   static MutationStateObserver<TSelected>
       typed<TData, TVariables, TOnMutateResult, TSelected>(
     QueryClient client, {
