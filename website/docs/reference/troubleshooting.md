@@ -17,20 +17,23 @@ from *outside the cache* — "is a write in flight", a connection flag, a
 notifier — and returns "off" while it is set. The flag clears; polling stays
 off.
 
-**Mechanism.** Those callbacks are evaluated when **the query** has an event:
-a fetch settling, data written, options replaced. Nothing tells the observer
-that your flag changed, so the last answer — off — stands. With a mutation it
-is sharper still: `onSettled` runs while the mutation still counts as pending,
-and no query event follows it. And handing the observer a new `Enabled.when`
-does not help, because the old and the new predicate are compared by what
-they return *now*, against the same outside state: no difference, no change.
+**Mechanism.** Those callbacks are evaluated when **the query** has an event
+— a fetch settling, data written — or when the observer is **handed its
+options**, which every rebuild of the reading widget does. Nothing tells the
+observer that your flag changed. If the widget does not rebuild when the flag
+flips, the last answer — off — stands, and with polling off no query event
+will come along to ask again. With a mutation it is sharper still:
+`onSettled` runs while the mutation still counts as pending, so a callback
+asked *then* still says "writing".
 
-This is upstream's behaviour too; a callback there sees the query, not the
-world.
+**Fix.** Make the flag rebuild the widget that reads the query — a
+`ValueListenableBuilder`, a `ListenableBuilder`, a `MutationStateController`
+for "a write is in flight", `setState`. The rebuild hands the observer its
+options again and both callbacks are asked again. Outside widgets,
+`observer.setOptions(options)` with the very same options does the same.
 
-**Fix.** Put outside state into the options as a **value**. The widget that
-knows the flag rebuilds when it flips and hands over different options, which
-the observer does notice:
+Better still, put outside state into the options as a **value**; then there
+is no callback to go stale:
 
 ```dart snippet="reference/troubleshooting.md#pause-polling"
 QueryObserverOptions<List<Task>> polledTasks({required bool writing}) =>
@@ -47,6 +50,11 @@ QueryObserverOptions<List<Task>> polledTasks({required bool writing}) =>
 
 Keep the callbacks for what they can see: the query's own state — "stop
 polling once the job reports `done`".
+
+Upstream differs in one detail here. It compares the old and the new `enabled`
+*at the same instant*, so there even a rebuild does not help an `enabled`
+callback over outside state: both sides see the same world. This port compares
+against what the observer last saw.
 
 *Learned in: the BR64 integration, where polling paused for a write never came
 back.*

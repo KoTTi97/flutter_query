@@ -186,6 +186,10 @@ meets first:
   gives a sealed `CombinedResult` — pending, error, or data with a
   `refetchError` — with `retry()`, `refetch()` and an optional `CombineMemo`.
   Stands in for `useQueries`' heterogeneous tuple and `combine` step.
+- An `Enabled.when` over state outside the cache is re-evaluated when the
+  observer is handed its options again — every rebuild — because `setOptions`
+  compares against the observer's last result rather than resolving the old
+  options at the same instant, as upstream does.
 - `mutationFnWithContext: (variables, context)` — upstream's
   `MutationFunctionContext` (`client`, `meta`, `mutationKey`) plus a typed
   `onMutateResult` and a `signal` — and `cancel()` on `Mutation` and

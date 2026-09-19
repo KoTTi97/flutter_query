@@ -231,6 +231,14 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _checkDataType(options);
     final prevOptions = _options;
     final prevQuery = _currentQuery;
+    // What `enabled` came to the last time this observer looked, not what the
+    // previous options come to *now*. Upstream resolves old and new at the
+    // same instant, so a predicate over state outside the cache — "a write is
+    // in flight", a connection flag — never reads as changed: both sides see
+    // the same world, and polling paused that way never resumed (first
+    // integration, #84). Against the last result, handing the observer its
+    // options again — which every rebuild does — is a re-evaluation.
+    final wasEnabled = _currentResult.isEnabled;
 
     final nextOptions =
         _client.defaultQueryObserverOptions<TQueryData, TData>(options);
@@ -265,7 +273,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     final mounted = hasListeners;
 
     if (mounted &&
-        _options.shouldFetchOptionally(_currentQuery, prevQuery, prevOptions)) {
+        _options.shouldFetchOptionally(_currentQuery, prevQuery, prevOptions,
+            wasEnabled: wasEnabled)) {
       executeFetch();
     }
 
@@ -277,8 +286,10 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // polling one included — on every rebuild, so a widget rebuilding faster
     // than its interval would never poll (third review, 2026-09-09).
     final queryChanged = !identical(_currentQuery, prevQuery);
-    final enabledChanged = _options.enabled.resolve(_currentQuery) !=
-        prevOptions.enabled.resolve(_currentQuery);
+    final enabledChanged = queryChanged
+        ? _options.enabled.resolve(_currentQuery) !=
+            prevOptions.enabled.resolve(_currentQuery)
+        : _options.enabled.resolve(_currentQuery) != wasEnabled;
 
     if (mounted &&
         (queryChanged ||
@@ -919,8 +930,10 @@ extension _RefetchRules on DefaultedQueryObserverOptions<Object?, Object?> {
   bool shouldFetchOptionally(
     Query<Object?> query,
     Query<Object?> prevQuery,
-    DefaultedQueryObserverOptions<Object?, Object?> prevOptions,
-  ) =>
-      (!identical(query, prevQuery) || !prevOptions.enabled.resolve(query)) &&
+    DefaultedQueryObserverOptions<Object?, Object?> prevOptions, {
+    bool? wasEnabled,
+  }) =>
+      (!identical(query, prevQuery) ||
+          !(wasEnabled ?? prevOptions.enabled.resolve(query))) &&
       isStaleFor(query);
 }

@@ -3202,6 +3202,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | Sets and Maps are not plain objects, so `replaceEqualDeep` returns `next` for them untouched | shared whole when deep-equal (row above); a set is compared as a multiset under the walk's own relation, never under the set's equality policy: a hashed multiset walk that asks either set for its length and its members only — no `lookup`, `contains`, `containsAll` or `remove` — and the members for `==` and `hashCode` — so a case-insensitive `SplayTreeSet` reports a member that changed case, and a `Set` whose own methods throw or break their contract is compared all the same. About 1.3 ms a write at 10 000 members and 14–22 ms at 100 000, past a 16 ms frame; members that break `==`'s own contract get the greedy walk's answer. A map is still looked up by its own keys, so a map with a custom key equality is compared under that policy and keeps the older key representation; such a map needs its own hook or `noStructuralSharing()`. `QueryKey`'s set parts are frozen to default equality, so its `containsAll` shortcut stays sound | pre-release verification, 2026-09-12 (AR-01); final review 2026-09-12 (F1) and its round 3 (R2-1, R2-2, R2-4), `port_specifics_test.dart` `F1 …` ×4, `R2-1 …` ×2, `R2-2 …`, `R2-4 …` |
 | `Query.isDisabled()`'s no-observer branch is `queryFn === skipToken \|\| !isFetched()`: it consults the `skipToken` sentinel but **not** `enabled`, so an unobserved query whose last observer was `enabled: false` and which holds data is *not* disabled and `refetchType: 'all'` refetches it | `!isFetched()` alone. `Enabled.no` spells both `skipToken` and `enabled: false` (#17), and `enabled: false` is the meaning kept — upstream's `enabled: false` does not reach this arm either. So an unobserved, seeded query whose last observer left with `Enabled.no` is refetched by `refetchType: all`, where upstream's `skipToken` one is not, and no `Enabled.when` predicate is evaluated for a query nobody observes. `enabled` governs automatic fetching; `refetchQueries` is an explicit command. The ported case for the `skipToken` arm is unported again. FI-01 had made this branch `!_options.enabled.resolve(this) \|\| !isFetched()` for part of the day; F2/F3 reverted it | final review of the pre-release branch, 2026-09-12 (F2/F3, reverting FI-01); `port_specifics_test.dart` `F2 …`, `F3 …` |
 | `MutationObserver.#notify` runs its listeners once per action, so a listener sees one state per step of the mutation | listeners are notified only when the result is not `==` the last one they were told — the rule the query side has had since A19. The observable cost is fewer states: `mutation.test.tsx`'s two state cases see 3 where upstream sees 4, and 1 pending state across `onMutate` where upstream sees 2, which is why both moved to `states.last` | pre-release deep-dive review, 2026-09-12 (FI-02); the query-side rule it matches is A19, fourth review 2026-09-09 |
+| `QueryObserver.setOptions` decides "was it re-enabled?" by resolving the **previous** options' `enabled` *now*, beside the new one | compared against the `isEnabled` of the observer's last result — what it last *saw*. Identical for every `enabled` that depends on the query or is a value; differs only for a callback over state outside the cache, which upstream can never see change (both sides resolve against the same world) and which here takes effect on the next `setOptions`, i.e. the next rebuild. A key change still compares old against new at the same instant | [#84](https://github.com/KoTTi97/flutter_query/issues/84) |
 | `MutationObserver.setOptions` notifies the cache with `observerOptionsUpdated` before the first `mutate`, carrying `mutation: undefined` | nothing is emitted until the observer has a mutation (`_currentMutation == null` → no event), so a devtools or logging listener never sees an option change made before the first `mutate` | pre-release deep-dive review, 2026-09-12 (FI-09) |
 | `notifyManager`'s `defaultScheduler` is `setTimeout(0)`, a macrotask | `scheduleMicrotask`: a batch flushes before the next event-loop turn, not after it, which is the finer grain Dart offers and what a Flutter frame wants. `setNotifyFunction` / `setBatchNotifyFunction` / `setScheduler` are all present for anything that needs upstream's timing back | [#19](https://github.com/KoTTi97/flutter_query/issues/19); stated in the `NotifyManager` dartdoc since, and in this table since the pre-release deep-dive review, 2026-09-12 (FI-13) |
 | `setQueryData(key, undefined)` creates nothing and updates nothing — the two `setQueryData` cases pin it | there is no `undefined`, and `null` is a value: `setQueryData<String?>(key, null)` **creates** the entry and writes `null` into it. The type argument is what stops this by accident — a bare `setQueryData(key, null)` infers `Null` and a query of another type refuses it — so reaching the behaviour takes naming a nullable type on purpose. "Leave it alone" is `updateQueryData` returning `null` | [#7](https://github.com/KoTTi97/flutter_query/issues/7), null convention of the second review 2026-09-09; recorded here at the pre-release deep-dive review, 2026-09-12 (FI-18) |
@@ -5949,4 +5950,43 @@ signal and result across a retry, cancel in flight with rollback and a
 discarded late result, cancel while queued behind a scope, cancel during an
 async `onMutate`, one-function assertion, precedence over key defaults);
 binding `combine_test.dart`'s neighbour `mutation_cancel_test.dart` (1).
+
+### #84 — options that depend on state outside the cache
+
+**Asked:** polling paused by a callback over "a write is in flight" never
+resumed — the one finding that stopped the app. Suggested: an
+`observer.reevaluate()` or a `Listenable` parameter on the options.
+
+**What was actually wrong, measured.** Two different things hid behind one
+symptom. `RefetchInterval.dynamic` was never the problem: `setOptions`
+compares the freshly computed interval with the one the timer *runs on*
+(`_currentRefetchInterval`), so any rebuild picks a change up. `Enabled.when`
+was: upstream — and the port, faithfully — resolves the previous options'
+`enabled` and the new one's **at the same instant**. For a predicate over the
+query that is a comparison of two predicates; for a predicate over outside
+state it is a comparison of the world with itself, never different, so neither
+the timers nor the optional fetch ever ran. `outside_state_test.dart`
+reproduced both halves before anything changed (the `enabled` half failed,
+the interval half passed).
+
+**Options.** (a) Documentation only — leaves a trap with no way out except
+"do not use the callback form", for the form the API offers. (b)
+`observer.reevaluate()` — new surface in core, then in four call styles. (c) A
+`Listenable` on the options — Flutter's type in… the core's options; or a
+binding-only parameter on four call styles, an option field's price four
+times. (d) **Compare against what the observer last saw**: `setOptions` takes
+`currentResult.isEnabled` as "was enabled". Chosen. No new surface at all: in
+Flutter the re-evaluation trigger is the rebuild, which the user's own
+`ValueListenableBuilder`/`setState` already causes and which already calls
+`setOptions`; outside Flutter, `setOptions` with the same options is the
+`reevaluate()` that was asked for. For every `enabled` upstream's comparison
+can see change, the two agree — the whole ported suite, observers included,
+passes unchanged. On a key change the old same-instant comparison is kept,
+because the last result belongs to the other query.
+
+What remains, and is documented as the first troubleshooting entry: *something*
+has to rebuild the widget when the flag flips. A callback cannot be observed.
+
+Tests: core `outside_state_test.dart` (2), binding `outside_state_test.dart`
+(2, `QueryBuilder` and `context.query`). A divergence row records it.
 
