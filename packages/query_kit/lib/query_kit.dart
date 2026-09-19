@@ -16,6 +16,7 @@
 library;
 
 export 'src/cancel_token.dart';
+export 'src/combined_result.dart';
 export 'src/filters.dart' hide describeFilters;
 export 'src/focus_manager.dart';
 export 'src/infinite_query.dart'

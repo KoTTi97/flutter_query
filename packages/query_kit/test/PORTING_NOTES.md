@@ -3185,7 +3185,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | the `select` memo keeps the last selection while the selector is `===` the last one | `==`: an instance-method tear-off is `==` to the next tear-off of the same method, as the options already treat it | ninth review, 2026-09-10 (C14) |
 | observer `TData` defaults to the query's type; nothing checks a mismatch | a `QueryObserver` with no `select` whose `TQueryData` is not a `TData` is refused with `ArgumentError` at construction, `setOptions` and `getOptimisticResult` | fifth review, 2026-09-09 |
 | an observer's `onQueryUpdate` throwing inside a dispatch propagates into the fetch | isolated per observer and reported to the zone, like the cache listeners; the query keeps its state | fifth review, 2026-09-09 (59) |
-| `useQueries` with a heterogeneous tuple and a `combine` step | a homogeneous `QueriesObserver` (`QueriesController`/`QueriesBuilder` in the binding); mixed data types need a `select`, and there is no `combine` — map the returned list | functional improvements plan, `competitor-deep-dive.md` §6 #13 |
+| `useQueries` with a heterogeneous tuple and a `combine` step | a homogeneous `QueriesObserver` (`QueriesController`/`QueriesBuilder` in the binding). Different data types combine as a **record of results**: `(a, b).combine(…)` → `CombinedResult`, arities two to six, optional `CombineMemo` — a pure function, no observer of its own | functional improvements plan, `competitor-deep-dive.md` §6 #13; [#82](https://github.com/KoTTi97/flutter_query/issues/82) |
 | `useMutationState` reads the cache through a React hook | `MutationStateObserver` (`MutationStateController` in the binding): `MutationFilters` plus a required `select`, structural sharing over the outer list, subscribed only while observed | functional improvements plan, `competitor-deep-dive.md` §6 #9 |
 | no minimum background duration before a focus refetch — every foreground event refetches | `AppFocusManager(refetchMinBackgroundDuration:)`, default `Duration.zero` (upstream's behaviour); a shorter absence suppresses **new** focus refetches only, paused work still resumes | functional improvements plan, `competitor-deep-dive.md` §6 #3 |
 | `keepPreviousData` / `placeholderData: (prev) => prev` | `const PlaceholderData.keepPrevious()` — identical to `.compute((previous, _) => previous)` including its "a previous `null` means no placeholder" rule, but `const`, so it survives the observer's placeholder memoisation | functional improvements plan, `competitor-deep-dive.md` §6 #4 |
@@ -5855,3 +5855,49 @@ answer the branch needs no special case — it gets a fixed-length copy and
 `copyWith` seals it, as before.
 
 Counts after: core 752 VM / 748 browser.
+
+## After the first integration (map #81)
+
+One row per ticket of [map #81](https://github.com/KoTTi97/flutter_query/issues/81):
+what the first real integration asked for beyond upstream, and what was decided.
+
+### #82 — combine over a record of results
+
+**Asked:** the integrator's list needs five queries of five types;
+`QueriesObserver` takes one type, so they wrote their own `CombinedQuery<T>`.
+
+**Options.** (a) A heterogeneous `QueriesObserver` — Dart cannot type it: a
+list has one element type, and an observer generic over a record cannot be
+written once for every arity. (b) A `CombinedQueryController<(A, B, C)>` in the
+binding, as the report suggested — one more observing thing, in one of four
+call styles, which then needs a builder, a mixin method and a `context` read to
+stay equal (map #1's rule), each per arity. (c) **A pure function over a record
+of results**, in the core. Chosen: every call style already hands out
+`QueryResult`s and already rebuilds when one changes, so nothing new has to
+observe anything; `(a, b).combine(fn)` works in all four by construction and
+in pure Dart too. `combine_test.dart` in the binding proves it for reads in
+one `build` and for controllers under `Listenable.merge`.
+
+**The result type is an opinion, deliberately** — upstream hands `combine` the
+raw results and leaves the state logic to the caller; the integrator's three
+states are what that logic comes to every time. `CombinedResult` is sealed:
+`CombinedPending`, `CombinedError` (a source failed *with nothing to show* —
+it wins over a pending neighbour, because waiting does not cure it),
+`CombinedData` (a failed refetch keeps its stale data in the combination and
+is reported as `refetchError`, the same rule `QueryError.staleData` follows).
+`retry()` refetches the failed sources only, `refetch()` all. Value equality
+without the `refetch` closures, so it can sit behind a `buildWhen`.
+
+**Memoization is opt-in**, because a pure function has nowhere to keep
+state: a `CombineMemo<R>` passed as `memo:` skips the combiner while every
+source holds the identical data instance and structurally shares a recomputed
+result with the previous one, as upstream runs `replaceEqualDeep` over
+`combine`'s output.
+
+Arities two to six, written out (no macro, no code generation — the same price
+as an option field). Tests: `combined_result_test.dart` (5),
+binding `combine_test.dart` (3). Writing the memo test found nothing in the
+library and one thing in the test: an observer nobody subscribes to keeps its
+last result, so a combination over unsubscribed observers is stale — true of
+every read of `currentResult`, and not `combine`'s to fix.
+

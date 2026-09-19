@@ -179,9 +179,13 @@ meets first:
 **Beyond `query-core`**
 
 - `QueriesObserver` (upstream's `useQueries`, homogeneous: one data type per
-  collection, `select` for the rest, no `combine`), `MutationStateObserver`
+  collection, `select` for the rest), `MutationStateObserver`
   (`useMutationState`), `PlaceholderData.keepPrevious()` and
   `initialDataUpdatedAtCompute`.
+- `combine` on a record of two to six `QueryResult`s of different data types
+  gives a sealed `CombinedResult` — pending, error, or data with a
+  `refetchError` — with `retry()`, `refetch()` and an optional `CombineMemo`.
+  Stands in for `useQueries`' heterogeneous tuple and `combine` step.
 - `FetchBehavior` and `FetchContext` are exported so `QueryOptions.behavior`
   is nameable; the observer-ref members and the cache plumbing are
   `@internal`.

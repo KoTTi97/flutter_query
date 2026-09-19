@@ -155,7 +155,8 @@ matter at the call site:
   nothing cached the fetch is awaited as usual.
 - **A list of queries is `QueriesObserver`**, upstream's `useQueries` without
   the heterogeneous tuple: one data type per collection, `select` when the
-  selected type differs, and observers reused by key and occurrence.
+  selected type differs, and observers reused by key and occurrence. Results
+  of **different** types combine as a record: `(a, b).combine((a, b) => …)`.
 - **Cache-wide mutation state is `MutationStateObserver`**, upstream's
   `useMutationState`: `MutationFilters` plus a `select`, with concurrent runs
   under one key kept apart.
@@ -180,7 +181,7 @@ Each row is recorded, with its reason, in
 | `queryKeyHashFn` | `QueryKey` is a value type |
 | `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook. Two limits: a map is shared **whole**, so one changed leaf shares nothing beneath it; and a hook governs the cache write and unselected placeholders: `select` output is shared by the default comparison unless the option is `noStructuralSharing()` — upstream's `false` — which turns it off too, because the hook is typed for the query's data and cannot be routed over a selection |
 | Observer options in `setQueryDefaults` / `defaultOptions.queries` | `QueryDefaults` is a subset: no `initialData`, `initialDataUpdatedAt(Compute)`, `placeholderData`, `select` or `behavior`. A default that decides what a query *holds* belongs at the call site, where its type is known |
-| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous; mixed data types need a `select`, and the returned list is mapped by the caller |
+| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous. Different data types are combined with `combine` on a **record of results** — `(a, b).combine((a, b) => …)` gives a `CombinedResult` (pending / error / data with `refetchError`), with an optional `CombineMemo` |
 | `streamedQuery` | not ported |
 | `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
 | `select` on `fetchQuery` | map the future |

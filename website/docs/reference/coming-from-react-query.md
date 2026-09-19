@@ -45,7 +45,7 @@ alternatives — there is no recommended default, pick per situation:
 |---|---|
 | `fetchQuery`, `prefetchQuery`, `ensureQueryData` | one `QueryClient.query(options)`; prefetch is `client.query(…).ignore()`, "only if nothing is cached" is `staleTime: StaleTime.static` |
 | `ensureQueryData({ revalidateIfStale: true })` | `client.query(options, revalidateIfStale: true)` — cached data now, refresh behind it |
-| `useQueries({ queries })` | `QueriesObserver` / `QueriesBuilder`, homogeneous: one data type per collection, `select` when the selected type differs. No `combine` — map the list |
+| `useQueries({ queries })` | `QueriesObserver` / `QueriesBuilder`, homogeneous: one data type per collection, `select` when the selected type differs. For different types, `(a, b).combine(…)` over a record of results |
 | `useMutationState({ filters, select })` | `MutationStateObserver` / `MutationStateController` |
 | `useIsFetching(filters)` | `IsFetchingController(client, filters: …)`, a `ValueListenable<int>`; the snapshot is `client.isFetching()` |
 | `useIsMutating(filters)` | a `MutationStateController` filtered on `MutationStatus.pending`, read for its length; the snapshot is `client.isMutating()` |
@@ -149,7 +149,7 @@ file — each starts with what it shows and how it is proven:
 
 ## Not here at all
 
-Persistence and hydration, `useQueries`' `combine` step, `streamedQuery`,
+Persistence and hydration, `streamedQuery`,
 Suspense, SSR and
 devtools are out of the first release; [the feature matrix](feature-matrix.md)
 lists them, and [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md)

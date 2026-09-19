@@ -12,7 +12,8 @@ among them, because none of them is a way of *reading* one query.
 ## A list of queries
 
 `QueriesBuilder` observes a list that may change length or order — upstream's
-`useQueries`, minus the heterogeneous tuple.
+`useQueries`, minus the heterogeneous tuple — for which see
+[combining queries of different types](#combining-queries-of-different-types).
 
 ```dart snippet="guides/collections-and-side-effects.md#queries-builder"
 Widget queriesBuilderSample(List<String> visibleIds) =>
@@ -39,10 +40,66 @@ Widget queriesBuilderSample(List<String> visibleIds) =>
 - **Each query fails and settles on its own**; one error does not disturb its
   neighbours.
 
-It is homogeneous: one data type per collection. Mixed data types need a
-`select` to a common type, and the returned list is mapped by the caller —
-there is no `combine` step. `QueriesObserver` is the same thing without
-Flutter.
+It is homogeneous: one data type per collection, because a Dart `List` has
+one element type. `QueriesObserver` is the same thing without Flutter. For
+queries of **different** types, combine their results instead.
+
+## Combining queries of different types
+
+A record has a type per position, so `combine` is a function over a **record
+of results** — from `context.query`, a builder, the mixin or a controller's
+`value`, it does not matter which. Nothing new observes anything: the reads
+you already have rebuild the widget, and `combine` says what they amount to
+together.
+
+```dart snippet="guides/collections-and-side-effects.md#combine"
+class TaskWithComments extends StatelessWidget {
+  const TaskWithComments(this.id, {super.key});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    final combined = (
+      context.query(taskQuery(id)),
+      context.query(commentsQuery(id)),
+    ).combine((task, comments) => '${task.name} (${comments.length})');
+
+    return switch (combined) {
+      CombinedPending() => const CircularProgressIndicator(),
+      CombinedError(:final error) => TextButton(
+          onPressed: combined.retry,
+          child: Text('$error — retry'),
+        ),
+      CombinedData(:final data, :final refetchError) => Text(
+          refetchError == null ? data : '$data (could not refresh)',
+        ),
+    };
+  }
+}
+```
+
+The rules, in order:
+
+1. A source that **failed with nothing to show** makes the whole a
+   `CombinedError` — it wins over a source that is still loading, because
+   waiting does not cure it and `retry()` (which refetches only the failed
+   sources) is something a user can press.
+2. Otherwise a source with no data yet makes it `CombinedPending`.
+3. Otherwise everything has data and the combiner runs. A background refetch
+   that failed keeps its stale data in the combination and shows up as
+   `refetchError`: content on screen is not blanked.
+
+`isFetching` is "any source is", and `refetch()` refetches all of them. Two to
+six results; past six, combine two combinations. Controllers combine the same
+way under a `ListenableBuilder` over `Listenable.merge([a, b])`.
+
+The combiner runs on every call — every build. For a constructor call that is
+nothing; for a join over long lists, keep a `CombineMemo<R>` next to the reads
+(a `State` field) and pass it as `memo:`. The combiner is then skipped while
+every source holds the identical data instance — which structural sharing
+makes the normal case for a refetch that changed nothing — and an equal
+result keeps its instance, as upstream shares the output of `combine`.
 
 ## Side effects
 

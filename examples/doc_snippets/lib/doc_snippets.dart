@@ -653,6 +653,33 @@ void theMountContract(QueryClient client) {
 // guides/collections-and-side-effects.md
 // ---------------------------------------------------------------------------
 
+// >>> guides/collections-and-side-effects.md#combine
+class TaskWithComments extends StatelessWidget {
+  const TaskWithComments(this.id, {super.key});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    final combined = (
+      context.query(taskQuery(id)),
+      context.query(commentsQuery(id)),
+    ).combine((task, comments) => '${task.name} (${comments.length})');
+
+    return switch (combined) {
+      CombinedPending() => const CircularProgressIndicator(),
+      CombinedError(:final error) => TextButton(
+          onPressed: combined.retry,
+          child: Text('$error — retry'),
+        ),
+      CombinedData(:final data, :final refetchError) => Text(
+          refetchError == null ? data : '$data (could not refresh)',
+        ),
+    };
+  }
+}
+// <<<
+
 // >>> guides/collections-and-side-effects.md#queries-builder
 Widget queriesBuilderSample(List<String> visibleIds) =>
     QueriesBuilder<Task, String>(
