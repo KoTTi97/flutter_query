@@ -42,8 +42,11 @@ The rest is a consistent picture: the app wanted **more than upstream** around
 mutations (context, cancellation, a typed state selector, scope diagnostics)
 and around reacting to state outside the cache (finding 9). Those are feature
 decisions, not repairs, so by this repository's rules they are charted, not
-patched in: they are the seeds for the map after
-[#70](https://github.com/KoTTi97/flutter_query/issues/70). By the reporter's
+patched in: they are map
+[#81](https://github.com/KoTTi97/flutter_query/issues/81) — #82 combine, #83
+mutation context and cancellation, #84 the re-evaluation trigger, #85 the four
+small ones; 7, 8, 13a and 13b are in its fog. The trade-off in finding 1 is
+open for discussion on [#86](https://github.com/KoTTi97/flutter_query/issues/86). By the reporter's
 own priority the order is 4 (combine), 3+5 (mutation context and
 cancellation, one design), 9 (a re-evaluation trigger), then 6, 2, 11, 12.
 

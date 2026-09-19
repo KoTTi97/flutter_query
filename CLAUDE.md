@@ -36,7 +36,11 @@ first, which switched element sharing off for sealed lists and broke
 infinite-query page sharing unseen by 750 tests; then instance identity with a
 fixed-length copy, which PORTING_NOTES' I1 argues. One was a
 packaging gap in the docs. The rest are upstream-faithful or beyond upstream,
-and the triage lists them as seeds for the next map.
+and they are charted as map [#81](https://github.com/KoTTi97/flutter_query/issues/81)
+(tickets #82–#85: combine, mutation context and cancellation, a re-evaluation
+trigger, four small additions); the sharing trade-off stays discussable on
+[#86](https://github.com/KoTTi97/flutter_query/issues/86). The traps among them
+opened the site's `reference/troubleshooting.md`.
 
 ## Where the work stands (2026-09-12)
 
