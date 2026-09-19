@@ -59,3 +59,27 @@ so a predicate over outside state never reads as changed. It opens the site's
 which this integration started: 9, 2, 10, 13d, 12 and 13c, symptom first, its
 two samples compiled as twins. [#78](https://github.com/KoTTi97/flutter_query/issues/78)
 adds its own eight entries to the same page.
+
+## Outcome (2026-09-20)
+
+Map #81 is worked off; PORTING_NOTES' "After the first integration" argues
+each decision.
+
+| Finding | Outcome |
+|---|---|
+| 4 combine | **built** — `(a, b).combine(fn)` over a record of results, sealed `CombinedResult`, optional `CombineMemo` (#82) |
+| 3 function context | **built** — `mutationFnWithContext`, with a typed `onMutateResult` and a `signal` (#83) |
+| 5 cancel a mutation | **built** — `cancel()` fails the run with `CancelledError`, so the rollback runs (#83) |
+| 9 outside state | **fixed at the root** — `setOptions` compares `enabled` against the observer's last result; a rebuild re-evaluates (#84) |
+| 6 consecutive errors | **built** — `QueryState.consecutiveErrorCount` (#85) |
+| 11 typed select | **built** — `MutationStateObserver.typed` / `MutationStateController.typed` (#85) |
+| 2 closing a prefix | declined, with the reason and the pattern that replaces it (#85) |
+| 12 deadlock assertion | declined — it would fire on correct code (#85) |
+| 7, 8, 13a, 13b | in the map's fog, for a later map |
+
+What the app can delete: its `CombinedQuery<T>`, the `currentName` carried in
+the rename's variables, the closed-API trick for leaving a screen mid-write,
+the retry-as-poll-budget workaround, and the casts in its pending-intent
+selection. Whether its `structuralSharing` hook can go is what #86 is waiting
+on a measurement for.
+

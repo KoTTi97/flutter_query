@@ -43,8 +43,8 @@ That is the whole differentiator, and it is checkable:
 
 |  |  |
 |---|---|
-| **752** tests in the core | 752 on the Dart VM; 748 also compiled to JavaScript |
-| **128** tests in the binding | four call styles, each proven to interoperate |
+| **770** tests in the core | 770 on the Dart VM; 766 also compiled to JavaScript |
+| **144** tests in the binding | four call styles, each proven to interoperate |
 | **269** tests across the two examples | plus **178** Playwright tests in a real browser |
 | **23** bugs found by porting | none of which a test written from the Dart side would have caught |
 | **every omission listed by name** | in [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md) |

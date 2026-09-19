@@ -83,6 +83,7 @@ final class QueryState<TQueryData> {
     this.error,
     this.errorStackTrace,
     this.errorUpdateCount = 0,
+    this.consecutiveErrorCount = 0,
     this.errorUpdatedAt,
     this.fetchFailureCount = 0,
     this.fetchFailureReason,
@@ -117,6 +118,17 @@ final class QueryState<TQueryData> {
   /// How many times the query has ended in an error over its whole life —
   /// upstream's `errorUpdateCount`.
   final int errorUpdateCount;
+
+  /// How many times in a row the query has ended in an error: one more with
+  /// every failed fetch — its retries exhausted — and back to zero with the
+  /// next data, fetched or written. Port-only
+  /// (https://github.com/KoTTi97/flutter_query/issues/85): upstream's
+  /// `fetchFailureCount` starts over with every fetch and its
+  /// [errorUpdateCount] never does, so "stop polling after five failures in a
+  /// row" has nothing to read. With this it is
+  /// `RefetchInterval.dynamic((query) =>
+  /// query.state.consecutiveErrorCount >= 5 ? null : interval)`.
+  final int consecutiveErrorCount;
 
   /// When the query last ended in an error. Not cleared with [error], so
   /// "last failed at" survives the refetch that follows.
@@ -163,6 +175,7 @@ final class QueryState<TQueryData> {
     Object? error,
     StackTrace? errorStackTrace,
     int? errorUpdateCount,
+    int? consecutiveErrorCount,
     DateTime? errorUpdatedAt,
     int? fetchFailureCount,
     Object? fetchFailureReason,
@@ -190,6 +203,8 @@ final class QueryState<TQueryData> {
       errorStackTrace:
           clearError ? null : (errorStackTrace ?? this.errorStackTrace),
       errorUpdateCount: errorUpdateCount ?? this.errorUpdateCount,
+      consecutiveErrorCount:
+          consecutiveErrorCount ?? this.consecutiveErrorCount,
       // Not cleared with the error: upstream's `fetchState` and `successState`
       // null `error` and leave `errorUpdatedAt` standing, so "last failed at"
       // survives the refetch that follows.
@@ -219,6 +234,7 @@ final class QueryState<TQueryData> {
           other.dataUpdatedAt == dataUpdatedAt &&
           other.error == error &&
           other.errorUpdateCount == errorUpdateCount &&
+          other.consecutiveErrorCount == consecutiveErrorCount &&
           other.errorUpdatedAt == errorUpdatedAt &&
           other.fetchFailureCount == fetchFailureCount &&
           other.fetchFailureReason == fetchFailureReason &&
@@ -235,6 +251,7 @@ final class QueryState<TQueryData> {
         dataUpdatedAt,
         error,
         errorUpdateCount,
+        consecutiveErrorCount,
         errorUpdatedAt,
         fetchFailureCount,
         fetchFailureReason,

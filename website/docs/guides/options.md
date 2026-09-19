@@ -185,6 +185,19 @@ result, so the UI can say "attempt 2 of 3" without owning a counter. A
 `refetchIntervalInBackground` keeps a poll running while the app is not
 focused; by default it stops.
 
+To give up after failures in a row, read `consecutiveErrorCount` from the
+query's state: one more with every fetch that ends in an error (its retries
+exhausted), back to zero with the next data. Upstream has no such counter —
+`fetchFailureCount` starts over with every fetch and `errorUpdateCount` never
+does.
+
+```dart snippet="guides/options.md#stop-polling-after-failures"
+const RefetchInterval giveUpAfterFive = RefetchInterval.dynamic(_untilFiveFail);
+
+Duration? _untilFiveFail(Query<Object?> query) =>
+    query.state.consecutiveErrorCount >= 5 ? null : const Duration(seconds: 1);
+```
+
 ## Initial and placeholder data
 
 Different things, and the difference is whether the cache believes it.

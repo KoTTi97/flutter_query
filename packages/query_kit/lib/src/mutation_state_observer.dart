@@ -12,6 +12,38 @@ import 'structural_sharing.dart';
 typedef MutationStateSelect<TSelected> = TSelected Function(
     Mutation<Object?, Object?, Object?> mutation);
 
+/// [MutationStateSelect] over mutations of one type: what
+/// [MutationStateObserver.typed] takes.
+typedef TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>
+    = TSelected Function(Mutation<TData, TVariables, TOnMutateResult> mutation);
+
+/// [filters] narrowed to the mutations that *are* a
+/// `Mutation<TData, TVariables, TOnMutateResult>`, and [select] adapted to
+/// the erased signature — the two halves of a typed selection, for the
+/// binding's controller to share. A type argument left as `Object?` matches
+/// anything, so `<Object?, SensorIntent, Object?>` is "every mutation whose
+/// variables are a `SensorIntent`".
+(MutationFilters, MutationStateSelect<TSelected>)
+    typedMutationSelection<TData, TVariables, TOnMutateResult, TSelected>(
+  MutationFilters filters,
+  TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>
+      select,
+) {
+  final predicate = filters.predicate;
+  return (
+    MutationFilters(
+      mutationKey: filters.mutationKey,
+      exact: filters.exact,
+      status: filters.status,
+      predicate: (mutation) =>
+          mutation is Mutation<TData, TVariables, TOnMutateResult> &&
+          (predicate == null || predicate(mutation)),
+    ),
+    (mutation) =>
+        select(mutation as Mutation<TData, TVariables, TOnMutateResult>),
+  );
+}
+
 /// Observes selected mutation values in cache insertion order.
 ///
 /// Subscribes to the cache only while it has listeners. Selection uses
@@ -25,6 +57,36 @@ class MutationStateObserver<TSelected> {
   })  : _filters = filters,
         _select = select {
     _update(notify: false);
+  }
+
+  /// A selection over the mutations of one type, [select] receiving them
+  /// typed — no cast to get at `state.variables`. Port-only
+  /// (https://github.com/KoTTi97/flutter_query/issues/85); upstream's
+  /// `useMutationState` select is untyped too.
+  ///
+  /// The types usually come from [select]'s parameter:
+  ///
+  /// ```dart
+  /// MutationStateObserver.typed(
+  ///   client,
+  ///   filters: const MutationFilters(status: MutationStatus.pending),
+  ///   select: (Mutation<Object?, SensorIntent, Object?> mutation) =>
+  ///       mutation.state.variables!,
+  /// );
+  /// ```
+  ///
+  /// A later [setOptions] replaces filters and select with untyped ones.
+  static MutationStateObserver<TSelected>
+      typed<TData, TVariables, TOnMutateResult, TSelected>(
+    QueryClient client, {
+    MutationFilters filters = const MutationFilters(),
+    required TypedMutationStateSelect<TData, TVariables, TOnMutateResult,
+            TSelected>
+        select,
+  }) {
+    final (typedFilters, typedSelect) = typedMutationSelection(filters, select);
+    return MutationStateObserver<TSelected>(client,
+        filters: typedFilters, select: typedSelect);
   }
 
   final QueryClient _client;

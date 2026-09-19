@@ -74,6 +74,15 @@ fetching, upstream's `useIsFetching`.
   mutation through the cache: the options' callbacks run, nothing is
   attached, and the mutation is collected after its `gcTime`.
 
+**Asked for by the first real integration** (map #81)
+
+- `MutationController.cancel()` fails the run being shown with a
+  `CancelledError`; disposing a controller still does not cancel.
+- `MutationStateController.typed` selects the mutations of one type, typed.
+- Results of different data types combine with the core's
+  `(a, b).combine(…)` in every call style; an `Enabled.when` over outside
+  state is re-evaluated by the rebuild that hands the options over again.
+
 **Widget tests** (ADR-0002)
 
 - Nothing is exported for tests; `flutter_test` is a dev dependency only. The

@@ -248,6 +248,22 @@ mutation matching a filter through a `select` — upstream's `useMutationState`.
 It is how a "saving…" badge in an app bar works without any widget owning the
 mutation. Concurrent runs under one key are kept apart.
 
+A filter spans mutations of every type, so `select` receives them erased. When
+you want the mutations of *one* type, `typed` filters by it and hands them over
+typed — the pending variables as an optimistic display, without a cast:
+
+```dart snippet="guides/mutations.md#typed-mutation-state"
+MutationStateController<String> pendingRenames(QueryClient client) =>
+    MutationStateController.typed(
+      client,
+      filters: const MutationFilters(status: MutationStatus.pending),
+      // The parameter's type is the filter: every mutation whose variables
+      // are a String, and `variables` needs no cast.
+      select: (Mutation<Object?, String, Object?> mutation) =>
+          mutation.state.variables!,
+    );
+```
+
 ## Defaults
 
 `client.setMutationDefaults(key, MutationDefaults(...))` registers

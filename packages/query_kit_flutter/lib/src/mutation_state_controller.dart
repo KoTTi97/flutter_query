@@ -18,6 +18,22 @@ class MutationStateController<TSelected> extends ChangeNotifier
   }) : _observer = MutationStateObserver<TSelected>(client,
             filters: filters, select: select);
 
+  /// A selection over the mutations of one type, [select] receiving them
+  /// typed — see `MutationStateObserver.typed`. The types usually come from
+  /// [select]'s parameter, and a type left as `Object?` matches anything.
+  static MutationStateController<TSelected>
+      typed<TData, TVariables, TOnMutateResult, TSelected>(
+    QueryClient client, {
+    MutationFilters filters = const MutationFilters(),
+    required TypedMutationStateSelect<TData, TVariables, TOnMutateResult,
+            TSelected>
+        select,
+  }) {
+    final (typedFilters, typedSelect) = typedMutationSelection(filters, select);
+    return MutationStateController<TSelected>(client,
+        filters: typedFilters, select: typedSelect);
+  }
+
   /// The client whose mutations are selected.
   final QueryClient client;
   final MutationStateObserver<TSelected> _observer;

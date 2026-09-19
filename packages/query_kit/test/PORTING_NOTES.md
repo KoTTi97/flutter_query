@@ -5990,3 +5990,50 @@ has to rebuild the widget when the flag flips. A callback cannot be observed.
 Tests: core `outside_state_test.dart` (2), binding `outside_state_test.dart`
 (2, `QueryBuilder` and `context.query`). A divergence row records it.
 
+### #85 — four small asks: two built, two declined
+
+**6 — `QueryState.consecutiveErrorCount`: built.** `fetchFailureCount` starts
+over with every fetch, `errorUpdateCount` never does, so "stop polling after
+five failures in a row" had nothing to read; the integrator bent `retry` with
+the poll interval as its delay into shape instead. The reducer adds one on
+`QueryErrorAction` — a *settled* failure, retries exhausted — and writes zero
+on `QuerySuccessAction`, manual writes included: data is data. On the state
+only, not on `QueryResult`: `RefetchInterval.dynamic` is handed the query, a
+result field is seventeen constructor sites, and nothing asked to render it.
+Price paid: the state's constructor, field, `copyWith`, `==`, `hashCode` and
+two reducer lines. A restored state without the field starts at zero.
+
+**11 — a typed mutation-state select: built.** `MutationStateObserver.typed`
+and `MutationStateController.typed` filter by
+`mutation is Mutation<TData, TVariables, TOnMutateResult>` — reified generics
+do what TypeScript cannot — and hand `select` the mutation typed. The types are
+inferred from `select`'s parameter, and `Object?` in a slot matches anything,
+so `Mutation<Object?, SensorIntent, Object?>` is "whose variables are a
+`SensorIntent`". The caller's own predicate is kept. A static method, not a
+constructor: a constructor cannot introduce the three extra type parameters.
+
+**2 — closing a prefix: declined.** "No new entries under this key" has no
+sound meaning for the observer that asks for one: `QueryCache.build` must hand
+back a `Query`, and the alternatives are throwing out of a widget's `build` or
+inventing a dead entry type every reader must then understand. The need behind
+it — a disconnected device must not be fetched — is met by what exists, more
+so after this map: take the readers away first or give them an `enabled` over
+the connection, which #84 makes take effect on the next rebuild; cancel and
+remove; and a transport that refuses. The troubleshooting entry says so.
+
+**12 — a debug assertion for nested `mutateAsync` in one scope: declined.**
+Detecting "a mutation started from inside a mutation function of the same
+scope" needs a zone around every mutation function, and what it detects is not
+the deadlock: a nested `mutate`, or a `mutateAsync` that is not awaited, queues
+behind the outer run and completes after it — legitimate, and indistinguishable
+at `mutate` time from the awaited call that hangs. An assertion that fires on
+correct code is worse than a documented trap. It is documented.
+
+Tests: `integration_requests_test.dart` (4).
+
+### Counts after map #81
+
+Core **770** VM / **766** compiled to JavaScript; binding **144**; doc
+snippets 9; showcase 238 and task manager 32 unchanged. No ported assertion
+changed anywhere in this map.
+

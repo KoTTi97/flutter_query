@@ -36,11 +36,17 @@ first, which switched element sharing off for sealed lists and broke
 infinite-query page sharing unseen by 750 tests; then instance identity with a
 fixed-length copy, which PORTING_NOTES' I1 argues. One was a
 packaging gap in the docs. The rest are upstream-faithful or beyond upstream,
-and they are charted as map [#81](https://github.com/KoTTi97/flutter_query/issues/81)
-(tickets #82–#85: combine, mutation context and cancellation, a re-evaluation
-trigger, four small additions); the sharing trade-off stays discussable on
-[#86](https://github.com/KoTTi97/flutter_query/issues/86). The traps among them
-opened the site's `reference/troubleshooting.md`.
+and they were charted as map [#81](https://github.com/KoTTi97/flutter_query/issues/81)
+and worked off on 2026-09-20 — PORTING_NOTES' "After the first integration"
+has a row per ticket: `(a, b).combine(…)` over a record of results (#82);
+`mutationFnWithContext` and `Mutation.cancel`, a failure and not a revert
+(#83, a row in ADR-0003); `setOptions` compares `enabled` against the
+observer's last result, so a rebuild re-evaluates a callback over outside
+state (#84, a divergence); `QueryState.consecutiveErrorCount` and
+`MutationStateObserver.typed` built, closing a prefix and a scope-deadlock
+assertion declined (#85). Core 770 VM / 766 browser, binding 144. The sharing
+trade-off stays discussable on [#86](https://github.com/KoTTi97/flutter_query/issues/86);
+the traps opened the site's `reference/troubleshooting.md`.
 
 ## Where the work stands (2026-09-12)
 

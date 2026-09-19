@@ -9,8 +9,8 @@ observers, the client and both caches, with no Flutter dependency.
 The claim it makes is fidelity. Upstream's own test suite is ported case for
 case — 17 suites, **414 of their 536** cases, every omitted case accounted for
 in `test/PORTING_NOTES.md` by name or by the upstream block it belongs to,
-with its category and its reason. The complete core suite has **752** VM tests;
-**748** also run compiled to JavaScript (four barrel checks are VM-only),
+with its category and its reason. The complete core suite has **770** VM tests;
+**766** also run compiled to JavaScript (four barrel checks are VM-only),
 including pre-release ownership regressions, the cases found by the example
 apps and 32 bounded confidence sequences over the public API. Closeness to
 upstream is a tiebreaker, not a goal: where a Dart idiom is better the port
@@ -186,6 +186,10 @@ meets first:
   gives a sealed `CombinedResult` — pending, error, or data with a
   `refetchError` — with `retry()`, `refetch()` and an optional `CombineMemo`.
   Stands in for `useQueries`' heterogeneous tuple and `combine` step.
+- `QueryState.consecutiveErrorCount` — failed fetches in a row, zero again with
+  the next data — so a `RefetchInterval.dynamic` can give up after N; and
+  `MutationStateObserver.typed`, a mutation-state selection filtered by and
+  typed to one mutation type.
 - An `Enabled.when` over state outside the cache is re-evaluated when the
   observer is handed its options again — every rebuild — because `setOptions`
   compares against the observer's last result rather than resolving the old

@@ -355,6 +355,25 @@ MutationOptions<Task, String, Task> renameWithContext(
     );
 // <<<
 
+// >>> guides/options.md#stop-polling-after-failures
+const RefetchInterval giveUpAfterFive = RefetchInterval.dynamic(_untilFiveFail);
+
+Duration? _untilFiveFail(Query<Object?> query) =>
+    query.state.consecutiveErrorCount >= 5 ? null : const Duration(seconds: 1);
+// <<<
+
+// >>> guides/mutations.md#typed-mutation-state
+MutationStateController<String> pendingRenames(QueryClient client) =>
+    MutationStateController.typed(
+      client,
+      filters: const MutationFilters(status: MutationStatus.pending),
+      // The parameter's type is the filter: every mutation whose variables
+      // are a String, and `variables` needs no cast.
+      select: (Mutation<Object?, String, Object?> mutation) =>
+          mutation.state.variables!,
+    );
+// <<<
+
 // ---------------------------------------------------------------------------
 // reference/troubleshooting.md
 // ---------------------------------------------------------------------------
