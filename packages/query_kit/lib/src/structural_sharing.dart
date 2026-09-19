@@ -11,6 +11,34 @@ import 'package:meta/meta.dart';
 import 'hashing.dart';
 import 'infinite_query.dart';
 
+/// A value class that structural sharing may walk into.
+///
+/// To the walk a class of your own is a leaf: compared with `==`, kept or
+/// replaced whole. For a wrapper around a list — `DeviceList(items)`, the
+/// shape freezed suggests — that means one changed element renews every
+/// element's instance: `==` downstream still holds, `identical` and everything
+/// built on it does not (measured by the first integration, 25 of 25 instances
+/// lost; https://github.com/KoTTi97/flutter_query/issues/86). A class that
+/// implements this is asked instead:
+///
+/// ```dart
+/// @override
+/// DeviceList shareWith(DeviceList previous) =>
+///     copyWith(items: replaceEqualDeep(previous.items, items));
+/// ```
+///
+/// [shareWith] is called on the **incoming** value, with the cached one, only
+/// when the two have the same runtime type and are not `==` — an equal pair
+/// keeps the cached instance without asking. Return a value equal to `this`
+/// that reuses what it can of [previous]. A [shareWith] that throws, or
+/// returns something that is not the caller's type, is ignored and the
+/// incoming value kept: sharing is best effort and never an error.
+abstract interface class StructurallyShareable<T> {
+  /// This value, with every part that [previous] already holds an equal
+  /// instance of swapped for that instance.
+  T shareWith(T previous);
+}
+
 /// Returns [previous] when [next] is deep-equal to it, and otherwise [next]
 /// with every deep-equal part swapped for the instance [previous] already
 /// held — upstream's default structural sharing, and the reason a refetch
@@ -186,7 +214,24 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
 
   // `is T` and not just `==`: `1 == 1.0` holds in Dart, and an `int` handed
   // back where a `double` was asked for would not be the caller's type.
-  return previous is T && previous == next ? previous : next;
+  if (previous is T && previous == next) {
+    return previous;
+  }
+  if (next is StructurallyShareable<Object?> &&
+      previous != null &&
+      previous.runtimeType == next.runtimeType) {
+    try {
+      // The argument check is the class's own: `shareWith(T previous)` is
+      // covariant in `T`, and the same runtime type is what makes it pass.
+      final shared = next.shareWith(previous);
+      if (shared is T) {
+        return shared;
+      }
+    } catch (_) {
+      // Best effort: the incoming value stands.
+    }
+  }
+  return next;
 }
 
 /// Whether [list] can grow. Dart has no read-only way to ask, so this writes

@@ -124,4 +124,92 @@ void main() {
     observer.destroy();
     client.clear();
   });
+
+  group('D: structural sharing and a value class that wraps a list', () {
+    final before = _Devices([for (var i = 0; i < 25; i++) _Device(i, 'd$i')]);
+    _Devices refetched({int? renamed}) => _Devices([
+          for (var i = 0; i < 25; i++)
+            _Device(i, i == renamed ? 'renamed' : 'd$i'),
+        ]);
+    int kept(_PlainDevices a, _PlainDevices b) => [
+          for (var i = 0; i < 25; i++)
+            if (identical(a.items[i], b.items[i])) i,
+        ].length;
+
+    test('a plain value class is a leaf: one changed element renews all', () {
+      final plain = _PlainDevices(before.items);
+      final next = _PlainDevices(refetched(renamed: 3).items);
+      final shared = replaceEqualDeep<_PlainDevices>(plain, next);
+      expect(shared, same(next));
+      expect(kept(plain, shared), 0);
+    });
+
+    test('a StructurallyShareable is walked: 24 of 25 instances survive', () {
+      final next = refetched(renamed: 3);
+      final shared = replaceEqualDeep<_Devices>(before, next);
+      expect(shared, isNot(same(before)));
+      expect(kept(before, shared), 24);
+      expect(shared.items[3].name, 'renamed');
+    });
+
+    test('an equal one is still shared whole, without asking it', () {
+      final next = refetched();
+      expect(replaceEqualDeep<_Devices>(before, next), same(before));
+    });
+
+    test('it is walked inside a list and through the cache too', () {
+      final client = testClient();
+      final key = queryKey();
+      client
+        ..setQueryData<List<_Devices>>(key, [before])
+        ..setQueryData<List<_Devices>>(key, [refetched(renamed: 3)]);
+      final cached = client.getQueryData<List<_Devices>>(key)!.single;
+      expect(kept(before, cached), 24);
+      client.clear();
+    });
+
+    test('a shareWith that throws or returns the wrong type is ignored', () {
+      final next = _Broken(1);
+      expect(replaceEqualDeep<_Broken>(_Broken(2), next), same(next));
+    });
+  });
+}
+
+class _Device {
+  const _Device(this.id, this.name);
+  final int id;
+  final String name;
+  @override
+  bool operator ==(Object other) =>
+      other is _Device && other.id == id && other.name == name;
+  @override
+  int get hashCode => Object.hash(id, name);
+}
+
+class _PlainDevices {
+  const _PlainDevices(this.items);
+  final List<_Device> items;
+  @override
+  bool operator ==(Object other) =>
+      other is _PlainDevices &&
+      other.items.length == items.length &&
+      [for (var i = 0; i < items.length; i++) other.items[i] == items[i]]
+          .every((equal) => equal);
+  @override
+  int get hashCode => Object.hashAll(items);
+}
+
+class _Devices extends _PlainDevices
+    implements StructurallyShareable<_Devices> {
+  const _Devices(super.items);
+  @override
+  _Devices shareWith(_Devices previous) =>
+      _Devices(replaceEqualDeep<List<_Device>>(previous.items, items));
+}
+
+class _Broken implements StructurallyShareable<_Broken> {
+  _Broken(this.value);
+  final int value;
+  @override
+  _Broken shareWith(_Broken previous) => throw StateError('no');
 }

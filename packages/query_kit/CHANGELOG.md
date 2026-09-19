@@ -9,8 +9,8 @@ observers, the client and both caches, with no Flutter dependency.
 The claim it makes is fidelity. Upstream's own test suite is ported case for
 case — 17 suites, **414 of their 536** cases, every omitted case accounted for
 in `test/PORTING_NOTES.md` by name or by the upstream block it belongs to,
-with its category and its reason. The complete core suite has **774** VM tests;
-**770** also run compiled to JavaScript (four barrel checks are VM-only),
+with its category and its reason. The complete core suite has **781** VM tests;
+**777** also run compiled to JavaScript (four barrel checks are VM-only),
 including pre-release ownership regressions, the cases found by the example
 apps and 32 bounded confidence sequences over the public API. Closeness to
 upstream is a tiebreaker, not a goal: where a Dart idiom is better the port
@@ -185,7 +185,12 @@ meets first:
 - `combine` on a record of two to six `QueryResult`s of different data types
   gives a sealed `CombinedResult` — pending, error, or data with a
   `refetchError` — with `retry()`, `refetch()` and an optional `CombineMemo`
-  (with `keys:` for whatever else the combiner reads).
+  (with `keys:` for whatever else the combiner reads), `optional()` for a
+  source the screen can do without, and the same `combine` over a
+  `List<QueryResult<T>>`.
+- `StructurallyShareable<T>`: a value class implements `shareWith(previous)`
+  and structural sharing walks into it — a wrapper around a list is otherwise
+  a leaf, and one changed element renews every instance.
   Stands in for `useQueries`' heterogeneous tuple and `combine` step.
 - `QueryState.consecutiveErrorCount` — failed fetches in a row, zero again with
   the next *fetched* data; a manual write and a cancelled fetch leave it alone — so a `RefetchInterval.dynamic` can give up after N; and

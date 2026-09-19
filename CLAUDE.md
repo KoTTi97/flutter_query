@@ -48,7 +48,12 @@ assertion declined (#85). The integrator's second report, against `87bc25b`,
 found two defects in that work — a `CombineMemo` blind to what its combiner
 captures (now `keys:`), and a manual write resetting `consecutiveErrorCount`
 — and one claim that did not reproduce; PORTING_NOTES' "Second integration
-report". Core 774 VM / 770 browser, binding 144. The sharing
+report". A third report, against `9c5066a` — the app now runs on the new
+surface, its nine-step simulator pass clean — measured that a value class
+wrapping a list is a leaf to structural sharing (0 of 25 instances kept) and
+answered [#86](https://github.com/KoTTi97/flutter_query/issues/86):
+`StructurallyShareable`, `optional()` sources and `combine` over a list
+followed. Core 781 VM / 777 browser, binding 144. The sharing
 trade-off stays discussable on [#86](https://github.com/KoTTi97/flutter_query/issues/86);
 the traps opened the site's `reference/troubleshooting.md`.
 

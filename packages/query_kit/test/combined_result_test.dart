@@ -205,4 +205,87 @@ void main() {
         21);
     client.clear();
   });
+
+  testFakeAsync(
+      'an optional source neither blocks nor fails the combination, is still '
+      'seen fetching, and is retried when the query behind it failed',
+      (time) async {
+    final client = testClient();
+    var matterFetches = 0;
+    var gatewayHasMatter = false;
+    final devices = QueryObserver<List<String>, List<String>>(client,
+        QueryObserverOptions(queryKey: queryKey(), queryFn: (_) => ['a']));
+    final matter = QueryObserver<List<String>, List<String>>(
+        client,
+        QueryObserverOptions(
+          queryKey: queryKey(),
+          retry: RetryPolicy.never,
+          queryFn: (_) {
+            matterFetches++;
+            return Future.delayed(const Duration(milliseconds: 10),
+                () => gatewayHasMatter ? ['m'] : throw StateError('404'));
+          },
+        ));
+    final unsubscribe = [devices.subscribe((_) {}), matter.subscribe((_) {})];
+    CombinedResult<String> read() => (
+          devices.currentResult,
+          matter.currentResult.optional()
+        ).combine((devices, matter) => '$devices+$matter');
+
+    await time.flushMicrotasks();
+    expect(read().dataOrNull, '[a]+null', reason: 'not waited for');
+    expect(read().isFetching, isTrue, reason: 'but seen');
+
+    await time.advance(const Duration(milliseconds: 10));
+    expect(read(), isA<CombinedData<String>>(), reason: 'a 404 does not fail');
+    expect(read().dataOrNull, '[a]+null');
+
+    gatewayHasMatter = true;
+    unawaited(read().retry());
+    await time.advance(const Duration(milliseconds: 10));
+    expect(matterFetches, 2);
+    expect(read().dataOrNull, '[a]+[m]');
+    expect(matter.currentResult.optional(), same(matter.currentResult),
+        reason: 'with data it is the result itself');
+
+    for (final u in unsubscribe) {
+      u();
+    }
+    client.clear();
+  });
+
+  testFakeAsync('a list of results of one type combines by the same rules',
+      (time) async {
+    final client = testClient();
+    var failing = true;
+    final hosts = QueriesObserver<int, int>(client, [
+      for (final host in [1, 2, 3])
+        QueryObserverOptions(
+          queryKey: queryKey(),
+          retry: RetryPolicy.never,
+          queryFn: (_) => Future.delayed(Duration(milliseconds: host * 10),
+              () => host == 2 && failing ? throw StateError('down') : host),
+        ),
+    ]);
+    final unsubscribe = hosts.subscribe((_) {});
+    CombinedResult<int> read() => hosts.currentResult
+        .combine((values) => values.fold(0, (sum, value) => sum + value));
+
+    await time.advance(const Duration(milliseconds: 10));
+    expect(read().isPending, isTrue);
+    await time.advance(const Duration(milliseconds: 10));
+    expect(read().isError, isTrue, reason: 'a real failure wins over pending');
+    await time.advance(const Duration(milliseconds: 10));
+    failing = false;
+    unawaited(read().retry());
+    await time.advance(const Duration(milliseconds: 20));
+    expect(read().dataOrNull, 6, reason: 'every value, in order');
+
+    expect(
+        <QueryResult<int>>[].combine((values) => values.length).dataOrNull, 0,
+        reason: 'an empty list is data');
+    unsubscribe();
+    hosts.destroy();
+    client.clear();
+  });
 }

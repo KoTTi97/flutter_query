@@ -242,6 +242,39 @@ Lists are shared element by element; maps and sets are kept whole when deeply
 equal; everything else is compared with `==`. **A typed model therefore needs
 `==` and `hashCode`** — without them every fetch produces a new value.
 
+**A class of your own is a leaf, including what is inside it.** A wrapper
+around a list — `TaskList(items)`, the shape freezed suggests — is compared
+with `==` and kept or replaced *whole*: when one task changes, all of them get
+new instances. Nothing looks wrong, because `==` still holds; `identical` and
+everything built on it is what goes. Hold the list itself in the cache, or let
+the class take part by implementing `StructurallyShareable`:
+
+```dart snippet="guides/options.md#structurally-shareable"
+@immutable
+class TaskList implements StructurallyShareable<TaskList> {
+  const TaskList(this.items);
+
+  final List<Task> items;
+
+  // Asked only when the two are not equal: keep every Task instance the
+  // cache already holds, and replace the ones that changed.
+  @override
+  TaskList shareWith(TaskList previous) =>
+      TaskList(replaceEqualDeep(previous.items, items));
+
+  @override
+  bool operator ==(Object other) =>
+      other is TaskList && listEquals(other.items, items);
+
+  @override
+  int get hashCode => Object.hashAll(items);
+}
+```
+
+It is found wherever the walk goes — at the top, in a list, in an
+`InfiniteData` page — so one implementation replaces a `structuralSharing`
+hook on every query that holds the type.
+
 "Kept whole" cuts both ways: a `Map<Id, Dto>` in which one entry changed is
 replaced whole, and every entry's instance with it — Dart cannot rebuild a map
 of your key and value types from inside the walk, as it can a list. If you

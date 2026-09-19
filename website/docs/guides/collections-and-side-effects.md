@@ -101,6 +101,29 @@ every source holds the identical data instance — which structural sharing
 makes the normal case for a refetch that changed nothing — and an equal
 result keeps its instance, as upstream shares the output of `combine`.
 
+A source the screen can do without is `optional()`: it never blocks and never
+fails the combination — its value is `null` until there is one — while
+`isFetching` still sees it and `retry()` still refetches it when the query
+behind it failed. And a **list** of results of one type, a
+`QueriesController`'s value, combines by the same rules:
+
+```dart snippet="guides/collections-and-side-effects.md#combine-optional-and-lists"
+CombinedResult<String> taskWithOptionalComments(
+  QueryResult<Task> task,
+  QueryResult<List<Comment>> comments,
+) =>
+    // Still loading, disabled or failed, `comments` is null here — and the
+    // task is still the task.
+    (task, comments.optional()).combine(
+      (task, comments) => '${task.name} (${comments?.length ?? '–'})',
+    );
+
+CombinedResult<int> doneCount(List<QueryResult<Task>> tasks) =>
+    // A QueriesController's value: one failure with nothing to show wins,
+    // otherwise pending, otherwise every value in order.
+    tasks.combine((tasks) => tasks.where((task) => task.done).length);
+```
+
 **With a memo, the combiner must be a function of the sources and nothing
 else.** A memo cannot see what a closure captures: a combiner that filters by a
 search text it closes over keeps returning the list for the *old* text until a

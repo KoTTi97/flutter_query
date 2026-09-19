@@ -67,10 +67,11 @@ sealed class CombinedResult<T> {
   Future<void> refetch() =>
       Future.wait([for (final source in _sources) source.refetch()]);
 
-  /// Refetches the sources that are in error, and only those.
+  /// Refetches the sources that are in error, and only those — an
+  /// [OptionalQueryResult.optional] source whose query failed included.
   Future<void> retry() => Future.wait([
         for (final source in _sources)
-          if (source.isError) source.refetch(),
+          if ((_optionalOrigin[source] ?? source).isError) source.refetch(),
       ]);
 
   Object? get _identity;
@@ -248,6 +249,73 @@ CombinedResult<R> _combine<R>(
       : memo._resolve(
           [for (final source in sources) source.dataOrNull], keys, compute);
   return CombinedData<R>._(sources, data, refetchError, refetchErrorStackTrace);
+}
+
+// What an `optional()` stand-in stands in for, so `retry()` still knows that
+// the query behind it failed.
+final Expando<QueryResult<Object?>> _optionalOrigin =
+    Expando<QueryResult<Object?>>('optional origin');
+
+/// A source a combination can do without.
+extension OptionalQueryResult<T> on QueryResult<T> {
+  /// This result for a combination that must neither wait for it nor fail
+  /// with it: a gateway without Matter answers 404, and the device list is
+  /// still the device list.
+  ///
+  /// With data — a success, or a failed refetch over stale data — this is the
+  /// result itself. Without — still loading, disabled, or failed with nothing
+  /// to show — it is a success holding `null`, carrying the same fetch status
+  /// and `refetch`, so the combination's `isFetching` still sees it and its
+  /// `retry()` still refetches it when the query behind it failed.
+  ///
+  /// ```dart
+  /// (devices, status, matter.optional()).combine(
+  ///   (devices, status, matter) => assemble(devices, status, matter: matter),
+  /// );
+  /// ```
+  QueryResult<T?> optional() {
+    final self = this;
+    if (self is QuerySuccess<T> ||
+        (self is QueryError<T> && self.hasStaleData)) {
+      return self;
+    }
+    final stand = QuerySuccess<T?>(
+      data: null,
+      fetchStatus: fetchStatus,
+      dataUpdatedAt: dataUpdatedAt,
+      errorUpdatedAt: errorUpdatedAt,
+      failureCount: failureCount,
+      failureReason: failureReason,
+      failureStackTrace: failureStackTrace,
+      errorUpdateCount: errorUpdateCount,
+      isStale: isStale,
+      isEnabled: isEnabled,
+      isFetched: isFetched,
+      isFetchedAfterMount: isFetchedAfterMount,
+      isPlaceholderData: false,
+      refetch: ({bool cancelRefetch = true}) async =>
+          (await refetch(cancelRefetch: cancelRefetch)).optional(),
+    );
+    _optionalOrigin[stand] = self;
+    return stand;
+  }
+}
+
+/// [combine] over a list of results of one type — a `QueriesController`'s
+/// value, say — by the same rules as a record of them.
+extension CombineQueryResultList<T> on List<QueryResult<T>> {
+  /// What the list amounts to together — see [CombinedResult] for the rules:
+  /// a source that failed with nothing to show wins, otherwise one without
+  /// data makes it pending, otherwise [combiner] gets every value in order.
+  /// An empty list is data. With a [memo], [combiner] must be a function of
+  /// the sources and [keys] alone — see [CombineMemo].
+  CombinedResult<R> combine<R>(R Function(List<T> values) combiner,
+          {CombineMemo<R>? memo, List<Object?>? keys}) =>
+      _combine(
+          List<QueryResult<Object?>>.of(this),
+          () => combiner([for (final source in this) source.dataOrNull as T]),
+          memo,
+          keys);
 }
 
 // `dataOrNull as A`, not `!`: a nullable `A` holds nulls that are data.

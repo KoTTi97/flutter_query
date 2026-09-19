@@ -13,6 +13,7 @@
 /// depend on one, so those stay prose-only and say so on the page.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
@@ -353,6 +354,45 @@ MutationOptions<Task, String, Task> renameWithContext(
         filters: QueryFilters(queryKey: taskKey(id)),
       ),
     );
+// <<<
+
+// >>> guides/options.md#structurally-shareable
+@immutable
+class TaskList implements StructurallyShareable<TaskList> {
+  const TaskList(this.items);
+
+  final List<Task> items;
+
+  // Asked only when the two are not equal: keep every Task instance the
+  // cache already holds, and replace the ones that changed.
+  @override
+  TaskList shareWith(TaskList previous) =>
+      TaskList(replaceEqualDeep(previous.items, items));
+
+  @override
+  bool operator ==(Object other) =>
+      other is TaskList && listEquals(other.items, items);
+
+  @override
+  int get hashCode => Object.hashAll(items);
+}
+// <<<
+
+// >>> guides/collections-and-side-effects.md#combine-optional-and-lists
+CombinedResult<String> taskWithOptionalComments(
+  QueryResult<Task> task,
+  QueryResult<List<Comment>> comments,
+) =>
+    // Still loading, disabled or failed, `comments` is null here — and the
+    // task is still the task.
+    (task, comments.optional()).combine(
+      (task, comments) => '${task.name} (${comments?.length ?? '–'})',
+    );
+
+CombinedResult<int> doneCount(List<QueryResult<Task>> tasks) =>
+    // A QueriesController's value: one failure with nothing to show wins,
+    // otherwise pending, otherwise every value in order.
+    tasks.combine((tasks) => tasks.where((task) => task.done).length);
 // <<<
 
 // >>> guides/options.md#stop-polling-after-failures

@@ -6125,3 +6125,63 @@ upstream's does.
 
 Counts after: core **774** VM / **770** browser.
 
+## Third integration report (2026-09-20, against `9c5066a`)
+
+The app replaced all five workarounds and passed its nine-step simulator run
+with no query or mutation exception; nothing in the library was changed from
+their side. `CombineMemo` with `keys:` and the counter behave as described.
+What came back is measurement and ergonomics, not defects.
+
+### D — a value class that wraps a list is a leaf: measured, and answered with `StructurallyShareable`
+
+Their measurement for #86, instances of 25 surviving a refetch that changed
+one: **0** with the cache holding a freezed `DeviceListDto` around the list,
+**24** with their own hook, **24** with the list held directly. Independent of
+the I1 fix: the walk compares a class of the user's own with `==` and keeps or
+replaces it whole, as upstream's does a class instance. Silent, because `==`
+still holds. Reproduced (`D:` group) before anything changed.
+
+Both of their suggestions, in their order: the guide says it, under the shape
+that causes it; and `StructurallyShareable<T>` with `T shareWith(T previous)`
+lets a class take part. The walk asks the **incoming** value, only when the
+runtime types match and the two are not `==` (an equal pair keeps the cached
+instance unasked). The call is dynamic — `StructurallyShareable<Object?>` —
+and its argument check is the class's own covariant one, which equal runtime
+types satisfy; a result that is not the caller's `T`, or a throw, leaves the
+incoming value, as everything else in this file is best effort. Found wherever
+the walk goes, so one implementation replaces a hook per query. `_equalDeep`
+and the set hash are untouched: they compare, and `==` already does that.
+
+This closes #86: the integrator's hook was never redundant, and the I1
+trade-off (a fixed-length shared copy) measured 24 of 25.
+
+### E — two gaps `combine` left: both built
+
+- **An optional source.** A gateway without Matter answers 404, and as a
+  source that made the screen a `CombinedError`. They had routed it around
+  `combine` through `keys:`, which works and shows the semantics; but then it
+  is no source — invisible to `isFetching` and `retry()`.
+  `QueryResult.optional()` gives a `QueryResult<T?>`: the result itself when it
+  has data (generics are covariant), otherwise a success holding `null` with
+  the same fetch status and `refetch`. `retry()` looks through to the origin
+  (an `Expando`), so a failed optional source is still retried. It never
+  blocks: "optional" means the screen does not depend on it, and a source that
+  blocked while retrying a 404 would be the old problem with a delay.
+- **Folding a list.** `List<QueryResult<T>>.combine((values) => …)` — a
+  `QueriesController`'s value — by the same rules, through the same
+  `_combine`, memo and keys included; an empty list is data. They had asked
+  for a folded `QueryResult`; it is a `CombinedResult` because that *is* the
+  library's statement of what the flags mean over a collection, and
+  fabricating a `QueryResult`'s thirteen fields for a collection — `isStale`?
+  `dataUpdatedAt`? — is exactly what their 115 lines had to invent.
+
+### F and the `cancel()` note — documentation
+
+A typed selection does not replace an untyped one over a deliberately mixed
+scope ("is any write in flight?"); the guide says so. And `mutateAsync` throws
+the `CancelledError` at its call site like any failure, so an un-awaited one
+needs a handler; one sentence beside "cancelling is failing".
+
+Tests: `integration_feedback_test.dart` `D:` (5), `combined_result_test.dart`
+(+2). Counts after: core **781** VM / **777** browser.
+
