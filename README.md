@@ -126,7 +126,7 @@ Each row is recorded, with its reason, in
 | `select` on `fetchQuery` | map the future |
 | `initialDataUpdatedAt` as a function | `initialDataUpdatedAtCompute: () => DateTime?`, evaluated only when the data is actually seeded |
 | SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
-| `MutationFunctionContext` | not ported; a mutation function takes its variables only |
+| `MutationFunctionContext` | `mutationFn` takes its variables only; `mutationFnWithContext: (variables, context)` is the two-argument form. Its context adds the typed `onMutateResult` and a `signal` to upstream's `client`, `meta`, `mutationKey` — and `cancel()` on a mutation, which upstream does not have, cancels it |
 | Callbacks in `setMutationDefaults` | not ported |
 | Devtools | none |
 

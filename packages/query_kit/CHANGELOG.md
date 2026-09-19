@@ -186,6 +186,11 @@ meets first:
   gives a sealed `CombinedResult` — pending, error, or data with a
   `refetchError` — with `retry()`, `refetch()` and an optional `CombineMemo`.
   Stands in for `useQueries`' heterogeneous tuple and `combine` step.
+- `mutationFnWithContext: (variables, context)` — upstream's
+  `MutationFunctionContext` (`client`, `meta`, `mutationKey`) plus a typed
+  `onMutateResult` and a `signal` — and `cancel()` on `Mutation` and
+  `MutationObserver`, which fails the run with a `CancelledError` so the
+  error callbacks roll back. Upstream cannot cancel a mutation.
 - `FetchBehavior` and `FetchContext` are exported so `QueryOptions.behavior`
   is nameable; the observer-ref members and the cache plumbing are
   `@internal`.

@@ -3117,7 +3117,7 @@ suite does not have to go looking:
 | `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; a typed hook replaces it for the cache write and unselected placeholders; `noStructuralSharing()` is `false` and the one spelling of it that turns sharing **off** for what `select` produced too — upstream routes the selection through `replaceData` and so through a function hook as well, which cannot be done here because the hook is typed `StructuralSharing<TQueryData>` and a selection is a `TData`, so a hook of one's own (`(_, next) => next` included) leaves the selection at the default walk, and only the recognised opt-out steps back from it (FI-05, fidelity review 2026-09-12; narrowed by F4, final review 2026-09-12); one limit: the select memo compares its input with `==` (C14's rule), so a data type with value equality — `InfiniteData`, a record, a value class — re-reports the previous selection without re-running the selector, where upstream's `===` memo re-runs it; unselected placeholders use the raw-data sharing hook | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
 | `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
 | `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
-| `MutationFunctionContext` (a mutation function's second argument) | not ported: `MutationFn` takes variables only |  [#14](https://github.com/KoTTi97/flutter_query/issues/14) |
+| `MutationFunctionContext` (a mutation function's second argument) | `MutationFn` still takes variables only; a second option, `mutationFnWithContext`, takes `(variables, MutationFunctionContext<TOnMutateResult>)`. The context holds upstream's `client`, `meta`, `mutationKey` plus a typed `onMutateResult` and a `signal`; `Mutation.cancel()` (port-only) cancels it and fails the run with `CancelledError` |  [#14](https://github.com/KoTTi97/flutter_query/issues/14), [#83](https://github.com/KoTTi97/flutter_query/issues/83) |
 | `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
 | a `Set` of listeners in `Subscribable`, and `delete(listener)` as the way out — so the *function* is the identity and a second registration of it is not a second entry | a `List` of **registrations**: Dart tear-offs are `==`, so a Set let one subscriber's unsubscribe silence another's. The handle returned by `subscribe` is the identity, not the function: it removes its own entry and only its own, it is once-only (a second call removes nothing more, where an unguarded one took another registration of the same function with it), and an entry deactivated by `clear()`, `destroy()` or an earlier removal stays dead — a handle held from before a `destroy()` cannot remove a registration made after it. Upstream has no equivalent of any of this because it has no equal functions | eighth review 2026-09-10; extended by [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R08, `release_observer_regressions_test.dart` OI05/OI16/OI17, `release_query_regressions_test.dart` QER18 |
 | module-level managers | instances the `QueryClient` owns — the `NotifyManager` too since the third review (`NotifyManager.shared` opts back in) | [#19](https://github.com/KoTTi97/flutter_query/issues/19), review 2026-09-09 |
@@ -5900,4 +5900,53 @@ binding `combine_test.dart` (3). Writing the memo test found nothing in the
 library and one thing in the test: an observer nobody subscribes to keeps its
 last result, so a combination over unsubscribed observers is stale — true of
 every read of `currentResult`, and not `combine`'s to fix.
+
+### #83 — what a mutation function may know, and a way to be cancelled
+
+**Asked:** (3) `mutationFn` cannot see what `onMutate` returned, so after an
+optimistic patch it no longer knows the pre-patch state — the integrator's
+planner diffed against the patched cache and sent nothing; (5) a write with a
+ten-second confirmation loop cannot be cancelled when its screen goes away.
+Upstream has neither: its context is `{client, meta, mutationKey}`, and a
+mutation cannot be cancelled. One design, because a signal needs somewhere to
+live and the context is that place.
+
+**How the function gets a context.** (a) Upstream's shape, a second parameter
+on `mutationFn` — Dart has no optional-arity function types, so every
+`(variables) => …` and every tear-off (`mutationFn: api.addTask`) in every
+ported test, example and user's app becomes a type error for the few functions
+that want it. (b) A zone value, `MutationFunctionContext.current` — no
+signature at all, but untyped (`Object? onMutateResult`), invisible in the
+options, and gone the moment the function's work hops zones. (c) **A second
+option, `mutationFnWithContext`**, typed
+`(TVariables, MutationFunctionContext<TOnMutateResult>)`. Chosen: the
+`onMutate` result arrives typed, which is the integrator's actual case, and it
+is visible where mutations are configured. The price is the option-field
+price, lower here than on the query side: `MutationOptions` has no `copyWith`
+and no subclasses, so it was the constructor, the field, the `Defaulted*`
+constructor/field/`==`/`hashCode` and the client's defaulting. One function
+per mutation (asserted); a function with context wins over a
+`setMutationDefaults` one, whose erased signature has no context form.
+
+**What cancelling means.** A cancelled query returns quietly to its previous
+state. A write has none: the request may have reached the server. So
+`Mutation.cancel()` is a **failure** — the signal is cancelled
+(synchronously, as a query's is), the retryer rejects with `CancelledError`,
+no further attempt is made, and `onError`/`onSettled` run. That makes the
+rollback and the invalidation the user already wrote do the right thing, and
+releases a `MutationScope` through the same `finally` as any settlement
+(ADR-0003, which gained a row). Considered and rejected: a silent cancel (the
+optimistic patch would stay with nothing to correct it), and cancelling on
+controller `dispose` (a write the user started should finish; map #1's "a
+mutation outlives its widget" stands). `cancel()` is on `Mutation`,
+`MutationObserver` and `MutationController`, and only ever touches the run
+being shown.
+
+The machinery was all there — `Retryer.cancel`, `QueryCancelToken`, the
+`finally` that owns the scope — which is why this is some sixty lines.
+Tests: `mutation_context_test.dart` (7: the context's five fields, the same
+signal and result across a retry, cancel in flight with rollback and a
+discarded late result, cancel while queued behind a scope, cancel during an
+async `onMutate`, one-function assertion, precedence over key defaults);
+binding `combine_test.dart`'s neighbour `mutation_cancel_test.dart` (1).
 

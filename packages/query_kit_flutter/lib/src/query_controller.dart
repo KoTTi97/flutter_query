@@ -422,6 +422,12 @@ class MutationController<TData, TVariables, TOnMutateResult>
   /// Back to idle, detaching from the mutation being observed.
   void reset() => _observer.reset();
 
+  /// Cancels the run this controller is showing: it fails with a
+  /// `CancelledError` and its error callbacks run — see `Mutation.cancel`.
+  /// Disposing a controller does not cancel; a write the user started
+  /// normally should finish. Call this first when it should not.
+  void cancel() => _observer.cancel();
+
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);

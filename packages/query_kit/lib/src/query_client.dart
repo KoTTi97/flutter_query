@@ -1121,8 +1121,10 @@ class QueryClient {
 
     return DefaultedMutationOptions<TData, TVariables, TOnMutateResult>(
       mutationKey: mutationKey,
-      mutationFn:
-          options.mutationFn ?? _adoptMutationFn<TData, TVariables>(defaults),
+      mutationFn: options.mutationFnWithContext != null
+          ? null
+          : options.mutationFn ?? _adoptMutationFn<TData, TVariables>(defaults),
+      mutationFnWithContext: options.mutationFnWithContext,
       retry: options.retry ?? defaults.retry ?? RetryPolicy.never,
       retryDelay:
           options.retryDelay ?? defaults.retryDelay ?? RetryDelay.defaultValue,

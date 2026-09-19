@@ -165,6 +165,12 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     return mutation.execute(variables);
   }
 
+  /// Cancels the run this observer is showing — see [Mutation.cancel]: it
+  /// fails with a `CancelledError`, its error callbacks run, and this observer
+  /// shows that. Earlier runs this observer has moved on from are not touched,
+  /// and with nothing running this does nothing.
+  void cancel() => _currentMutation?.cancel();
+
   /// Detaches from the mutation being observed and goes back to idle.
   ///
   /// The mutation itself keeps running and still fires its own callbacks; this

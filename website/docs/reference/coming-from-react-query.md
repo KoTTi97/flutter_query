@@ -115,7 +115,7 @@ alternatives — there is no recommended default, pick per situation:
 
 | JS | Here |
 |---|---|
-| `mutationFn: (variables, context) => …` | `mutationFn: (variables) => …` — `MutationFunctionContext` is not ported |
+| `mutationFn: (variables, context) => …` | `mutationFn: (variables) => …`, or `mutationFnWithContext: (variables, context) => …` — two fields, because Dart has no optional-arity function types. The context also carries `onMutateResult` and a `signal` |
 | `mutate(vars, { onSuccess })` | `mutate(vars, callbacks: MutateCallbacks(onSuccess: …))` |
 | `mutateAsync(vars)` | `mutateAsync(vars)` |
 | `onMutate` returning rollback context | `onMutate` returning `TOnMutateResult`, the observer's third type parameter |

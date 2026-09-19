@@ -6,7 +6,11 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 
+import 'cancel_token.dart';
 import 'option_values.dart';
+// A cycle (query_client → here), which Dart allows; the context names the
+// client, as upstream's does.
+import 'query_client.dart';
 import 'query_key.dart';
 
 /// Mutations sharing a scope run one at a time, in the order they started.
@@ -35,6 +39,54 @@ final class MutationScope {
 /// What a mutation runs.
 typedef MutationFn<TData, TVariables> = FutureOr<TData> Function(
     TVariables variables);
+
+/// What a [MutationFnWithContext] is told about the run it is part of.
+///
+/// Upstream's `MutationFunctionContext` holds [client], [meta] and
+/// [mutationKey]. The other two are this port's, asked for by its first real
+/// integration (https://github.com/KoTTi97/flutter_query/issues/83):
+///
+/// * [onMutateResult] — after an optimistic patch the cache no longer says
+///   what was there before; whatever `onMutate` kept does, and a function
+///   that diffs "before" against "wanted" needs it.
+/// * [signal] — cancelled by `Mutation.cancel`, so a transport that can abort
+///   does. A function that ignores it runs on, and its result is discarded.
+@immutable
+final class MutationFunctionContext<TOnMutateResult> {
+  /// Built by the mutation for each run; not for callers.
+  @internal
+  const MutationFunctionContext({
+    required this.client,
+    required this.meta,
+    required this.mutationKey,
+    required this.onMutateResult,
+    required this.signal,
+  });
+
+  /// The client the mutation belongs to.
+  final QueryClient client;
+
+  /// [MutationOptions.meta], with the default applied.
+  final Object? meta;
+
+  /// [MutationOptions.mutationKey].
+  final QueryKey? mutationKey;
+
+  /// What `onMutate` returned for this run — `null` when there is no
+  /// `onMutate`, and for a restored mutation whatever was restored.
+  final TOnMutateResult? onMutateResult;
+
+  /// Cancelled when the run is, and never otherwise. One token for the whole
+  /// run: a cancelled mutation does not retry.
+  final QueryCancelToken signal;
+}
+
+/// What a mutation runs, told about its run: [MutationOptions.mutationFnWithContext].
+typedef MutationFnWithContext<TData, TVariables, TOnMutateResult>
+    = FutureOr<TData> Function(
+  TVariables variables,
+  MutationFunctionContext<TOnMutateResult> context,
+);
 
 /// [MutationOptions.onMutate]: runs before the mutation function, and what
 /// it returns is the `onMutateResult` the other callbacks receive.
@@ -111,6 +163,7 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
   const MutationOptions({
     this.mutationKey,
     this.mutationFn,
+    this.mutationFnWithContext,
     this.onMutate,
     this.onSuccess,
     this.onError,
@@ -121,7 +174,8 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
     this.gcTime,
     this.scope,
     this.meta,
-  });
+  }) : assert(mutationFn == null || mutationFnWithContext == null,
+            'Give a mutation one function: mutationFn or mutationFnWithContext.');
 
   /// Options for a mutation without an [onMutate] step.
   ///
@@ -175,6 +229,19 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
   /// `setMutationDefaults` is used, and a mutation with none fails with
   /// `MissingMutationFunctionError`.
   final MutationFn<TData, TVariables>? mutationFn;
+
+  /// [mutationFn] with a second argument: the [MutationFunctionContext] of the
+  /// run — the client, `meta`, the key, what [onMutate] returned, and a
+  /// `signal` that `Mutation.cancel` cancels. Instead of [mutationFn], never
+  /// beside it; when set it also wins over a function registered with
+  /// `setMutationDefaults`, which has no context form.
+  ///
+  /// A second field rather than a second parameter on [mutationFn], which is
+  /// upstream's shape: Dart has no optional-arity function types, so that
+  /// would make every `(variables) => …` and every tear-off a type error for
+  /// the sake of the few functions that want the context.
+  final MutationFnWithContext<TData, TVariables, TOnMutateResult>?
+      mutationFnWithContext;
 
   /// Runs before the mutation function; its result is handed to [onError] and
   /// [onSettled] so an optimistic update can be rolled back.
@@ -230,6 +297,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   const DefaultedMutationOptions({
     required this.mutationKey,
     required this.mutationFn,
+    required this.mutationFnWithContext,
     required this.onMutate,
     required this.onSuccess,
     required this.onError,
@@ -248,6 +316,11 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// [MutationOptions.mutationFn], with the key's registered default applied.
   /// Still nullable: the mutation fails only when it runs.
   final MutationFn<TData, TVariables>? mutationFn;
+
+  /// [MutationOptions.mutationFnWithContext], carried through as given. When
+  /// set, [mutationFn] is null.
+  final MutationFnWithContext<TData, TVariables, TOnMutateResult>?
+      mutationFnWithContext;
 
   /// [MutationOptions.onMutate], carried through as given.
   ///
@@ -308,6 +381,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
       other is DefaultedMutationOptions<TData, TVariables, TOnMutateResult> &&
           other.mutationKey == mutationKey &&
           other.mutationFn == mutationFn &&
+          other.mutationFnWithContext == mutationFnWithContext &&
           other.onMutate == onMutate &&
           other.onSuccess == onSuccess &&
           other.onError == onError &&
@@ -323,6 +397,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   int get hashCode => Object.hash(
         mutationKey,
         mutationFn,
+        mutationFnWithContext,
         onMutate,
         onSuccess,
         onError,

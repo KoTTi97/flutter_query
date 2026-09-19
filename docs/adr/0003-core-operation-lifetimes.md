@@ -57,6 +57,7 @@ the additional `release_*_regressions_test.dart` suites.
 | Retry policy, retry delay, network mode | Snapshot when each retryer is created. Dynamic callbacks can still read external state at invocation time. |
 | Mutation function and completion hooks | Function read per attempt; hooks read when invoked, with that run's variables/context. |
 | Mutation scope | Fixed for the entire run, through completion hooks. |
+| Mutation cancellation (port-only, #83) | `Mutation.cancel` is a failure, not a revert: the run's signal is cancelled, the retryer rejects with `CancelledError`, error and settled hooks run with that run's variables and `onMutateResult`, and the scope owner releases through the same `finally` as any other settlement. One signal per run, shared by its retries. A late transport result is discarded. No run in flight: no-op. |
 | Resume selection | Uses the existing retryer's network mode; a restored mutation without a retryer uses the impending run's start rule. |
 | Query/Mutation re-add after removal | Removed objects are terminal; reject with StateError. Build a fresh entry instead. Duplicate add of an already cached Mutation is a no-op. |
 | Restored states | Cache build, direct constructors and query setState validate the same payload/presence invariants before installation. Genuine nullable-null payloads remain valid. |

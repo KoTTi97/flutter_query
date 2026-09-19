@@ -7,6 +7,7 @@ import 'dart:collection';
 import 'package:clock/clock.dart';
 import 'package:meta/meta.dart';
 
+import 'cancel_token.dart';
 import 'mutation_options.dart';
 import 'option_values.dart';
 import 'query_client.dart';
@@ -621,6 +622,34 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
 
   bool _removed = false;
 
+  QueryCancelToken? _signal;
+
+  /// Cancels the run in flight: the [MutationFunctionContext.signal] is
+  /// cancelled, no further attempt is made, and the mutation **fails with a
+  /// [CancelledError]** — `onError` and `onSettled` run, so an optimistic
+  /// update is rolled back by the same code that rolls back any other
+  /// failure, and the scope moves on. A mutation that is paused, waiting for
+  /// its scope or still in `onMutate` fails the same way without its function
+  /// ever running. With no run in flight this does nothing.
+  ///
+  /// Port-only; upstream cannot cancel a mutation
+  /// (https://github.com/KoTTi97/flutter_query/issues/83). It is a failure
+  /// and not, as a cancelled query is, a quiet return to the previous state,
+  /// because a write has no previous state to return to: the request may have
+  /// reached the server. What is cancelled is the *waiting*. A function that
+  /// honours the signal aborts its transport; one that does not runs on
+  /// unobserved and its result is discarded. Either way the caller cannot
+  /// know what the server did, which is what `onSettled`'s invalidation is
+  /// for.
+  void cancel() {
+    final retryer = _retryer;
+    if (retryer == null || retryer.isResolved) {
+      return;
+    }
+    _signal?.cancel();
+    retryer.cancel();
+  }
+
   /// Whether a run is in flight — `execute` has been called and its
   /// `finally` has not yet run. A restored `pending` mutation that has not
   /// been continued is not running; it has no retryer to release its scope
@@ -677,12 +706,28 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     // it: a mutation that pauses while its `onMutate` is still running must
     // still be resumable, and `continueMutation` has nothing to continue
     // without it.
+    final signal = QueryCancelToken();
     final retryer = Retryer<TData>(
       // Resolved per attempt, not once: `setOptions` on a running mutation
       // replaces the function, and a retry must call the replacement. A
       // missing function fails *inside* the attempt, so that it reaches the
       // error state and the callbacks like any other failure would.
       fn: () async {
+        final withContext = _options.mutationFnWithContext;
+        if (withContext != null) {
+          // Built per attempt: `onMutate` has run by the first one, and a
+          // retry sees the same result and the same signal.
+          return withContext(
+            variables,
+            MutationFunctionContext<TOnMutateResult>(
+              client: client,
+              meta: _options.meta,
+              mutationKey: _options.mutationKey,
+              onMutateResult: _state.onMutateResult,
+              signal: signal,
+            ),
+          );
+        }
         final mutationFn = _options.mutationFn;
         if (mutationFn == null) {
           throw MissingMutationFunctionError(_options.mutationKey);
@@ -699,7 +744,10 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       // but a caller waiting 30 seconds to be told the function was never
       // there is the certain cost against that unlikely benefit (eighth
       // review, 2026-09-10).
-      retry: _options.mutationFn == null ? RetryPolicy.never : _options.retry,
+      retry:
+          _options.mutationFn == null && _options.mutationFnWithContext == null
+              ? RetryPolicy.never
+              : _options.retry,
       retryDelay: _options.retryDelay,
       networkMode: _options.networkMode,
       onFail: (failureCount, error, stackTrace) =>
@@ -708,6 +756,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       onContinue: () => _dispatch(const MutationContinueAction()),
     );
     _retryer = retryer;
+    _signal = signal;
     // Removed from the cache before this run began — from inside the
     // `MutationAdded` event, say — `destroy` found no retryer to stop, and
     // the run it is about to make would otherwise retry with its full policy
@@ -836,6 +885,7 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
       _cache.onMutationSettled(_erased);
       if (identical(_retryer, retryer)) {
         _retryer = null;
+        _signal = null;
         _execution = null;
       }
       // Only when nobody is watching: `optionalRemove` leaves a pending

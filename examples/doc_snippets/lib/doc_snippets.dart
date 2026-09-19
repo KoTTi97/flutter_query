@@ -68,7 +68,8 @@ class Api {
   Future<Task> getTask(String id, {QueryCancelToken? signal}) async =>
       const Task(id: '1', name: 'Draft the changelog', done: true);
 
-  Future<Task> rename(String id, String name) async =>
+  Future<Task> rename(String id, String name,
+          {String? from, QueryCancelToken? signal}) async =>
       Task(id: id, name: name, done: true);
 
   Future<void> addTask(String name) async {}
@@ -323,6 +324,36 @@ QueryObserverOptions<Task> withoutStructuralSharing(String id) =>
       structuralSharing: noStructuralSharing(), // upstream's `false`
       // <<<
     );
+
+// ---------------------------------------------------------------------------
+// guides/mutations.md — the function's context, and cancelling
+// ---------------------------------------------------------------------------
+
+// >>> guides/mutations.md#function-context
+MutationOptions<Task, String, Task> renameWithContext(
+        QueryClient client, String id) =>
+    MutationOptions(
+      onMutate: (name) {
+        final before = client.getQueryData<Task>(taskKey(id))!;
+        client.setQueryData<Task>(taskKey(id), before.copyWith(name: name));
+        return before;
+      },
+      // The cache already says `name`. What it said before is in the context,
+      // and so is the signal `cancel()` cancels.
+      mutationFnWithContext: (name, context) => api.rename(
+        id,
+        name,
+        from: context.onMutateResult?.name,
+        signal: context.signal,
+      ),
+      onError: (_, __, ___, before) {
+        if (before != null) client.setQueryData<Task>(taskKey(id), before);
+      },
+      onSettled: (_, __, ___, ____, _____) => client.invalidateQueries(
+        filters: QueryFilters(queryKey: taskKey(id)),
+      ),
+    );
+// <<<
 
 // ---------------------------------------------------------------------------
 // reference/troubleshooting.md
