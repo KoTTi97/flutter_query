@@ -325,6 +325,31 @@ QueryObserverOptions<Task> withoutStructuralSharing(String id) =>
     );
 
 // ---------------------------------------------------------------------------
+// reference/troubleshooting.md
+// ---------------------------------------------------------------------------
+
+// >>> reference/troubleshooting.md#pause-polling
+QueryObserverOptions<List<Task>> polledTasks({required bool writing}) =>
+    QueryObserverOptions(
+      queryKey: tasksKey,
+      queryFn: (context) => api.listTasks(signal: context.signal),
+      // A value, not a callback: the widget rebuilds when `writing` flips,
+      // hands over new options, and the observer sees that they changed.
+      refetchInterval: writing
+          ? RefetchInterval.off
+          : const RefetchInterval.every(Duration(seconds: 1)),
+    );
+// <<<
+
+// >>> reference/troubleshooting.md#disconnect
+void disconnect(QueryClient client, QueryKey deviceKey) {
+  final filters = QueryFilters(queryKey: deviceKey);
+  client.cancelQueries(filters: filters).ignore();
+  client.removeQueries(filters: filters);
+}
+// <<<
+
+// ---------------------------------------------------------------------------
 // guides/rebuilds.md
 // ---------------------------------------------------------------------------
 

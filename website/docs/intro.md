@@ -43,7 +43,7 @@ That is the whole differentiator, and it is checkable:
 
 |  |  |
 |---|---|
-| **742** tests in the core | 742 on the Dart VM; 738 also compiled to JavaScript |
+| **752** tests in the core | 752 on the Dart VM; 748 also compiled to JavaScript |
 | **128** tests in the binding | four call styles, each proven to interoperate |
 | **269** tests across the two examples | plus **178** Playwright tests in a real browser |
 | **23** bugs found by porting | none of which a test written from the Dart side would have caught |

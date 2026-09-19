@@ -32,6 +32,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'reference/coming-from-react-query',
         'reference/feature-matrix',
+        'reference/troubleshooting',
         'reference/api',
       ],
     },

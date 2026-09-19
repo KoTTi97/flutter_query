@@ -9,8 +9,8 @@ observers, the client and both caches, with no Flutter dependency.
 The claim it makes is fidelity. Upstream's own test suite is ported case for
 case — 17 suites, **414 of their 536** cases, every omitted case accounted for
 in `test/PORTING_NOTES.md` by name or by the upstream block it belongs to,
-with its category and its reason. The complete core suite has **742** VM tests;
-**738** also run compiled to JavaScript (four barrel checks are VM-only),
+with its category and its reason. The complete core suite has **752** VM tests;
+**748** also run compiled to JavaScript (four barrel checks are VM-only),
 including pre-release ownership regressions, the cases found by the example
 apps and 32 bounded confidence sequences over the public API. Closeness to
 upstream is a tiebreaker, not a goal: where a Dart idiom is better the port
@@ -19,6 +19,9 @@ meets first:
 
 **Pre-release correctness fixes**
 
+- Structural sharing no longer hands a fixed-length or unmodifiable list back
+  growable: the shared copy is fixed-length, and a sealed list with nothing to
+  share is stored as it came (first real integration, 2026-09-19).
 - Canceled or reset query operations cannot overwrite a successor; late signal
   reads stay with their own fetch, and reentrant retry teardown leaves no timer.
 - Mutation scopes remain exclusive through completion callbacks, including

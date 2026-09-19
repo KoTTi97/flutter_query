@@ -28,6 +28,16 @@ defects in them, both fixed. The notes' "Final functional review"
 section lists what was reproduced and deliberately left (ADR-0003's scope
 lock among them).
 
+The [2026-09-19 first real integration](docs/research/br64-integration-findings.md)
+(Eltako Connect, BR64) reported fourteen findings. One was a defect — structural
+sharing handed an unmodifiable list back growable — fixed with its regressions
+in `integration_findings_test.dart` (core 752 VM / 748 browser). The fix was decided twice — strict immutability
+first, which switched element sharing off for sealed lists and broke
+infinite-query page sharing unseen by 750 tests; then instance identity with a
+fixed-length copy, which PORTING_NOTES' I1 argues. One was a
+packaging gap in the docs. The rest are upstream-faithful or beyond upstream,
+and the triage lists them as seeds for the next map.
+
 ## Where the work stands (2026-09-12)
 
 | Phase | State |

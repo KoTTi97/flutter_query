@@ -105,7 +105,7 @@ the same day and only the task manager's has moved since.
 
 | | |
 |---|---|
-| core | **742** Dart VM tests; **738** also compiled to JavaScript (four barrel checks are VM-only). Of those, 414 are ported upstream cases; the rest are the port-only files, the review regressions and 33 bounded confidence sequences |
+| core | **752** Dart VM tests; **748** also compiled to JavaScript (four barrel checks are VM-only). Of those, 414 are ported upstream cases; the rest are the port-only files, the review regressions and 33 bounded confidence sequences |
 | binding | **128** tests, widget tests behind one harness |
 | showcase | **214** widget tests + **169** Playwright tests in Chromium |
 | task manager | **16** widget tests + **9** Playwright tests |

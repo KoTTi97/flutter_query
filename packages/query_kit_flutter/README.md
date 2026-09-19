@@ -288,6 +288,19 @@ three styles have no equivalent: with them, `select` is the tool.
 
 ## Setting up
 
+Nothing is on pub.dev yet. From a checkout, the binding is a path dependency
+**plus an override**, because it asks for a hosted `query_kit`:
+
+```yaml
+dependencies:
+  query_kit_flutter:
+    path: ../flutter_query/packages/query_kit_flutter
+
+dependency_overrides:
+  query_kit:
+    path: ../flutter_query/packages/query_kit
+```
+
 ```dart
 final client = QueryClient();
 

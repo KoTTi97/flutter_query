@@ -12,6 +12,19 @@ Two packages. Add the one that matches what you are building.
 Nothing is on pub.dev at the time of writing. The snippets below are what
 installation looks like once `0.1.0` is published; a git dependency is not an
 alternative, because the binding depends on a hosted `query_kit`.
+
+Until then, a checkout works as a path dependency — with an override, because
+the binding asks for a *hosted* `query_kit` that pub cannot find yet:
+
+```yaml
+dependencies:
+  query_kit_flutter:
+    path: ../flutter_query/packages/query_kit_flutter
+
+dependency_overrides:
+  query_kit:
+    path: ../flutter_query/packages/query_kit
+```
 :::
 
 ## In a Flutter app

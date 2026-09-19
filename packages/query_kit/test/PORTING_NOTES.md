@@ -5782,3 +5782,76 @@ while the resume was awaited).
 
 The core suite is **744 VM / 740 browser tests** (742 + SURF-1 + C-P3-2),
 the binding's **138** (136 + B-1 + the lifetime regression).
+
+## First real integration (2026-09-19)
+
+The library's first use in a real app (Eltako Connect's BR64 devices: list,
+detail, writes, polling, teach-in) came back with fourteen findings. The full
+triage — each finding checked against this code and against upstream at the
+pin, and what becomes of it — is
+[`docs/research/br64-integration-findings.md`](../../../docs/research/br64-integration-findings.md).
+One was a defect in the port; it is fixed here. One was a packaging gap in the
+documentation. The rest are upstream-faithful behaviour, recorded divergences
+(`MutationFunctionContext`, heterogeneous `combine`, `streamedQuery`) or
+requests beyond upstream, and none of them changed code; the traps among them
+(9, 2, 10, 13d, 12, 13c) opened the site's `reference/troubleshooting.md`,
+its samples compiled as twins. Regressions live in
+`integration_findings_test.dart`. No ported assertion changed.
+
+### I1 — structural sharing handed an unmodifiable list back growable
+
+`replaceEqualDeep` rebuilt a partly equal list with `next.toList()`, which is
+growable whatever `next` was. `setQueryData(key, List.unmodifiable([1, 3]))`
+over `[1, 2]` therefore left a list in the cache that `getQueryData(key)!.add`
+could grow behind every observer's back — the hole C20 closed for
+`InfiniteData`, still open for plain lists. Reproduced before anything changed
+(the all-equal case passed, because `previous` is returned whole; the partly
+equal one failed).
+
+Upstream has no counterpart: a JavaScript array has no unmodifiable variant
+that a copy could lose (a frozen array's copy is unfrozen there too, and nobody
+relies on it). So this is decided on Dart's terms, and it was decided twice.
+
+**The constraint.** Dart cannot build an unmodifiable list of `next`'s
+*runtime* element type from inside a generic function: `List<E>.unmodifiable`
+needs `E` statically, an `UnmodifiableListView` built here would be a
+`List<Object?>` and fail `is T`, and `List` has no `asUnmodifiableView` (checked
+against the 3.11 SDK). `toList(growable: false)` does keep the type. So for a
+sealed `next` with a cached instance to swap in, the choice is strict
+immutability *or* instance identity, not both.
+
+**First answer, withdrawn: immutability.** An unmodifiable `next` was never
+copied — shared whole or stored as it came. The integrating team objected, and
+they were right: their architecture seals every DTO list, so this switched
+element sharing off at every level for exactly the apps most careful about
+their data, where the code before the fix had shared (and leaked a growable
+list). Value-equal DTOs would still compare `==`, but the `identical` fast
+path, nested lists and models without `==` all read as new on every poll.
+
+**Second answer, kept: identity.** Better than the unfixed code on both axes
+rather than trading one for the other:
+
+- The copy is growable only if `next` is; a list that cannot grow —
+  fixed-length or unmodifiable — gets a **fixed-length** copy. `add`/`remove`
+  throw, which closes the reported hole; `list[i] = x` remains possible, as it
+  always was for a growable list. Documented in the options guide.
+- When **nothing was swapped in**, the copy would hold exactly `next`'s
+  elements, so a non-growable `next` is returned itself — still sealed. The
+  reported repro (`[1, 2]` → `[1, 3]`, ints) lands here and is fully
+  unmodifiable.
+- A caller who needs a sealed list in every case has the static types to seal
+  it in a `structuralSharing` hook.
+- Whether a list can grow has no read-only test, so the walk writes
+  `list.length = list.length`, which changes nothing. The first answer also
+  needed `list[0] = list[0]` to tell fixed-length from unmodifiable; this one
+  does not.
+
+**The first answer also broke infinite queries, and no existing test
+noticed.** Every fetch seals `pages` and `pageParams`, so the `InfiniteData`
+branch got both lists back unshared and a refetch that changed one page
+replaced all of them. 750 tests stayed green. `an infinite refetch still
+shares its unchanged pages` was written then and stays; under the second
+answer the branch needs no special case — it gets a fixed-length copy and
+`copyWith` seals it, as before.
+
+Counts after: core 752 VM / 748 browser.

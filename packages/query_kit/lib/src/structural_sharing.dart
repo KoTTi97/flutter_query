@@ -24,7 +24,16 @@ import 'infinite_query.dart';
 /// replaced. Maps are not rebuilt entry by entry because Dart cannot construct
 /// a map of the same runtime type from inside a generic function, and a copy
 /// typed `Map<Object?, Object?>` would not be the caller's `Map<String, int>`.
-/// A list can be copied with `toList()`, which keeps its element type.
+/// A list can be copied with `toList()`, which keeps its element type — and
+/// the copy is growable only if the incoming list is. A list that cannot grow
+/// — fixed-length or unmodifiable — comes back as itself when none of its
+/// elements was swapped for a cached instance, and otherwise as a
+/// **fixed-length** copy: no unmodifiable list of its runtime element type can
+/// be built from in here, and keeping the cached instances is what sharing is
+/// for. `add` and `remove` throw on that copy; `list[i] = x` does not. A
+/// caller who needs the cache to hold a sealed list in that case has the
+/// static types to seal it in a `structuralSharing` hook (first integration,
+/// 2026-09-19, I1).
 ///
 /// A set is compared as a multiset under this walk's own relation — never
 /// under the set's equality policy, so a `SplayTreeSet` with a
@@ -80,8 +89,11 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
     final nextLength = next.length;
     // `toList` on the incoming list keeps its runtime element type, which a
     // `List<Object?>` built here would not. Always a copy when not every
-    // element is shared, as upstream's is; the ported suite pins that.
-    final copy = next.toList();
+    // element is shared, as upstream's is; the ported suite pins that. The
+    // copy is growable only if `next` is (first integration, 2026-09-19, I1).
+    final growable = _isGrowable(next);
+    final copy = next.toList(growable: growable);
+    var swapped = false;
     var equalItems = 0;
     Set<Type>? refused;
     for (var i = 0; i < nextLength; i++) {
@@ -115,6 +127,7 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
           (refused ??= <Type>{}).add(type);
           continue;
         }
+        swapped = true;
         if (identical(shared, previousItem)) {
           equalItems++;
         }
@@ -125,8 +138,15 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
         previous is T) {
       return previous as T;
     }
+    // A list that cannot grow may be one its writer sealed. With nothing
+    // swapped in, the copy holds exactly `next`'s elements, so `next` itself
+    // is the better answer: still sealed. With something swapped in, the
+    // fixed-length copy keeps the cached instances and refuses `add`.
+    if (!growable && !swapped) {
+      return next;
+    }
     // `next` is a `T`; its `toList()` usually is too, but a `T` narrower
-    // than a plain growable list (an unmodifiable view, say) is not.
+    // than a plain list (a user's `ListBase`, say) is not.
     return copy is T ? copy as T : next;
   }
 
@@ -167,6 +187,17 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
   // `is T` and not just `==`: `1 == 1.0` holds in Dart, and an `int` handed
   // back where a `double` was asked for would not be the caller's type.
   return previous is T && previous == next ? previous : next;
+}
+
+/// Whether [list] can grow. Dart has no read-only way to ask, so this writes
+/// the length that is already there, which changes nothing.
+bool _isGrowable(List<Object?> list) {
+  try {
+    list.length = list.length;
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 /// The comparison half of [replaceEqualDeep], for the branches that share a

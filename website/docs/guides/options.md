@@ -227,6 +227,15 @@ Lists are shared element by element; maps and sets are kept whole when deeply
 equal; everything else is compared with `==`. **A typed model therefore needs
 `==` and `hashCode`** — without them every fetch produces a new value.
 
+A rebuilt list is growable only if the one that came in was. A list that
+cannot grow — fixed-length or unmodifiable — is rebuilt as a **fixed-length**
+list when a cached instance is swapped into it: keeping those instances is the
+point of sharing, and Dart cannot build an unmodifiable list of your element
+type from inside the walk. `add` and `remove` throw on it; `list[i] = x` does
+not. When nothing is swapped in, your sealed list is stored as it came. If the
+cache must hold a sealed list in every case, seal it in your own
+`structuralSharing` hook, where the element type is known.
+
 A set is compared by its members' `==` and `hashCode`, never by the
 comparator or `equals:` it was built with, so a case-insensitive set still
 reports `'Alpha'` becoming `'alpha'`. That costs about a millisecond and a half
