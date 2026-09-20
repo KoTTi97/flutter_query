@@ -6185,3 +6185,46 @@ needs a handler; one sentence beside "cancelling is failing".
 Tests: `integration_feedback_test.dart` `D:` (5), `combined_result_test.dart`
 (+2). Counts after: core **781** VM / **777** browser.
 
+## Fourth integration report (2026-09-20, against `025dcf7`)
+
+Confirmation by measurement, and one case. With `StructurallyShareable` on the
+four list DTOs and **no** hook, their script measures 24 of 25 — what the hook
+gave; all four hooks are gone, as are `query_result_fold.dart` and
+`combined_query.dart`, some 450 lines. The simulator run passed all nine steps
+including thirty seconds of polling. A `shareWith(T? previous)` they already
+had satisfies the interface: a wider parameter is a valid override.
+
+### G — a list of results plus the query it was derived from: `combineWith`
+
+The case asked for in the last round. A dynamic set of host queries (a
+`QueriesController`) and the device-list query that named the hosts; the
+answer is "all controllers of all hosts, if the adapter is available". They
+had routed the device list in through `keys:`, and named the cost themselves:
+when it fails with nothing to show, the combination is `CombinedData([])` —
+"no controllers" instead of an error.
+
+Options. (a) A `CombinedResult` as a source — declined, as they argued too:
+"a real failure wins" would have to be read across two levels. (b) Their
+`hosts.value.asSource()`: a `QueryResult<List<T>>` standing for the collection
+— which means fabricating a `QueryResult`'s thirteen fields, the thing
+`combine` over a list was built to spare them. (c) **`combineWith(other,
+combiner)`** on the list: `other` and every element are sources of *one*
+combination, `other` first, through the same `_combine`. Chosen: one level,
+nothing fabricated, and `retry()`, `refetch()` and `isFetching` cover
+everything. `combineWith2` for two such sources; past that the arity is
+somebody's next report.
+
+### The rest
+
+- **A `shareWith` that is wrong.** Two ways, and they are not alike. One that
+  returns an equal value sharing nothing loses the saving silently — not
+  detectable without doing the walk twice; documented, with how to measure.
+  One that returns a value **not equal to the incoming one** (`previous`, by
+  mistake) puts stale data in the cache, and the silent ignore that covers a
+  throw would have covered that too. Now a debug assertion, made outside the
+  `try` so it is not swallowed.
+- **Reach:** yes, inside a list and through the cache — `D:`'s fourth case has
+  pinned that since the hook was written.
+
+Counts after: core **783** VM / **779** browser.
+

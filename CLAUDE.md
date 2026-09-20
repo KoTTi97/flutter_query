@@ -53,7 +53,12 @@ surface, its nine-step simulator pass clean — measured that a value class
 wrapping a list is a leaf to structural sharing (0 of 25 instances kept) and
 answered [#86](https://github.com/KoTTi97/flutter_query/issues/86):
 `StructurallyShareable`, `optional()` sources and `combine` over a list
-followed. Core 781 VM / 777 browser, binding 144. The sharing
+followed, and a fourth round confirmed them by measurement (24 of 25 with no
+hook) and brought the one case `combine` still lacked: `combineWith`, a list
+plus the query it was derived from. Core 783 VM / 779 browser, binding 144.
+The app has replaced six of its own building blocks, some 450 lines; what is
+untested is the real BR64 — the 202 confirmation with cancel, and giving up
+after five failures. The sharing
 trade-off stays discussable on [#86](https://github.com/KoTTi97/flutter_query/issues/86);
 the traps opened the site's `reference/troubleshooting.md`.
 

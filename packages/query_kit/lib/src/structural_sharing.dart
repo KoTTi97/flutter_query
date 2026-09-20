@@ -33,6 +33,14 @@ import 'infinite_query.dart';
 /// that reuses what it can of [previous]. A [shareWith] that throws, or
 /// returns something that is not the caller's type, is ignored and the
 /// incoming value kept: sharing is best effort and never an error.
+///
+/// Two ways to get it wrong, and only one is caught. Returning a value that is
+/// **not equal to `this`** — `previous`, by mistake — would put stale data in
+/// the cache; debug builds assert against it. Returning an equal value that
+/// **shares nothing** — a plain copy — is correct and merely useless: nothing
+/// fails, and the saving is lost without a sound. Measure it once: after a
+/// refetch that changed one element, the others should be `identical` to the
+/// instances held before.
 abstract interface class StructurallyShareable<T> {
   /// This value, with every part that [previous] already holds an equal
   /// instance of swapped for that instance.
@@ -220,15 +228,27 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
   if (next is StructurallyShareable<Object?> &&
       previous != null &&
       previous.runtimeType == next.runtimeType) {
+    Object? candidate;
     try {
       // The argument check is the class's own: `shareWith(T previous)` is
       // covariant in `T`, and the same runtime type is what makes it pass.
       final shared = next.shareWith(previous);
       if (shared is T) {
-        return shared;
+        candidate = shared;
       }
     } catch (_) {
       // Best effort: the incoming value stands.
+    }
+    if (candidate != null) {
+      // Outside the `try`, so it is not swallowed with the rest: a result
+      // that is not the incoming value is stale data on its way into the
+      // cache, and that is not a sharing failure to shrug at.
+      assert(
+          candidate == next,
+          '${next.runtimeType}.shareWith returned a value that is not equal '
+          'to the one it was called on. Return `this` with the parts '
+          '`previous` already holds swapped in — never `previous` itself.');
+      return candidate as T;
     }
   }
   return next;

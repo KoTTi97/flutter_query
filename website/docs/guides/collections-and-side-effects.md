@@ -124,6 +124,25 @@ CombinedResult<int> doneCount(List<QueryResult<Task>> tasks) =>
     tasks.combine((tasks) => tasks.where((task) => task.done).length);
 ```
 
+A list **and** a source of another type — typically the query the list of
+queries was derived from — is `combineWith`. It is one combination, not two
+nested ones: the rules read the same, and the deriving query's failure is an
+error rather than an empty list. (`combineWith2` takes two such sources. A
+`CombinedResult` is deliberately not a source itself.)
+
+```dart snippet="guides/collections-and-side-effects.md#combine-with"
+CombinedResult<List<Comment>> allComments(
+  QueryResult<List<Post>> feed,
+  List<QueryResult<List<Comment>>> perPost,
+) =>
+    // One combination, `feed` first: if the query the list was derived from
+    // failed, this is an error — not an empty list.
+    perPost.combineWith(
+      feed,
+      (perPost, feed) => [for (final comments in perPost) ...comments],
+    );
+```
+
 **With a memo, the combiner must be a function of the sources and nothing
 else.** A memo cannot see what a closure captures: a combiner that filters by a
 search text it closes over keeps returning the list for the *old* text until a

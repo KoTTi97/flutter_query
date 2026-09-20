@@ -288,4 +288,56 @@ void main() {
     hosts.destroy();
     client.clear();
   });
+
+  testFakeAsync(
+      'G: a list and the query it was derived from are one combination — the '
+      "deriving query's failure is an error, not an empty list", (time) async {
+    final client = testClient();
+    var adapterDown = true;
+    final adapter = QueryObserver<bool, bool>(
+        client,
+        QueryObserverOptions(
+          queryKey: queryKey(),
+          retry: RetryPolicy.never,
+          queryFn: (_) async => adapterDown ? throw StateError('down') : true,
+        ));
+    final hosts = QueriesObserver<List<String>, List<String>>(client, [
+      for (final host in ['h1', 'h2'])
+        QueryObserverOptions(
+            queryKey: queryKey(), queryFn: (_) async => ['$host-c']),
+    ]);
+    final unsubscribe = [adapter.subscribe((_) {}), hosts.subscribe((_) {})];
+    CombinedResult<List<String>> read() => hosts.currentResult.combineWith(
+        adapter.currentResult,
+        (details, available) => available
+            ? [for (final controllers in details) ...controllers]
+            : const []);
+
+    await time.flushMicrotasks();
+    expect(read(), isA<CombinedError<List<String>>>());
+
+    adapterDown = false;
+    unawaited(read().retry());
+    await time.flushMicrotasks();
+    expect(read().dataOrNull, ['h1-c', 'h2-c']);
+
+    // With no hosts at all the other source still decides.
+    expect(
+        <QueryResult<int>>[]
+            .combineWith(adapter.currentResult, (values, ok) => ok)
+            .dataOrNull,
+        isTrue);
+    expect(
+        [hosts.currentResult.first]
+            .combineWith2(adapter.currentResult, adapter.currentResult,
+                (values, a, b) => values.single.single)
+            .dataOrNull,
+        'h1-c');
+
+    for (final u in unsubscribe) {
+      u();
+    }
+    hosts.destroy();
+    client.clear();
+  });
 }

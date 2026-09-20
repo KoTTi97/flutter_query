@@ -271,6 +271,14 @@ class TaskList implements StructurallyShareable<TaskList> {
 }
 ```
 
+Two ways to get `shareWith` wrong, and only one is caught. Returning a value
+that is not equal to `this` — `previous`, by mistake — would put stale data in
+the cache, and debug builds assert against it. Returning an equal value that
+shares nothing — a plain copy — is correct and useless: nothing fails, and the
+saving is gone without a sound. Measure it once: after a refetch that changed
+one element, the others should be `identical` to what was there before. (One
+that throws is ignored, and the incoming value kept.)
+
 It is found wherever the walk goes — at the top, in a list, in an
 `InfiniteData` page — so one implementation replaces a `structuralSharing`
 hook on every query that holds the type.

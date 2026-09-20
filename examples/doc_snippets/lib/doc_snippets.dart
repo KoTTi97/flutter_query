@@ -395,6 +395,19 @@ CombinedResult<int> doneCount(List<QueryResult<Task>> tasks) =>
     tasks.combine((tasks) => tasks.where((task) => task.done).length);
 // <<<
 
+// >>> guides/collections-and-side-effects.md#combine-with
+CombinedResult<List<Comment>> allComments(
+  QueryResult<List<Post>> feed,
+  List<QueryResult<List<Comment>>> perPost,
+) =>
+    // One combination, `feed` first: if the query the list was derived from
+    // failed, this is an error — not an empty list.
+    perPost.combineWith(
+      feed,
+      (perPost, feed) => [for (final comments in perPost) ...comments],
+    );
+// <<<
+
 // >>> guides/options.md#stop-polling-after-failures
 const RefetchInterval giveUpAfterFive = RefetchInterval.dynamic(_untilFiveFail);
 

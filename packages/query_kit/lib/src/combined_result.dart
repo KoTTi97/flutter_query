@@ -316,6 +316,43 @@ extension CombineQueryResultList<T> on List<QueryResult<T>> {
           () => combiner([for (final source in this) source.dataOrNull as T]),
           memo,
           keys);
+
+  /// This list **and** one more source of another type, as one combination —
+  /// the query a dynamic set of queries was derived from, say: the hosts'
+  /// details and the device list that named the hosts.
+  ///
+  /// One level, not two: [other] and every element are sources of the same
+  /// combination, [other] first, so "a source that failed with nothing to
+  /// show wins" reads the same as in a record, and `retry()`, `refetch()` and
+  /// `isFetching` cover all of them. A [CombinedResult] is deliberately not a
+  /// source itself — nested, the rules would have to be read twice.
+  CombinedResult<R> combineWith<A, R>(
+    QueryResult<A> other,
+    R Function(List<T> values, A other) combiner, {
+    CombineMemo<R>? memo,
+    List<Object?>? keys,
+  }) =>
+      _combine(
+          [other, ...this],
+          () => combiner([for (final source in this) source.dataOrNull as T],
+              other.dataOrNull as A),
+          memo,
+          keys);
+
+  /// [combineWith] for two more sources.
+  CombinedResult<R> combineWith2<A, B, R>(
+    QueryResult<A> first,
+    QueryResult<B> second,
+    R Function(List<T> values, A first, B second) combiner, {
+    CombineMemo<R>? memo,
+    List<Object?>? keys,
+  }) =>
+      _combine(
+          [first, second, ...this],
+          () => combiner([for (final source in this) source.dataOrNull as T],
+              first.dataOrNull as A, second.dataOrNull as B),
+          memo,
+          keys);
 }
 
 // `dataOrNull as A`, not `!`: a nullable `A` holds nulls that are data.

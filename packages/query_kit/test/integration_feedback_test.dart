@@ -168,6 +168,11 @@ void main() {
       client.clear();
     });
 
+    test('a shareWith that returns stale data is an assertion in debug', () {
+      expect(() => replaceEqualDeep<_Stale>(_Stale(1), _Stale(2)),
+          throwsA(isA<AssertionError>()));
+    });
+
     test('a shareWith that throws or returns the wrong type is ignored', () {
       final next = _Broken(1);
       expect(replaceEqualDeep<_Broken>(_Broken(2), next), same(next));
@@ -205,6 +210,13 @@ class _Devices extends _PlainDevices
   @override
   _Devices shareWith(_Devices previous) =>
       _Devices(replaceEqualDeep<List<_Device>>(previous.items, items));
+}
+
+class _Stale implements StructurallyShareable<_Stale> {
+  _Stale(this.value);
+  final int value;
+  @override
+  _Stale shareWith(_Stale previous) => previous;
 }
 
 class _Broken implements StructurallyShareable<_Broken> {
