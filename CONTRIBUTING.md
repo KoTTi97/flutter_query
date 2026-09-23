@@ -107,11 +107,11 @@ for a *hosted* `query_kit` and would otherwise take the published one:
 ```yaml
 dependencies:
   query_kit_flutter:
-    path: ../flutter_query/packages/query_kit_flutter
+    path: ../query_kit/packages/query_kit_flutter
 
 dependency_overrides:
   query_kit:
-    path: ../flutter_query/packages/query_kit
+    path: ../query_kit/packages/query_kit
 ```
 
 ## Conventions that are load-bearing
@@ -147,7 +147,7 @@ semantics.
 ## Where the plan lives
 
 Decisions are tracked as a wayfinder map on
-[issue #1](https://github.com/KoTTi97/flutter_query/issues/1); each fork in the
+[issue #1](https://github.com/KoTTi97/query_kit/issues/1); each fork in the
 road is a sub-issue closed with the options, the answer, and why it beat the
 alternatives. The research behind them is under [`docs/`](docs/). If you are
 proposing something that changes the shape of the API, open an issue first —

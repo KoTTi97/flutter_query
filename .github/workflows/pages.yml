@@ -1,5 +1,5 @@
 # Deploys the documentation site, live demos included, to GitHub Pages at
-# https://kotti97.github.io/flutter_query/ — on a core release tag, or by hand
+# https://kotti97.github.io/query_kit/ — on a core release tag, or by hand
 # from the Actions tab.
 #
 # Prepared, not switched on: until the repository's Pages source is set to

@@ -4,8 +4,8 @@ description: >-
   State mixin and context.query. An AI-coded community port, not affiliated
   with TanStack.
 version: 1.0.0
-repository: https://github.com/KoTTi97/flutter_query
-issue_tracker: https://github.com/KoTTi97/flutter_query/issues
+repository: https://github.com/KoTTi97/query_kit
+issue_tracker: https://github.com/KoTTi97/query_kit/issues
 topics:
   - cache
   - state-management

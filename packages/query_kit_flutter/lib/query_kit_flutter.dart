@@ -110,7 +110,7 @@
 /// [OnlineStatus] for connectivity. Nothing here needs a package beyond
 /// Flutter.
 ///
-/// Guides, recipes and the full reference: https://kotti97.github.io/flutter_query/
+/// Guides, recipes and the full reference: https://kotti97.github.io/query_kit/
 library;
 
 export 'package:query_kit/query_kit.dart';

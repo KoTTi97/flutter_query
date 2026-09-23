@@ -25,7 +25,7 @@ Three rules keep that honest:
    everywhere; port-only behaviour goes in `smoke_test.dart`.
 3. **Nothing is omitted silently.** Every case that is not ported is listed by
    name and category in
-   [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md),
+   [`PORTING_NOTES.md`](https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md),
    with its reason.
 
 The port follows one fixed revision of TanStack Query, **`50680b98c`**, {/* jargon-ok */}

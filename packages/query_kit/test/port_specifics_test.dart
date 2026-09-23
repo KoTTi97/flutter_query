@@ -2,7 +2,7 @@
 ///
 /// Port-only tests live here rather than in a ported suite, so that one Dart
 /// file still maps to one upstream file everywhere else
-/// (https://github.com/KoTTi97/flutter_query/issues/18). Each case names the
+/// (https://github.com/KoTTi97/query_kit/issues/18). Each case names the
 /// finding it pins down.
 library;
 

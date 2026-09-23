@@ -1,5 +1,5 @@
 /// Infinite queries through the four call styles
-/// (https://github.com/KoTTi97/flutter_query/issues/16): the paging half lives
+/// (https://github.com/KoTTi97/query_kit/issues/16): the paging half lives
 /// on the controller, which is what every style hands back.
 library;
 

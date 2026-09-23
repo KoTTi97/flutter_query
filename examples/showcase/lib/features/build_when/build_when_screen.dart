@@ -1,7 +1,7 @@
 /// Port-specific: `buildWhen` on the **eight keyless reads**, each one beside
 /// its unfiltered twin.
 ///
-/// The site's [What rebuilds, and when](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/guides/render-optimizations.md)
+/// The site's [What rebuilds, and when](https://github.com/KoTTi97/query_kit/blob/main/website/docs/guides/render-optimizations.md)
 /// names twelve places that take the predicate: four builders and eight
 /// keyless reads — `watchQuery`, `watchSelectQuery`, `watchInfiniteQuery`,
 /// `watchMutation`, `context.query`, `context.selectQuery`,

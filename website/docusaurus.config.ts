@@ -12,7 +12,7 @@ import dartSource from './plugins/dart-source'
 // Pages project name and every hard-coded link that `baseUrl` does not reach
 // (the announcement bar is raw HTML) are built from it, so renaming the
 // repository is one edit here (plus its GitHub URLs).
-const repository = 'flutter_query'
+const repository = 'query_kit'
 const baseUrl = `/${repository}/`
 
 // The project's AI disclosure, in the one wording used everywhere a reader
@@ -82,7 +82,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/docs',
-          editUrl: 'https://github.com/KoTTi97/flutter_query/tree/main/website/',
+          editUrl: 'https://github.com/KoTTi97/query_kit/tree/main/website/',
           showLastUpdateTime: false,
         },
         blog: false,
@@ -124,7 +124,7 @@ const config: Config = {
         { to: '/docs/project/fidelity', position: 'left', label: 'Fidelity' },
         { to: '/docs/project/credits', position: 'left', label: 'Credits' },
         {
-          href: 'https://github.com/KoTTi97/flutter_query',
+          href: 'https://github.com/KoTTi97/query_kit',
           position: 'right',
           className: 'header-github-link',
           'aria-label': 'GitHub repository',
@@ -149,14 +149,14 @@ const config: Config = {
             { label: 'Credits, and what this is not', to: '/docs/project/credits' },
             { label: 'How fidelity is proven', to: '/docs/project/fidelity' },
             { label: 'How the examples are built', to: '/docs/project/examples' },
-            { label: 'Contributing', href: 'https://github.com/KoTTi97/flutter_query/blob/main/CONTRIBUTING.md' },
-            { label: 'Porting notes', href: 'https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md' },
+            { label: 'Contributing', href: 'https://github.com/KoTTi97/query_kit/blob/main/CONTRIBUTING.md' },
+            { label: 'Porting notes', href: 'https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md' },
           ],
         },
         {
           title: 'Elsewhere',
           items: [
-            { label: 'GitHub', href: 'https://github.com/KoTTi97/flutter_query' },
+            { label: 'GitHub', href: 'https://github.com/KoTTi97/query_kit' },
             { label: 'TanStack Query', href: 'https://tanstack.com/query' },
           ],
         },

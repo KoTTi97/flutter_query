@@ -36,7 +36,7 @@ test('its links go to the whole app and to the feature source', async ({ page })
   )
   await expect(page.getByRole('link', { name: 'View source ↗' })).toHaveAttribute(
     'href',
-    'https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/simple',
+    'https://github.com/KoTTi97/query_kit/tree/main/examples/showcase/lib/features/simple',
   )
 })
 

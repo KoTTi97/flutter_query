@@ -504,8 +504,8 @@ Widget buildWhenSample(String id) => QueryBuilder<Task>(
 // <<<
 
 /// The same predicate on a keyless read: one implementation for all twelve
-/// places that take one (C49, https://github.com/KoTTi97/flutter_query/issues/55,
-/// and its mutation follow-on, https://github.com/KoTTi97/flutter_query/issues/67).
+/// places that take one (C49, https://github.com/KoTTi97/query_kit/issues/55,
+/// and its mutation follow-on, https://github.com/KoTTi97/query_kit/issues/67).
 QueryResult<Task> keylessBuildWhenSample(BuildContext context, String id) {
   // >>> guides/render-optimizations.md#build-when-keyless
   final task = context.query(
@@ -571,7 +571,7 @@ MutationOptions<Task, String, Task?> renameOptimistically(
 // <<<
 
 /// The mutation reads take the same predicate, and it is the only narrowing a
-/// mutation reader has (https://github.com/KoTTi97/flutter_query/issues/67).
+/// mutation reader has (https://github.com/KoTTi97/query_kit/issues/67).
 MutationController<void, String, void> mutationBuildWhenSample(
   BuildContext context,
   String id,

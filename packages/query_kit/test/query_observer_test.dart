@@ -816,7 +816,7 @@ void main() {
           queryKey: key,
           queryFn: (_) => data,
           // `noStructuralSharing()` is upstream's `structuralSharing: false`
-          // (https://github.com/KoTTi97/flutter_query/issues/12). A hook of
+          // (https://github.com/KoTTi97/query_kit/issues/12). A hook of
           // one's own, even `(_, next) => next`, leaves the selection shared:
           // only the recognised opt-out reaches it (F4, 2026-09-12).
           structuralSharing: noStructuralSharing(),

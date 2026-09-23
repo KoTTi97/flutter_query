@@ -49,7 +49,7 @@ the web:
 | `?embed=1` | one feature alone: the route in the hash and nothing beneath it — no back button, no way into the catalogue; an id that is no feature shows "Unknown demo" |
 | `?semantics=1` | the semantics tree on from the first frame, as `--dart-define=E2E=true` does, for screen readers and for the site's Playwright suite |
 
-So the site frames `/flutter_query/demo/showcase/?embed=1&semantics=1#/optimistic-updates`.
+So the site frames `/query_kit/demo/showcase/?embed=1&semantics=1#/optimistic-updates`.
 `tool/build_demos.sh` (or `npm run demos` in `website/`) builds this app and
 the task manager that way into `website/static/demo/`, which is gitignored;
 the site's `<LiveDemo feature="…">` component loads one on a click. The
@@ -154,7 +154,7 @@ Not here, because the port does not have them: hydration and persisters,
 `useQueries`' `combine` option as upstream spells it (the homogeneous list is
 `query-collections` above, and what several reads of different types amount
 to together is `combine`), `streamedQuery`, SSR. The reasons are in the core's
-[PORTING_NOTES](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
+[PORTING_NOTES](https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md).
 
 No screen presents one of the four call styles as the default; across the
 catalogue each is used in its turn.

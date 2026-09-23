@@ -173,7 +173,7 @@ jobs:
   # The built site in a real Chromium: the `<LiveDemo>` on a doc page loads
   # on its click and its screen fetches from the in-memory backend, and every
   # showcase feature — the list is the catalogue's own, so none can be
-  # missed — boots at its embed URL. Served as it ships, under /flutter_query/.
+  # missed — boots at its embed URL. Served as it ships, under /query_kit/.
   website-e2e:
     needs: website
     runs-on: ubuntu-latest

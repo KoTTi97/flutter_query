@@ -25,7 +25,7 @@ It is also a **port** of TanStack Query, published with gratitude under
 TanStack Query's MIT licence, and it is **not affiliated with, endorsed by, or
 connected in any way to** Tanner Linsley, the TanStack team, or the TanStack
 organisation. Problems with this package belong in
-[this repository's issues](https://github.com/KoTTi97/flutter_query/issues),
+[this repository's issues](https://github.com/KoTTi97/query_kit/issues),
 never theirs. [Credits, and what this is not](project/credits.md) says more.
 :::
 

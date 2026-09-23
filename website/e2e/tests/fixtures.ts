@@ -6,7 +6,7 @@ import features from '../../src/components/LiveDemo/showcase-features.json' with
 
 export { expect, test } from '@playwright/test'
 
-export const BASE = '/flutter_query/'
+export const BASE = '/query_kit/'
 
 export type Feature = { id: string; title: string; summary: string }
 

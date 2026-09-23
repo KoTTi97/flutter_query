@@ -192,7 +192,7 @@ int _selfTest() {
     'see C17 for why': 'finding C',
     'worked off by map #49': 'map',
     'as ADR-0002 decides': 'ADR',
-    'github.com/KoTTi97/flutter_query/issues/58': 'issue link',
+    'github.com/KoTTi97/query_kit/issues/58': 'issue link',
     'upstream at 50680b98c': 'upstream pin',
     'LIB-3 covers it': 'finding ID',
     'MU-2, AR-1 and QE-4': 'finding ID',

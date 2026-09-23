@@ -165,7 +165,7 @@ drifted apart in six places — a 404's wording, a non-boolean `reminder`, an
 empty or missing `name`, a new task's server-owned fields, a search's
 whitespace, and every write to an id the backend does not have — and every
 widget test that touched one of those was asserting fiction
-([#54](https://github.com/KoTTi97/flutter_query/issues/54)). Where the two
+([#54](https://github.com/KoTTi97/query_kit/issues/54)). Where the two
 differ *deliberately* — the seed is three rows here and five on the server, for
 reasons the case gives — the case asserts the difference instead of hiding it.
 

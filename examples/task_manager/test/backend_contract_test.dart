@@ -6,7 +6,7 @@
 /// The acceptance suite drives the real app against `FakeBackend`, and every
 /// one of its assertions is worth exactly as much as the fake's likeness to
 /// `server/server.ts`. This file is where a drift shows — it found six
-/// (https://github.com/KoTTi97/flutter_query/issues/54).
+/// (https://github.com/KoTTi97/query_kit/issues/54).
 ///
 /// Where the two *deliberately* differ, the case says so and asserts the
 /// difference rather than papering over it; the seed is the one such place.

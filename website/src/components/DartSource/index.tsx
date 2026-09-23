@@ -28,7 +28,7 @@ export type DartSourceProps = {
 
 // Line links point at the commit the site was built from
 // (`customFields.sourceRevision`), so the lines they name are the lines shown.
-const repository = 'https://github.com/KoTTi97/flutter_query/blob'
+const repository = 'https://github.com/KoTTi97/query_kit/blob'
 
 function find(
   lines: string[],

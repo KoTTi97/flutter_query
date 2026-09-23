@@ -52,6 +52,6 @@ body:
       options:
         - label: >-
             I checked
-            [PORTING_NOTES.md](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md)
+            [PORTING_NOTES.md](https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md)
             and this is not one of the recorded divergences or omissions.
           required: true

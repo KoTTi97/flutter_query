@@ -1,6 +1,6 @@
 /// The MVP acceptance suite: one widget test per row of the demo's feature
 /// checklist, against the fake backend
-/// (https://github.com/KoTTi97/flutter_query/issues/24).
+/// (https://github.com/KoTTi97/query_kit/issues/24).
 ///
 /// The rows are the feature checklist in this example's README, itemised the
 /// way the original port design did (`git show 69c71d4:flutter-port/DESIGN.md`,

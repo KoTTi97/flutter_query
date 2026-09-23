@@ -1,5 +1,5 @@
 /// The acceptance bar transferred from
-/// https://github.com/KoTTi97/flutter_query/issues/23: all four call styles
+/// https://github.com/KoTTi97/query_kit/issues/23: all four call styles
 /// reaching the same query in one app, an options change handled without
 /// recreating the observer, observers released when the last reader goes away,
 /// and `context.query`'s per-key rebuild granularity — each proven by a test

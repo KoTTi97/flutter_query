@@ -187,7 +187,7 @@ finish() {
 
 TOTAL_STAGES=9
 
-REPO="KoTTi97/flutter_query"
+REPO="KoTTi97/query_kit"
 CORE_PKG="query_kit"
 CORE_DIR="packages/query_kit"
 BINDING_PKG="query_kit_flutter"

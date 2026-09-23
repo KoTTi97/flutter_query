@@ -43,7 +43,7 @@ package README has a quick start.
 The documentation site — getting started, a guide per concept, examples, the
 JavaScript-to-Dart name map and troubleshooting — is built from
 [`website/`](website). It will be published at
-<https://kotti97.github.io/flutter_query/>; until then, run it locally:
+<https://kotti97.github.io/query_kit/>; until then, run it locally:
 
 ```bash
 cd website && npm ci && npm start
@@ -76,7 +76,7 @@ by, reviewed by, or connected in any way to* Tanner Linsley, the TanStack team,
 or the TanStack organisation. They have not seen it and are not responsible for
 it. **Please do not take problems with this package to them** — bugs, questions
 and complaints belong in
-[this repository's issues](https://github.com/KoTTi97/flutter_query/issues).
+[this repository's issues](https://github.com/KoTTi97/query_kit/issues).
 
 ## Repository
 
@@ -129,7 +129,7 @@ cd examples/doc_snippets && flutter test
 The examples' READMEs say how to run them against their backends and how to
 run their end-to-end suites. The project was planned as wayfinder maps on
 GitHub issues, starting with
-[issue #1](https://github.com/KoTTi97/flutter_query/issues/1); the one rule
+[issue #1](https://github.com/KoTTi97/query_kit/issues/1); the one rule
 that shaped everything is that closeness to upstream is a tiebreaker, not a
 goal — where a Dart or Flutter idiom is better, the port diverges and writes
 down why.

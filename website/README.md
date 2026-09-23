@@ -7,7 +7,7 @@ maintainer's call.
 
 ```bash
 npm ci
-npm start          # http://localhost:3000/flutter_query/, hot reload
+npm start          # http://localhost:3000/query_kit/, hot reload
 npm run build      # what CI runs
 npm run serve      # serve the built output
 ```
@@ -60,7 +60,7 @@ of building it in CI.
 - **Every Dart sample appears in `examples/doc_snippets/`**, compiled and
   analyzed at `--fatal-infos` in CI — and **a test checks that it still
   matches the page**, which nothing did until
-  [#72](https://github.com/KoTTi97/flutter_query/issues/72). A twin marks the
+  [#72](https://github.com/KoTTi97/query_kit/issues/72). A twin marks the
   region a page shows, and the fence names it:
 
   ```dart
@@ -118,7 +118,7 @@ of building it in CI.
 
 `npm audit` reports 26 advisories (8 moderate, 18 high) on a clean `npm ci` at
 Docusaurus 3.10.2, and that is the state this repository accepts for now —
-decided in [C30](https://github.com/KoTTi97/flutter_query/issues/44) and
+decided in [C30](https://github.com/KoTTi97/query_kit/issues/44) and
 re-checked on 2026-09-12. What was checked:
 
 - Every one of them is transitive and belongs to the **build** toolchain —
@@ -142,7 +142,7 @@ different matter and blocks.
 
 `npm run demos && npm run build` produces a static `build/` directory;
 anything that serves files will do. For GitHub Pages, `url` and `baseUrl` in
-the config already point at `https://kotti97.github.io/flutter_query/` — the
+the config already point at `https://kotti97.github.io/query_kit/` — the
 path is the repository's name, written once as a constant at the top of
 `docusaurus.config.ts`, so a rename is one edit there — and
 `.github/workflows/pages.yml` builds and deploys it on a `query_kit-v*` tag or
