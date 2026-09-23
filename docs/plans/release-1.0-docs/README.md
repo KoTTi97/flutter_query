@@ -29,6 +29,7 @@ starts once C3 has fixed the sidebar and slugs.
 | C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | open |
 | C7 | API reference pages, differences page, troubleshooting cleanup | | 3 | open |
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | open |
+| C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | open |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | open |
 
 ## Decisions
@@ -102,6 +103,9 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B13 | C3 review | every titled admonition rendered as plain `:::danger` text (Docusaurus v4 syntax) — AI notice box included | fixed `3b4eb53` |
 | B14 | C3 review | `/docs/` 404; see-through mobile menu; 8 wrong facts in moved/new pages (StaleTime.static vs invalidation, cancelRefetch, NetworkMode is an enum, …) | fixed `3b4eb53` |
 | B15 | C3 review | landing page shows stale test counts / bug count | open → C10 |
+| B16 | C5 | `tool/build_demos.sh` can't read `baseUrl` since C1 made it a constant — CI demo build broken | open → C11 |
+| B17 | C5 | showcase sources shown on the site carry review IDs/issue links, one on screen ("since C49") | open → C11 |
+| B18 | C5 | stale showcase texts: "combine is not ported", missing spec reference, pagination/offline notices overpromise | open → C11 |
 
 ## Log
 
