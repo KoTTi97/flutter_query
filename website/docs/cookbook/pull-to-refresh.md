@@ -1,7 +1,6 @@
 ---
 title: Pull to refresh
 description: A RefreshIndicator whose spinner lasts exactly as long as the refetch, keeps the list on screen when the refresh fails, and works on an empty list too.
-sidebar_position: 3
 ---
 
 # Pull to refresh

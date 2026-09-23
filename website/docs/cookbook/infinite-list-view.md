@@ -1,7 +1,6 @@
 ---
 title: An infinite list view
 description: A ListView that loads the next page as the user nears the end — once per page, with a footer that shows progress, a retry and the end of the list, and pull-to-refresh on top.
-sidebar_position: 8
 ---
 
 # An infinite list view

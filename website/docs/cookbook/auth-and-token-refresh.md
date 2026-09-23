@@ -1,7 +1,6 @@
 ---
 title: Auth and token refresh
 description: Refresh an expired token once for every request that hit it, never retry a refused request, and give each signed-in user a cache of their own.
-sidebar_position: 2
 ---
 
 # Auth and token refresh
@@ -17,7 +16,7 @@ the transport, and the cache boundary sits in the widget tree.
 
 ## The finished code
 
-The tokens and the refresh call, on a dio of their own:
+The tokens and the refresh call, on a `Dio` without the interceptor below:
 
 ```dart snippet="prose-only: needs dio, which neither published package may depend on" title="lib/data/token_store.dart"
 import 'package:dio/dio.dart';
@@ -25,17 +24,17 @@ import 'package:dio/dio.dart';
 import '../app/signed_in_shell.dart'; // signedInUser
 
 class TokenStore {
-  TokenStore({required this.refreshDio});
+  TokenStore({required this.plainDio});
 
-  /// A Dio of its own, without the interceptor below: a refresh that
-  /// answers 401 must not try to refresh itself.
-  final Dio refreshDio;
+  /// A Dio without the interceptor below, for the refresh and for the
+  /// repeated request: neither may run into the interceptor again.
+  final Dio plainDio;
 
   String? accessToken;
   String? refreshToken;
 
   Future<void> refresh() async {
-    final response = await refreshDio.post<Map<String, Object?>>(
+    final response = await plainDio.post<Map<String, Object?>>(
       '/auth/refresh',
       data: <String, Object?>{'refreshToken': refreshToken},
     );
@@ -62,10 +61,9 @@ import 'token_store.dart';
 /// and repeats the request. Queued: while one refresh runs, the other
 /// requests that failed wait for it instead of refreshing again.
 class AuthInterceptor extends QueuedInterceptor {
-  AuthInterceptor(this._tokens, this._dio);
+  AuthInterceptor(this._tokens);
 
   final TokenStore _tokens;
-  final Dio _dio;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -80,22 +78,31 @@ class AuthInterceptor extends QueuedInterceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    // Every path below ends in exactly one handler call: a queued
+    // interceptor waits for it before it takes the next error.
+    if (err.response?.statusCode != 401) return handler.next(err);
     final request = err.requestOptions;
-    if (err.response?.statusCode != 401 || request.extra['retried'] == true) {
-      return handler.next(err);
-    }
-    try {
-      // Another request may have refreshed while this one waited its turn.
-      final sentWith = request.headers['Authorization'];
-      if (sentWith == 'Bearer ${_tokens.accessToken}') {
+    // Another request may have refreshed while this one waited its turn.
+    if (request.headers['Authorization'] == 'Bearer ${_tokens.accessToken}') {
+      try {
         await _tokens.refresh();
+      } on Object catch (error) {
+        // Refused, or an answer without tokens: the session is over. No
+        // answer at all (no network) leaves the user signed in.
+        if (error is! DioException || error.response != null) {
+          _tokens.signOut();
+        }
+        return handler.next(err);
       }
-      request.extra['retried'] = true;
+    }
+    final token = _tokens.accessToken;
+    if (token == null) return handler.next(err); // signed out meanwhile
+    request.headers['Authorization'] = 'Bearer $token';
+    try {
       // The same options, so the same CancelToken: a query cancelled during
       // the refresh still aborts the repeat.
-      handler.resolve(await _dio.fetch<Object?>(request));
+      handler.resolve(await _tokens.plainDio.fetch<Object?>(request));
     } on DioException catch (error) {
-      if (error.requestOptions.path == '/auth/refresh') _tokens.signOut();
       handler.next(error);
     }
   }
@@ -103,8 +110,8 @@ class AuthInterceptor extends QueuedInterceptor {
 
 Dio authenticatedDio(String baseUrl) {
   final dio = Dio(BaseOptions(baseUrl: baseUrl));
-  final tokens = TokenStore(refreshDio: Dio(BaseOptions(baseUrl: baseUrl)));
-  dio.interceptors.add(AuthInterceptor(tokens, dio));
+  final tokens = TokenStore(plainDio: Dio(BaseOptions(baseUrl: baseUrl)));
+  dio.interceptors.add(AuthInterceptor(tokens));
   return dio;
 }
 ```
@@ -163,16 +170,26 @@ class SignedInShell extends StatelessWidget {
    The query sees one slow success, not a failure and a retry, so no screen
    flashes an error and no error callback fires.
 2. **`QueuedInterceptor` makes the refresh happen once.** Its `onError` calls
-   run one after another. The first 401 refreshes; the ones queued behind it
+   run one after another: the next starts only when the one before has called
+   `next` or `resolve`. The first 401 refreshes; the ones queued behind it
    find that their request went out with an older token than the store now
    holds, skip the refresh and repeat at once.
-3. **A request is repeated once.** `extra['retried']` marks the repeat, so a
-   server that answers 401 to a fresh token does not loop.
-4. **The refresh has its own `Dio`**, without the interceptor. A 401 from
-   `/auth/refresh` itself must end the session, not start another refresh.
-5. **The repeat keeps its `CancelToken`.** `_dio.fetch(request)` sends the same
-   `RequestOptions`, so a query the library cancels during the refresh still
-   aborts the repeated request.
+3. **The repeat goes out on the plain `Dio`.** Sent through the intercepted
+   `Dio`, a repeat that failed again — a second 401, a 500, a cancel — would
+   queue its error behind the `onError` that is waiting for it, and both would
+   wait for ever, with every later error on that `Dio` queued behind them.
+   On the plain `Dio` a failed repeat simply throws, and its error is passed
+   on. That also makes a request repeat at most once: the repeat never meets
+   this interceptor.
+4. **A failed refresh ends the session, once.** A refresh the server refused
+   (or answered without tokens) signs out and passes the original 401 on; it
+   never starts another refresh. A refresh that got no answer — no network —
+   passes the 401 on and leaves the user signed in.
+5. **The repeat keeps its `CancelToken`.** `fetch(request)` sends the same
+   `RequestOptions`, with the new token set by hand, so a query the library
+   cancels during the refresh still aborts the repeated request. Other
+   interceptors on the main `Dio` (logging, say) do not see the repeat; add
+   them to the plain one too if they must.
 6. **`retryTransientFailures` refuses 4xx.** The library's default retries a
    failed query three times with a growing delay, whatever the error. A 403 or
    a 404 will be a 403 or a 404 again; the policy returns `false` for any
@@ -207,8 +224,10 @@ screen still on the tree would find its entry gone and fetch it again — with
 no token. So the signed-in screens go first, the frame that removes them runs,
 and only then is the cache cleared.
 
-A mutation that was still pending is dropped by `clear()` and fails; its
-`onError` runs a few microtasks later. If that callback writes to the cache —
+A mutation that was still pending is dropped by `clear()`: a paused one fails
+with a `CancelledError`, one whose request was already on its way settles with
+that request's outcome, and either way its callbacks run a few microtasks
+later. If that callback writes to the cache —
 an optimistic update's rollback does — it re-creates the entry it names. Where
 that matters, call `clear()` once more after the next frame.
 

@@ -235,6 +235,174 @@ void main() {
     await tester.pump(api.latency);
     expect(api.calls, <String>['list ke']);
   });
+
+  test('the retry policy repeats transient failures only', () {
+    bool retries(int count, Object error) =>
+        retryTransientFailures.shouldRetry(count, error, StackTrace.empty);
+    expect(retries(0, const ApiException('down', status: 503)), isTrue);
+    expect(retries(0, const ApiException('timeout')), isTrue);
+    expect(retries(2, StateError('anything')), isTrue);
+    expect(retries(3, const ApiException('down', status: 503)), isFalse);
+    expect(retries(0, const ApiException('gone', status: 404)), isFalse);
+    expect(retries(0, const ApiException('no', status: 401)), isFalse);
+  });
+
+  screenTest(
+      'a failed pull keeps the list, with a banner', const ProductListScreen(),
+      (tester, api) async {
+    await tester.pump(api.latency);
+    api.failNext = const ApiException('The server is down');
+
+    await tester.fling(find.text('Kettle'), const Offset(0, 400), 1000);
+    await tester.pump(); // the indicator starts …
+    await tester.pump(const Duration(seconds: 1)); // … and calls onRefresh
+    expect(api.calls, <String>['list ', 'list ']);
+    await tester.pump(api.latency);
+    await tester.pumpAndSettle();
+    expect(find.text('Kettle'), findsOneWidget);
+    expect(
+      find.text('Could not refresh: The server is down'),
+      findsOneWidget,
+    );
+    expect(find.byType(RefreshProgressIndicator), findsNothing);
+  });
+
+  screenTest('a detail nobody seeded pulls from a cached list',
+      const ProductListScreen(), (tester, api) async {
+    await tester.pump(api.latency);
+    final client =
+        QueryClientProvider.of(tester.element(find.byType(ProductListScreen)));
+    // As if the pushed entry had been garbage-collected.
+    client.removeQueries(
+      filters: QueryFilters(queryKey: ProductKeys.detail('p1'), exact: true),
+    );
+
+    await tester.tap(find.text('Kettle'));
+    await tester.pumpAndSettle();
+    expect(find.text('€39.00'), findsOneWidget);
+    expect(api.calls, <String>['list ']); // fresh as its list: no 'get p1'
+    expect(
+      client.getQueryState<Product>(ProductKeys.detail('p1'))?.dataUpdatedAt,
+      client.getQueryState<List<Product>>(ProductKeys.list())?.dataUpdatedAt,
+    );
+  });
+
+  screenTest('a newer needle cancels the older one and keeps its rows',
+      const ProductSearchScreen(), (tester, api) async {
+    final client = QueryClientProvider.of(
+      tester.element(find.byType(ProductSearchScreen)),
+    );
+    // Slower than the debounce, so a request can be overtaken.
+    api.latency = const Duration(seconds: 1);
+    await tester.enterText(find.byType(TextField), 'ke');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(api.latency);
+    expect(find.text('Kettle'), findsOneWidget);
+
+    // 'ket' goes out; 'kett' replaces it before it answers.
+    await tester.enterText(find.byType(TextField), 'ket');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(); // the rebuild re-keys the read
+    await tester.enterText(find.byType(TextField), 'kett');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    final ket = client.getQueryState<List<Product>>(
+      ProductKeys.list(search: 'ket'),
+    );
+    expect(ket?.fetchStatus, FetchStatus.idle); // cancelled, put back
+    expect(ket?.hasData, isFalse);
+    // 'ke''s rows stay, dimmed, while 'kett' loads.
+    expect(find.text('Kettle'), findsOneWidget);
+    expect(
+      tester.widget<Opacity>(find.byType(Opacity)).opacity,
+      0.5,
+    );
+
+    await tester.pump(api.latency);
+    expect(api.calls, <String>['list ke', 'list ket', 'list kett']);
+    expect(
+      client.getQueryData<List<Product>>(ProductKeys.list(search: 'ket')),
+      isNull, // the late answer was dropped
+    );
+    expect(tester.widget<Opacity>(find.byType(Opacity)).opacity, 1);
+  });
+
+  group('the global error snackbar', () {
+    Future<(QueryClient, FakeProductApi)> pumpApp(
+      WidgetTester tester,
+      Widget home,
+    ) async {
+      final api = FakeProductApi();
+      final client = createQueryClient()
+        ..setDefaultOptions(
+          const DefaultOptions(
+            queries: QueryDefaults(retry: RetryPolicy.never),
+          ),
+        );
+      await tester.pumpWidget(ProductApiScope(
+        api: api,
+        child: QueryClientProvider(
+          client: client,
+          child: MaterialApp(
+            scaffoldMessengerKey: scaffoldMessengerKey,
+            home: home,
+          ),
+        ),
+      ));
+      return (client, api);
+    }
+
+    Future<void> tearDownApp(WidgetTester tester, QueryClient client) async {
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      client.clear();
+      await tester.pump();
+      client.clear();
+    }
+
+    testWidgets('toasts a failed refresh, not a failed first load',
+        (tester) async {
+      final (client, api) = await pumpApp(tester, const ProductListScreen());
+      api.failNext = const ApiException('The server is down');
+      await tester.pump(api.latency);
+      await tester.pump();
+      expect(find.byType(SnackBar), findsNothing);
+
+      client.refetchQueries().ignore();
+      await tester.pump(api.latency);
+      await tester.pump();
+      expect(find.text('Kettle'), findsOneWidget);
+      api.failNext = const ApiException('The server is down');
+      client.refetchQueries().ignore();
+      await tester.pump(api.latency);
+      await tester.pump();
+      // The toast — and, the trap on the pull-to-refresh page, the list's
+      // own banner saying the same.
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text('Could not refresh: The server is down'),
+        ),
+        findsOneWidget,
+      );
+      await tearDownApp(tester, client);
+    });
+
+    testWidgets('stays quiet for a query marked silent', (tester) async {
+      final (client, api) = await pumpApp(tester, const SizedBox());
+      final observer = client.observe(quietProductListQuery(api));
+      final unsubscribe = observer.subscribe((_) {});
+      await tester.pump(api.latency);
+      api.failNext = const ApiException('The server is down');
+      observer.refetch().ignore();
+      await tester.pump(api.latency);
+      await tester.pump();
+      expect(observer.currentResult, isA<QueryError<List<Product>>>());
+      expect(find.byType(SnackBar), findsNothing);
+      unsubscribe();
+      await tearDownApp(tester, client);
+    });
+  });
 }
 
 /// Opens the form and shows what it popped with.

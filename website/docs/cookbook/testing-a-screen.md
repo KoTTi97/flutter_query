@@ -1,7 +1,6 @@
 ---
 title: Testing a screen
 description: Widget tests for screens that read queries — a fake API with latency, a harness with the teardown built in, and tests for loading, errors, seeded data, staleness and a refused save.
-sidebar_position: 10
 ---
 
 # Testing a screen
@@ -264,10 +263,12 @@ screenTest('a refused save shows the server\'s field errors',
 - **A route transition shows both screens.** Right after a tap, the old and
   the new route are both on the tree. `pumpAndSettle` after the tap lets the
   transition finish before a finder looks for a single match.
-- **Values in the fake are read when it answers.** `api.products = []` after
-  `pumpWidget` still takes effect for the first request, because the fake
-  builds its answer after the latency. Set it before if a test needs it to
-  count from the very first call.
+- **Values in the fake are read when it answers.** `api.products = []` and
+  `api.failNext` set in the test body still reach the first request, which
+  `pumpWidget` has already started, because the fake builds its answer after
+  the latency. `latency` is not: the first request is already waiting with
+  the old one. A test that needs another latency from the start gets it from
+  a harness parameter.
 
 ## Variations
 

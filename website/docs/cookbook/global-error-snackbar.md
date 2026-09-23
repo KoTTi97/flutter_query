@@ -1,7 +1,6 @@
 ---
 title: A global error snackbar
 description: One place that turns failed background refreshes and failed saves into a SnackBar — once per failure, never for what a screen already shows, and with a per-query way out.
-sidebar_position: 7
 ---
 
 # A global error snackbar

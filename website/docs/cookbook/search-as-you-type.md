@@ -1,7 +1,6 @@
 ---
 title: Search as you type
 description: A debounced search box that asks the server nothing while empty, cancels the request a newer keystroke replaced, and keeps the last results on screen while the next arrive.
-sidebar_position: 4
 ---
 
 # Search as you type
@@ -150,9 +149,10 @@ delay.
 - **Debouncing in the query function does not work.** A `Future.delayed`
   before the request makes every keystroke a fetch that waits, then runs; the
   entries still pile up, one per letter. Debounce the *key*.
-- **A query function that ignores the signal is not aborted.** The library
-  still stops listening to it — the entry goes back to where it was, and the
-  late answer is dropped — but the request runs to the end on the server. Pass
+- **A query function that ignores the signal is not cancelled.** When the
+  key moves on, the library cancels the old fetch only if its function read
+  `context.signal`. One that never read it is left to finish: the request runs
+  to the end and its answer is cached under the old term. Pass
   `context.signal` to the transport.
 - **Trim before comparing.** `'ket '` and `'ket'` are two keys and two requests
   for the same results; the screen trims the term once, where it sets

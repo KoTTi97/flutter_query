@@ -1,7 +1,6 @@
 ---
 title: List to detail, seeded
 description: Open a detail screen with the data the list already has — no spinner, no second request — and still refetch it when it is old.
-sidebar_position: 5
 ---
 
 # List to detail, seeded

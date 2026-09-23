@@ -1,7 +1,6 @@
 ---
 title: Lifecycle and connectivity wiring
 description: One main.dart that tells the client when the app is in front and when the network is there — connectivity_plus, a reachability probe, a calmer focus refetch and a debug offline switch.
-sidebar_position: 9
 ---
 
 # Lifecycle and connectivity wiring
@@ -177,8 +176,10 @@ class DebugOnlineSwitch extends StatelessWidget {
 }
 ```
 
-Wrap the app in `DebugOnlineSwitch` when `kDebugMode` is true, and toggle
-`simulateOffline` from a debug menu. `OnlineStatus.fixed` is a verdict with no
+In a debug build (`kDebugMode`), use `DebugOnlineSwitch` in place of the
+provider in `main` — with the client created there, `createQueryClient()` —
+rather than around it: two providers giving one client a verdict would
+overrule each other. Toggle `simulateOffline` from a debug menu. `OnlineStatus.fixed` is a verdict with no
 source of changes; a changed one reaches the client on the rebuild that
 changes it.
 

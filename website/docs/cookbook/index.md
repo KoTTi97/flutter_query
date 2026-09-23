@@ -1,8 +1,6 @@
 ---
 title: Cookbook
 description: Recipes for tasks that combine several features — each one a complete, compiled answer to "how do I…".
-sidebar_position: 0
-sidebar_class_name: qk-sidebar-hidden
 ---
 
 # Cookbook

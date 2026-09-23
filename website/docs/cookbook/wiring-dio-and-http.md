@@ -1,7 +1,6 @@
 ---
 title: Wiring dio or package:http
 description: One API client for every query — cancellation handed on to the transport, timeouts, and failures turned into errors a screen can show.
-sidebar_position: 1
 ---
 
 # Wiring dio or package:http
@@ -301,8 +300,10 @@ the same job as `ProductApiScope`.
 2. **Cancellation crosses the bridge in `_bridge`.** Every query function is
    handed a `QueryCancelToken` as `context.signal`. `signal.onCancel(token.cancel)`
    hands the library's cancel on to a dio `CancelToken`, so when the library
-   cancels a fetch — a newer search replaced it, `cancelQueries` was called, the
-   last reader left during a first load — dio aborts the request.
+   cancels a fetch — `cancelQueries` was called, or the last reader left while
+   it ran, as when a newer search replaces an older one — dio aborts the
+   request. (Reading `context.signal` is what allows the second case: a query
+   function that never reads it is left to finish when its readers go.)
    `onCancel` runs the callback at once if the signal is already cancelled.
 3. **A cancelled request is rethrown untouched.** When dio reports
    `CancelToken.isCancel(error)`, the library cancelled the fetch itself and
@@ -341,8 +342,9 @@ class HttpApiClient {
   HttpApiClient({required this.baseUrl, http.Client? client})
       : _client = client ?? http.Client();
 
-  /// Ends with a slash: `https://api.example.com/v1/`.
-  final Uri baseUrl;
+  /// No trailing slash, as for dio: `https://api.example.com/v1`, and paths
+  /// start with one, `/products`. (`Uri.resolve` would drop the `/v1`.)
+  final String baseUrl;
   final http.Client _client;
 
   Future<T> get<T>(
@@ -351,15 +353,19 @@ class HttpApiClient {
     Map<String, String>? query,
     QueryCancelToken? signal,
   }) async {
+    final url = Uri.parse('$baseUrl$path');
     final request = http.AbortableRequest(
       'GET',
-      baseUrl.resolve(path).replace(queryParameters: query),
+      query == null ? url : url.replace(queryParameters: query),
       // http 1.5 and later: the request is aborted when this completes.
       abortTrigger: signal?.whenCancelled,
     );
     final http.Response response;
     try {
-      response = await http.Response.fromStream(await _client.send(request))
+      // The timeout covers waiting for the headers and reading the body.
+      response = await _client
+          .send(request)
+          .then(http.Response.fromStream)
           .timeout(const Duration(seconds: 30));
     } on http.RequestAbortedException {
       rethrow; // cancelled by the library, which already knows
@@ -395,9 +401,11 @@ class HttpApiClient {
   `package:http` the request goes on until the server answers or the client is
   closed. For a real deadline on dio, use its timeouts, which do abort.
 - **Before `package:http` 1.5 there is no abort.** On an older version the
-  library still cancels the query — its state goes back and the late answer is
-  dropped — but the request runs to the end on the wire. Upgrade rather than
-  work around it.
+  request runs to the end on the wire whatever the library does. An explicit
+  cancel (`cancelQueries`) still puts the entry back and drops the late
+  answer; a query function that never reads `context.signal` is not even
+  cancelled when its last reader leaves — the request finishes and its answer
+  is cached. Upgrade rather than work around it.
 - **Do not create a `CancelToken` per client.** One shared token cancels every
   request the client ever makes. Make one per call, from that call's signal, as
   `_bridge` does.

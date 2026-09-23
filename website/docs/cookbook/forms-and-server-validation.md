@@ -1,7 +1,6 @@
 ---
 title: Forms and server validation
 description: An edit form driven by a mutation — disabled while saving, the server's field errors next to the fields, the cache updated from the response, and the screen closed on success.
-sidebar_position: 6
 ---
 
 # Forms and server validation
