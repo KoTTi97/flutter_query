@@ -2,7 +2,8 @@
 // catalogue, so a feature without a page fails here the day it is added.
 // Each page must carry exactly one live demo, of its own feature, and show the
 // screen's source. Nothing is started: the placeholder is static, and its
-// "Open full screen" link names the route the frame would load.
+// "Open full screen" link names the route the frame would load, in the site's
+// colour scheme (light, as Playwright's default browser reports it).
 import { BASE, expect, showcaseFeatures, test } from './fixtures'
 
 for (const feature of showcaseFeatures) {
@@ -16,7 +17,7 @@ for (const feature of showcaseFeatures) {
     await expect(demo.getByText(feature.title, { exact: true })).toBeVisible()
     await expect(demo.getByRole('link', { name: 'Open full screen ↗' })).toHaveAttribute(
       'href',
-      `${BASE}demo/showcase/#/${feature.id}`,
+      `${BASE}demo/showcase/?theme=light#/${feature.id}`,
     )
     // Nothing loads before the click.
     await expect(page.locator('iframe')).toHaveCount(0)
@@ -48,6 +49,6 @@ test('the task manager page frames the whole app', async ({ page }) => {
   await expect(demo.getByText('Task manager', { exact: true })).toBeVisible()
   await expect(demo.getByRole('link', { name: 'Open full screen ↗' })).toHaveAttribute(
     'href',
-    `${BASE}demo/task_manager/`,
+    `${BASE}demo/task_manager/?theme=light`,
   )
 })
