@@ -33,7 +33,7 @@ starts once C3 has fixed the sidebar and slugs.
 | F1 | Follow-ups | B22, B25, B27, leftover ranking words; fresh re-check of C4d's reference fact edits (query-client, query-options, widgets-and-controllers) | 4 | done |
 | R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | done |
 | X | Independent review by a Codex agent | after E; `codex exec -m gpt-6-sol -s read-only` (maintainer's model choice), findings reproduced before fixing | 6 | open |
-| E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | open |
+| E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | done |
 
 ## Decisions
 
@@ -124,7 +124,10 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B25 | C5 review | four-call-styles card 7 titled "two styles" but shows three panels | fixed `d29456b` |
 | B26 | C6a | `guides/infinite-queries.md` shows a pixel-offset scroll guard the showcase's load_more code says fails | fixed `80e6dfa` |
 | B28 | F1 | `QuerySelectOptions` dartdoc + options page: select was said to suppress notifications for unselected changes (it keeps only `data`'s instance); inline `queryFn` said to be no change | fixed `d29456b` |
-| B29 | F1 | 3 broken anchors (`paginated-queries` → `placeholder-query-data#keeping-the-previous-page`, `prefetching#where-to-prefetch`, one more) | open → E |
+| B29 | F1 | 3 broken anchors (`paginated-queries` → `placeholder-query-data#keeping-the-previous-page`, `prefetching#where-to-prefetch`, one more) | fixed `4ea460e` (`onBrokenAnchors: 'throw'`) |
+| B30 | E | website e2e red (31/69): examples spec expected the full-screen link without `?theme=` | fixed `9cd13ed` |
+| B31 | E review of F1 | a mutation in flight keeps `retry`/`retryDelay`/`networkMode`/`scope`; select keeps `data`'s instance only with sharing on; placeholder shows again on refetch after error; `pages` count replaced by any observer | fixed `8404745` |
+| B32 | E | root README/CONTRIBUTING still said "case for case" | fixed `9ee6e5b` |
 | B27 | C6a | `QueryCancelToken` dartdoc says package:http has no cancellation; http ≥1.5 has `AbortableRequest` | fixed `d29456b` |
 
 ## Log
@@ -149,3 +152,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | R | `2b03d4a` | 87 files: repo URLs and base path → query_kit; GitHub Pages switched on (Actions source); Codex CLI smoke-tested with gpt-6-sol |
 | 2026-09-23 | F1 | `d29456b` | B22/B25/B27; fresh re-check of three reference pages found 2 P1 wrong statements (select notifications, inline queryFn) + P2s, fixed in dartdoc and site; core 1157, binding 299 |
 | 2026-09-23 | R2 | — | repo transferred to `dualmeta-gmbh/query_kit` (Pages carried over); every URL, site `url`/`organizationName`, wizard `REPO` updated; verified publisher dualmeta.io: wizard stage 7 + `docs/releasing.md` section. LICENSE holder still `KoTTi97` — maintainer's call |
+| 2026-09-23 | E | `4ea460e`…`9ee6e5b` | clean pass: core 1157 VM/1153 Chrome, binding 299/298, showcase 256 + contract 50 + Playwright 177, task_manager 34 + contract 29 + Playwright 10, doc_snippets 42, site e2e 69, coverage 99.83/99.77 %, dry-runs and dart doc 0 warnings; browser read light/dark/375px clean; floors job (Flutter 3.27.4) not run locally |
