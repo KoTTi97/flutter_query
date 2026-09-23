@@ -1,9 +1,9 @@
 # The query_kit documentation site
 
 [Docusaurus 3](https://docusaurus.io). The prose lives in `docs/`, the landing
-page in `src/pages/`. Nothing here is deployed — the site is built in CI so a
-broken link or a failing build is caught, and where it goes is the
-maintainer's call.
+page in `src/pages/`. The site is built in CI on every push, so a broken link
+or a failing build is caught, and deployed to GitHub Pages
+(<https://kotti97.github.io/query_kit/>) on a release tag or by hand.
 
 ```bash
 npm ci
