@@ -230,8 +230,11 @@ their mutation functions or callbacks (`onMutate`, `onSuccess`, `onError`,
 then pop" and "delete, then show a snackbar" are two mutations. So does a
 different `scope`, `retry`, `retryDelay`, `networkMode` or `gcTime`: rows
 reading `MutationScope('task-$id')` inline under one key would otherwise
-share one queue. Give each an `id:`. `meta` is not compared — it is most
-often a map literal, new on every build — and the last read's wins.
+share one queue. Give each an `id:`. Those five compare by value, except
+the two that carry a closure — `RetryPolicy.when` and `RetryDelay.dynamic`
+— which compare by variant only, so a helper building one inline and read
+twice is still one mutation. `meta` is not compared — it is most often a map
+literal, new on every build — and the last read's wins.
 
 The same functions read twice are one mutation and do not assert: a getter
 over one stored options object, options built around tear-offs or top-level

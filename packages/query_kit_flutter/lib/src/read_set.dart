@@ -61,7 +61,8 @@ typedef _Entry = ReadEntry<Object?>;
 /// identity by: the mutation function, its context twin and the four
 /// callbacks (third pass, V3-6), and the five fields that decide where and
 /// how it runs — `scope`, `retry`, `retryDelay`, `networkMode`, `gcTime`
-/// (fourth pass, V4-3). Not `meta`: see [ReadSet.readMutation].
+/// (fourth pass, V4-3), a retry closure by its variant only (fifth pass,
+/// V5-3). Not `meta`: see [ReadSet.readMutation].
 typedef _MutationShape = (
   (Object?, Object?, Object?, Object?, Object?, Object?),
   (Object?, Object?, Object?, Object?, Object?),
@@ -426,9 +427,17 @@ class ReadSet {
       // (fourth pass, V4-3): rows reading `MutationScope('task-$id')` under
       // one key and function would collapse into one controller whose last
       // scope serialises every row's run; `retry`, `retryDelay`,
-      // `networkMode` and `gcTime` change the run the same way. All five are
-      // value types, so options built inline twice with the same values
-      // compare equal and do not assert. `meta` is not compared: it is
+      // `networkMode` and `gcTime` change the run the same way. They are
+      // compared by value — `MutationScope`, `NetworkMode`, `GcTime`,
+      // `RetryPolicy.never`/`.always`/`.times`, `RetryDelay.fixed`/
+      // `.exponential` — except the two variants that carry a closure,
+      // `RetryPolicy.when` and `RetryDelay.dynamic`, which are compared by
+      // variant only (fifth pass, V5-3): their `==` is the closure's
+      // identity, and a helper building `RetryPolicy.when((n, e, _) => …)`
+      // inline is read twice as one mutation as often as it is two. Unlike
+      // the mutation function and callbacks, a retry closure only decides
+      // whether and when a failed attempt runs again; the last read's wins.
+      // `meta` is not compared: it is
       // arbitrary data, most often an inline map literal — a new object
       // every read, with no deep `==` — so comparing it would assert on
       // reads that are one mutation, while collapsing it only changes what
@@ -448,8 +457,8 @@ class ReadSet {
           ),
           (
             options.scope,
-            options.retry,
-            options.retryDelay,
+            _byVariant(options.retry),
+            _byVariant(options.retryDelay),
             options.networkMode,
             options.gcTime,
           ),
@@ -498,6 +507,14 @@ class ReadSet {
     entry.read(buildWhen: _erased(buildWhen));
     return controller;
   }
+
+  /// What the mutation ambiguity check compares a retry option by: its value,
+  /// or — for the two variants carrying a closure — its variant alone
+  /// (fifth pass, V5-3).
+  static Object? _byVariant(Object? option) =>
+      option is RetryWhen || option is RetryDelayDynamic
+          ? option.runtimeType
+          : option;
 
   /// A caller's predicate as the untyped entries take it.
   ///

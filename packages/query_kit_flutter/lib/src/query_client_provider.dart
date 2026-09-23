@@ -220,13 +220,19 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   StreamSubscription<bool>? _onlineSubscription;
   bool? _lastOnline;
 
+  /// Set when a failing `_follow` in [didUpdateWidget] gave back what this
+  /// state held: Flutter abandons the element then, and should it dispose
+  /// it after all, nothing is given back twice (fifth pass, V5-2).
+  bool _released = false;
+
   @override
   void initState() {
     super.initState();
     _mountClient(widget.client);
-    // Listened to first: the one step here that can fail. It touches no
-    // client state — a stream never delivers during `listen` — so nothing
-    // below has happened when it throws.
+    // Listened to first: the one step here that can fail, so nothing below
+    // has happened when it throws. A stream *can* deliver during `listen` —
+    // a synchronous controller whose `onListen` adds the current value — and
+    // then its value is already the client's (fifth pass, V5-1).
     try {
       _follow(widget.onlineStatus);
     } catch (_) {
@@ -241,8 +247,11 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       rethrow;
     }
     // Initial focus can resume restored mutations synchronously. It must
-    // already see the connectivity snapshot supplied by the provider.
-    _applyOnlineStatus(widget.client);
+    // already see the connectivity snapshot supplied by the provider:
+    // `initial`, unless the stream said something while it was listened to.
+    if (_lastOnline == null) {
+      _applyOnlineStatus(widget.client);
+    }
     if (widget.observeAppLifecycle) {
       _observeLifecycle(widget.client);
     }
@@ -555,6 +564,28 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     final clientChanged = oldWidget.client != widget.client;
     final sameStream = widget.onlineStatus?.changes != null &&
         oldWidget.onlineStatus?.changes == widget.onlineStatus?.changes;
+    final statusChanged = oldWidget.onlineStatus != widget.onlineStatus;
+    // What the old stream last said, before a new one is followed.
+    final lastOnline = _lastOnline;
+    // Listened to first, as in `initState`: the one step that can fail, so
+    // when it throws nothing has been told to any client. Flutter abandons
+    // an element whose `didUpdateWidget` threw without disposing it, so
+    // what this state held for the old widget is given back here, the way
+    // `dispose` would (fifth pass, V5-2 — V4-2's twin: an `initial: false`
+    // applied first stayed, and so did the mount).
+    if (statusChanged && !sameStream) {
+      try {
+        _follow(widget.onlineStatus);
+      } catch (_) {
+        _released = true;
+        _stopObservingLifecycle();
+        if (oldWidget.onlineStatus != null) {
+          _releaseOnline(oldWidget.client);
+        }
+        _unmountClient(oldWidget.client);
+        rethrow;
+      }
+    }
     if (clientChanged) {
       _stopObservingLifecycle();
       _unmountClient(oldWidget.client);
@@ -564,10 +595,11 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       // still running. A connectivity source that has been taken away speaks
       // for nobody, and a value it left behind would pin a later client
       // offline with nothing able to put it back (third review, 2026-09-10).
-      final lastOnline = _lastOnline;
       if (lastOnline != null && sameStream) {
         widget.client.onlineManager.setOnline(lastOnline);
-      } else {
+      } else if (_lastOnline == null) {
+        // Unless a new stream already said something while it was listened
+        // to (V5-1).
         _applyOnlineStatus(widget.client);
       }
     }
@@ -584,7 +616,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       // is mapped too (ninth review, 2026-09-10, C17).
       _applyCurrentLifecycleState(widget.client);
     }
-    if (oldWidget.onlineStatus != widget.onlineStatus) {
+    if (statusChanged) {
       // A changed status reaches the client as it stands — except when one
       // stream is swapped for another, where the client already has a verdict
       // from a live source and `initial` is the wrong thing to rewind it to.
@@ -594,14 +626,17 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       // there would yank the client back online between each rebuild and the
       // new stream's first event. A fixed status has no such source: applying
       // it here is the only way it can reach the client at all.
+      // A new stream that delivered while it was listened to has already
+      // said more than `initial` can (V5-1). Changing only `initial` does
+      // not replace the source or its latest event, and a single-subscription
+      // stream cannot be listened to again: followed above, only when it is
+      // a different stream.
       if (!clientChanged &&
+          _lastOnline == null &&
           !(oldWidget.onlineStatus is OnlineStatusStream &&
               widget.onlineStatus is OnlineStatusStream)) {
         _applyOnlineStatus(widget.client);
       }
-      // Changing only `initial` does not replace the source or its latest
-      // event. A single-subscription stream cannot be listened to again.
-      if (!sameStream) _follow(widget.onlineStatus);
     }
     // Who speaks for which client's connectivity, counted (V-B-3): a client
     // left for another is left as it was; a status taken away from the same
@@ -622,6 +657,10 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
 
   @override
   void dispose() {
+    if (_released) {
+      super.dispose();
+      return;
+    }
     _stopObservingLifecycle();
     _cancelOnline();
     if (widget.onlineStatus != null) {

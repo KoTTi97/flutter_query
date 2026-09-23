@@ -62,10 +62,14 @@ fetching, upstream's `useIsFetching`.
   Taking `onlineStatus` away, or disposing the provider, puts its client back
   online once no other provider has a status for that client: a replacement
   provider on the same client — a new key, a move to another parent — keeps
-  its own verdict. A provider whose mount failed — the single-subscription
-  stream listened to twice — counts for nobody, applies no online verdict
-  (not even its `initial`) and leaves the client unmounted. A failing `cancel()` of the subscription is reported
-  through `FlutterError.reportError`.
+  its own verdict. A provider that fails to listen to its stream — a
+  single-subscription stream listened to twice, whether on mount or when a
+  later build hands it one — counts for nobody, applies no online verdict
+  (not even its `initial`) and leaves the client unmounted. `initial` is
+  applied only until the stream says something: a stream that delivers
+  while it is listened to (a synchronous controller whose `onListen` adds
+  the current value) is not overridden by it. A failing `cancel()` of the
+  subscription is reported through `FlutterError.reportError`.
 - The first `resumed` after app start is not a focus change, so mounted
   queries do not refetch at startup.
 - A result that arrives inside a build is delivered after the frame; outside
@@ -130,8 +134,10 @@ fetching, upstream's `useIsFetching`.
   mutation functions or callbacks (`onMutate`, `onSuccess`, `onError`,
   `onSettled`), or a different `scope`, `retry`, `retryDelay`, `networkMode`
   or `gcTime` — rows reading `MutationScope('task-$id')` inline would share
-  one queue — are a debug assertion; give each an `id`. `meta` is not
-  compared, and the last read's wins. They used to
+  one queue — are a debug assertion; give each an `id`. Those five compare
+  by value, except `RetryPolicy.when` and `RetryDelay.dynamic`, which carry
+  a closure and compare by variant only, so an inline one read twice is one
+  mutation. `meta` is not compared, and the last read's wins. They used to
   share one controller silently, so whichever was read last ran for both.
   The same functions read twice — one stored options object, tear-offs,
   top-level functions — are one mutation and do not assert, and neither does

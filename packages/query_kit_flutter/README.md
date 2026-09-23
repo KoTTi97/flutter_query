@@ -213,9 +213,12 @@ category, as upstream's is, not a name: two mutations read in one build with
 the same key and types would share a controller, so two such reads with
 *different* mutation functions or callbacks, or a different `scope`, `retry`,
 `retryDelay`, `networkMode` or `gcTime`, are a debug assertion — give each
-an `id` (`meta` is not compared; the last read's wins). The same functions read twice — one stored options object, tear-offs
-— are one mutation and do not assert; a function literal is new on every build, so
-keep it in a field or read the mutation once. Like a query, it is released
+an `id`. Those five compare by value, except `RetryPolicy.when` and
+`RetryDelay.dynamic`, which carry a closure and compare by variant only;
+`meta` is not compared, and the last read's wins. The same functions read
+twice — one stored options object, tear-offs — are one mutation and do not
+assert; a function literal is new on every build, so keep it in a field or
+read the mutation once. Like a query, it is released
 after the frame once a build stops reading it.
 
 The third type argument is what `onMutate` returns — the rollback handle of an

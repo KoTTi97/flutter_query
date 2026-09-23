@@ -4229,5 +4229,121 @@ void _releaseReview20260923() {
       await tester.pump();
       expect(find.text('w=w1'), findsOneWidget);
     });
+
+    // Fifth pass (verification of the fourth).
+
+    queryWidgetTest(
+        'V5-1: a stream that delivers while it is listened to is not '
+        'overridden by initial', (tester, client) async {
+      late StreamController<bool> c;
+      c = StreamController<bool>.broadcast(
+          sync: true, onListen: () => c.add(false));
+      addTearDown(c.close);
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: OnlineStatus.stream(c.stream, initial: true)));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    queryWidgetTest('V5-1: the same, when the stream arrives on a later build',
+        (tester, client) async {
+      late StreamController<bool> c;
+      c = StreamController<bool>.broadcast(
+          sync: true, onListen: () => c.add(false));
+      addTearDown(c.close);
+      await tester.pumpWidget(app(client, const SizedBox()));
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: OnlineStatus.stream(c.stream, initial: true)));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    queryWidgetTest(
+        'V5-2: a provider whose didUpdateWidget threw leaves the client '
+        'online and unmounted', (tester, client) async {
+      final used = StreamController<bool>();
+      addTearDown(used.close);
+      used.stream.listen((_) {});
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: const OnlineStatus.fixed(true)));
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: OnlineStatus.stream(used.stream, initial: false)));
+      expect(tester.takeException(), isA<FlutterError>());
+      expect(client.onlineManager.isOnline(), isTrue);
+      await tester.pumpWidget(const SizedBox());
+      // Nobody speaks for the client any more: a provider with a status
+      // that leaves puts it back online, as with no failure before.
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: const OnlineStatus.fixed(false)));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(client.onlineManager.isOnline(), isTrue);
+      // The abandoned provider's mount was given back: one mount and one
+      // unmount leave the client unmounted, so focus reaches nothing.
+      await tester.pumpWidget(app(client, const SizedBox()));
+      await tester.pumpWidget(const SizedBox());
+      client.setQueryData<String>(QueryKey(const <Object?>['k']), 'v');
+      final fetches = <int>[];
+      final observer = QueryObserver<String, String>(
+        client,
+        QueryObserverOptions<String>(
+          queryKey: QueryKey(const <Object?>['k']),
+          queryFn: (_) async {
+            fetches.add(1);
+            return 'w';
+          },
+        ),
+      );
+      final unsubscribe = observer.subscribe((_) {});
+      addTearDown(unsubscribe);
+      await tester.pump();
+      final before = fetches.length;
+      client.focusManager.setFocused(false);
+      client.focusManager.setFocused(true);
+      await tester.pump();
+      expect(fetches.length, before,
+          reason: 'a client left mounted would refetch on focus');
+    });
+
+    for (final field in ['retry', 'retryDelay']) {
+      queryWidgetTest(
+          'V5-3: an inline $field closure read twice is one mutation',
+          (tester, client) async {
+        MutationOptions<String, int, Object?> options() => MutationOptions(
+              mutationKey: QueryKey(const <Object?>['save']),
+              mutationFn: _rrSave,
+              retry: field == 'retry'
+                  ? RetryPolicy.when(
+                      (n, e, _) => n < 2 && e is TimeoutException)
+                  : null,
+              retryDelay: field == 'retryDelay'
+                  ? RetryDelay.dynamic((n, _) => Duration(seconds: n))
+                  : null,
+            );
+        await tester.pumpWidget(app(client, Builder(builder: (context) {
+          final busy = context.mutation(options()).value.isPending;
+          final m = context.mutation(options());
+          return Text('$busy ${m.value.isIdle}');
+        })));
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    queryWidgetTest('V5-3: two retry values read in one build still assert',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, Builder(builder: (context) {
+        for (final times in [1, 3]) {
+          context.mutation(MutationOptions<String, int, Object?>(
+            mutationKey: QueryKey(const <Object?>['save']),
+            mutationFn: _rrSave,
+            retry: RetryPolicy.times(times),
+          ));
+        }
+        return const SizedBox();
+      })));
+      expect(tester.takeException(), isA<FlutterError>());
+    });
   });
 }

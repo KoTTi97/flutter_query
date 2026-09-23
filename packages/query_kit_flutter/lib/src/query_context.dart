@@ -206,11 +206,14 @@ extension QueryContext on BuildContext {
   /// (`onMutate`, `onSuccess`, `onError`, `onSettled`), or a different
   /// `scope`, `retry`, `retryDelay`, `networkMode` or `gcTime`, without
   /// [id], are a debug assertion — rows reading `MutationScope('task-$id')`
-  /// inline under one key would otherwise share one queue. `meta` is not
-  /// compared: the last read's wins. The same functions read twice — one stored options
-  /// object, tear-offs, top-level functions — are one mutation, and so is a
-  /// nested builder re-reading what `build` read; a function literal is a
-  /// new function each time it is built, so keep it in a field or read once.
+  /// inline under one key would otherwise share one queue. Those five
+  /// compare by value, except `RetryPolicy.when` and `RetryDelay.dynamic`,
+  /// which carry a closure and compare by variant only. `meta` is not
+  /// compared: the last read's wins. The same functions read twice — one
+  /// stored options object, tear-offs, top-level functions — are one
+  /// mutation, and so is a nested builder re-reading what `build` read; a
+  /// function literal is a new function each time it is built, so keep it in
+  /// a field or read once.
   /// Only a `StatelessWidget`'s or `State`'s own build is checked: reads
   /// through a `LayoutBuilder`'s context are never compared. Through a lazily
   /// built list's item-builder context, any read is a debug error (see the

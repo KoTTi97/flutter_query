@@ -19,7 +19,9 @@ import 'package:flutter/foundation.dart';
 ///   developer's offline switch.
 /// * [OnlineStatus.stream] — [OnlineStatusStream.changes] reports every later
 ///   change, and [OnlineStatusStream.initial] is what to assume until the
-///   first event arrives. `initial` is required because a `Stream` has no
+///   first event arrives — not applied at all when that event arrives while
+///   the provider listens, as a synchronous controller's `onListen` can
+///   deliver it. `initial` is required because a `Stream` has no
 ///   current value: a provider that only listens starts out believing the
 ///   default — online — however long the first event takes, and an app
 ///   launched in airplane mode then fetches once against a network that is
