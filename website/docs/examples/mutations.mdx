@@ -9,8 +9,8 @@ import screen from '@site/../examples/showcase/lib/features/mutations/mutations_
 A server-side counter and the writes that change it, walked through in four
 cards: one mutation fired both ways, the order its callbacks run in, two
 writes queued behind each other by a `MutationScope`, and a write that keeps
-running after the widget that fired it has gone. Every write invalidates the
-counter, so the number on screen always comes from the server. This is what
+running after the widget that fired it has gone. Every successful write
+invalidates the counter, so the number on screen always comes from the server. This is what
 sits behind any "save" button in an app: submitting a settings form, adding
 an item to a cart, renaming a device, where you want the pending and error
 states on screen and the affected queries refreshed afterwards.
@@ -19,10 +19,11 @@ states on screen and the affected queries refreshed afterwards.
 
 ## What to try
 
-- Press *Increment (mutate)*. The facts under card A go to `status=pending`,
-  then `status=success` with `data=1`, and only then does the header read
-  `counter=1`: the mutation stays pending until the invalidated counter has
-  refetched. *Reset* takes it back to `status=idle`.
+- Press *Increment (mutate)*. The facts under card A go to `status=pending`
+  and stay there while the invalidated counter refetches; then
+  `status=success` with `data=1` arrives together with `counter=1` in the
+  header, because `onSuccess` returns the invalidation and the mutation
+  waits for it. *Reset* takes it back to `status=idle`.
 - Tick *Fail next* and increment again: `status=error` with
   `error=Requested: 500` and `failureCount=1`. Mutations are not retried
   unless asked, so the first failure is the error. The tick clears itself;
@@ -59,7 +60,7 @@ widget apart:
   source={screen}
   path="examples/showcase/lib/features/mutations/mutations_screen.dart"
   from="final counter = watchQuery(counterQuery(_api));"
-  end="    );"
+  to="final result = increment.value;"
 />
 
 The slow increment takes an optional scope. Card C builds two

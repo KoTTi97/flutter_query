@@ -6,8 +6,9 @@ description: Every RefetchOn value for app focus and for mount, a minimum backgr
 import DartSource from '@site/src/components/DartSource'
 import screen from '@site/../examples/showcase/lib/features/focus_refetch/focus_refetch_screen.dart'
 
-Three entries of the same server reading sit side by side under different
-policies, so one return to the foreground gets a different answer from each.
+Three entries sit side by side under different policies (A and B on the
+server time, C on a counter of its own), so one return to the foreground
+gets a different answer from each.
 Entry A turns `refetchOnWindowFocus` through `never`, `ifStale`, `always` and
 a `RefetchOn.when` rule; entry B adds `refetchOnMount`, with a reader you can
 detach and attach again; entry C runs on a client of its own, under a nested
@@ -22,11 +23,13 @@ user only glanced at a notification.
 
 ## What to try
 
-- The browser gives the demo no app lifecycle of its own to leave, so the
-  *App focused* switch is the focus source: turning it off and on again calls
-  `client.focusManager.setFocused(false)` and `(true)`, which is what
-  `QueryClientProvider` does for a real app. With the default `ifStale` and a
-  30-second stale time nothing refetches, and both strips keep `fetches=1`.
+- Clicking outside the demo, or switching browser tabs, is a real focus
+  change here too: Flutter on the web reports it as a lifecycle change. The
+  *App focused* switch is the dependable way to cycle it: turning it off and
+  on again calls `client.focusManager.setFocused(false)` and `(true)`, which
+  is what `QueryClientProvider` does on a lifecycle change. With the default
+  `ifStale` and a 30-second stale time nothing refetches within the first
+  30 seconds, and both strips keep `fetches=1`.
 - Set entry A's *On focus* to `always` and cycle the switch: entry A's
   `serial` goes up and its strip reads `fetches=2`, while entry B, still on
   `ifStale` with fresh data, stays where it was. Set *Stale time* to `0` and

@@ -72,7 +72,7 @@ widget.
 
 The same call awaited is an imperative read. With `revalidateIfStale: true`
 it returns what the cache holds at once and refreshes a stale entry behind
-it; it fails only when nothing is cached. Under `StaleTime.static` the entry
+it; with nothing cached it awaits the fetch, and only then can it fail. Under `StaleTime.static` the entry
 is never stale, so a cached value comes back with no request at all.
 
 <DartSource

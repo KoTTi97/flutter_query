@@ -14,6 +14,11 @@ screen, taken from the compiled file. Every screen draws its cache entries'
 state as it changes, so you can watch what the library does, not just what the
 widget shows.
 
+A demo is a Flutter web app in a frame, and it behaves like one: clicking
+outside it and back in is a window focus change, so a stale query refetches
+on the way back in, as it would in your app. A `fetches=` count a page
+promises can therefore be one higher if you clicked away in between.
+
 ## Whole apps
 
 - **[Task manager](./task-manager.mdx)**: one ordinary small app, a to-do

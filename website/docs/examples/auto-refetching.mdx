@@ -31,7 +31,9 @@ finished.
   nothing is fetched until you switch on **Poll in the background**. The
   binding normally moves focus from the app lifecycle; these buttons do it by
   hand. Pressing **Focus** also refetches the stale list, which is
-  `refetchOnWindowFocus`, not the interval.
+  `refetchOnWindowFocus`, not the interval. Clicking outside the demo is a
+  real loss of focus too, so polling pauses while you read this page and
+  resumes when you click back in.
 
 ## The code
 
@@ -56,6 +58,13 @@ landed.
   source={screen}
   path="examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart"
   from="/// Both writes invalidate the list."
+  end="    );"
+/>
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart"
+  from="MutationOptions<int, void, void> clearTicksMutation("
   end="    );"
 />
 

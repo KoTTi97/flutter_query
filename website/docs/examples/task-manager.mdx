@@ -13,8 +13,7 @@ manager is the other kind of example, an ordinary small app that needs six
 of those features at once, so you can see how they compose. It has an
 overview with search and a sync badge, a detail screen with a rename field
 and a reminder switch, and a backend that is slow on purpose and fails on
-cue. It was also the port's acceptance bar: every row of the checklist below
-had to work before the library was called done.
+cue. Each row of the table below is covered by a widget test.
 
 <LiveDemo app="task_manager" height={720} />
 
@@ -33,7 +32,7 @@ starts with three tasks.
 | Toggle the reminder | The switch flips at once, the screen waits for the scheduler, polls until the confirmation arrives about three seconds later, then stops polling. |
 | Type in the search box | One request per pause in typing, not one per keystroke. |
 | Add a task (**+**) | Every list is invalidated: which tasks exist is the list's concern. |
-| Delete a task | The row disappears at once. Every second delete is refused, so the first one springs back with a notice; the next goes through. |
+| Delete a task | The row disappears at once. Deletes alternate: the first is refused and springs back with a notice; the next goes through. |
 | Look at the header badge | "x of y synced" is a second shape of the list's own cache entry; it costs no request. |
 
 ## The cache policy, in one file
@@ -149,6 +148,13 @@ to a row whose detail still renders from cache.
 <DartSource
   source={queries}
   path="examples/task_manager/lib/src/queries.dart"
+  from="MutationOptions<Task, CreateInput, void> createTaskMutation("
+  end="    );"
+/>
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
   from="MutationOptions<String, String, ListSnapshot> deleteTaskMutation("
   end="    );"
 />
@@ -188,7 +194,7 @@ A row reads its own task:
 <DartSource
   source={overview}
   path="examples/task_manager/lib/src/screens/overview.dart"
-  from="final task = context.query(taskQuery(client, api, id)).dataOrNull;"
+  from="final client = QueryClientProvider.of(context);"
   end="    }"
 />
 
@@ -198,7 +204,7 @@ The badge selects from the list's entry:
   source={header}
   path="examples/task_manager/lib/src/widgets/header.dart"
   from="QuerySelectBuilder<TaskListResponse, ({int synced, int total})>("
-  to="              },"
+  end="            ),"
 />
 
 ## How it is tested
@@ -206,9 +212,9 @@ The badge selects from the list's entry:
 Three layers, all in `examples/task_manager/`:
 
 - **Widget tests** (`test/acceptance_test.dart`): one test per row of the
-  checklist, plus regressions. They run the real app, with its own client
+  feature checklist in the app's README, plus regressions. They run the real app, with its own client
   defaults, against the same in-memory backend the live demo uses, wired in
-  as a dio adapter with its latencies at zero. Only the transport is
+  as a dio adapter with its latencies at zero unless a test sets one. Only the transport is
   replaced; the app's api class, JSON handling, errors and cancellation all
   run.
 - **A contract test** (`test/backend_contract_test.dart`): the same cases

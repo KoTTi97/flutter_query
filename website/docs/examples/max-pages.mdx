@@ -26,8 +26,9 @@ log viewer jumped to a timestamp, a long timeline of sensor readings.
 - Press *Load previous*: a *loading previous* pill shows while
   `isFetchingPreviousPage=true`, the window slides back to `30,40,50`, and
   `lastPage` says `backward`.
-- Press *Refetch*: exactly the pages in the window are requested again, first
-  to last, every one `forward`, and each row's *fetched* time is renewed.
+- Press *Refetch*: the pages in the window are fetched again, first to last,
+  and nothing outside it: `lastPage` ends on the window's last cursor with
+  `forward`, and each row's *fetched* time is renewed.
 - Keep paging one way: at cursor 90 `hasNextPage=false` and *Load next* is
   disabled; at cursor 0 the same happens to *Load previous*.
 

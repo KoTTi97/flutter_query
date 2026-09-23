@@ -22,8 +22,9 @@ search results with numbered pages.
 - Watch the first load: `page-0` shows one fetch, and then the `page-1`
   debug strip reads `status=success` with `observers=0`. The next page was
   prefetched with nobody reading it.
-- Press *Next page*. Page 1's rows appear at once with
-  `isPlaceholderData=false` and no new request, and the strip for page 2
+- Press *Next page* within five seconds of the load. Page 1's rows appear
+  at once with `isPlaceholderData=false` and no new request (after that the
+  prefetched page is stale and refetches in the background as it is shown), and the strip for page 2
   shows its prefetch.
 - Press *Next page* twice in quick succession. For the moment the next
   page's prefetch is still running, the previous page's rows stay on screen

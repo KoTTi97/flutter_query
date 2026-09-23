@@ -1,6 +1,7 @@
 import type * as Preset from '@docusaurus/preset-classic'
 import type { Config } from '@docusaurus/types'
 import { themes as prismThemes } from 'prism-react-renderer'
+import { execSync } from 'node:child_process'
 import dartSource from './plugins/dart-source'
 
 // Nothing is deployed yet. The url/baseUrl below are the GitHub Pages
@@ -19,6 +20,18 @@ const baseUrl = `/${repository}/`
 const aiNotice =
   "query_kit is an entirely AI-coded project: all code, tests and documentation were written by AI coding agents (Anthropic's Claude). A human maintainer set the goals and reviews releases, but did not write the code."
 
+// The commit the site is built from. `<DartSource>` links an excerpt to its
+// lines on GitHub at this commit, not at `main`, where later edits would move
+// them. CI names it; a local build asks git; outside a checkout, `main`.
+function sourceRevision(): string {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA
+  try {
+    return execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+  } catch {
+    return 'main'
+  }
+}
+
 const config: Config = {
   title: 'query_kit',
   tagline: 'TanStack Query for Dart and Flutter, ported test for test',
@@ -36,6 +49,8 @@ const config: Config = {
   markdown: { hooks: { onBrokenMarkdownLinks: 'throw' } },
 
   future: { v4: true, faster: true },
+
+  customFields: { sourceRevision: sourceRevision() },
 
   // IBM Plex Sans and Plex Mono. `custom.css` falls back to the system stack,
   // so a blocked or slow font request costs the face and nothing else — and

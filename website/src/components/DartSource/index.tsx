@@ -1,3 +1,4 @@
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import CodeBlock from '@theme/CodeBlock'
 import type { ReactNode } from 'react'
 import styles from './styles.module.css'
@@ -25,7 +26,9 @@ export type DartSourceProps = {
   title?: string
 }
 
-const repository = 'https://github.com/KoTTi97/flutter_query/blob/main'
+// Line links point at the commit the site was built from
+// (`customFields.sourceRevision`), so the lines they name are the lines shown.
+const repository = 'https://github.com/KoTTi97/flutter_query/blob'
 
 function find(
   lines: string[],
@@ -55,6 +58,7 @@ function dedent(lines: string[]): string {
 }
 
 export default function DartSource({ source, path, from, to, end, title }: DartSourceProps): ReactNode {
+  const revision = String(useDocusaurusContext().siteConfig.customFields?.sourceRevision ?? 'main')
   if (typeof source !== 'string') {
     throw new Error(`DartSource: the source of ${path} is not a string; import the .dart file itself`)
   }
@@ -64,7 +68,7 @@ export default function DartSource({ source, path, from, to, end, title }: DartS
     end !== undefined
       ? find(lines, end, first + 1, path, false, true)
       : to !== undefined
-        ? find(lines, to, first, path, false)
+        ? find(lines, to, first + 1, path, false)
         : from === undefined
           ? lines.length - 1
           : first
@@ -77,7 +81,7 @@ export default function DartSource({ source, path, from, to, end, title }: DartS
         {dedent(lines.slice(first, last + 1))}
       </CodeBlock>
       <p className={styles.link}>
-        <a href={`${repository}/${path}${anchor}`} target="_blank" rel="noopener noreferrer">
+        <a href={`${repository}/${revision}/${path}${anchor}`} target="_blank" rel="noopener noreferrer">
           View on GitHub ↗
         </a>
       </p>

@@ -10,8 +10,9 @@ A post, its comments and a counter: three queries of three types, a `Post`,
 a `List<Comment>` and an `int`, read side by side and then combined into one
 value with `(a, b, c).combine(...)` over a record of results. The screen
 switches once over the sealed `CombinedResult` instead of three times over
-three results: pending until every source has data, an error when a source
-failed with nothing to show, and data otherwise, with a failed background
+three results: an error as soon as a source has failed with nothing to show,
+even while another is still loading; pending until every source has data;
+and data otherwise, with a failed background
 refresh reported beside the data it kept. Use it when a screen is only
 meaningful with all its parts, an order page that needs the order, its
 customer and the stock levels, or a device screen that needs the device, its

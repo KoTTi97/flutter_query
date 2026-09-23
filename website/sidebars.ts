@@ -101,7 +101,7 @@ const sidebars: SidebarsConfig = {
       ],
     },
     // The same groups, in the same order, as the gallery on the index page
-    // (`docs/examples/index.mdx`).
+    // (`docs/examples/index.md`).
     {
       type: 'category',
       label: 'Examples',

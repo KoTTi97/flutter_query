@@ -22,9 +22,9 @@ pinned to a home screen.
 
 - Press *Reverse*. The cards swap order (`ids=3,2,1`) and every strip still
   reads `fetches=1`: the results were reordered, nothing was fetched.
-- Press *Add post* and then *Remove last*. The new id is fetched on its own;
-  after removing it, its strip reads `observers=0` while the entry stays
-  cached.
+- Press *Add post*: only the new id is fetched. Then press *Remove last*
+  until post 3's card goes: its strip stays and reads `observers=0`, because
+  the entry stays cached without a reader.
 - Press *Duplicate first*. The first id appears twice and its strip reads
   `observers=2`: two observers over one cache entry. The entry is stale by
   then, so the second observer refetches it once for both.

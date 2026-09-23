@@ -30,9 +30,9 @@ leaving and coming back should not start from page one.
 - Press *Go to about*. The debug strip reads `observers=0`, and the About view
   still reports `cached pages` and `cached rows` read off the cache. *Back to
   list* shows the same rows at once, and `fetches` in the strip does not move.
-- Press the refresh icon (*Refetch*): a *refreshing* pill appears, and every
-  page the list holds is requested again, first to last, while the rows stay
-  on screen.
+- Press the refresh icon (*Refetch*): a *refreshing* pill appears and
+  `fetches` in the strip goes up by one while every page the list holds is
+  fetched again, first to last; the rows stay on screen.
 
 ## The code
 

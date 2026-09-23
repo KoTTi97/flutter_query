@@ -26,8 +26,10 @@ firmware channel it names, a selected order before its shipment tracking.
 - Tick *Pause comments* and choose another post. The post loads, but the
   comments stay `status=pending`, `fetchStatus=idle` with a *paused* pill;
   untick it and they are fetched once.
-- Switch between posts, then press *Clear choice*. Each post re-keys both
-  queries; the entries you left stay in the cache, just without a reader.
+- Switch to another post and back. Each choice re-keys both queries; the
+  post you return to shows its title and comments at once from the cache,
+  because the entries you left stayed there without a reader, and a
+  background refetch follows. *Clear choice* releases both readers.
 
 ## The code
 

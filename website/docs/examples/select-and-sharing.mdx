@@ -51,8 +51,9 @@ passed on every build.
 
 Every reader shares one query; a `select` makes it a
 `QuerySelectOptions<List<Todo>, T>`. Leaving `structuralSharing` null keeps
-the default sharing, and `noStructuralSharing()` switches it off for the
-cache write and for what `select` produces.
+the default sharing, and `keepNext`, the screen's name for
+`noStructuralSharing()`, switches it off for the cache write and for what
+`select` produces.
 
 <DartSource
   source={screen}

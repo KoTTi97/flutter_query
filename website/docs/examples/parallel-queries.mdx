@@ -34,8 +34,8 @@ number changes at runtime, see [Query collections](./query-collections.mdx).
 ## The code
 
 Each post has a `QueryController` of its own, created in `initState` and
-disposed in `dispose`; a `Listenable.merge` over the three lets one builder
-react to any of them.
+disposed in `dispose`. Each card listens to its own controller, and a
+`Listenable.merge` over the three lets the toolbar react to any of them.
 
 <DartSource
   source={screen}
@@ -53,7 +53,7 @@ next fetch is asked for.
   source={screen}
   path="examples/showcase/lib/features/parallel_queries/parallel_queries_screen.dart"
   from="void _refetchAll() {"
-  to="  }"
+  end="  }"
 />
 
 <DartSource
