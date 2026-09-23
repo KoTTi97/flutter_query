@@ -31,8 +31,8 @@ starts once C3 has fixed the sidebar and slugs.
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | done |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
 | F1 | Follow-ups | B22, B25, B27, leftover ranking words; fresh re-check of C4d's reference fact edits (query-client, query-options, widgets-and-controllers) | 4 | open |
-| R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | open |
-| X | Independent review by a Codex agent | after E; needs the Codex CLI installed and logged in by the maintainer | 6 | blocked |
+| R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | done |
+| X | Independent review by a Codex agent | after E; `codex exec -m gpt-6-sol -s read-only` (maintainer's model choice), findings reproduced before fixing | 6 | open |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | open |
 
 ## Decisions
@@ -71,7 +71,10 @@ starts once C3 has fixed the sidebar and slugs.
   README is either fenced under `examples/doc_snippets` (as today) or imported
   from compiled source; no free-floating sample.
 - **D7 — Deployment is prepared, not performed.** A GitHub Pages workflow may
-  be added; switching Pages on, pushing, tagging and publishing stay with the
+  be added. The maintainer approved Pages (free for the public repository);
+  it was switched on with source *GitHub Actions* on 2026-09-23, so the
+  site deploys to `https://kotti97.github.io/query_kit/` when `pages.yml`
+  first runs on the default branch. Switching Pages on was the one exception; pushing, tagging and publishing stay with the
   maintainer (`scripts/release.sh`).
 - **D8 — Gates per chunk.** The repo's gates from CLAUDE.md (the five test
   suites touched, `dart analyze --fatal-infos`, `dart format`, `npm run build`
@@ -138,3 +141,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C4a | `c898d32`, `fc28fec` | getting started + 10 queries guides at depth; review fixed B20, B21 and 11 more (gcTime longest wins, maps/sets not walked, Enabled.when re-ask per style) |
 | 2026-09-23 | C6a | `551ce17`, `ce2a092` | 10 recipes on one catalogue app; review fixed a P1 (token-refresh repeat through the queued interceptor could deadlock), 4 P2 (http base URL, timeout, cancellation fact, non-Dio refresh failure), tests for the claims; merge: one explicit 20-recipe sidebar list, dead generator/CSS removed |
 | 2026-09-23 | C4d | `d50cc98`, `f3b978a` | tools guides + 8 reference pages (C7 folded in); four sub-reviews: ~40 fixes (missing members, throw sites, 11 missing divergences, dio adapter signature, pumpAndSettle advice), TanStack column moved into descriptions, no table scrolls at 1440px; wave 3 fully merged, 97 LiveDemos on the site |
+| 2026-09-23 | R | `2b03d4a` | 87 files: repo URLs and base path → query_kit; GitHub Pages switched on (Actions source); Codex CLI smoke-tested with gpt-6-sol |
