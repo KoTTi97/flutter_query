@@ -115,6 +115,8 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B23 | C5 review | `examples/index` renamed to .mdx broke 11 links (build failed); GitHub source links pinned to `main` instead of the built commit | fixed `4d6a791` |
 | B24 | C5 review | 6 P2 + 7 P3 "what to try" bullets promised what the screens don't show | fixed `4d6a791` |
 | B25 | C5 review | four-call-styles card 7 titled "two styles" but shows three panels | open → F1 |
+| B26 | C6a | `guides/infinite-queries.md` shows a pixel-offset scroll guard the showcase's load_more code says fails | open → C4b review |
+| B27 | C6a | `QueryCancelToken` dartdoc says package:http has no cancellation; http ≥1.5 has `AbortableRequest` | open → F1 |
 
 ## Log
 
