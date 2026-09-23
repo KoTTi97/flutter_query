@@ -3346,14 +3346,12 @@ void ninthReview() {
       expect(queryA.observersCount, 1);
       expect(queryB.observersCount, 0);
     }
-    // The same-key attempt touches nothing; the switch is undone, so the
-    // cache saw the observer leave `b` again and nothing else.
-    expect(events, [
-      'observerRemoved',
-      'observerAdded',
-      'observerRemoved',
-      'observerAdded',
-    ]);
+    // Neither attempt touches anything: the seed is computed on the next
+    // query before the observer switches, so the cache sees no observer
+    // leave `a` and come back. It used to (the rollback's detach and
+    // re-attach), and that detach cancelled `a`'s fetch (release review,
+    // 2026-09-23, L2-1).
+    expect(events, isEmpty);
     stop();
     unsubscribe();
     client.clear();

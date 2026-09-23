@@ -109,31 +109,41 @@ class QueriesObserver<TQueryData, TData> {
     }
     final next = <QueryObserver<TQueryData, TData>>[];
     final created = <QueryObserver<TQueryData, TData>>[];
-    // Resolve types/defaults before changing existing subscriptions.
-    try {
-      for (final options in nextQueries) {
-        if (options.select == null && <TQueryData>[] is! List<TData>) {
-          throw ArgumentError(
-              'QueriesObserver requires select when data types differ.');
-        }
-        _client.defaultQueryObserverOptions(options);
-        final matches = available[options.queryKey];
-        if (matches != null && matches.isNotEmpty) {
-          next.add(matches.removeFirst());
-        } else {
-          final observer = QueryObserver<TQueryData, TData>(_client, options);
-          created.add(observer);
-          next.add(observer);
-        }
-      }
-    } catch (_) {
-      for (final observer in created) {
-        observer.destroy();
-      }
-      rethrow;
-    }
     _updating++;
     try {
+      // Everything that can throw — types, defaults, a new member's
+      // construction and every member's `setOptions`, which runs user code
+      // (`InitialData.compute`, AR-05) — before the collection changes, as
+      // upstream applies the options before it swaps `#observers`. Applied
+      // after the swap, a throw left removed members destroyed, new members
+      // never subscribed and `currentResult` a different length from
+      // `observers` (release review, 2026-09-23, L3-3). Members before the
+      // throwing one keep their new options, as upstream's do.
+      try {
+        for (final options in nextQueries) {
+          if (options.select == null && <TQueryData>[] is! List<TData>) {
+            throw ArgumentError(
+                'QueriesObserver requires select when data types differ.');
+          }
+          _client.defaultQueryObserverOptions(options);
+          final matches = available[options.queryKey];
+          if (matches != null && matches.isNotEmpty) {
+            next.add(matches.removeFirst());
+          } else {
+            final observer = QueryObserver<TQueryData, TData>(_client, options);
+            created.add(observer);
+            next.add(observer);
+          }
+        }
+        for (var i = 0; i < next.length; i++) {
+          next[i].setOptions(nextQueries[i]);
+        }
+      } catch (_) {
+        for (final observer in created) {
+          observer.destroy();
+        }
+        rethrow;
+      }
       for (final observer in _observers) {
         if (!next.contains(observer)) {
           _subscriptions.remove(observer)?.call();
@@ -142,9 +152,6 @@ class QueriesObserver<TQueryData, TData> {
       }
       _queries = nextQueries;
       _observers = next;
-      for (var i = 0; i < next.length; i++) {
-        next[i].setOptions(nextQueries[i]);
-      }
       if (hasListeners) {
         for (final observer in List.of(next)) {
           _subscribeObserver(observer);

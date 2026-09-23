@@ -260,20 +260,26 @@ class Retryer<TData> {
     }
   }
 
+  // The status is set before the pause is released, so a pause that exists
+  // because the loop cannot continue is released too — `_tryContinue` lets
+  // a resolved loop through — and `_pause` then skips `onContinue`. Upstream
+  // releases first (`continueFn?.()` before `status = ...`), which left a
+  // rejected loop parked on its pause for good; nothing observed it, but the
+  // comment in `_pause` said the opposite (release review, 2026-09-23, L1-2).
   void _resolve(TData data) {
     if (!isResolved) {
+      _status = RetryerStatus.resolved;
       _tryContinue();
       _wakeDelay();
-      _status = RetryerStatus.resolved;
       _completer.complete(data);
     }
   }
 
   void _reject(Object error, {required StackTrace stackTrace}) {
     if (!isResolved) {
+      _status = RetryerStatus.rejected;
       _tryContinue();
       _wakeDelay();
-      _status = RetryerStatus.rejected;
       _completer.completeError(error, stackTrace);
     }
   }

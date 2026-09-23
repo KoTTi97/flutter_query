@@ -64,14 +64,24 @@ sealed class CombinedResult<T> {
       };
 
   /// Refetches every source, as each one's own `refetch` does.
-  Future<void> refetch() =>
-      Future.wait([for (final source in _sources) source.refetch()]);
+  ///
+  /// [cancelRefetch] is passed to every source: `true`, the default as on a
+  /// single result, cancels a fetch already running over data and starts
+  /// again; `false` joins it. Two combinations that share a source refetch it
+  /// once each, so a pull-to-refresh over both fetches it twice unless one of
+  /// them passes `false` (release review, 2026-09-23, LIB-5).
+  Future<void> refetch({bool cancelRefetch = true}) => Future.wait([
+        for (final source in _sources)
+          source.refetch(cancelRefetch: cancelRefetch),
+      ]);
 
   /// Refetches the sources that are in error, and only those — an
   /// [OptionalQueryResult.optional] source whose query failed included.
-  Future<void> retry() => Future.wait([
+  /// [cancelRefetch] as for [refetch].
+  Future<void> retry({bool cancelRefetch = true}) => Future.wait([
         for (final source in _sources)
-          if ((_optionalOrigin[source] ?? source).isError) source.refetch(),
+          if ((_optionalOrigin[source] ?? source).isError)
+            source.refetch(cancelRefetch: cancelRefetch),
       ]);
 
   Object? get _identity;
@@ -176,6 +186,9 @@ final class CombinedData<T> extends CombinedResult<T> {
 /// which is compared with `==` and re-runs the combiner when it differs
 /// (second integration report, 2026-09-20).
 final class CombineMemo<T> {
+  /// An empty memo: the first `combine` through it runs the combiner.
+  CombineMemo();
+
   List<Object?>? _inputs;
   List<Object?>? _keys;
   late T _output;
@@ -259,8 +272,8 @@ final Expando<QueryResult<Object?>> _optionalOrigin =
 /// A source a combination can do without.
 extension OptionalQueryResult<T> on QueryResult<T> {
   /// This result for a combination that must neither wait for it nor fail
-  /// with it: a gateway without Matter answers 404, and the device list is
-  /// still the device list.
+  /// with it: an optional feature's endpoint answers 404, and the rest of the
+  /// screen is still the rest of the screen.
   ///
   /// With data — a success, or a failed refetch over stale data — this is the
   /// result itself. Without — still loading, disabled, or failed with nothing
@@ -269,8 +282,8 @@ extension OptionalQueryResult<T> on QueryResult<T> {
   /// `retry()` still refetches it when the query behind it failed.
   ///
   /// ```dart
-  /// (devices, status, matter.optional()).combine(
-  ///   (devices, status, matter) => assemble(devices, status, matter: matter),
+  /// (tasks, user, avatar.optional()).combine(
+  ///   (tasks, user, avatar) => Dashboard(tasks, user, avatar: avatar),
   /// );
   /// ```
   QueryResult<T?> optional() {
@@ -288,6 +301,7 @@ extension OptionalQueryResult<T> on QueryResult<T> {
       failureReason: failureReason,
       failureStackTrace: failureStackTrace,
       errorUpdateCount: errorUpdateCount,
+      consecutiveErrorCount: consecutiveErrorCount,
       isStale: isStale,
       isEnabled: isEnabled,
       isFetched: isFetched,
@@ -318,14 +332,19 @@ extension CombineQueryResultList<T> on List<QueryResult<T>> {
           keys);
 
   /// This list **and** one more source of another type, as one combination —
-  /// the query a dynamic set of queries was derived from, say: the hosts'
-  /// details and the device list that named the hosts.
+  /// the query a dynamic set of queries was derived from, say: the details of
+  /// each item and the query that listed the items.
   ///
   /// One level, not two: [other] and every element are sources of the same
   /// combination, [other] first, so "a source that failed with nothing to
   /// show wins" reads the same as in a record, and `retry()`, `refetch()` and
   /// `isFetching` cover all of them. A [CombinedResult] is deliberately not a
   /// source itself — nested, the rules would have to be read twice.
+  ///
+  /// One more source only. For more, put them in the list itself, typed by
+  /// what they have in common —
+  /// `<QueryResult<Object?>>[a, b, ...items].combine(...)` — and cast in the
+  /// combiner.
   CombinedResult<R> combineWith<A, R>(
     QueryResult<A> other,
     R Function(List<T> values, A other) combiner, {
@@ -336,21 +355,6 @@ extension CombineQueryResultList<T> on List<QueryResult<T>> {
           [other, ...this],
           () => combiner([for (final source in this) source.dataOrNull as T],
               other.dataOrNull as A),
-          memo,
-          keys);
-
-  /// [combineWith] for two more sources.
-  CombinedResult<R> combineWith2<A, B, R>(
-    QueryResult<A> first,
-    QueryResult<B> second,
-    R Function(List<T> values, A first, B second) combiner, {
-    CombineMemo<R>? memo,
-    List<Object?>? keys,
-  }) =>
-      _combine(
-          [first, second, ...this],
-          () => combiner([for (final source in this) source.dataOrNull as T],
-              first.dataOrNull as A, second.dataOrNull as B),
           memo,
           keys);
 }
@@ -423,7 +427,10 @@ extension CombineQueryResults5<A, B, C, D, E> on (
           keys);
 }
 
-/// [combine] over six results. Past six, combine two combinations.
+/// [combine] over six results. Past six, combine a list of what the sources
+/// have in common — `<QueryResult<Object?>>[...]` at worst — and cast in the
+/// combiner; a [CombinedResult] is not a source, so two combinations cannot
+/// be combined.
 extension CombineQueryResults6<A, B, C, D, E, F> on (
   QueryResult<A>,
   QueryResult<B>,

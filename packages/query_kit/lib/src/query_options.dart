@@ -228,9 +228,14 @@ final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
 
   // Value equality, like every other option value: an `InitialData.value`
   // built inline would otherwise make every `setOptions` look like a change.
+  // Exact runtime types here and in the four siblings below: a covariant `is`
+  // alone made `.value<num>(1) == .value<int>(1)` but not the reverse, and
+  // the two hashed apart (release review, 2026-09-23, L2-4).
   @override
   bool operator ==(Object other) =>
-      other is InitialDataValue<TQueryData> && other.data == data;
+      other is InitialDataValue<TQueryData> &&
+      other.runtimeType == runtimeType &&
+      other.data == data;
   @override
   int get hashCode => Object.hash(InitialDataValue<TQueryData>, data);
   @override
@@ -261,7 +266,9 @@ final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
   // closure is honestly a new one.
   @override
   bool operator ==(Object other) =>
-      other is InitialDataCompute<TQueryData> && other.compute == compute;
+      other is InitialDataCompute<TQueryData> &&
+      other.runtimeType == runtimeType &&
+      other.compute == compute;
   @override
   int get hashCode => Object.hash(InitialDataCompute<TQueryData>, compute);
   @override
@@ -324,7 +331,8 @@ final class PlaceholderDataKeepPrevious<TQueryData>
 
   @override
   bool operator ==(Object other) =>
-      other is PlaceholderDataKeepPrevious<TQueryData>;
+      other is PlaceholderDataKeepPrevious<TQueryData> &&
+      other.runtimeType == runtimeType;
 
   @override
   int get hashCode => (PlaceholderDataKeepPrevious<TQueryData>).hashCode;
@@ -344,7 +352,9 @@ final class PlaceholderDataValue<TQueryData>
 
   @override
   bool operator ==(Object other) =>
-      other is PlaceholderDataValue<TQueryData> && other.data == data;
+      other is PlaceholderDataValue<TQueryData> &&
+      other.runtimeType == runtimeType &&
+      other.data == data;
   @override
   int get hashCode => Object.hash(PlaceholderDataValue<TQueryData>, data);
   @override
@@ -371,7 +381,9 @@ final class PlaceholderDataCompute<TQueryData>
   // See `InitialDataCompute`: equal when the function is.
   @override
   bool operator ==(Object other) =>
-      other is PlaceholderDataCompute<TQueryData> && other.compute == compute;
+      other is PlaceholderDataCompute<TQueryData> &&
+      other.runtimeType == runtimeType &&
+      other.compute == compute;
   @override
   int get hashCode => Object.hash(PlaceholderDataCompute<TQueryData>, compute);
   @override
@@ -766,6 +778,40 @@ final class QueryObserverOptions<TData>
         refetchIntervalInBackground:
             refetchIntervalInBackground ?? this.refetchIntervalInBackground,
         retryOnMount: retryOnMount ?? this.retryOnMount,
+      );
+
+  /// These options with a [select] added: every field carried over, so a
+  /// shared options factory can serve a projecting reader without being
+  /// written out again field by field — the spelled-out copy is where a
+  /// field went missing (release review, 2026-09-23, LIB-3).
+  ///
+  /// ```dart
+  /// final taskName = taskQuery(id).withSelect((task) => task.name);
+  /// ```
+  QuerySelectOptions<TData, R> withSelect<R>(SelectFn<TData, R> select) =>
+      QuerySelectOptions<TData, R>(
+        queryKey: queryKey,
+        select: select,
+        queryFn: queryFn,
+        enabled: enabled,
+        staleTime: staleTime,
+        gcTime: gcTime,
+        retry: retry,
+        retryDelay: retryDelay,
+        networkMode: networkMode,
+        initialData: initialData,
+        initialDataUpdatedAt: initialDataUpdatedAt,
+        initialDataUpdatedAtCompute: initialDataUpdatedAtCompute,
+        structuralSharing: structuralSharing,
+        meta: meta,
+        behavior: behavior,
+        placeholderData: placeholderData,
+        refetchOnMount: refetchOnMount,
+        refetchOnWindowFocus: refetchOnWindowFocus,
+        refetchOnReconnect: refetchOnReconnect,
+        refetchInterval: refetchInterval,
+        refetchIntervalInBackground: refetchIntervalInBackground,
+        retryOnMount: retryOnMount,
       );
 }
 
