@@ -6,6 +6,11 @@ node_modules
 build/
 .packages
 pubspec_overrides.yaml
+# The binding's example is outside the workspace (it ships, and a published
+# example cannot say `resolution: workspace`); its override onto the checkout
+# is committed, and kept out of the archive by packages/query_kit_flutter/.pubignore.
+!/packages/query_kit_flutter/example/pubspec_overrides.yaml
+/packages/query_kit_flutter/example/pubspec.lock
 
 # dart doc output
 **/doc/api/
@@ -21,3 +26,7 @@ pubspec_overrides.yaml
 
 # review write-ups: session artefacts, not repository content
 /docs/reviews/
+
+# throwaway probe tests review sessions leave behind (`_<name>_tmp_test.dart`):
+# ignored, so neither `git status` nor a pub archive ever picks one up
+/packages/*/test/_*_tmp_test.dart

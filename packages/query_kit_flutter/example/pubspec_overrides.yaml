@@ -1,0 +1,9 @@
+# In the repository, the example runs against the checkout, not against what
+# is on pub.dev. This file is excluded from the published archive
+# (`../.pubignore`), so an unpacked `query_kit_flutter` resolves its example
+# from pub.dev alone.
+dependency_overrides:
+  query_kit:
+    path: ../../query_kit
+  query_kit_flutter:
+    path: ..

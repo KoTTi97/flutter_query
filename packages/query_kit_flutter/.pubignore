@@ -1,0 +1,3 @@
+# The example's override onto the checkout is for the repository only: in the
+# archive it would point at a query_kit that is not there. See the file.
+example/pubspec_overrides.yaml

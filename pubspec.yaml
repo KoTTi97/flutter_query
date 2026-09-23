@@ -7,7 +7,6 @@ environment:
 workspace:
   - packages/query_kit
   - packages/query_kit_flutter
-  - packages/query_kit_flutter/example
   - examples/doc_snippets
   - examples/task_manager
   - examples/showcase

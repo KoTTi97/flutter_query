@@ -18,6 +18,13 @@ jobs:
           flutter-version: 3.38.8
           cache: true
       - run: flutter pub get
+      # The binding's example is not a workspace member — it ships in the
+      # archive, where `resolution: workspace` cannot resolve — so the
+      # analyzer needs it resolved on its own, through its committed
+      # override onto the checkout.
+      - name: example dependencies
+        run: flutter pub get
+        working-directory: packages/query_kit_flutter/example
       - name: core tests
         run: dart test
         working-directory: packages/query_kit

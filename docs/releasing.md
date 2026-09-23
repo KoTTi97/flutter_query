@@ -29,7 +29,7 @@ The examples (`examples/showcase`, `examples/task_manager`) are never published
 ## Before tagging
 
 - Both `pubspec.yaml` files carry the release version (no `-dev`), and the
-  binding's `query_kit` constraint names it (`^0.1.0`).
+  binding's `query_kit` constraint names it (`^1.0.0`).
 - Both `CHANGELOG.md` files have a heading for exactly that version; pub
   validates it.
 - CI is green on `main` for the commit being tagged — every job of
@@ -45,13 +45,19 @@ The examples (`examples/showcase`, `examples/task_manager`) are never published
 One tag per package, named after the package and the version:
 
 ```
-query_kit-v0.1.0
-query_kit_flutter-v0.1.0
+query_kit-v1.0.0
+query_kit_flutter-v1.0.0
 ```
 
 Pushing a tag runs [`.github/workflows/publish.yml`](../.github/workflows/publish.yml),
 which publishes the package under that prefix from its directory via pub.dev's
-automated publishing (GitHub OIDC, no secrets). **That only works once the
+automated publishing (GitHub OIDC, no secrets). It is pub.dev's documented
+*custom* workflow, not `dart-lang/setup-dart`'s reusable one: that one installs
+the Dart SDK only, and both packages resolve inside the root workspace, whose
+members need Flutter — the binding cannot even be validated without it. So
+`setup-dart` only registers the OIDC-issued pub.dev token, Flutter is
+installed after it, and `flutter pub publish --force` runs in the package's
+directory. **That only works once the
 package's pub.dev admin page has automated publishing enabled for this
 repository and the tag pattern** — until then the workflow fails at the
 publish step and nothing is published. The first publish of a new package
@@ -76,8 +82,30 @@ cd packages/query_kit && dart pub publish
 ```
 
 ```bash
-cd packages/query_kit_flutter && dart pub publish
+cd packages/query_kit_flutter && flutter pub publish
 ```
+
+(`dart pub publish` works too when `dart` is the Flutter SDK's, which is what
+the wizard assumes.)
+
+## What the archives hold
+
+- **Tests and `test/PORTING_NOTES.md` ship.** There is no `.pubignore` in the
+  core: the notes are the fidelity audit (some 425 KB, the archive about
+  400 KB compressed), the CHANGELOG points readers at them, and a user who
+  `dart pub unpack`s the package can run the ported suite against the very
+  version they depend on. Halving the download is not worth losing that
+  (REL-21, 2026-09-23).
+- **The binding's example resolves from pub.dev alone.** It is not a
+  workspace member — a published `resolution: workspace` fails outside this
+  repository (REL-7) — and it reaches the checkout through a committed
+  `example/pubspec_overrides.yaml`, which the binding's `.pubignore` keeps out
+  of the archive. After a fresh clone, `flutter pub get` in
+  `packages/query_kit_flutter/example` resolves it; CI does that before the
+  analyzer.
+- **Throwaway probe tests** (`packages/*/test/_*_tmp_test.dart`) are
+  gitignored, so they neither dirty the tree the wizard checks nor reach an
+  archive.
 
 ## Naming
 

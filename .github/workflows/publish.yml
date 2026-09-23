@@ -1,6 +1,16 @@
 # Publishes one package to pub.dev when its tag is pushed — see
 # docs/releasing.md for the order (core first) and the pub.dev-side switch this
 # needs. Uses pub.dev's automated publishing over GitHub OIDC: no secrets.
+#
+# Not `dart-lang/setup-dart`'s reusable publish workflow: it installs the Dart
+# SDK only, and both packages resolve inside the root workspace, whose members
+# include the binding and the Flutter examples — a Dart-only `pub get` there
+# fails, and the binding cannot be validated without Flutter at all. So this
+# is the custom workflow pub.dev documents
+# (https://dart.dev/tools/pub/automated-publishing): `setup-dart` exchanges the
+# GitHub OIDC token for a pub.dev one and registers it with pub (`PUB_TOKEN`,
+# in pub's own credential store, which the Flutter SDK's pub reads too), then
+# Flutter is installed and publishes.
 name: publish
 
 on:
@@ -10,18 +20,29 @@ on:
       - 'query_kit_flutter-v[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
-  core:
-    if: startsWith(github.ref_name, 'query_kit-v')
+  publish:
     permissions:
       id-token: write
-    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
-    with:
-      working-directory: packages/query_kit
-
-  flutter:
-    if: startsWith(github.ref_name, 'query_kit_flutter-v')
-    permissions:
-      id-token: write
-    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
-    with:
-      working-directory: packages/query_kit_flutter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Package directory from the tag
+        id: package
+        run: |
+          case "$GITHUB_REF_NAME" in
+            query_kit_flutter-v*) echo "dir=packages/query_kit_flutter" >> "$GITHUB_OUTPUT" ;;
+            query_kit-v*) echo "dir=packages/query_kit" >> "$GITHUB_OUTPUT" ;;
+            *) echo "unexpected tag $GITHUB_REF_NAME" >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@v7
+      # Order matters: setup-dart registers the pub.dev token; flutter-action
+      # then puts Flutter's own `dart` and `flutter` first on the PATH.
+      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.8
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Publish
+        run: flutter pub publish --force
+        working-directory: ${{ steps.package.outputs.dir }}
