@@ -22,7 +22,7 @@ InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
     );
 ```
 
-:::note Two shapes, as with plain queries
+:::note[Two shapes, as with plain queries]
 A *reader* takes one of two observer shapes, mirroring
 [`QueryObserverOptions` and `QuerySelectOptions`](query-options.md#two-shapes):
 `InfiniteQueryObserverOptions<TPageData, TPageParam>`, above, has no

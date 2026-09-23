@@ -88,7 +88,8 @@ Widget taskTitle(QueryResult<Task> task) => switch (task) {
 ## Other fields worth knowing
 
 - `dataUpdatedAt` and `errorUpdatedAt` — when the data or the error arrived.
-- `isStale` — whether the data is older than its `staleTime`.
+- `isStale` — whether the data is older than its `staleTime`, or was
+  invalidated.
 - `failureCount` and `failureReason` — how many attempts of the current fetch
   have failed, while it retries. See [retries](query-retries.md).
 - `consecutiveErrorCount` — fetches in a row that ended in an error. See

@@ -1,6 +1,6 @@
 ---
 title: How fidelity is proven
-description: TanStack Query's suite ported case for case, what porting found, what review and real use found, and where every omission is written down.
+description: TanStack Query's suite ported case by case, what porting found, what review and real use found, and where every omission is written down.
 ---
 
 # How fidelity is proven
@@ -28,8 +28,8 @@ Three rules keep that honest:
    [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md),
    with its reason.
 
-Upstream is pinned at **`50680b98c`**. The revision is load-bearing: test
-counts and line references drift otherwise.
+The port follows one fixed revision of TanStack Query, **`50680b98c`**, {/* jargon-ok */}
+so the ported tests and the behaviour they check describe the same version.
 
 ## What is ported
 

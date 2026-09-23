@@ -154,7 +154,8 @@ Without writing any of it:
   refetches behind it if the data is older than `staleTime`.
 - **Refetch on focus and on reconnect**, retries with exponential backoff, and
   garbage collection of entries nobody is watching.
-- **Cancellation** the moment nothing is observing the query any more.
+- **Cancellation** the moment nothing is observing the query any more, when
+  the query function hands `context.signal` to its HTTP client.
 
 Which of those fire, and when, is [important defaults](important-defaults.md).
 

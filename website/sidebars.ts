@@ -100,15 +100,23 @@ const sidebars: SidebarsConfig = {
         },
       ],
     },
+    // One page for now; the chunks that add its pages list them here, and
+    // the page itself stays the category's landing page.
     {
       type: 'category',
       label: 'Examples',
-      items: ['examples/index'],
+      className: 'qk-sidebar-heading',
+      link: { type: 'doc', id: 'examples/index' },
+      items: [],
     },
+    // One page for now; the chunks that add its pages list them here, and
+    // the page itself stays the category's landing page.
     {
       type: 'category',
       label: 'Cookbook',
-      items: ['cookbook/index'],
+      className: 'qk-sidebar-heading',
+      link: { type: 'doc', id: 'cookbook/index' },
+      items: [],
     },
     {
       type: 'category',

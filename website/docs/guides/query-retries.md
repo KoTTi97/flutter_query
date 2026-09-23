@@ -15,7 +15,7 @@ three more times by default, waiting one second, then two, then four.
 
 | | |
 |---|---|
-| `RetryPolicy.times(n)` | retry until `n` attempts after the first have failed — `times(3)` is the query default |
+| `RetryPolicy.times(n)` | retry up to `n` times after the first failure — `times(3)` is the query default |
 | `RetryPolicy.never` | the first failure is the error — the mutation default |
 | `RetryPolicy.always` | retry forever |
 | `RetryPolicy.when((failureCount, error, stackTrace) => …)` | decide per failure; `failureCount` is `0` on the first decision |
@@ -57,8 +57,12 @@ retries and continues when the client is online again.
 - A `MissingQueryFunctionError` — there is no function to retry.
 - A cancelled fetch — see [query cancellation](query-cancellation.md).
 
-Retry policy and retry delay are read when a fetch starts; changing them
-during the fetch affects the next one.
+Retry policy, retry delay and network mode are read when a fetch starts; see
+[when options are read](query-options.md#when-options-are-read).
+
+An imperative `client.query` with no retry policy of its own or in the
+defaults makes **one** attempt, and leaves the cache entry's existing policy
+in place for later refetches; see [prefetching](prefetching.md#what-clientquery-joins).
 
 ## Tests
 

@@ -75,6 +75,15 @@ const config: Config = {
     ],
   ],
 
+  // No page lives at `/docs` itself; a reader who trims a docs URL back to
+  // it lands on the overview rather than a 404.
+  plugins: [
+    [
+      '@docusaurus/plugin-client-redirects',
+      { redirects: [{ from: '/docs', to: '/docs/overview' }] },
+    ],
+  ],
+
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
     // Always on, not dismissible: two things about this project should reach

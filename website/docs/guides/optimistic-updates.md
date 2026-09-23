@@ -17,7 +17,8 @@ touching the cache. Nothing to roll back — if it fails, the pending row simply
 goes away.
 
 **From the cache, with rollback.** `onMutate` snapshots and patches; whatever it
-returns is handed to `onError` and `onSettled` as their last argument:
+returns is handed to `onSuccess`, `onError` and `onSettled` as their last
+argument:
 
 ```dart snippet="guides/optimistic-updates.md#optimistic"
 MutationOptions<Task, String, Task?> renameOptimistically(

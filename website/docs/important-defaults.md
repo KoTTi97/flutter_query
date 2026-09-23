@@ -93,7 +93,7 @@ the device coming back online: no `refetchOnWindowFocus`, no
 `refetchOnReconnect`, no resuming of paused mutations, and a `query` that
 paused offline waits for a reconnect only while mounted.
 
-:::warning In Flutter, the provider owns this
+:::warning[In Flutter, the provider owns this]
 `QueryClientProvider` mounts the client it is given and unmounts it again when
 it goes. That count is what keeps focus and reconnect refetches wired, so **an
 extra `unmount()` of your own unbalances it** and the client stops listening to

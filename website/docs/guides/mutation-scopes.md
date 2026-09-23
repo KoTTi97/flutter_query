@@ -31,6 +31,6 @@ completes, and until then the mutation is still `pending` and
 per-call callbacks passed to `mutate` run after the state has moved on. A
 queued run reports `isPaused`, as a run waiting for the network does.
 
-A scope is a string id you choose: a constant for "every write of this kind",
+A scope's id is any value with value equality — usually a string you choose: a constant for "every write of this kind",
 or one per row — `MutationScope('task-$id')` — for "writes to the same row".
 Mutations without a scope run in parallel.

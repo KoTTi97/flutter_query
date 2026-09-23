@@ -90,7 +90,7 @@ A keyless read's is per read, and its reader is the whole widget or the whole
 `State`: several reads each filter their own query, and a change any one of
 them lets through rebuilds the reader.
 
-:::note `previous` is what was built, not what was seen
+:::note[`previous` is what was built, not what was seen]
 `previous` is the result the reader last **built**, not the last one it saw. A
 result `buildWhen` skipped is not remembered, so the next comparison is against
 what is actually on screen.

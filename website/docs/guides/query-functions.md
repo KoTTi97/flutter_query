@@ -49,8 +49,8 @@ an exception type of your own with the status code, for example.
   the key;
 - **`client`** — the `QueryClient` running the fetch.
 
-An infinite query's function is `pageFn`, and its context also carries the
-`pageParam` and the `direction`; see [infinite queries](infinite-queries.md).
+An infinite query's function is `pageFn`, handed an `InfinitePageContext`
+that also carries the `pageParam` and the `direction`; see [infinite queries](infinite-queries.md).
 
 ## Keep it free of widget state
 

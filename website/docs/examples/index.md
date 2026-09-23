@@ -7,8 +7,8 @@ description: Every feature as a screen of the showcase app, against a real backe
 
 # Examples
 
-The repository has two example apps, both runnable on the web and on a
-device, both against a small backend of their own.
+The repository has two example apps, each against a small backend of its
+own. The showcase runs on the web; the task manager on the web and iOS.
 
 ## The showcase
 
@@ -38,7 +38,7 @@ cd examples/showcase && flutter run -d chrome
 | `combine` | three queries of three types as one result | [Combining queries](../guides/combining-queries.md) |
 | `prefetching` | fetching before the screen asks | [Prefetching](../guides/prefetching.md) |
 | `select-and-sharing` | what `select` and structural sharing keep | [Structural sharing](../guides/structural-sharing.md) |
-| `build-when` | every read with and without `buildWhen` | [What rebuilds, and when](../guides/render-optimizations.md) |
+| `build-when` | the keyless reads with and without `buildWhen` | [What rebuilds, and when](../guides/render-optimizations.md) |
 | `initial-and-placeholder` | initial data against placeholder data | [Placeholder query data](../guides/placeholder-query-data.md) |
 | `stale-and-gc` | fresh, stale and collected entries | [Caching](../guides/caching.md) |
 
@@ -58,7 +58,7 @@ cd examples/showcase && flutter run -d chrome
 | `optimistic-updates` | both optimistic shapes, with rollback | [Optimistic updates](../guides/optimistic-updates.md) |
 | `mutation-state` | every write in flight, from the cache | [Mutation state](../guides/mutation-state.md) |
 | `mutation-cancel` | cancelling a write, and what the rollback does | [Cancelling mutations](../guides/cancelling-mutations.md) |
-| `playground` | every mutation option on one screen | [Optimistic updates](../guides/optimistic-updates.md) |
+| `playground` | stale time, gc time, latency and error rate, turned while the queries are live | [Caching](../guides/caching.md) |
 | `invalidation-and-filters` | prefix, exact and predicate filters | [Query invalidation](../guides/query-invalidation.md) |
 | `global-callbacks` | the caches' callbacks and a toast | [Global callbacks](../guides/global-callbacks.md) |
 

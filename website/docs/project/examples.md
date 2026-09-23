@@ -1,5 +1,5 @@
 ---
-title: Examples
+title: How the examples are built
 description: How the examples are built and tested — the one-file tour, the showcase against a real backend, and the acceptance demo.
 ---
 

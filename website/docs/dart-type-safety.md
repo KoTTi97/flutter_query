@@ -86,19 +86,14 @@ key, or store a wrapper type that says what the entry is. See
 
 ## Sealed values instead of magic numbers
 
-`null` means "not configured" on every option field. An option with a real
-"off" value is a sealed value type — `StaleTime`, `GcTime`, `Enabled`,
-`RetryPolicy`, `RetryDelay`, `RefetchOn`, `RefetchInterval`, `NetworkMode` —
-never a magic number, string or boolean. `staleTime: 0`, `staleTime:
-Infinity` and `staleTime: 'static'` are three ideas JavaScript squeezes into
-one field; here they are three constructors of one sealed class, and a
-`switch` over them is exhaustive.
-
-The computed forms come in three families, named by what they compute:
-`.when(predicate)` decides yes or no (`Enabled`, `RetryPolicy`, `RefetchOn`),
-`.dynamic(fn)` computes the value itself (`StaleTime`, `RefetchInterval`,
-`RetryDelay`), and `.compute(fn)` produces data (`InitialData`,
-`PlaceholderData`).
+`null` means "not configured" on every option field. An option with modes is
+a sealed value type — `StaleTime`, `GcTime`, `Enabled`, `RetryPolicy`,
+`RetryDelay`, `RefetchOn`, `RefetchInterval` — never a magic number, string
+or boolean. `staleTime: 0`, `staleTime: Infinity` and `staleTime: 'static'`
+are three ideas JavaScript squeezes into one field; here they are three
+constructors of one sealed class, and a `switch` over them is exhaustive. See
+[describing a query once](guides/query-options.md#two-rules) for the
+computed forms.
 
 ## Cancellation and time
 

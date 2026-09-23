@@ -48,8 +48,8 @@ have to do yourself there is `client.mount()`.
 | `query_kit_flutter` | Flutter **3.27** | Tested on 3.27 as well as current stable. |
 
 Platforms: the core supports all six pub.dev platforms. The binding is
-exercised on the web and on the iOS simulator by the examples' end-to-end
-suites; the others are untested rather than unsupported.
+exercised on the web by the examples' end-to-end suites; the other platforms
+are untested rather than unsupported.
 
 ## Recommended analyzer setting
 

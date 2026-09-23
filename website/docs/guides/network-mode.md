@@ -27,7 +27,8 @@ client believes it is online until something says otherwise. See
 
 ## Mutations
 
-A **mutation** started offline is **paused**, not failed.
+In the default `online` mode, a **mutation** started offline is **paused**,
+not failed.
 `client.resumePausedMutations()` releases paused mutations, and a mounted
 client does it itself when the online manager flips back.
 
@@ -44,4 +45,5 @@ platform's connectivity, sets it in both:
 - `DefaultOptions(queries: QueryDefaults(networkMode: …))`
 - `DefaultOptions(mutations: MutationDefaults(networkMode: …))`
 
-Each resolves option → its own client default → `online`.
+Each resolves option → the defaults registered for its key → its own client
+default → `online`.

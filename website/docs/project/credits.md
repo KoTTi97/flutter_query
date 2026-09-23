@@ -10,7 +10,8 @@ description: A port of TanStack Query, with thanks — unaffiliated with TanStac
 Not "inspired by". Not "in the spirit of". A **port of [TanStack
 Query](https://tanstack.com/query)**: the behaviour is TanStack Query's, the
 architecture is its, the option names are its where Dart allowed it, and its
-own test suite is ported case for case and run against this code. Where
+own test suite is ported case by case — every case left out is listed with
+its reason — and run against this code. Where
 query_kit deliberately behaves differently, the difference is written down
 with its reason — see [differences from TanStack
 Query](../reference/differences-from-tanstack.md).
@@ -37,7 +38,7 @@ substantial portions of the original, and the licence says so.
 
 ## It is not theirs
 
-:::danger Not affiliated with TanStack
+:::danger[Not affiliated with TanStack]
 This project is **not affiliated with, endorsed by, reviewed by, or connected
 in any way to** Tanner Linsley, the TanStack team, or the TanStack
 organisation. They have not seen it. They have no responsibility for it. The
@@ -59,7 +60,7 @@ themselves.
 
 ## It was written by AI
 
-:::warning An AI-written project
+:::warning[An AI-written project]
 Effectively **all** of the code, the tests and the documentation in this
 repository were written by AI agents, working from a plan the agents also
 wrote. A human is in the loop only rarely.
@@ -79,7 +80,7 @@ strategy, this sentence — was decided by an agent.
 
 **What stands in for human review is adversarial, and deliberately so:**
 
-- **TanStack Query's own test suite**, ported case for case. It is the one
+- **TanStack Query's own test suite**, ported case by case. It is the one
   referee that cannot be talked round.
 - **Repeated external deep-dive reviews**, each by a fresh reviewer with no
   memory of the decisions — and a fresh review of every fix.

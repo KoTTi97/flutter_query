@@ -31,12 +31,14 @@ await client.invalidateQueries(
 
 An invalidation does two things to every matching query:
 
-1. **Marks it stale**, whatever its `staleTime` says, so the next mount, focus
-   or reconnect refetches it.
+1. **Marks it stale**, whatever its `staleTime` says — except
+   `StaleTime.static`, which stays fresh — so the next mount, focus or
+   reconnect refetches it.
 2. **Refetches it now if it is active** — if a widget or observer is reading
    it. An inactive query waits until something reads it again.
 
-The future completes when those refetches have settled.
+The future completes when those refetches have settled; one paused because
+the client is offline is not waited for.
 
 ## What is matched
 
@@ -50,7 +52,7 @@ the most general part down — see [query keys](query-keys.md). Every other
 
 | `RefetchType` | Refetches |
 |---|---|
-| `active` | the default: matching queries a reader is observing |
+| `active` | the default (unless the filters' own `type` says otherwise): matching queries a reader is observing |
 | `inactive` | matching queries nobody is observing |
 | `all` | both |
 | `none` | nothing — the queries are only marked stale |

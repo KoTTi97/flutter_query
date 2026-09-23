@@ -37,7 +37,7 @@ which is what makes `refetchOnWindowFocus` mean anything on a phone.
 | `inactive` | **it depends** — see below |
 | `hidden`, `paused`, `detached` | no |
 
-:::note `inactive` means two different things
+:::note[`inactive` means two different things]
 On **iOS, Android and Fuchsia**, `inactive` is a transient interruption: the
 notification shade, a system dialog, the app switcher. Treating those as
 "unfocused" would refetch the world on the way back, so `inactive` counts as

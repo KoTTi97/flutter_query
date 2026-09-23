@@ -34,7 +34,7 @@ Leaving the filters out matches everything.
 |---|---|
 | `queryKey` | keys that start with this one — a **prefix** |
 | `exact` | with `true`, only the key itself |
-| `type` | `QueryTypeFilter.active` (observed), `inactive` or `all` |
+| `type` | `QueryTypeFilter.active` (read by at least one enabled observer), `inactive` or `all` |
 | `stale` | stale (`true`) or fresh (`false`) queries |
 | `fetchStatus` | `FetchStatus.fetching`, `paused` or `idle` |
 | `status` | `QueryStatus.pending`, `error` or `success` |

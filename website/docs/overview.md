@@ -19,7 +19,7 @@ the plumbing.
   builder widgets, a `State` mixin and `context.query(...)`. No third-party
   dependency.
 
-:::danger Read this first
+:::danger[Read this first]
 query_kit is an entirely AI-coded project: all code, tests and documentation
 were written by AI coding agents (Anthropic's Claude). A human maintainer set
 the goals and reviews releases, but did not write the code.
@@ -97,7 +97,8 @@ a query. The documentation names no default.
 ## A port, checked against the original
 
 The behaviour is TanStack Query's, and TanStack Query's own test suite —
-ported to Dart — is run against it. Where the port deliberately differs, the difference is
+ported to Dart case by case, with every case left out listed and explained —
+is run against it. Where the port deliberately differs, the difference is
 written down: see [differences from TanStack
 Query](reference/differences-from-tanstack.md) and [how fidelity is
 proven](project/fidelity.md).

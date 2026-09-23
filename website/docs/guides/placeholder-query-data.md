@@ -16,7 +16,7 @@ result.
 | | |
 |---|---|
 | `PlaceholderData.value(v)` | this value |
-| `PlaceholderData.compute((previous, previousQuery) => …)` | computed from what this reader showed before, and the query it came from |
+| `PlaceholderData.compute((previous, previousQuery) => …)` | computed from the data (before `select`) of the query this reader last showed, and that query |
 | `const PlaceholderData.keepPrevious()` | the previous key's data — TanStack Query's `keepPreviousData` |
 
 While it shows, the result is a `QuerySuccess` with `isPlaceholderData: true`,

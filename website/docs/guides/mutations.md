@@ -82,10 +82,16 @@ Widget build(BuildContext context) {
 The cache work has to happen either way. The client is the right thing to close
 over; the `BuildContext` is not.
 
+Per-call callbacks — the `callbacks:` passed to `mutate` — are the exception:
+once the reader has stopped listening, they are skipped, and only the
+options' own callbacks run. Put what must happen in the options.
+
 ## Narrowing rebuilds
 
-All four styles take [`buildWhen`](render-optimizations.md#buildwhen). It is
-the only narrowing a mutation reader has: there is no `select` on a mutation.
+`context.mutation`, `watchMutation` and `MutationBuilder` take
+[`buildWhen`](render-optimizations.md#buildwhen); a `MutationController`
+has none, on purpose — it is the notifier. It is the only narrowing a
+mutation reader has: there is no `select` on a mutation.
 
 ## Identity
 
@@ -125,7 +131,8 @@ it.
 `meta` per key. **Not callbacks** — see [differences from TanStack
 Query](../reference/differences-from-tanstack.md).
 
-A mutation with no `mutationFn` anywhere fails with
+A mutation with neither a `mutationFn` nor a `mutationFnWithContext` anywhere
+fails with
 `MissingMutationFunctionError`, and is never retried.
 
 ## Where next

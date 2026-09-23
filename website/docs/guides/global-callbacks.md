@@ -60,6 +60,6 @@ passed to `mutate` after both; see [mutations](mutations.md).
 
 ## Opting out with `meta`
 
-`meta` is a map on a query's or a mutation's options that the library never
+`meta` is any value — usually a map — on a query's or a mutation's options that the library never
 reads. A global callback can: above, a query with `meta: {'silent': true}`
 fails without a toast.

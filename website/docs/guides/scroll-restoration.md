@@ -34,4 +34,5 @@ The position is Flutter's, not the cache's:
   memory.
 
 A stale list refetches behind the restored position; structural sharing keeps
-the unchanged rows' instances, so the rows on screen do not rebuild.
+the unchanged rows' instances, so a row widget that compares its data can
+skip the work.

@@ -23,7 +23,8 @@ modes, the shape every option with modes has here:
 value: a provider that only listens starts out believing the default — online —
 however long the first event takes, and an app launched in airplane mode then
 fetches once against a network that is not there. Most connectivity packages
-answer the question directly.
+can tell you the current state — `connectivity_plus` has
+`checkConnectivity()`.
 
 Six lines with `connectivity_plus`, which stays **your** dependency:
 
@@ -66,7 +67,7 @@ QueryClientProvider(
 `null` — the default — brings nothing, and the client keeps believing it is
 online.
 
-:::warning A link is not reachability
+:::warning[A link is not reachability]
 `connectivity_plus` reports a *link*, not the internet. A phone on hotel wifi
 behind a captive portal reports "connected".
 :::

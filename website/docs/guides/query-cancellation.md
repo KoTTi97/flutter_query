@@ -35,7 +35,8 @@ The token also has `isCancelled`, `whenCancelled` (a future) and
   cache.
 - **A refetch with `cancelRefetch: true`** — the default for `refetch()`,
   `invalidateQueries` and `refetchQueries` — cancels the fetch in flight and
-  starts its own.
+  starts its own, when the query already has data. A query still loading its
+  first data joins the running fetch instead.
 
 ## What `cancelQueries` does
 

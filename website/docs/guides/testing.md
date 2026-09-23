@@ -53,7 +53,7 @@ own test folder. The samples on this page are the cases of
 [`examples/doc_snippets/test/teardown_snippet_test.dart`](https://github.com/KoTTi97/flutter_query/blob/main/examples/doc_snippets/test/teardown_snippet_test.dart),
 which CI runs, so they cannot rot.
 
-## The harness both examples wrap
+## A harness
 
 Written once per test suite, so no case repeats the steps:
 
@@ -94,16 +94,18 @@ queryWidgetTest('the list loads', (tester, client) async {
 });
 ```
 
-Both example apps wrap this shape with their own fixture, in the same
-teardown order: `showcaseTest` in `examples/showcase/test/harness.dart`,
+Both example apps wrap this shape with a fixture of their own, in the same
+teardown order: `showcaseTest` in
+[`examples/showcase/test/harness.dart`](https://github.com/KoTTi97/flutter_query/blob/main/examples/showcase/test/harness.dart),
 which also brings a fresh fake backend and opens the app on one route, and
-`demoTest` in `examples/task_manager/test/acceptance_test.dart`. The
-binding's own suite has the fuller version in
-`packages/query_kit_flutter/test/harness.dart` — a second client adopted for
-the teardown, the provider wired with lifecycle observation off, the app
-lifecycle put back to `resumed` when a case faked it. They are worth reading
-before writing your own harness; the showcase's README lists the rules that
-cost someone a debugging session, in the order they bite.
+`demoTest` in
+[`examples/task_manager/test/acceptance_test.dart`](https://github.com/KoTTi97/flutter_query/blob/main/examples/task_manager/test/acceptance_test.dart).
+The binding's own suite has the fuller version in
+[`packages/query_kit_flutter/test/harness.dart`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit_flutter/test/harness.dart)
+— a second client adopted for the teardown, the provider wired with lifecycle
+observation off, the app lifecycle put back to `resumed` when a case faked
+it. None of them is importable; they are worth reading before you write your
+own.
 
 ## A client for tests
 
@@ -169,5 +171,6 @@ fires the timers.
 
 A `QueryController` is a plain `ValueListenable`, and the core's
 `QueryObserver` is a plain object with `subscribe`. Both are testable with
-`package:test` alone, no binding required — which is often the faster way to
-pin a cache behaviour down.
+plain `test()` cases, no `WidgetTester` required — a `QueryController` under
+`flutter test`, a `QueryObserver` even under `dart test` — which is often the
+faster way to pin a cache behaviour down.

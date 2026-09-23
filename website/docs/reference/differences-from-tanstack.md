@@ -33,7 +33,7 @@ is not here at all, the [feature matrix](feature-matrix.md).
 |---|---|
 | `fetchQuery`, `prefetchQuery`, `ensureQueryData` | one `client.query`: `await` it, `.ignore()` it, `staleTime: StaleTime.static`, or `revalidateIfStale: true`. See [prefetching](../guides/prefetching.md) |
 | a positional filters object | a named `filters:` argument everywhere |
-| `skipToken` | `Enabled.no` — which, unlike `skipToken`, lets `refetchQueries` refetch a query nobody observes |
+| `skipToken` | `Enabled.no` — which, unlike `skipToken`, lets `refetchQueries` refetch a cached query nobody observes |
 | `hasNextPage`, `fetchNextPage` on the result | on the infinite query's controller or observer; the sealed result keeps one shape |
 | an infinite query's `queryFn` | `pageFn`, with a typed page context |
 | `useQueries` with a tuple of different types and `combine` | `QueriesBuilder` for a list of one type; different types combine as a record of results, `(a, b).combine(…)`. See [combining queries](../guides/combining-queries.md) |
@@ -41,7 +41,7 @@ is not here at all, the [feature matrix](feature-matrix.md).
 | `initialDataUpdatedAt` as a function | `initialDataUpdatedAtCompute` |
 | a mutation function's second argument | `mutationFnWithContext: (variables, context)`; plain `mutationFn` takes the variables only |
 | `mutate(variables, { onSuccess, … })` | `mutate(variables, callbacks: MutateCallbacks(…))` |
-| the rollback handle on the mutation result (`context`) | passed to `onError` and `onSettled`, not on `MutationResult` |
+| the rollback handle on the mutation result (`context`) | passed to `onSuccess`, `onError` and `onSettled`, not on `MutationResult` |
 | module-level `focusManager`, `onlineManager`, `notifyManager` | instances owned by each `QueryClient` |
 | cache callbacks on a reassignable `config` | final constructor arguments of `QueryCache` and `MutationCache` |
 

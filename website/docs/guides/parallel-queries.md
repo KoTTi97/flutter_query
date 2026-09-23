@@ -23,7 +23,6 @@ loads, an error if either failed — [combine them](combining-queries.md).
 
 ## A list of queries
 
-
 `QueriesBuilder` observes a list that may change length or order — the
 counterpart of `useQueries`, minus the heterogeneous tuple (for that, see
 [combining queries](combining-queries.md)).

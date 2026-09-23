@@ -36,8 +36,8 @@ stale-while-revalidate as an imperative call: cached data comes back at once
 while a stale entry refreshes behind it; with nothing cached, the fetch is
 awaited as usual.
 
-`client.query` also accepts `InfiniteQueryOptions`, which fetches the first
-page; see [infinite queries](infinite-queries.md).
+`client.query` also accepts `InfiniteQueryOptions` — with nothing cached, it
+fetches the first page — and `client.infiniteQuery` is the typed form; see [infinite queries](infinite-queries.md).
 
 ## Where to prefetch
 
@@ -54,8 +54,8 @@ Prefetched data is cached like any other: it is garbage-collected after
 
 `client.query` **joins** a fetch already in flight for its key rather than
 starting another — so a call right after your write may hand back what the
-running fetch brings. Use `refetchQueries` for a fetch that starts after your
-write.
+running fetch brings, and a cancelled fetch that reverts resolves it with the
+reverted data. Use `refetchQueries` for a fetch that starts after your write.
 
 The options it is given become the query's, as an observer's do: an explicit
 `retry` in them is the policy a later invalidation or focus refetch of that

@@ -20,15 +20,17 @@ is a plain `??` per field: an option you leave unset is decided by the next
 level down — the key's defaults, then the client's, then the built-in value.
 See [important defaults](../important-defaults.md).
 
-**An option with a real "off" value is a sealed value type**, never a magic
-number, string or boolean — `StaleTime`, `GcTime`, `Enabled`, `RetryPolicy`,
-`RetryDelay`, `RefetchOn`, `RefetchInterval`, `NetworkMode`. Each has its own
+**An option with modes is a sealed value type**, never a magic number,
+string or boolean — `StaleTime`, `GcTime`, `Enabled`, `RetryPolicy`,
+`RetryDelay`, `RefetchOn`, `RefetchInterval`; `NetworkMode`, a closed set
+of three, is an enum. Each has its own
 page: [caching](caching.md), [dependent queries](dependent-queries.md),
 [retries](query-retries.md), [app focus](window-focus-refetching.md),
 [polling](polling.md), [network mode](network-mode.md).
 
 The computed forms come in three families, named by what they compute:
-`.when(predicate)` decides yes or no (`Enabled`, `RetryPolicy`, `RefetchOn`),
+`.when(fn)` decides per query or per failure — yes or no for `Enabled` and
+`RetryPolicy`, a `RefetchOn` value for `RefetchOn` —
 `.dynamic(fn)` computes the value itself from the query or the attempt
 (`StaleTime`, `RefetchInterval`, `RetryDelay`), and `.compute(fn)` produces
 data (`InitialData`, `PlaceholderData`).

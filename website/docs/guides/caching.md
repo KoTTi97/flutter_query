@@ -46,7 +46,8 @@ is asked several times per operation; keep its function cheap and free of side
 effects.
 
 An [invalidation](query-invalidation.md) marks data stale whatever its
-`staleTime` says.
+`staleTime` says — except `StaleTime.static`, which an invalidation does not
+make stale.
 
 ## Garbage collection
 

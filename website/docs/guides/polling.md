@@ -17,8 +17,8 @@ it.
 | `RefetchInterval.every(d)` | refetch every `d` |
 | `RefetchInterval.dynamic((query) => …)` | computed from the query each time the timer is re-armed; return a `Duration`, or `null` to stop |
 
-The timer belongs to the observer: it starts when a reader subscribes and
-stops when the last one goes. It polls whatever `staleTime` says, including
+Each reader's observer has its own timer: it starts when that reader
+subscribes and stops when it goes. It polls whatever `staleTime` says, including
 a `StaleTime.static` query.
 
 ## In the background

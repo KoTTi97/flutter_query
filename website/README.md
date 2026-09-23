@@ -29,13 +29,13 @@ of building it in CI.
   region a page shows, and the fence names it:
 
   ```dart
-  // >>> guides/rebuilds.md#select-counts
+  // >>> guides/render-optimizations.md#select-counts
   select: (tasks) => tasks.where((s) => s.done).length,
   // <<<
   ```
 
   ````md
-  ```dart snippet="guides/rebuilds.md#select-counts"
+  ```dart snippet="guides/render-optimizations.md#select-counts"
   ````
 
   The id rides on the fence's metastring rather than a nearby HTML comment,
@@ -69,6 +69,9 @@ of building it in CI.
   `mutations.md` showed a closure this repository's own lints reject
   (`unnecessary_lambdas`). Neither would have been caught by compiling the
   twins alone.
+- **Admonitions put their title in brackets**: `:::note[Title]`, not
+  `:::note Title`. The site runs with Docusaurus's v4 flags, which drop the
+  MDX 1 form, and a page using it renders the `:::` line as a paragraph.
 - **Numbers are measured, not remembered.** The test counts on the landing
   page and in `docs/project/fidelity.md` come from actual runs. If you cannot
   re-measure one, do not restate it.

@@ -40,7 +40,7 @@ A bare `setQueryData(key, null)` infers `Null` and writes nothing, as
 `undefined` does in TanStack Query; write `setQueryData<Task?>(key, null)` to
 store a null.
 
-:::danger One key, one exact type
+:::danger[One key, one exact type]
 A key is bound to the data type it was first used with, and reading it as any
 other type throws `QueryDataTypeError` — **related types included**. `int` and
 `int?` are two types. So are `List<Task>` and `List<Object?>`.
