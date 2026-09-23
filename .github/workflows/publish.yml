@@ -33,11 +33,25 @@ jobs:
             query_kit-v*) echo "dir=packages/query_kit" >> "$GITHUB_OUTPUT" ;;
             *) echo "unexpected tag $GITHUB_REF_NAME" >&2; exit 1 ;;
           esac
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The tag names what is published: a tag whose version is not the
+      # pubspec's would publish the checkout's version under the wrong name.
+      - name: Tag matches the pubspec
+        working-directory: ${{ steps.package.outputs.dir }}
+        run: |
+          tag_version="${GITHUB_REF_NAME#*-v}"
+          tag_package="${GITHUB_REF_NAME%-v*}"
+          name=$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml)
+          version=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml)
+          if [ "$name" != "$tag_package" ] || [ "$version" != "$tag_version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match pubspec $name $version" >&2
+            exit 1
+          fi
+          echo "publishing $name $version"
       # Order matters: setup-dart registers the pub.dev token; flutter-action
       # then puts Flutter's own `dart` and `flutter` first on the PATH.
-      - uses: dart-lang/setup-dart@v1
-      - uses: subosito/flutter-action@v2
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           flutter-version: 3.38.8

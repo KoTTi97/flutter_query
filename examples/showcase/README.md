@@ -27,6 +27,10 @@ cd examples/showcase && flutter run -d chrome
 flutter run --dart-define=BACKEND=http://192.168.1.5:5175/api   # a real device
 ```
 
+The server listens on loopback only, because anyone who reaches it can reset
+its data. A real device is another machine, so start the server with
+`HOST=0.0.0.0 npm run dev` for it — on a network you trust.
+
 The home screen lists the catalogue; each row opens a feature at `/#/<id>`.
 
 ### Without a server

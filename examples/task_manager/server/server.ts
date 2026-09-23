@@ -148,6 +148,11 @@ app.use(
   },
 )
 
-app.listen(PORT, () => {
-  console.log(`Dummy backend listening on http://localhost:${PORT}`)
+// Loopback only: anyone who can reach this server can reset or rewrite its
+// data, which is what a test fixture is for and what a network must not get.
+// HOST=0.0.0.0 opts in, for a device on the LAN.
+const HOST = process.env.HOST ?? '127.0.0.1'
+
+app.listen(PORT, HOST, () => {
+  console.log(`Dummy backend listening on http://${HOST}:${PORT}`)
 })

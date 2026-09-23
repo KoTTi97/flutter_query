@@ -168,6 +168,11 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(status).json({ message })
 })
 
-app.listen(PORT, () => {
-  console.log(`Showcase backend listening on http://localhost:${PORT}`)
+// Loopback only: anyone who can reach this server can reset or rewrite its
+// data, which is what a test fixture is for and what a network must not get.
+// HOST=0.0.0.0 opts in, for a device on the LAN.
+const HOST = process.env.HOST ?? '127.0.0.1'
+
+app.listen(PORT, HOST, () => {
+  console.log(`Showcase backend listening on http://${HOST}:${PORT}`)
 })

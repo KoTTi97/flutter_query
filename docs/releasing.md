@@ -82,7 +82,12 @@ the Dart SDK only, and both packages resolve inside the root workspace, whose
 members need Flutter — the binding cannot even be validated without it. So
 `setup-dart` only registers the OIDC-issued pub.dev token, Flutter is
 installed after it, and `flutter pub publish --force` runs in the package's
-directory. **That only works once the
+directory. Before anything is installed it checks that the tag names the
+package and version in that pubspec, and stops if not: a tag is a promise
+about what is published. Every action in the workflows is pinned to a
+commit SHA, its version in a comment; Dependabot's monthly `github-actions`
+update moves the pin and the comment together, as a reviewable PR.
+**That only works once the
 package's pub.dev admin page has automated publishing enabled for this
 repository and the tag pattern** — until then the workflow fails at the
 publish step and nothing is published. The first publish of a new package

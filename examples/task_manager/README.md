@@ -59,7 +59,9 @@ works.
 
 On a **physical iPhone or iPad**, `localhost` is the device itself, so point it
 at your Mac's address on the network — and expect iOS to ask once for local
-network permission:
+network permission. The server listens on loopback only unless told
+otherwise, so start it with `HOST=0.0.0.0 npm run dev` for a device, on a
+network you trust:
 
 ```bash
 flutter run --dart-define=BACKEND=http://192.168.240.11:5174/api
