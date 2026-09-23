@@ -277,13 +277,36 @@ class TaskList implements StructurallyShareable<TaskList> {
 }
 ```
 
-Two ways to get `shareWith` wrong, and only one is caught. Returning a value
-that is not equal to `this` — `previous`, by mistake — would put stale data in
-the cache, and debug builds assert against it. Returning an equal value that
-shares nothing — a plain copy — is correct and useless: nothing fails, and the
-saving is gone without a sound. Measure it once: after a refetch that changed
-one element, the others should be `identical` to what was there before. (One
-that throws is ignored, and the incoming value kept.)
+Returning `previous` itself is right exactly when nothing changed. A class
+without value equality is never `==` to its predecessor, even with the same
+content, so the walk asks on every refetch, and handing `previous` back is the
+only way it keeps its instance:
+
+```dart snippet="guides/options.md#share-with-previous"
+// No value equality: two TaskFeeds are never ==, so the walk always asks.
+class TaskFeed implements StructurallyShareable<TaskFeed> {
+  TaskFeed(this.items);
+
+  final List<Task> items;
+
+  @override
+  TaskFeed shareWith(TaskFeed previous) {
+    final shared = replaceEqualDeep(previous.items, items);
+    return identical(shared, previous.items) ? previous : TaskFeed(shared);
+  }
+}
+```
+
+Nothing checks the contract, in debug builds or release: for a class whose
+`==` is not deep, the walk cannot tell a correct `previous` from a mistaken
+one. So there are two ways to get `shareWith` wrong, both silent. Returning
+`previous` — or anything not equal in content to `this` — when something did
+change puts stale data in the cache. Returning an equal value that shares
+nothing — a plain copy — is correct and useless: the saving is gone without a
+sound. Measure it once: after a refetch that changed one element, the others
+should be `identical` to what was there before, and after one that changed
+nothing, the whole value should be. (A hook that throws is ignored, and the
+incoming value kept.)
 
 It is found wherever the walk goes — at the top, in a list, in an
 `InfiniteData` page — so one implementation replaces a `structuralSharing`

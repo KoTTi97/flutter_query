@@ -40,12 +40,23 @@ Things to know:
 
 - **Read in `build`, not in a handler.** The read is reconciled against the
   previous build; that is how an unused key is released.
-- A read inside a **nested builder callback** — a `ListView.builder` item, a
-  `LayoutBuilder`, a `ValueListenableBuilder` — is added to the enclosing
-  widget's reads and does not release what its own `build` read. A key such a
-  callback stops reading is released on that widget's next own build or when
-  it goes. Give a list item its own widget (a `TaskTile` that reads its own
-  query) when its reads should come and go with the item.
+- A read through the outer `context` inside a **nested builder callback** — a
+  `ValueListenableBuilder`, an `AnimatedBuilder`, a `LayoutBuilder` — is added
+  to the enclosing widget's reads and does not release what its own `build`
+  read. A key such a callback stops reading is released on that widget's next
+  own build or when it goes. A `LayoutBuilder`'s or `OrientationBuilder`'s
+  *own* `context` is different: its builder is its build, so the wide
+  layout's key goes after the frame that switched to the narrow one.
+- **Lists: do not read through the `context` an `itemBuilder` is given.** A
+  `ListView.builder`, `GridView.builder`, `PageView.builder` or any other
+  lazily built list hands its item builder the whole list's context, not the
+  row's, and builds rows piecemeal as they scroll in, so no rule for it both
+  keeps the rows on screen subscribed and lets go of the ones scrolled away.
+  A debug build throws a `FlutterError` naming the fix: give each row a widget
+  of its own — `itemBuilder: (_, i) => TaskTile(ids[i])` — and read in
+  `TaskTile.build`, so each row's reads come and go with it. (In a release
+  build such a read is bounded, but a row still on screen can lose its
+  subscription when others scroll in.)
 - Each reading widget gets observers of its own. What is shared is the query in
   the cache, which the core deduplicates.
 - A widget that stops calling `context.query` *altogether* gives no signal
@@ -158,7 +169,7 @@ converged on:
 | Situation | What fits |
 |---|---|
 | A leaf that renders one query | `context.query` — flat, and only that widget rebuilds |
-| Inside a `ListView.builder` or a sliver | `QueryBuilder`, or a small item widget that reads its own query — the tree stays explicit and each item's reads go with it |
+| Inside a `ListView.builder` or a sliver | `QueryBuilder`, or a small row widget that reads its own query — the tree stays explicit and each row's reads go with it. Not `context.query` through the `itemBuilder`'s own `context`, which is a debug error |
 | A `State` that is already stateful (a form, a controller) | `QueryMixin` — the query and its mutations go flat at the top of `build` |
 | Two siblings that need the same result | `QueryController` held by the parent |
 | You want `buildWhen` | a builder, `watchQuery` or `context.query`; a controller filters in its listener instead |

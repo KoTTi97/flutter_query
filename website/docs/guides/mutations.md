@@ -222,9 +222,18 @@ none: it *is* the notifier.
 In the context and mixin styles a mutation is identified by `id:` if you give
 one, else by its `mutationKey`, each together with its three type arguments;
 without either, by the types alone. A `mutationKey` is a category, as
-upstream's is, not a name: two mutations of the same shape under one key in
-one build without an `id:` are caught by an assertion in debug builds — they
-would otherwise share one controller. Give each an `id:`.
+upstream's is, not a name: two mutations of the same shape under one key read
+in one `build` without an `id:` would share one controller, and whichever was
+read last would run for both. When their mutation functions differ, a debug
+build catches it with an assertion. Give each an `id:`.
+
+The same function read twice is one mutation and does not assert: a getter
+over one stored options object, options built around a tear-off or a
+top-level function, or a nested builder re-reading what `build` read. A
+function literal is a new function every time it is evaluated, so a getter
+that builds one per read looks exactly like two mutations and still asserts
+— keep the options (or the function) in a field, or read the mutation once
+and share the controller.
 
 Like a query, a mutation is released after the frame once a build stops reading
 it.
@@ -299,7 +308,8 @@ Two things to know, because an empty list after a filter looks harmless:
 - The type is the controller's for its life: a later `setOptions` may
   replace the filters or the select, and the selection still sees only
   mutations of that type (a new select receives them erased, as the untyped
-  one does).
+  one does). A filter's `predicate` runs after the type test, so it too
+  sees only mutations of that type and may read the declared type.
 - A typed selection does not replace an untyped one where the mutations are
   mixed on purpose: "is *any* write in flight?" over a scope that holds two
   variable types is still one untyped controller, next to the typed one.

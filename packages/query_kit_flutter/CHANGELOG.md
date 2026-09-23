@@ -60,8 +60,10 @@ fetching, upstream's `useIsFetching`.
   single-subscription one only while exactly one provider listens once, and
   a second listen throws a `FlutterError` pointing to `asBroadcastStream()`.
   Taking `onlineStatus` away, or disposing the provider, puts its client back
-  online; a failing `cancel()` of the subscription is reported through
-  `FlutterError.reportError`.
+  online once no other provider has a status for that client: a replacement
+  provider on the same client — a new key, a move to another parent — keeps
+  its own verdict. A failing `cancel()` of the subscription is reported
+  through `FlutterError.reportError`.
 - The first `resumed` after app start is not a focus change, so mounted
   queries do not refetch at startup.
 - A result that arrives inside a build is delivered after the frame; outside
@@ -81,12 +83,26 @@ fetching, upstream's `useIsFetching`.
   keeps a `MutationBuilder`'s state and a `QueriesBuilder`'s collection, and
   a client swap in the same frame as an options change fetches on the new
   client. `QueriesBuilder` builds once for one change of its list.
-- A read inside a nested builder callback — a `ValueListenableBuilder`, a
-  `LayoutBuilder`, a `ListView.builder` item — is additive to the enclosing
-  reader: it does not release what the reader's own `build` read, and a key
-  such a callback stops reading is released on the reader's next own build
-  or disposal. Give a list item its own widget where release should follow
-  the item.
+- A read through the outer `context` (or `watchQuery`) inside a nested
+  builder callback — a `ValueListenableBuilder`, an `AnimatedBuilder`, a
+  `LayoutBuilder` — is additive to the enclosing reader: it does not release
+  what the reader's own `build` read, and a key such a callback stops reading
+  is released on the reader's next own build or disposal. A
+  `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` is a reader of
+  its own whose builder is its build, so a key it stops reading — the wide
+  layout's, after a resize — is released after that frame.
+- `context.query`, `context.selectQuery`, `context.infiniteQuery` and
+  `context.mutation` called with the `context` a lazily built list hands its
+  item builder — `ListView.builder`, `GridView.builder`, `PageView.builder`,
+  `SliverList`/`SliverGrid` builders, `ListWheelScrollView.useDelegate`,
+  two-dimensional scroll views — throw a `FlutterError` in debug builds.
+  That context is the whole list's, and no release rule for it is both
+  bounded and correct. Give each row a widget of its own and read in its
+  `build`: `itemBuilder: (_, i) => TaskTile(ids[i])`. Release builds follow
+  the per-frame rule there, which is bounded, but a row still on screen can
+  lose its subscription when others scroll in. `watchQuery`, or the outer
+  `context`, inside an item builder is the additive case above: rows
+  scrolled away stay subscribed until the reader builds again.
 - A listener delivers each notification whose value differs from the last
   one it saw; a batch of writes is one transition to the last value.
 - A controller's `value` before its first listener is the optimistic result,
@@ -95,9 +111,18 @@ fetching, upstream's `useIsFetching`.
   mutation through the cache: the options' callbacks run, nothing is
   attached, and the mutation is collected after its `gcTime`. On a live
   controller the per-call callbacks run whether or not anything listens.
+  Running a mutation through `controller.observer` instead is the core's
+  contract: on a controller nobody listens to, its per-call callbacks are
+  dropped. Run mutations through the controller.
 - A `mutationKey` is a category, not a name: two mutation reads of one shape
-  under one key in one build, without an `id`, are a debug assertion — give
-  each an `id`.
+  under one key in the reader's own `build`, without an `id`, with different
+  mutation functions, are a debug assertion — give each an `id`. They used to
+  share one controller silently, so whichever was read last ran for both.
+  The same function read twice — one stored options object, a tear-off, a
+  top-level function — is one mutation and does not assert, and neither does
+  a nested builder re-reading what `build` read. A function literal is a new
+  function every time it is built, so a getter that builds one per read
+  still asserts: keep it in a field, or read the mutation once.
 - `QueryController.setOptions` and `InfiniteQueryController.setInfiniteOptions`
   keep nothing the observer refused.
 
@@ -106,7 +131,8 @@ fetching, upstream's `useIsFetching`.
 - `MutationController.cancel()` fails the run being shown with a
   `CancelledError`; disposing a controller still does not cancel.
 - `MutationStateController.typed` selects the mutations of one type, typed,
-  for the controller's life — a later `setOptions` keeps the type.
+  for the controller's life — a later `setOptions` keeps the type, and a
+  filter's `predicate` only sees mutations of that type.
 - Results of different data types combine with the core's
   `(a, b).combine(…)` in every call style; an `Enabled.when` over outside
   state is re-evaluated by the rebuild that hands the options over again.

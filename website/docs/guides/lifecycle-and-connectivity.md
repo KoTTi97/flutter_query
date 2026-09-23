@@ -124,7 +124,10 @@ only while exactly one provider listens to it, once — no remount, no second
 provider — and a second listen throws a `FlutterError` that points to
 `asBroadcastStream()`; wrap it when in doubt. A swapped client inherits the
 last value the stream reported, and taking `onlineStatus` away (setting it to
-`null`) or disposing the provider puts the client back online.
+`null`) or disposing the provider puts the client back online — once no
+other provider has a status for that client. A replacement provider on the
+same client, under a new key or moved to another parent, mounts before the
+old one goes and keeps its own verdict.
 
 With no stream at all, a fixed status is the whole verdict, and a changed one
 reaches the client on the rebuild that changes it:

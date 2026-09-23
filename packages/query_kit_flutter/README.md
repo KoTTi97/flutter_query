@@ -81,11 +81,16 @@ they are released when the widget stops reading the key or unmounts. A widget
 that stops calling `context.query` *altogether* gives no signal Flutter can
 see, so its last observers stay until it unmounts — put a conditional read in
 its own small widget. Read in `build`, not in a handler: the read is reconciled
-against the previous build. A read inside a nested builder callback — a
-`ListView.builder` item, a `LayoutBuilder`, a `ValueListenableBuilder` — is
+against the previous build. A read through the outer `context` inside a
+nested builder callback — a `ValueListenableBuilder`, a `LayoutBuilder` — is
 added to the enclosing widget's reads and does not release them; a key such a
-callback stops reading goes on that widget's next own build. Give a list item
-its own widget when its reads should come and go with the item.
+callback stops reading goes on that widget's next own build. A
+`LayoutBuilder`'s *own* `context` releases per frame: its builder is its
+build. **In a list, do not read through the `context` an `itemBuilder` is
+given** — it is the whole list's, not the row's, and a debug build throws a
+`FlutterError` naming the fix. Give each row a widget of its own,
+`itemBuilder: (_, i) => TaskTile(ids[i])`, and read in `TaskTile.build`; its
+reads then come and go with the row.
 `context.selectQuery` is the form with a `select`; it takes a
 `QuerySelectOptions`. `context.query` always reads the
 provider's client and takes no `client:` — a `BuildContext` names exactly one
@@ -196,9 +201,12 @@ asks for it and disposed with it. In the context and mixin styles a mutation is
 identified by `id`, else by its `mutationKey`, each together with its three
 type arguments; without either, by the types alone. A `mutationKey` is a
 category, as upstream's is, not a name: two mutations read in one build with
-the same key and types would share a controller, so that is a debug assertion
-— give each an `id`. Like a query, it is released after the frame once a build
-stops reading it.
+the same key and types would share a controller, so two such reads with
+*different* mutation functions are a debug assertion — give each an `id`. The
+same function read twice — one stored options object, a tear-off — is one
+mutation and does not assert; a function literal is new on every build, so
+keep it in a field or read the mutation once. Like a query, it is released
+after the frame once a build stops reading it.
 
 The third type argument is what `onMutate` returns — the rollback handle of an
 optimistic update. A mutation without one uses `MutationOptions.simple`, which
@@ -419,7 +427,8 @@ exactly one provider listens to it, once — no remount, no second provider —
 and a second listen throws a `FlutterError` that says so; wrap it with
 `asBroadcastStream()` to be safe. A swapped client inherits the last value
 the stream reported, and taking `onlineStatus` away (or disposing the
-provider) puts the client back online. Worth knowing: `connectivity_plus` reports a *link*, not
+provider) puts the client back online once no other provider has a status
+for it — a replacement provider keeps its own verdict. Worth knowing: `connectivity_plus` reports a *link*, not
 reachability. A phone on hotel wifi with a captive portal reports "connected".
 
 ## Signals, hooks and other reactive packages

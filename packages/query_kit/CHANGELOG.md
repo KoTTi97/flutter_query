@@ -11,8 +11,8 @@ version.
 The claim it makes is fidelity. Upstream's own test suite is ported case for
 case — 17 suites, **414 of their 536** cases, every omitted case accounted for
 in `test/PORTING_NOTES.md` by name or by the upstream block it belongs to,
-with its category and its reason. The complete core suite has **818** VM tests;
-**814** also run compiled to JavaScript (four barrel checks are VM-only),
+with its category and its reason. The complete core suite has **823** VM tests;
+**819** also run compiled to JavaScript (four barrel checks are VM-only),
 including pre-release ownership regressions, the regressions of the release
 review, the cases found by the example apps and a first real integration, and
 32 bounded confidence sequences over the public API. Closeness to
@@ -46,7 +46,9 @@ meets first:
 - A cancel delivered from the `fetch` notification while offline no longer
   leaves the query paused with nothing running (QE-01).
 - A `select` that throws after a key change reports a loading error, not the
-  previous key's selection as stale data (OB-01).
+  previous key's selection as stale data (OB-01) — nor the selection of a
+  placeholder, which upstream shows there as a refetch error. A divergence,
+  recorded.
 - Structural sharing and key equality compare sets in linear time, for
   every member type: a 10 000-member set of `int`s, `double`s, strings,
   records or `DateTime`s costs about 1–1.5 ms per cache write on the VM
@@ -106,19 +108,21 @@ meets first:
 - `client.query` of an infinite key that has an observer, without a page
   function, borrows the observer's paging, and so does an invalidation driven
   by a select-only reader; both used to throw "missing queryFn".
-- `setOptions` with an `InitialData.compute` that throws leaves the observer
-  and the previous key's running fetch untouched, and `QueriesObserver.setQueries`
-  is atomic: a member whose options throw leaves the collection as it was.
+- `setOptions` with an `InitialData.compute` that throws leaves the observer's
+  query and the previous key's running fetch untouched, and a same-key
+  `setOptions` that brings a new `select` with a new `initialData` runs the
+  new `select` on the seed. `QueriesObserver.setQueries` is atomic: a member
+  whose options throw leaves the collection as it was, with its combined
+  result recomputed and its listeners told.
 - A `keepPrevious` placeholder is not reported as the new key's `staleData`
   when that key's `select` throws; the result is a loading error.
 - `==` is symmetric across type arguments for `InitialData`,
-  `PlaceholderData` and `InfiniteData`. The debug assertion after
-  `StructurallyShareable.shareWith` fires only when the hook returns
-  `previous` itself.
+  `PlaceholderData` and `InfiniteData`.
 - Mutations: one started paused that could run by the time an async
   `onMutate` returned no longer reports `isPaused` while its function runs;
   `cancel()` on one restored `pending` from persistence fails it instead of
-  doing nothing; offline, `resumePausedMutations()` no longer waits for an
+  doing nothing, and hands its scope on only if it held it — cancelling a
+  restored scope's tail leaves the head paused; offline, `resumePausedMutations()` no longer waits for an
   `always` mutation queued behind an `online` scope-mate that cannot run; a
   second run whose `onMutate` threw no longer hands the first run's
   `onMutateResult` to its error callbacks.
@@ -250,14 +254,19 @@ meets first:
   sharing a source and refreshed together fetch it once.
 - `StructurallyShareable<T>`: a value class implements `shareWith(previous)`
   and structural sharing walks into it — a wrapper around a list is otherwise
-  a leaf, and one changed element renews every instance.
+  a leaf, and one changed element renews every instance. Returning `previous`
+  is right exactly when nothing changed — how a class without value equality
+  keeps its instance across an unchanged refetch. Nothing checks the
+  contract, in debug builds or release: for an `==` that is not deep, the
+  walk cannot tell a correct `previous` from a stale one.
 - `QueryState.consecutiveErrorCount`, carried on `QueryResult` too — failed
   fetches in a row, zero again with the next *fetched* data; a manual write
   and a cancelled fetch leave it alone — so a `RefetchInterval.dynamic` can
   give up after N and a widget can say so from the result it has; and
   `MutationStateObserver.typed`, a mutation-state selection filtered by and
   typed to one mutation type, for the observer's life — a later `setOptions`
-  keeps the type.
+  keeps the type, and a filter's `predicate` only sees mutations of that
+  type, so it may read the declared type without a cast.
 - An `Enabled.when` over state outside the cache is re-evaluated when the
   observer is handed its options again — every rebuild — because `setOptions`
   compares against what the observer last committed rather than resolving the

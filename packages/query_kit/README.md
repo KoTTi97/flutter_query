@@ -179,7 +179,8 @@ matter at the call site:
   without.
 - **Structural sharing walks into your own classes** when they implement
   `StructurallyShareable`; otherwise a value class is a leaf, compared by
-  its `==`.
+  its `==`. Its `shareWith` returns `previous` exactly when nothing changed;
+  nothing checks that, because nothing can.
 - **Giving up is readable.** `consecutiveErrorCount` — on `QueryState` and on
   every `QueryResult` — counts failed fetches in a row, so a
   `RefetchInterval.dynamic` can stop after N and a widget can say so; only a
@@ -187,7 +188,7 @@ matter at the call site:
 - **Cache-wide mutation state is `MutationStateObserver`**, upstream's
   `useMutationState`: `MutationFilters` plus a `select`, with concurrent runs
   under one key kept apart; `MutationStateObserver.typed` selects the
-  mutations of one type, typed.
+  mutations of one type, typed — its filter's `predicate` sees only those.
 - **`AppFocusManager(refetchMinBackgroundDuration:)`** suppresses focus
   refetches after an absence too short to matter — a divergence from upstream,
   which always refetches. It never blocks paused work from resuming, and the

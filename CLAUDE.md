@@ -72,17 +72,33 @@ not reproduce) — PORTING_NOTES' three "Release review 2026-09-23" sections, a
 row each. What users meet: `withSelect`, `QueryResult.consecutiveErrorCount`,
 `CombinedResult.refetch(cancelRefetch:)`; `combineWith2`, the `canFetch`
 export and `typedMutationSelection` gone; #84 holding in all four call styles;
-reads in nested builders additive. The docs pass put the README samples under
+reads in nested builders additive (a list's item-builder context refused in debug
+builds, after the second pass). The docs pass put the README samples under
 `site_fences_test.dart`, took the binding's example out of the workspace
 (`docs/releasing.md`, "What the archives hold") and gave `publish.yml` a
-Flutter SDK. Core **818 VM / 814 browser**, binding **167**.
+Flutter SDK. Then a fresh verifier per package read the fixes against
+upstream and against their pre-fix parent — each section's "Second pass" —
+and, as every earlier round, found defects the fixes had introduced. Core
+(V-C-1–7): three introduced — a same-key `setOptions` running the old
+`select` on a new seed, a typed mutation selection's predicate seeing other
+types, cancelling a restored scope's tail starting its head — and four older
+or cosmetic ones fixed: the `StructurallyShareable` debug assertion removed
+(returning `previous` is correct when nothing changed), `setQueries`'s throw
+path notifying, the L2-2 divergence recorded, dead `trySetData` gone.
+Binding (V-B-1–5): three P2 — a `LayoutBuilder`'s own context never releasing,
+a `ListView.builder` item context holding every row ever built (now a debug
+`FlutterError`: a widget per row), a replacement provider's online verdict
+overwritten by the old one's dispose (now only the last provider resets) —
+and two P3: the keyed-mutation assertion narrowed to different functions in
+the reader's own build, and `MutationController.observer`'s bypass
+documented. Core **823 VM / 819 browser**, binding **184**.
 
 ## Where the work stands (2026-09-23)
 
 | Phase | State |
 |---|---|
-| **`packages/query_kit/`** — the pure-Dart core | **1.0.0, release review done (2026-09-23), not published** — 818 VM / 814 browser tests since; the rest of this cell is the 2026-09-12 state. **Pre-release deep-dive review done (2026-09-12).** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
-| **`packages/query_kit_flutter/`** — the Flutter binding | **1.0.0, done, nine times reviewed, restructured by map #49, release-reviewed 2026-09-23.** 167 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
+| **`packages/query_kit/`** — the pure-Dart core | **1.0.0, release review done (2026-09-23), not published** — 823 VM / 819 browser tests since; the rest of this cell is the 2026-09-12 state. **Pre-release deep-dive review done (2026-09-12).** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
+| **`packages/query_kit_flutter/`** — the Flutter binding | **1.0.0, done, nine times reviewed, restructured by map #49, release-reviewed 2026-09-23.** 184 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46; deduplicated 2026-09-12, map #49).** 30 screens (`combine` and `mutation-cancel` joined on 2026-09-20), 247 widget tests against a dio fake of the backend and 177 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 25 cases against fake and server, and `catalogue_test.dart`, which holds the **five** per-feature artefact sets level. It found two library bugs no ported test could reach |
 | **`examples/task_manager/`** — the acceptance demo, one whole app | **done.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, **15 contract cases** run against its fake and its real server (map #49 — twelve of the fourteen were red against the fake), and 10 Playwright end-to-end tests in a real browser against that server; iOS and web generated |
 

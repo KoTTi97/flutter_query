@@ -378,6 +378,21 @@ class TaskList implements StructurallyShareable<TaskList> {
 }
 // <<<
 
+// >>> guides/options.md#share-with-previous
+// No value equality: two TaskFeeds are never ==, so the walk always asks.
+class TaskFeed implements StructurallyShareable<TaskFeed> {
+  TaskFeed(this.items);
+
+  final List<Task> items;
+
+  @override
+  TaskFeed shareWith(TaskFeed previous) {
+    final shared = replaceEqualDeep(previous.items, items);
+    return identical(shared, previous.items) ? previous : TaskFeed(shared);
+  }
+}
+// <<<
+
 // >>> guides/collections-and-side-effects.md#combine-optional-and-lists
 CombinedResult<String> taskWithOptionalComments(
   QueryResult<Task> task,

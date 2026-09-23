@@ -214,20 +214,42 @@ call that configured nothing is limited to that one fetch.
 **Fix.** Leave `retry` out of the imperative call when it should not stick,
 or set the policy where the query is observed, which hands it in again.
 
+## "context.query was called with the context an item builder was given"
+
+**Symptom.** A debug build throws this `FlutterError` from `context.query`
+(or `context.selectQuery`, `context.infiniteQuery`, `context.mutation`)
+inside a `ListView.builder`'s `itemBuilder` — or a `GridView.builder`'s, a
+`PageView.builder`'s, a `SliverList`'s, a `ListWheelScrollView.useDelegate`'s
+or a two-dimensional scroll view's.
+
+**Mechanism.** The `context` an item builder is given belongs to the list,
+not the row. The list builds its rows piecemeal, as they scroll in, and a
+read through its context cannot say which row it belongs to: released per
+frame, a row still on screen loses its subscription when others scroll in;
+kept, every row ever built stays subscribed. Neither is right, so a debug
+build refuses the read. A release build follows the per-frame rule, which is
+bounded but can drop a visible row's subscription.
+
+**Fix.** Give each row a widget of its own and read in its `build` —
+`itemBuilder: (_, i) => TaskTile(ids[i])` with the `context.query` inside
+`TaskTile.build` — so each row's reads come and go with it.
+
 ## A list item's query is never released
 
-**Symptom.** `context.query` (or `watchQuery`) inside a `ListView.builder`'s
-`itemBuilder`. Items scroll away or the list shrinks, and their queries stay
-observed.
+**Symptom.** `watchQuery` in a `QueryMixin` `State`, or `context.query`
+through the *outer* `context`, inside an `itemBuilder`. Items scroll away or
+the list shrinks, and their queries stay observed.
 
-**Mechanism.** A read made in a nested builder callback — an `itemBuilder`, a
-`LayoutBuilder`, a `ValueListenableBuilder` — is **added** to the enclosing
-widget's reads; it does not release what that widget's own `build` read. A key
-such a callback stops reading is released only on that widget's next own
-build or when it goes.
+**Mechanism.** A read made through the reader's context in a nested builder
+callback — an `itemBuilder`, a `ValueListenableBuilder`, a `LayoutBuilder`
+given the outer `context` — is **added** to the enclosing widget's reads; it
+does not release what that widget's own `build` read. A key such a callback
+stops reading is released only on that widget's next own build or when it
+goes. (A `LayoutBuilder`'s *own* `context` is not this case: its builder is
+its build, and a key it stops reading goes after the frame.)
 
-**Fix.** Give the item its own widget that reads its own query — a
-`TaskTile(id)` — so its reads come and go with it.
+**Fix.** The same: a row widget — a `TaskTile(id)` — that reads its own
+query, so its reads come and go with it.
 
 ## "QueryClientProvider could not listen to its onlineStatus"
 
@@ -241,7 +263,8 @@ only while exactly one provider listens to it, once.
 
 **Fix.** `OnlineStatus.stream(changes.asBroadcastStream(), initial: …)`, built
 once outside `build`. Taking `onlineStatus` away, or disposing the provider,
-puts the client back online.
+puts the client back online once no other provider has a status for it; a
+replacement provider on the same client keeps its own verdict.
 
 ## Two keys that "are" the same do not match
 
