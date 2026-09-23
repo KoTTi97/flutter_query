@@ -378,6 +378,13 @@ class MutationController<TData, TVariables, TOnMutateResult>
 
   /// The observer underneath, for what the controller does not mirror — the
   /// defaulted `options` it runs with, for one.
+  ///
+  /// Running a mutation *through it* is the core's contract, not this
+  /// controller's: `observer.mutate`/`mutateAsync` skip the hold
+  /// [mutateAsync] keeps for a run, so on a controller nobody listens to the
+  /// per-call callbacks are dropped, as the core drops them for an observer
+  /// without listeners (second pass of the release review 2026-09-23,
+  /// V-B-5). Run mutations through the controller.
   MutationObserver<TData, TVariables, TOnMutateResult> get observer =>
       _observer;
 
