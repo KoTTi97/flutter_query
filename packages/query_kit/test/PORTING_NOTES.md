@@ -3202,7 +3202,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | Sets and Maps are not plain objects, so `replaceEqualDeep` returns `next` for them untouched | shared whole when deep-equal (row above); a set is compared as a multiset under the walk's own relation, never under the set's equality policy: a hashed multiset walk that asks either set for its length and its members only — no `lookup`, `contains`, `containsAll` or `remove` — and the members for `==` and `hashCode` — so a case-insensitive `SplayTreeSet` reports a member that changed case, and a `Set` whose own methods throw or break their contract is compared all the same. About 1.3 ms a write at 10 000 members and 14–22 ms at 100 000, past a 16 ms frame; members that break `==`'s own contract get the greedy walk's answer. A map is still looked up by its own keys, so a map with a custom key equality is compared under that policy and keeps the older key representation; such a map needs its own hook or `noStructuralSharing()`. `QueryKey`'s set parts are frozen to default equality, so its `containsAll` shortcut stays sound | pre-release verification, 2026-09-12 (AR-01); final review 2026-09-12 (F1) and its round 3 (R2-1, R2-2, R2-4), `port_specifics_test.dart` `F1 …` ×4, `R2-1 …` ×2, `R2-2 …`, `R2-4 …` |
 | `Query.isDisabled()`'s no-observer branch is `queryFn === skipToken \|\| !isFetched()`: it consults the `skipToken` sentinel but **not** `enabled`, so an unobserved query whose last observer was `enabled: false` and which holds data is *not* disabled and `refetchType: 'all'` refetches it | `!isFetched()` alone. `Enabled.no` spells both `skipToken` and `enabled: false` (#17), and `enabled: false` is the meaning kept — upstream's `enabled: false` does not reach this arm either. So an unobserved, seeded query whose last observer left with `Enabled.no` is refetched by `refetchType: all`, where upstream's `skipToken` one is not, and no `Enabled.when` predicate is evaluated for a query nobody observes. `enabled` governs automatic fetching; `refetchQueries` is an explicit command. The ported case for the `skipToken` arm is unported again. FI-01 had made this branch `!_options.enabled.resolve(this) \|\| !isFetched()` for part of the day; F2/F3 reverted it | final review of the pre-release branch, 2026-09-12 (F2/F3, reverting FI-01); `port_specifics_test.dart` `F2 …`, `F3 …` |
 | `MutationObserver.#notify` runs its listeners once per action, so a listener sees one state per step of the mutation | listeners are notified only when the result is not `==` the last one they were told — the rule the query side has had since A19. The observable cost is fewer states: `mutation.test.tsx`'s two state cases see 3 where upstream sees 4, and 1 pending state across `onMutate` where upstream sees 2, which is why both moved to `states.last` | pre-release deep-dive review, 2026-09-12 (FI-02); the query-side rule it matches is A19, fourth review 2026-09-09 |
-| `QueryObserver.setOptions` decides "was it re-enabled?" by resolving the **previous** options' `enabled` *now*, beside the new one | compared against the `isEnabled` of the observer's last result — what it last *saw*. Identical for every `enabled` that depends on the query or is a value; differs only for a callback over state outside the cache, which upstream can never see change (both sides resolve against the same world) and which here takes effect on the next `setOptions`, i.e. the next rebuild. A key change still compares old against new at the same instant | [#84](https://github.com/KoTTi97/flutter_query/issues/84) |
+| `QueryObserver.setOptions` decides "was it re-enabled?" by resolving the **previous** options' `enabled` *now*, beside the new one | compared against what `enabled` came to when the observer last committed options or subscribed — a field of its own, not the last result's `isEnabled`, which a preview or any query update recomputes against the new world. Identical for a value (`Enabled.yes`/`no`). Differs for a callback over state outside the cache, which upstream can never see change (both sides resolve against the same world) and which here takes effect on the next `setOptions`, i.e. the next rebuild. Differs too for an `Enabled.when` over the query whose answer flips between two rebuilds: upstream compares two predicates over the same query and sees nothing, here the rebuild sees a re-enabled observer and refetches if stale. A key change still compares old against new at the same instant. *(Corrected 2026-09-23, CORE-4: this row said "identical for every `enabled` that depends on the query" and "takes effect on the next `setOptions`"; the first was false, and the second was only true once CORE-2 moved the baseline off the last result.)* | [#84](https://github.com/KoTTi97/flutter_query/issues/84); release review 2026-09-23 (CORE-2, CORE-4) |
 | `MutationObserver.setOptions` notifies the cache with `observerOptionsUpdated` before the first `mutate`, carrying `mutation: undefined` | nothing is emitted until the observer has a mutation (`_currentMutation == null` → no event), so a devtools or logging listener never sees an option change made before the first `mutate` | pre-release deep-dive review, 2026-09-12 (FI-09) |
 | `notifyManager`'s `defaultScheduler` is `setTimeout(0)`, a macrotask | `scheduleMicrotask`: a batch flushes before the next event-loop turn, not after it, which is the finer grain Dart offers and what a Flutter frame wants. `setNotifyFunction` / `setBatchNotifyFunction` / `setScheduler` are all present for anything that needs upstream's timing back | [#19](https://github.com/KoTTi97/flutter_query/issues/19); stated in the `NotifyManager` dartdoc since, and in this table since the pre-release deep-dive review, 2026-09-12 (FI-13) |
 | `setQueryData(key, undefined)` creates nothing and updates nothing — the two `setQueryData` cases pin it | there is no `undefined`, and `null` is a value: `setQueryData<String?>(key, null)` **creates** the entry and writes `null` into it. The type argument is what stops this by accident — a bare `setQueryData(key, null)` infers `Null` and a query of another type refuses it — so reaching the behaviour takes naming a nullable type on purpose. "Leave it alone" is `updateQueryData` returning `null` | [#7](https://github.com/KoTTi97/flutter_query/issues/7), null convention of the second review 2026-09-09; recorded here at the pre-release deep-dive review, 2026-09-12 (FI-18) |
@@ -5032,7 +5032,12 @@ watching borrows and fetches; with the branch deleted the same call fails with
 `MissingQueryFunctionError` — so nothing about it was changed. The ported case
 now drives the fetch through the functionless options and goes red without the
 branch, and `FI-04 a fetch with no query function of its own borrows an
-observer's` covers the user-facing path.
+observer's` covers the user-facing path. *(Corrected 2026-09-23, L3-1:)*
+"works" held for a plain key only. An infinite observer's options carry no
+`queryFn` — the paging is the behaviour — so the branch found nothing to
+borrow on an infinite key and the same call failed with
+`MissingQueryFunctionError`. The branch now borrows a behaviour as well; see
+"Release review 2026-09-23 — core query side".
 
 **FI-05 — `structuralSharing` did not reach `select` output.** Upstream shares
 the selected value with `replaceData(prevResult?.data, data, options)`
@@ -5984,6 +5989,15 @@ can see change, the two agree — the whole ported suite, observers included,
 passes unchanged. On a key change the old same-instant comparison is kept,
 because the last result belongs to the other query.
 
+*(Corrected 2026-09-23, CORE-2/CORE-4.)* "The last result's `isEnabled`" was
+the wrong baseline, and "the whole ported suite passes unchanged" did not
+make it the right one: a preview (`getOptimisticResult(next)`, which the
+binding runs before `setOptions`) and every query update recompute that
+result against the *new* world, so the flip was swallowed before the rebuild
+could see it. The baseline is now a field of its own, written only when the
+observer commits options or subscribes; see "Release review 2026-09-23 —
+core query side".
+
 What remains, and is documented as the first troubleshooting entry: *something*
 has to rebuild the widget when the flag flips. A callback cannot be observed.
 
@@ -6001,7 +6015,10 @@ on `QuerySuccessAction`, manual writes included: data is data. On the state
 only, not on `QueryResult`: `RefetchInterval.dynamic` is handed the query, a
 result field is seventeen constructor sites, and nothing asked to render it.
 Price paid: the state's constructor, field, `copyWith`, `==`, `hashCode` and
-two reducer lines. A restored state without the field starts at zero.
+two reducer lines. A restored state without the field starts at zero. *(2026-09-23, LIB-2: now on `QueryResult` too — an app rendered "gave up" from
+the variant, which a manual write turns into a success while the counter
+stands; measured, it cost ten lines — four constructors, four construction sites, the
+field and its place in `==` — not seventeen sites.)*
 
 **11 — a typed mutation-state select: built.** `MutationStateObserver.typed`
 and `MutationStateController.typed` filter by
@@ -6212,7 +6229,9 @@ combiner)`** on the list: `other` and every element are sources of *one*
 combination, `other` first, through the same `_combine`. Chosen: one level,
 nothing fabricated, and `retry()`, `refetch()` and `isFetching` cover
 everything. `combineWith2` for two such sources; past that the arity is
-somebody's next report.
+somebody's next report. *(Removed before release, 2026-09-23, REL-11: no
+caller, and a list typed by what the sources share covers it; see "Release
+review 2026-09-23 — core query side".)*
 
 ### The rest
 
@@ -6222,9 +6241,47 @@ somebody's next report.
   One that returns a value **not equal to the incoming one** (`previous`, by
   mistake) puts stale data in the cache, and the silent ignore that covers a
   throw would have covered that too. Now a debug assertion, made outside the
-  `try` so it is not swallowed.
+  `try` so it is not swallowed. *(Narrowed 2026-09-23, CORE-1: it compared
+  the returned value with the incoming one by `==`, which a correct hook on an
+  identity-equality class never satisfies; it now asserts only that the hook
+  did not return `previous` itself.)*
 - **Reach:** yes, inside a list and through the cache — `D:`'s fourth case has
   pinned that since the hook was written.
 
 Counts after: core **783** VM / **779** browser.
 
+
+## Release review 2026-09-23 — core query side
+
+The release review's findings on the query, its retryer, the observers, their
+options and results, infinite queries, `QueriesObserver` and `combine`. Each
+was reproduced by a test named after its ID in `release_review_query_test.dart`
+and watched fail before anything changed, unless its row says otherwise; no
+upstream-ported assertion changed.
+
+| ID | What was wrong | Reproduced by | What changed |
+|---|---|---|---|
+| CORE-2 | #84's baseline was the last result's `isEnabled`. The binding's `getOptimisticResult(next)` before `setOptions(next)` recomputed that result with the new options, so `Enabled.no` → `Enabled.yes` read as "was enabled" and did not fetch — which upstream does. And any query update between an outside-state flip and the rebuild (an invalidation, a write) recomputed it against the new world, swallowing the flip #84 was built for | `CORE-2a` (preview then `setOptions`, no → yes: 0 fetches) and `CORE-2b` (flag flips, `invalidateQueries(refetchType: none)`, then the rebuild: 0 fetches) | A dedicated `_lastSeenEnabled`, written only when the observer is constructed, commits options in `setOptions`, or subscribes (true when the mount fetches). `setOptions` compares against it for the optional fetch and for re-arming the timers |
+| L2-5 | The same baseline in `getOptimisticResult`'s optimistic-fetch branch: the preview of a re-enabled outside-state predicate said "not fetching" while the `setOptions` right after it fetched | `L2-5` | The preview reads `_lastSeenEnabled` too, so it shows the fetch that is about to start |
+| CORE-4 | The #84 divergence row claimed the rule was identical to upstream "for every `enabled` that depends on the query", and that an outside flip "takes effect on the next `setOptions`" — CORE-2 showed the second false, and the first is false by construction | By reading, against CORE-2's tests | Row rewritten, with a correction note in it; the #84 section gained one too. New in the row: an `Enabled.when` over the query whose answer flips between two rebuilds now refetches (if stale) on the next rebuild, where upstream sees nothing |
+| CORE-1 | The debug assertion after `StructurallyShareable.shareWith` required the returned value to be `==` the incoming one, which a correct hook on an identity-equality class never satisfies — every refetch of such a value asserted | `CORE-1` (a direct walk, and a refetch through an observer, of an identity-equality `_Box`) | The assertion is now "did not return `previous` itself" — the mistake the "Fourth integration report" meant to catch — and the `StructurallyShareable` dartdoc says so. Release builds unchanged. That report's bullet carries a note |
+| L1-1 | A `CancelledError` thrown by the query function itself — awaiting another query that was cancelled with `revert` — was taken for this query's own cancel: the entry reverted to `pending`/`idle` with no error, and nothing ever settled it | `L1-1` group (a reverting cancel of the inner query of `client.query`; a silent cancel through `resetQueries` with an observer; the query's own cancel still reverting) | `fetch` records the retryer's own `CancelledError` and `_settle` treats only *that* instance as a cancel; any other is an ordinary error through `QueryErrorAction`. **Decided: it does not count toward `consecutiveErrorCount`.** Options: (a) count it — it is an error of this query's fetch; (b) do not — the reducer's existing rule (Second report, C) that a cancelled fetch "did not fail". Chose (b): the cancel says nothing about whether *this* source answers, which is what the counter is for, and one rule for every `CancelledError` is easier to state than one about whose cancel it was. `errorUpdateCount` counts it, as upstream's does |
+| L1-2 | `Retryer._resolve`/`_reject` completed the future before setting their status, where upstream settles the status first | **By reading only** — no test can observe it: completion runs listeners in a later microtask, by which point the status is set either way | Changed anyway, at the review lead's preference, to upstream's order (status, wake a paused continue and the delay, then complete), with a comment saying it is not observable |
+| L1-3 | Four dartdoc sentences were false: `onQueryFetchError` omitted a non-reverting cancel; `FetchOptions.cancelRefetch` omitted that a first load is joined; `QueryErrorAction` omitted the non-reverting cancel; `FetchStatus.paused` omitted a retry waiting for the foreground | By reading, against the code | The four sentences corrected |
+| L2-1 | `setOptions` switched to the new query before `InitialData.compute` could throw in `nextQuery.setOptions`, and the rollback re-attached to the old query — whose detach had already cancelled and reverted its fetch | `L2-1` (a throwing seed on the key switched to: the old key's fetch was reverted, its data never arrived) | `nextQuery.setOptions` now runs *before* the switch, so a throw leaves the observer untouched and the rollback is gone. The port-only AR-05 case in `port_specifics_test.dart` asserted the rollback's `observerRemoved`/`observerAdded` events — the defect itself; it now asserts none. That is a port regression, not an upstream assertion |
+| L2-2 | A `keepPrevious` placeholder followed by a `select` that throws on the new key's first data reported the placeholder as the new key's `staleData`: `hasStaleData`, a refetch error rather than a loading error | `L2-2` group (the memoised selection, and one re-run over the placeholder) | The select memo no longer records a query for a placeholder (`_selectQuery = null`), so the error branch finds no stale data of the new key's own |
+| L2-3 | `StaleTime.dynamic` over outside state had #84's defect: `setOptions` compared old and new resolved at the same instant, so a shortened stale time was never armed and `isStale` stayed false | `L2-3` | The stale timer is re-armed when the resolved stale time differs from the one it was last armed for (`_armedStaleTime`) — the refetch interval's rule |
+| L2-4 | `==` of `InitialDataValue`, `InitialDataCompute`, `PlaceholderDataKeepPrevious`, `PlaceholderDataValue` and `PlaceholderDataCompute` was not symmetric across type arguments (`<int>` == `<num>` one way only) | `L2-4` | `runtimeType` compared, as the results and the defaulted options already did |
+| L3-2 | The same for `InfiniteData.==` | `L3-2` | Same fix |
+| L3-1 | A query whose options carry no `queryFn` borrows one from an observer — but an infinite query's options have `queryFn: null` and a `behavior`, so a plain `client.query`/`fetchQuery` of an observed infinite key, or an invalidation driven by a select-only reader, borrowed nothing and threw "missing queryFn" | `L3-1` group (`client.query` without a queryFn over an observed infinite key; a select-only infinite reader plus invalidate) | The borrow branch runs when the options have neither a `queryFn` nor a `behavior`, and accepts an observer with either. Upstream's sticky `#queryType` was **not** ported: the port's behaviour carries the page function itself, upstream's sticky type fails the same way without a borrow source, and a sticky behaviour would be one more site that copies every field. FI-04's paragraph ("works") held for a plain key only and carries a correction |
+| L3-3 | `setQueries` destroyed removed members and swapped the collection before running members' `setOptions`, so a throwing `InitialData.compute` left removed observers destroyed, new ones never subscribed and `currentResult` a different length from `observers` | `L3-3` | Everything that can throw — types, defaults, construction, every member's `setOptions` — runs first; on a throw the observers it created are destroyed and the collection is as it was. Members before the throwing one keep their new options, as upstream's do |
+| L3-4 | `combine`'s arity-six dartdoc said to "combine two combinations" past six — a `CombinedResult` is not a source, so that does not compile | By reading | Says to combine a list typed by what the sources share (`<QueryResult<Object?>>[…]`) and cast in the combiner. The site's `collections-and-side-effects.md` says the same wrong thing and is left to the docs pass |
+| LIB-2 | After a manual write the result is a `QuerySuccess` (upstream-faithful) while `consecutiveErrorCount` stands (Second report, C) — and the counter lived on the state only, so an app rendering "gave up" read it from the variant, which the write had turned into a success | `LIB-2` (three failures, then `setQueryData`: a success, count 3, equal to the state's) — failed to compile before | **Options:** (a) reset the counter on a manual write — rejected in the Second report's C: an optimistic patch is a guess, and it would refill the give-up budget precisely when the device is unreachable; (b) put the counter on `QueryResult`; (c) a derived `hasGivenUp` — the threshold is the app's, not the library's; (d) document only — leaves the widget without the number it has to render from. **Chose (b)**, plus troubleshooting text for the docs pass: #85's "nothing asked to render it" no longer holds, and measured, the field is ten lines, not the seventeen sites #85 estimated. It is part of the result's `==`. #85's paragraph carries a note |
+| LIB-3 | No way to derive the select shape from the plain one; an app copied fields by hand and dropped six and four of them, so two observers of one key ran under different policies | `LIB-3` — failed to compile before | `QueryObserverOptions.withSelect(select)` → `QuerySelectOptions`, and `InfiniteQueryObserverOptions.withSelect` → `InfiniteQuerySelectOptions`, carrying every field. The test sets every field, checks that the derived options' `toString` fields equal the source's plus `select` (so a field a later edit forgets fails), and that both spellings resolve to equal defaulted options. A new option field now costs a ninth place: this copy |
+| LIB-5 | `CombinedResult.refetch()`/`retry()` always cancelled a source's in-flight fetch, so two combinations sharing a source, refreshed together, fetched it twice with the first cancelled | `LIB-5` | Both take `cancelRefetch` (default `true`, as `QueryResult.refetch`) and pass it through; `cancelRefetch: false` joins. The dartdoc says a shared source is refetched once per combination |
+| REL-9 | `optional()`'s dartdoc example was the integrating app's own domain | By reading | Generic wording and sample (`tasks, user, avatar.optional()`) |
+| REL-11 | `combineWith2` — an arity nobody called, named by a number | By `grep`: no caller in the packages, the examples or the integrating app | **Removed**, not renamed. Options: rename (Dart has no overloads, and a name for "two more" is still a number), keep, or remove. Removing before the first release is free and adding it back later is not breaking; a list typed by what the sources share covers the case, and `combineWith`'s dartdoc says how. The G test's `combineWith2` line now uses that list. The "Fourth integration report" paragraph carries a note; the site's mention is left to the docs pass |
+| REL-14 | `CombineMemo`'s implicit constructor had no dartdoc | By reading | An explicit `CombineMemo()` with one |
+
+Counts after: core **803** VM / **799** browser (783 / 779 before; the 20 of
+`release_review_query_test.dart`), binding **144** (unchanged).

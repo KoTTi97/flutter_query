@@ -24,7 +24,8 @@ enum FetchStatus {
   fetching,
 
   /// A fetch wants to run but cannot: the device is offline and the query's
-  /// [NetworkMode] says to wait.
+  /// [NetworkMode] says to wait, or a retry is waiting for the app to return
+  /// to the foreground.
   paused,
 
   /// Nothing is happening.
@@ -129,7 +130,8 @@ final class QueryState<TQueryData> {
   /// [errorUpdateCount] never does, so "stop polling after five failures in a
   /// row" has nothing to read. With this it is
   /// `RefetchInterval.dynamic((query) =>
-  /// query.state.consecutiveErrorCount >= 5 ? null : interval)`.
+  /// query.state.consecutiveErrorCount >= 5 ? null : interval)`. Every
+  /// observer's result carries it too, as `QueryResult.consecutiveErrorCount`.
   final int consecutiveErrorCount;
 
   /// When the query last ended in an error. Not cleared with [error], so

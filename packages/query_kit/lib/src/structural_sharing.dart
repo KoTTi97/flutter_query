@@ -36,7 +36,10 @@ import 'infinite_query.dart';
 ///
 /// Two ways to get it wrong, and only one is caught. Returning a value that is
 /// **not equal to `this`** — `previous`, by mistake — would put stale data in
-/// the cache; debug builds assert against it. Returning an equal value that
+/// the cache; debug builds assert against `previous` itself, the one form of
+/// it the walk can tell apart from a correct result whatever the class's
+/// `==` is (a class with identity equality returns a new instance that is
+/// never `==` to `this`, and that is right). Returning an equal value that
 /// **shares nothing** — a plain copy — is correct and merely useless: nothing
 /// fails, and the saving is lost without a sound. Measure it once: after a
 /// refetch that changed one element, the others should be `identical` to the
@@ -240,13 +243,18 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
       // Best effort: the incoming value stands.
     }
     if (candidate != null) {
-      // Outside the `try`, so it is not swallowed with the rest: a result
-      // that is not the incoming value is stale data on its way into the
-      // cache, and that is not a sharing failure to shrug at.
+      // Outside the `try`, so it is not swallowed with the rest: `previous`
+      // handed back is stale data on its way into the cache, and that is not
+      // a sharing failure to shrug at. Only that is asserted. Here `previous`
+      // is known not to be `==` to `next`, so returning it is always the
+      // mistake; `candidate == next` was asserted before, and a class with
+      // identity equality — or a shallow `==` over a list — can never meet
+      // it with a correct `shareWith`, which then failed the fetch in debug
+      // builds only (release review, 2026-09-23, CORE-1).
       assert(
-          candidate == next,
-          '${next.runtimeType}.shareWith returned a value that is not equal '
-          'to the one it was called on. Return `this` with the parts '
+          !identical(candidate, previous),
+          '${next.runtimeType}.shareWith returned `previous`, which is not '
+          'equal to the value it was called on. Return `this` with the parts '
           '`previous` already holds swapped in — never `previous` itself.');
       return candidate as T;
     }

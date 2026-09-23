@@ -76,8 +76,10 @@ abstract interface class QueryCacheRef {
   /// `onSuccess` and `onSettled` hooks.
   void onQueryFetchSuccess(Query<Object?> query, Object? data);
 
-  /// Told when a fetch of [query] rejected for good — retries exhausted or a
-  /// non-silent cancel; the cache runs its `onError` and `onSettled` hooks.
+  /// Told when a fetch of [query] rejected for good — retries exhausted, or a
+  /// cancel that is neither silent nor reverting (`cancelQueries(revert:
+  /// false)`); the cache runs its `onError` and `onSettled` hooks. A silent
+  /// cancel and the default reverting one report nothing.
   void onQueryFetchError(
     Query<Object?> query,
     Object error,
@@ -172,7 +174,9 @@ final class FetchOptions {
   /// Creates the overrides; all are unset by default.
   const FetchOptions({this.cancelRefetch, this.meta, this.retry});
 
-  /// Cancel a fetch that is already running and start a new one.
+  /// Cancel a fetch that is already running and start a new one — when the
+  /// query already holds data. Without data the call joins the running fetch
+  /// instead, as upstream's does. Unset means `false`.
   final bool? cancelRefetch;
 
   /// Carried into [QueryState.fetchMeta]; infinite queries put the page
@@ -247,8 +251,9 @@ final class QuerySuccessAction<TQueryData> extends QueryAction {
   final bool manual;
 }
 
-/// A fetch failed for good: retries exhausted, or cancelled without `silent`.
-/// Moves `status` to error, ends the fetch and flags existing data as
+/// A fetch failed for good: retries exhausted, or cancelled with neither
+/// `silent` nor `revert` — a reverting cancel restores the earlier state
+/// through [QuerySetStateAction] instead. Moves `status` to error, ends the fetch and flags existing data as
 /// invalidated. Upstream's `error` action.
 final class QueryErrorAction extends QueryAction {
   /// Creates the action for the error that settled the fetch.
@@ -865,11 +870,19 @@ class Query<TQueryData> extends Removable {
     if (afterOptions != null) return afterOptions;
 
     // A query created by setQueryData or restored from persistence has no
-    // query function of its own; borrow one from an observer.
-    if (_options.queryFn == null) {
+    // query function of its own; borrow one from an observer. A behaviour
+    // counts as one: an infinite query's options carry no `queryFn` — its
+    // pages come from the behaviour — where upstream's carry the page
+    // function as `queryFn`. Checking `queryFn` alone, a plain fetch of an
+    // infinite key (`client.query` without a function, a select-only reader)
+    // stripped the paging and failed with `MissingQueryFunctionError`, and so
+    // did every option-less refetch after it (release review, 2026-09-23,
+    // L3-1).
+    if (_options.queryFn == null && _options.behavior == null) {
       for (final observer in _observers) {
         final observerOptions = observer.observerQueryOptions;
-        if (observerOptions.queryFn != null) {
+        if (observerOptions.queryFn != null ||
+            observerOptions.behavior != null) {
           setOptions(observerOptions as DefaultedQueryOptions<TQueryData>);
           break;
         }
@@ -931,6 +944,10 @@ class Query<TQueryData> extends Removable {
     // Kept in case this fetch has to be reverted.
     _revertState = _state;
 
+    // The CancelledError this fetch's own `cancel` produced, recognised by
+    // instance in `_settle` (L1-1).
+    CancelledError? ownCancel;
+
     // Constructing a retryer runs nothing; `start()` does, below.
     final retryer = Retryer<TQueryData>(
       fn: context.fetchFn,
@@ -951,6 +968,7 @@ class Query<TQueryData> extends Removable {
       onPause: () => _dispatch(const QueryPauseAction()),
       onContinue: () => _dispatch(const QueryContinueAction()),
       onCancel: (error) {
+        ownCancel = error;
         if (error.revert) {
           final revertState = _revertState;
           if (revertState != null) {
@@ -972,16 +990,27 @@ class Query<TQueryData> extends Removable {
     // `fetchFailureCount` (fourth review, 2026-09-09).
     _dispatch(QueryFetchAction(meta: fetchOptions?.meta));
 
-    _settle(retryer, operation).ignore();
+    _settle(retryer, operation, () => ownCancel).ignore();
     return operation.future;
   }
 
   /// Runs [retryer] to its end and completes [operation] with what the cache
   /// ended up holding: the data once written and the hooks run, or the
   /// error once dispatched.
+  ///
+  /// [ownCancel] is the [CancelledError] this fetch's own `cancel` produced,
+  /// if any. Only that one takes the silent and reverting branches: they rely
+  /// on `onCancel` having reverted the state, or on a successor or
+  /// [cancel]'s idle fix owning the status. A `CancelledError` the query
+  /// function threw itself — a query it awaited was cancelled, reset or
+  /// removed — took them too, and nothing ever set the query `idle`: it sat
+  /// `fetching` with nothing running, counted by `isFetching` and never
+  /// collected. It is an ordinary failure now (release review, 2026-09-23,
+  /// L1-1). Upstream tests `instanceof CancelledError` and hangs the same way.
   Future<void> _settle(
     Retryer<TQueryData> retryer,
     Completer<TQueryData> operation,
+    CancelledError? Function() ownCancel,
   ) async {
     try {
       final data = await retryer.start();
@@ -999,7 +1028,7 @@ class Query<TQueryData> extends Removable {
         _runCacheHook(() => _cache.onQueryFetchSuccess(this, data));
       }
     } catch (error, stackTrace) {
-      if (error is CancelledError) {
+      if (error is CancelledError && identical(error, ownCancel())) {
         if (error.silent) {
           // A silent cancel means a new fetch is starting: ride along with it.
           // When no new fetch replaced this one, `_operation` is still this

@@ -45,6 +45,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // prefetch, and how `gcTime` grows to the longest anyone asked for.
     _currentQuery.setOptions(_options.queryOptions);
     updateResult();
+    _lastSeenEnabled = _currentResult.isEnabled;
   }
 
   final QueryClient _client;
@@ -161,6 +162,15 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   Timer? _staleTimer;
   Timer? _refetchTimer;
   Duration? _currentRefetchInterval;
+  // The resolved stale time the stale timer was last armed for — the
+  // `_currentRefetchInterval` of the stale timer (L2-3).
+  StaleTime? _armedStaleTime;
+
+  // What `enabled` came to when this observer last committed options or
+  // subscribed: [setOptions]' and the preview's "was it enabled?". Not the
+  // last result's `isEnabled`, which a query update or a preview recomputes
+  // against the new world (release review, 2026-09-23, CORE-2, L2-5).
+  late bool _lastSeenEnabled;
 
   /// The most recently computed result.
   QueryResult<TData> get currentResult => _currentResult;
@@ -187,6 +197,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       final fetchOnMount = _options.shouldFetchOnMount(_currentQuery);
       if (!hasListeners || lifetime != _lifetime) return;
       if (fetchOnMount) {
+        // `shouldFetchOnMount` is false for a disabled observer.
+        _lastSeenEnabled = true;
         executeFetch();
         // A fetch that joined one already running dispatched nothing, and
         // then nothing recomputed the result — while a binding reads
@@ -200,6 +212,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         }
       } else {
         updateResult();
+        _lastSeenEnabled = _currentResult.isEnabled;
       }
 
       if (hasListeners && lifetime == _lifetime) _updateTimers();
@@ -231,14 +244,18 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     _checkDataType(options);
     final prevOptions = _options;
     final prevQuery = _currentQuery;
-    // What `enabled` came to the last time this observer looked, not what the
-    // previous options come to *now*. Upstream resolves old and new at the
-    // same instant, so a predicate over state outside the cache — "a write is
-    // in flight", a connection flag — never reads as changed: both sides see
-    // the same world, and polling paused that way never resumed (first
-    // integration, #84). Against the last result, handing the observer its
-    // options again — which every rebuild does — is a re-evaluation.
-    final wasEnabled = _currentResult.isEnabled;
+    // What `enabled` came to the last time this observer committed options,
+    // not what the previous options come to *now*. Upstream resolves old and
+    // new at the same instant, so a predicate over state outside the cache —
+    // "a write is in flight", a connection flag — never reads as changed:
+    // both sides see the same world, and polling paused that way never
+    // resumed (first integration, #84). Against what the observer last saw,
+    // handing it its options again — which every rebuild does — is a
+    // re-evaluation. A dedicated field, not the last result's `isEnabled`:
+    // a preview and every query update recompute that result with the *new*
+    // world, and either one between the flip and the rebuild swallowed the
+    // fetch (release review, 2026-09-23, CORE-2).
+    final wasEnabled = _lastSeenEnabled;
 
     final nextOptions =
         _client.defaultQueryObserverOptions<TQueryData, TData>(options);
@@ -246,25 +263,15 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // transition leaves the previous observer usable.
     final nextQuery =
         _client.queryCache.build<TQueryData>(_client, nextOptions.queryOptions);
-    final prevInitialState = _currentQueryInitialState;
+    // `InitialData.compute` is user code, and an existing query with no data
+    // runs it here. Its throw is the caller's (AR-05) — and it comes before
+    // the switch, so the observer is still on the options and the query it
+    // had, and the previous query's fetch still has its observer: switching
+    // first detached it, which cancelled and reverted that fetch before the
+    // rollback could re-attach (release review, 2026-09-23, L2-1).
+    nextQuery.setOptions(nextOptions.queryOptions);
     _options = nextOptions;
-
     _updateQuery(nextQuery);
-    try {
-      _currentQuery.setOptions(_options.queryOptions);
-    } catch (_) {
-      // `InitialData.compute` is user code, and an existing query with no
-      // data runs it here. Its throw is the caller's — but the switch above
-      // is undone first, so the observer stays on the options and the query
-      // it had, as a rejected type transition leaves it (pre-release
-      // verification, 2026-09-12, AR-05).
-      _options = prevOptions;
-      if (!identical(_currentQuery, prevQuery)) {
-        _updateQuery(prevQuery);
-        _currentQueryInitialState = prevInitialState;
-      }
-      rethrow;
-    }
 
     if (_options != prevOptions) {
       _client.queryCache.notifyObserverOptionsUpdated(_currentQuery, this);
@@ -279,6 +286,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     }
 
     updateResult();
+    _lastSeenEnabled = _currentResult.isEnabled;
 
     // Compared once resolved, as upstream compares `resolveQueryValue`s: an
     // `Enabled.when` or `StaleTime.dynamic` built inline is a new closure on
@@ -291,11 +299,16 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             prevOptions.enabled.resolve(_currentQuery)
         : _options.enabled.resolve(_currentQuery) != wasEnabled;
 
+    // The stale time, like the interval below, is compared with the one the
+    // timer was last armed for, not with the previous options resolved now:
+    // a `StaleTime.dynamic` over outside state reads the same world on both
+    // sides and never differed, so a stale time shortened by outside state
+    // was never armed and `isStale` stayed false (release review, 2026-09-23,
+    // L2-3 — #84's twin).
     if (mounted &&
         (queryChanged ||
             enabledChanged ||
-            _options.staleTime.resolveFor(_currentQuery) !=
-                prevOptions.staleTime.resolveFor(_currentQuery))) {
+            _options.staleTime.resolveFor(_currentQuery) != _armedStaleTime)) {
       _updateStaleTimeout();
     }
 
@@ -405,7 +418,9 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   void _updateStaleTimeout() {
     _clearStaleTimeout();
-    final staleTime = _options.staleTime.resolve(_currentQuery);
+    final resolved = _options.staleTime.resolveFor(_currentQuery);
+    _armedStaleTime = resolved;
+    final staleTime = resolved is StaleTimeDuration ? resolved.duration : null;
 
     if (_currentResult.isStale || !_shouldScheduleTimer(staleTime)) {
       return;
@@ -499,8 +514,11 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     if (optimistic) {
       final mounted = hasListeners;
       final fetchOnMount = !mounted && options.shouldFetchOnMount(query);
+      // The same "was it enabled?" [setOptions] is about to ask, so the
+      // preview shows the fetch the commit starts (L2-5).
       final fetchOptionally = mounted &&
-          options.shouldFetchOptionally(query, _currentQuery, _options);
+          options.shouldFetchOptionally(query, _currentQuery, _options,
+              wasEnabled: _lastSeenEnabled);
 
       if (fetchOnMount || fetchOptionally) {
         final fetchable = canFetch(options.networkMode, _client.onlineManager);
@@ -576,8 +594,10 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           outData = _selectResult;
           hasOutData = _hasSelectResult;
           // Equal input through the same selector is this query's selection
-          // too, whichever query first produced it.
-          _selectQuery = query;
+          // too, whichever query first produced it — unless the input is a
+          // placeholder, which is no query's data: a selection of it stands
+          // behind nobody's select error (release review, 2026-09-23, L2-2).
+          _selectQuery = isPlaceholderData ? null : query;
         } else {
           if (!identical(query, _selectQuery)) {
             // The last selection belongs to another query. It must not stand
@@ -609,6 +629,10 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             _selectResult = outData;
             _hasSelectResult = true;
             hasOutData = true;
+            // A selection of a placeholder belongs to no query (L2-2): the
+            // next pass over this query's real data starts without stale
+            // data, as a failed first fetch does.
+            if (isPlaceholderData) _selectQuery = null;
             _clearSelectError();
           } catch (selectError, selectStackTrace) {
             _selectError = selectError;
@@ -689,6 +713,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             failureReason: state.fetchFailureReason,
             failureStackTrace: state.fetchFailureStackTrace,
             errorUpdateCount: state.errorUpdateCount,
+            consecutiveErrorCount: state.consecutiveErrorCount,
             isStale: options.isStaleFor(query),
             isEnabled: options.enabled.resolve(query),
             isFetched: query.isFetched(),
@@ -706,6 +731,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             failureReason: state.fetchFailureReason,
             failureStackTrace: state.fetchFailureStackTrace,
             errorUpdateCount: state.errorUpdateCount,
+            consecutiveErrorCount: state.consecutiveErrorCount,
             isStale: options.isStaleFor(query),
             isEnabled: options.enabled.resolve(query),
             isFetched: query.isFetched(),
@@ -722,6 +748,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             failureReason: state.fetchFailureReason,
             failureStackTrace: state.fetchFailureStackTrace,
             errorUpdateCount: state.errorUpdateCount,
+            consecutiveErrorCount: state.consecutiveErrorCount,
             isStale: options.isStaleFor(query),
             isEnabled: options.enabled.resolve(query),
             isFetched: query.isFetched(),

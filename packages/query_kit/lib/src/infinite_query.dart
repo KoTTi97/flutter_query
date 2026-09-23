@@ -110,10 +110,15 @@ final class InfiniteData<TPageData, TPageParam> {
             : List<TPageParam>.unmodifiable(pageParams),
       );
 
+  /// Equal when the runtime types are and both lists hold equal elements. The
+  /// runtime-type check keeps `==` symmetric across type arguments, as
+  /// `QueryResult`'s and the structural-sharing walk's (release review,
+  /// 2026-09-23, L3-2).
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is InfiniteData<TPageData, TPageParam> &&
+          other.runtimeType == runtimeType &&
           _listEquals(other.pages, pages) &&
           _listEquals(other.pageParams, pageParams);
 
@@ -618,6 +623,39 @@ final class InfiniteQueryObserverOptions<TPageData, TPageParam>
       retryOnMount: retryOnMount ?? this.retryOnMount,
     );
   }
+
+  /// [QueryObserverOptions.withSelect] for the paged shape: these options
+  /// with a [select] added and every other field carried over (release
+  /// review, 2026-09-23, LIB-3).
+  InfiniteQuerySelectOptions<TPageData, TPageParam, R> withSelect<R>(
+          SelectFn<InfiniteData<TPageData, TPageParam>, R> select) =>
+      InfiniteQuerySelectOptions<TPageData, TPageParam, R>(
+        queryKey: queryKey,
+        pageFn: pageFn,
+        initialPageParam: initialPageParam,
+        getNextPageParam: getNextPageParam,
+        select: select,
+        getPreviousPageParam: getPreviousPageParam,
+        maxPages: maxPages,
+        enabled: enabled,
+        staleTime: staleTime,
+        gcTime: gcTime,
+        retry: retry,
+        retryDelay: retryDelay,
+        networkMode: networkMode,
+        initialData: initialData,
+        initialDataUpdatedAt: initialDataUpdatedAt,
+        initialDataUpdatedAtCompute: initialDataUpdatedAtCompute,
+        structuralSharing: structuralSharing,
+        meta: meta,
+        placeholderData: placeholderData,
+        refetchOnMount: refetchOnMount,
+        refetchOnWindowFocus: refetchOnWindowFocus,
+        refetchOnReconnect: refetchOnReconnect,
+        refetchInterval: refetchInterval,
+        refetchIntervalInBackground: refetchIntervalInBackground,
+        retryOnMount: retryOnMount,
+      );
 
   @internal
   @override

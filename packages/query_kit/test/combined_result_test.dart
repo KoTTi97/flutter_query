@@ -327,11 +327,14 @@ void main() {
             .combineWith(adapter.currentResult, (values, ok) => ok)
             .dataOrNull,
         isTrue);
+    // More than one extra source: a list typed by what they share
+    // (`combineWith2` was removed before release, REL-11).
     expect(
-        [hosts.currentResult.first]
-            .combineWith2(adapter.currentResult, adapter.currentResult,
-                (values, a, b) => values.single.single)
-            .dataOrNull,
+        <QueryResult<Object?>>[
+          adapter.currentResult,
+          adapter.currentResult,
+          hosts.currentResult.first,
+        ].combine((values) => (values[2] as List<String>).single).dataOrNull,
         'h1-c');
 
     for (final u in unsubscribe) {

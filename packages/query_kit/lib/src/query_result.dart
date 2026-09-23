@@ -42,6 +42,7 @@ sealed class QueryResult<TData> {
     required this.failureReason,
     required this.failureStackTrace,
     required this.errorUpdateCount,
+    required this.consecutiveErrorCount,
     required this.isStale,
     required this.isEnabled,
     required this.isFetched,
@@ -74,6 +75,16 @@ sealed class QueryResult<TData> {
 
   /// How many times this query has ended in an error over its whole life.
   final int errorUpdateCount;
+
+  /// Fetches in a row that ended in an error — the query's
+  /// [QueryState.consecutiveErrorCount], here so the widget that renders a
+  /// result can read it too. A successful fetch sets it back to zero; a
+  /// manual write (`setQueryData`, an optimistic patch) does not, although
+  /// it turns an error into a [QuerySuccess]. So a "gave up after five
+  /// failures" is read here, not from the variant: after such a write the
+  /// result is a success while polling that stopped on this count stays
+  /// stopped (release review, 2026-09-23, LIB-2).
+  final int consecutiveErrorCount;
 
   /// Whether the data is older than this observer's `staleTime`, or has been
   /// invalidated — upstream's `isStale`. A query with no data is stale; a
@@ -146,6 +157,7 @@ sealed class QueryResult<TData> {
         failureCount,
         failureReason,
         errorUpdateCount,
+        consecutiveErrorCount,
         isStale,
         isEnabled,
         isFetched,
@@ -183,6 +195,7 @@ final class QueryPending<TData> extends QueryResult<TData> {
     required super.failureReason,
     required super.failureStackTrace,
     required super.errorUpdateCount,
+    required super.consecutiveErrorCount,
     required super.isStale,
     required super.isEnabled,
     required super.isFetched,
@@ -207,6 +220,7 @@ final class QuerySuccess<TData> extends QueryResult<TData> {
     required super.failureReason,
     required super.failureStackTrace,
     required super.errorUpdateCount,
+    required super.consecutiveErrorCount,
     required super.isStale,
     required super.isEnabled,
     required super.isFetched,
@@ -242,6 +256,7 @@ final class QueryError<TData> extends QueryResult<TData> {
     required super.failureReason,
     required super.failureStackTrace,
     required super.errorUpdateCount,
+    required super.consecutiveErrorCount,
     required super.isStale,
     required super.isEnabled,
     required super.isFetched,
