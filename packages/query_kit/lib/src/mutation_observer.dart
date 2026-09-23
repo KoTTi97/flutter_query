@@ -131,6 +131,10 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// changed `mutationKey` means a different mutation, so the observer
   /// [reset]s; otherwise a mutation still in flight takes the new options and
   /// a settled one keeps the ones it ran with.
+  ///
+  /// What an in-flight run takes: its callbacks, `meta` and `gcTime`, and a
+  /// retry calls the new mutation function. Its `retry`, `retryDelay`,
+  /// `networkMode` and `scope` were fixed when it started and stay so.
   void setOptions(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) {
