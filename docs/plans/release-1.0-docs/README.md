@@ -24,11 +24,11 @@ starts once C3 has fixed the sidebar and slugs.
 | C8b | Dartdoc, binding | same for `query_kit_flutter` | 1 | done |
 | C9 | Test gaps | core/binding coverage gaps from `audits/audit-demos-tests.md` §B closed; value-class table tests; binding on `--platform chrome`; jargon guard in CI (D3) | 1 | done |
 | C3 | Site IA | new sidebar per `audits/audit-site.md` §2; existing content moved into the new slugs; internal history out; stub pages marked | 2 | done |
-| C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | open |
+| C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | C4b, C4c done; C4a, C4d in review |
 | C5 | Examples section | one page per showcase feature + task manager, live demo + source | 3 | done |
 | C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | open |
 | C7 | API reference pages, differences page, troubleshooting cleanup | | 3 | open |
-| C10 | Landing page | editorial, AI notice, a live demo | 4 | open |
+| C10 | Landing page | editorial, AI notice, a live demo | 4 | done |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
 | R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | open |
 | X | Independent review by a Codex agent | after E; needs the Codex CLI installed and logged in by the maintainer | 6 | blocked |
@@ -100,11 +100,11 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B8 | C8b review | 9 P3 binding docs overstated (options re-applied only on parent rebuild, `id` identity, onlineStatus `initial` exceptions, BuildWhen qualifier, …) | fixed `b78b8e3` |
 | B9 | C9 review | `CombinedData ==` fields beyond data untested; jargon guard missed `L3-2`/`API-02` shapes and flagged prose | fixed `ab84027` |
 | B10 | C2 review | LiveDemo overlay vanished before Flutter's first frame (blank box for seconds); overlay not announced; pages.yml permissions too broad | fixed `99b99a7` |
-| B11 | C2 review | embedded demos stay light inside the dark site theme | open (P3) |
-| B12 | C2 review | playground screen resets backend latency to 0 for the whole full-screen app (pre-existing, real server too) | open (P3) |
+| B11 | C2 review | embedded demos stay light inside the dark site theme | fixed `98fb761` |
+| B12 | C2 review | playground screen resets backend latency to 0 for the whole full-screen app (pre-existing, real server too) | fixed `98fb761`, race `8344491` |
 | B13 | C3 review | every titled admonition rendered as plain `:::danger` text (Docusaurus v4 syntax) — AI notice box included | fixed `3b4eb53` |
 | B14 | C3 review | `/docs/` 404; see-through mobile menu; 8 wrong facts in moved/new pages (StaleTime.static vs invalidation, cancelRefetch, NetworkMode is an enum, …) | fixed `3b4eb53` |
-| B15 | C3 review | landing page shows stale test counts / bug count | open → C10 |
+| B15 | C3 review | landing page shows stale test counts / bug count | fixed `98fb761` |
 | B16 | C5 | `tool/build_demos.sh` can't read `baseUrl` since C1 made it a constant — CI demo build broken | fixed `617f9da` |
 | B17 | C5 | showcase sources shown on the site carry review IDs/issue links, one on screen ("since C49") | fixed `617f9da` |
 | B18 | C5 | stale showcase texts: "combine is not ported", missing spec reference, pagination/offline notices overpromise | fixed `617f9da` |
@@ -132,3 +132,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C5 | `f915e2f`, `4d6a791` | 33 example pages, live demo each, source imported at build time (`DartSource`), grouped gallery, e2e over every page |
 | 2026-09-23 | C4b | `861ce26`, `80e6dfa` | 15 guide pages at depth (refetching, network mode, retries, cancellation, paging, infinite, scroll restoration, initial/placeholder data); review fixed 16 (6 P2: scroll guard, demo sentences, cancel-as-error) |
 | 2026-09-23 | C4c | `711fd24`, `33b2662` | 16 mutation and cache guide pages at depth; review fixed B19 and 3 more (caching rebuild claim, prefetching demo steps, sharing counts) |
+| 2026-09-23 | C10 | `98fb761`, `8344491` | editorial landing with live demo and D2 notice; demos follow site theme; task_manager dark palette; review fixed 5 P3; build_demos.sh conflict resolved to C11's parser |
