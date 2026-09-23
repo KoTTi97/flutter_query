@@ -175,12 +175,13 @@ OutlineInputBorder _inputBorder(Color color, {double width = 1}) =>
       borderSide: BorderSide(color: color, width: width),
     );
 
-/// Body text one step quieter than the title above it.
-final TextStyle mutedText = TextStyle(
-  color: AppColors.muted,
-  fontSize: 13,
-  height: 1.35,
-);
+/// Body text one step quieter than the title above it — a getter, so it
+/// follows [AppColors.palette] however early it is first read.
+TextStyle get mutedText => TextStyle(
+      color: AppColors.muted,
+      fontSize: 13,
+      height: 1.35,
+    );
 
 const TextStyle titleText = TextStyle(
   fontSize: 15,

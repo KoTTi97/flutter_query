@@ -29,6 +29,12 @@
   color: var(--qk-muted);
 }
 
+/* The product's name keeps its own spelling inside the capitals. */
+.name {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
 .eyebrow::before {
   content: '';
   width: 1.75rem;

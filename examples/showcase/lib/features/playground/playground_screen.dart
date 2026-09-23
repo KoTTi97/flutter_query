@@ -206,6 +206,9 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
   /// others run at the backend's own latency.
   ({Duration latency, double errorRate})? _before;
 
+  /// Whether the read of [_before] has answered, one way or the other.
+  bool _read = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -228,9 +231,26 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
         errorRate: (config['errorRate']! as num).toDouble(),
       );
     } on Object {
-      // Unknown, so nothing to restore beyond the zeros below.
+      // Unknown, so nothing to restore beyond zeros.
+    }
+    _read = true;
+    if (!mounted) {
+      // Left before the read answered: `dispose` sent nothing, and this
+      // screen's own knobs were never pushed, so put back what was read.
+      _restoreScenario();
+      return;
     }
     await _pushScenario();
+  }
+
+  void _restoreScenario() {
+    final before = _before;
+    _api
+        .configureScenario(
+          latency: before?.latency ?? Duration.zero,
+          errorRate: before?.errorRate ?? 0,
+        )
+        .ignore();
   }
 
   @override
@@ -238,13 +258,8 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
     final snapshot = _snapshot;
     if (snapshot != null) {
       _client.setDefaultOptions(snapshot);
-      final before = _before;
-      _api
-          .configureScenario(
-            latency: before?.latency ?? Duration.zero,
-            errorRate: before?.errorRate ?? 0,
-          )
-          .ignore();
+      // Still reading: `_start` restores once the read answers.
+      if (_read) _restoreScenario();
     }
     _newTodo.dispose();
     super.dispose();

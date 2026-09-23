@@ -44,7 +44,7 @@ type Feature = { title: string; body: ReactNode; to: string }
 const features: Feature[] = [
   {
     title: 'Caching and deduplication',
-    body: 'Five widgets reading one key make one request, and a second visit renders from the cache.',
+    body: 'Five widgets reading one key make one request and share its answer.',
     to: '/docs/guides/caching',
   },
   {
@@ -89,7 +89,7 @@ const features: Feature[] = [
   },
   {
     title: 'Offline-aware',
-    body: 'Queries wait for the network instead of failing, and writes made offline pause until it is back.',
+    body: 'Told when the device is offline, queries wait for the network instead of failing, and writes made offline pause until it is back.',
     to: '/docs/guides/network-mode',
   },
   {
@@ -141,7 +141,11 @@ export default function Home(): ReactNode {
       <header className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroText}>
-            <p className={styles.eyebrow}>query_kit · for Dart and Flutter</p>
+            <p className={styles.eyebrow}>
+              <span>
+                <span className={styles.name}>query_kit</span> · for Dart and Flutter
+              </span>
+            </p>
             <h1 className={styles.title}>Server data in Flutter, cached and kept&nbsp;fresh</h1>
             <p className={styles.subtitle}>
               A port of TanStack Query: queries, mutations and infinite lists for Dart, with a Flutter binding that
