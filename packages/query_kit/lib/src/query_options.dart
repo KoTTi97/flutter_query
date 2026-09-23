@@ -487,7 +487,7 @@ final class PlaceholderDataCompute<TQueryData>
 /// default registered for the key with [QueryClient.setQueryDefaults], then
 /// the client's `DefaultOptions`, then the library default each field's
 /// documentation names. An option with a real "off" value says so with a
-/// value — `StaleTime.infinite`, `RetryPolicy.never`, `Enabled.no` — never
+/// value — `RefetchInterval.off`, `RetryPolicy.never`, `Enabled.no` — never
 /// with `null`.
 ///
 /// ```dart

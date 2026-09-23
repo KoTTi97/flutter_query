@@ -747,9 +747,7 @@ class Query<TQueryData> extends Removable {
   ///
   /// This is the query's view, and it asks its observers rather than deciding:
   /// an observer answers with the `isStale` of the result it last built, which
-  /// its own options computed from [isStaleByTime]. The four similar names and
-  /// where each one stops are laid out on `_RefetchRules` in
-  /// `query_observer.dart`.
+  /// its own options computed from [isStaleByTime].
   bool isStale() {
     if (observersCount > 0) {
       return _observers.any((observer) => observer.currentResultIsStale);

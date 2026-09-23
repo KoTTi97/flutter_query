@@ -138,8 +138,10 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
 
   /// Sets the focus state by hand. Passing `null` forgets the value set by
   /// hand, and [isFocused] then answers `true` — pure Dart has nothing to
-  /// consult (TanStack Query reads `document.visibilityState` here). It does
-  /// not hand control to the event listener, which only ever calls this.
+  /// consult (TanStack Query reads `document.visibilityState` here). An
+  /// installed event listener reports through this same method (or through
+  /// [onFocus], for a report that is not a `bool`), so its next report
+  /// overwrites a value set by hand.
   ///
   /// A change notifies the listeners; a mounted client then refetches its
   /// stale observed queries on the way back to focus, unless the absence

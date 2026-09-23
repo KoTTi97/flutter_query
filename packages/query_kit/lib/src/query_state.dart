@@ -11,8 +11,9 @@ import 'package:meta/meta.dart';
 ///
 /// {@category Queries}
 enum QueryStatus {
-  /// Nothing has resolved: no data and no error. The state before the first
-  /// fetch settles, unless `initialData` seeded the query.
+  /// No data and no error: the state before the first fetch settles (unless
+  /// `initialData` seeded the query), after a reset, and while a query
+  /// without data fetches again after a failure.
   pending,
 
   /// The query holds data, fetched or seeded; [QueryState.data] is
@@ -172,8 +173,9 @@ final class QueryState<TQueryData> {
   /// changing [status].
   final int fetchFailureCount;
 
-  /// What the latest failed attempt of the current fetch threw; `null` once
-  /// an attempt succeeds or a new fetch starts.
+  /// What the latest failed attempt threw. It is kept after the fetch
+  /// finally fails, and `null` once an attempt succeeds or a new fetch
+  /// starts.
   final Object? fetchFailureReason;
 
   /// The stack trace of the attempt that threw [fetchFailureReason]; `null`
@@ -184,8 +186,9 @@ final class QueryState<TQueryData> {
   /// it to carry the page direction).
   final Object? fetchMeta;
 
-  /// Whether `invalidateQueries` has marked the data stale regardless of
-  /// `staleTime`. Reset by the next successful fetch.
+  /// Whether the data counts as stale regardless of `staleTime`: set by
+  /// `invalidateQueries` and by a fetch that finally fails. Reset by the
+  /// next successful fetch or data write.
   final bool isInvalidated;
 
   /// What the query holds: pending, success or error. Defaults to

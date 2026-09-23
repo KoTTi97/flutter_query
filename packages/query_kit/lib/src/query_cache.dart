@@ -277,7 +277,9 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// Runs after any query's fetch settles, success or failure, with whichever
   /// of data and error applies: after a failure, `data` is what the query
   /// still holds from an earlier success, or `null`. Runs right after
-  /// [onSuccess] or [onError], once per fetch. Unset by default.
+  /// [onSuccess] or [onError], once per fetch, and is skipped when that hook
+  /// throws; a fetch whose cancel records no error runs neither. Unset by
+  /// default.
   final void Function(
     Object? data,
     Object? error,

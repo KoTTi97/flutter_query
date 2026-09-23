@@ -18,9 +18,11 @@ typedef OnlineSetup = void Function() Function(
 /// Tracks whether the device believes it has a network connection.
 ///
 /// Fetches and mutations under [NetworkMode.online] (the default) do not
-/// start while offline: they pause, and continue when this manager reports
-/// online again. A mounted [QueryClient] then also resumes paused mutations
-/// and refetches stale observed queries (the `refetchOnReconnect` option).
+/// start while offline: they pause. When this manager reports online again,
+/// a mounted [QueryClient] (see `QueryClient.mount`) continues them, resumes
+/// paused mutations and refetches stale observed queries (the
+/// `refetchOnReconnect` option). A client that is not mounted does not
+/// listen, and what is paused stays paused.
 ///
 /// Each client owns one, as `QueryClient.onlineManager`. The default is
 /// "online". Nothing is installed for you: report connectivity with

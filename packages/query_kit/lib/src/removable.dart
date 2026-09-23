@@ -19,7 +19,7 @@ abstract class Removable {
   GcTime? _gcTime;
 
   /// How long this may sit unused before it is collected. `null` until
-  /// options are applied. Readable, as upstream has it — devtools and tests
+  /// options are applied. Readable, as in TanStack Query — devtools and tests
   /// read the value that actually won — but only [updateGcTime] moves it,
   /// because the longest request has to keep winning.
   GcTime? get gcTime => _gcTime;
@@ -36,7 +36,7 @@ abstract class Removable {
     }
   }
 
-  /// Folds [newGcTime] (or upstream's five-minute default when `null`) into
+  /// Folds [newGcTime] (or the five-minute default when `null`) into
   /// [gcTime], keeping whichever of the old and new values is longer.
   @protected
   void updateGcTime(GcTime? newGcTime) {

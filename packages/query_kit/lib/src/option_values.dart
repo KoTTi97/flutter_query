@@ -420,9 +420,9 @@ sealed class RetryPolicy {
   /// Query: `retry: true`).
   static const RetryPolicy always = RetryAlways();
 
-  /// Retry until [count] failures have happened; `RetryPolicy.times(3)` is
-  /// the default for queries: three retries after the first failure
-  /// (TanStack Query: `retry: 3`).
+  /// Retry up to [count] times, so at most `count + 1` attempts run;
+  /// `RetryPolicy.times(3)` is the default for queries: up to three retries
+  /// after the first failure (TanStack Query: `retry: 3`).
   const factory RetryPolicy.times(int count) = RetryTimes;
 
   /// Decided per failure (TanStack Query: `retry: (failureCount, error) =>
@@ -475,12 +475,12 @@ final class RetryAlways extends RetryPolicy {
   String toString() => 'RetryPolicy.always';
 }
 
-/// The [RetryPolicy.times] variant: retries until [count] attempts have
-/// failed.
+/// The [RetryPolicy.times] variant: up to [count] retries, so at most
+/// `count + 1` attempts.
 ///
 /// {@category Option values}
 final class RetryTimes extends RetryPolicy {
-  /// Retries until [count] attempts have failed; prefer spelling it
+  /// Up to [count] retries; prefer spelling it
   /// `RetryPolicy.times(…)`.
   const RetryTimes(this.count);
 
@@ -899,7 +899,8 @@ final class RefetchIntervalDynamic extends RefetchInterval {
 enum NetworkMode {
   /// Only fetch while online. Offline, a fetch does not start: the query
   /// stays pending (or keeps its data) with `fetchStatus` paused, and
-  /// continues when the network comes back. Retries pause the same way.
+  /// continues when the network comes back and a mounted client passes that
+  /// on. Retries pause the same way.
   online,
 
   /// Ignore connectivity entirely: always fetch, never pause for the

@@ -10,10 +10,17 @@ import 'dart:async';
 /// A fetch is cancelled by `QueryClient.cancelQueries`, by `Query.cancel`,
 /// by a newer fetch taking over (`cancelRefetch`), or when its last observer
 /// unsubscribes while a query function that read its
-/// [QueryFunctionContext.signal] is still running. Whoever awaits that fetch
-/// — `QueryClient.query`, `QueryObserver.refetch` — sees this error.
-/// Depending on [revert] and [silent], the query itself goes back to its
-/// previous state or records the error.
+/// [QueryFunctionContext.signal] is still running. What someone awaiting
+/// that fetch (`QueryClient.query`, `QueryObserver.refetch`) sees depends
+/// on [silent] and [revert]:
+///
+/// * a [silent] cancel that a new fetch replaced completes with the new
+///   fetch's result, and otherwise throws this error; the query's state
+///   records nothing;
+/// * a [revert] cancel on a query that holds data completes with that data;
+///   the query goes back to its previous state;
+/// * in every other case the caller gets this error, and the query records
+///   it unless the cancel reverted it.
 ///
 /// An [Exception], not an [Error]: cancelling is an expected outcome, not a
 /// programming mistake. A query function may also throw it itself, through
@@ -60,7 +67,8 @@ final class CancelledError implements Exception {
 /// so it is allowed to finish and its result is cached. Once the signal has
 /// been read, the fetch is cancelled and the query reverts instead.
 ///
-/// The library creates one token per fetch attempt and cancels it; a query
+/// The library creates one token per fetch, shared by its retries, and
+/// cancels it; a query
 /// function never calls [cancel]. Tests that call a query function directly
 /// create their own with the default constructor, `QueryCancelToken()`, and
 /// pass it to the `QueryFunctionContext` they build.

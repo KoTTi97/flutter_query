@@ -48,7 +48,8 @@ typedef BatchNotifyFunction = void Function(void Function() callback);
 /// reported to the zone and does not discard later callbacks in that batch.
 ///
 /// ```dart
-/// // Several writes, one deferred notification round:
+/// // Several writes; callbacks queued through `schedule` or `batchCalls`
+/// // meanwhile are delivered in one round after the batch ends:
 /// client.notifyManager.batch(() {
 ///   client.setQueryData<int>(QueryKey(['a']), 1);
 ///   client.setQueryData<int>(QueryKey(['b']), 2);

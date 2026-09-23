@@ -243,7 +243,7 @@ class Retryer<TData> {
   /// Runs one of the owner's hooks. They dispatch into the query or mutation,
   /// and a dispatch reaches listeners — user code. Left unguarded, a throw
   /// escaped into `_attempt`'s ignored future and the completer was never
-  /// settled: a fetch pending forever, with nothing reported anywhere
+  /// settled: a fetch pending forever, with nothing reported anywhere.
   /// The throw is the fetch's error instead, the
   /// policy a throwing retry callback already follows. Returns whether the
   /// hook completed.

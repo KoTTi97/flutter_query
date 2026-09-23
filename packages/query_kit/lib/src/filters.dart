@@ -108,8 +108,8 @@ final class QueryFilters {
   /// carries both defaults.
   final bool? exact;
 
-  /// Restricts to observed queries, unobserved ones, or both. Unset means
-  /// both.
+  /// Restricts to active queries (at least one enabled observer), inactive
+  /// ones, or both; see [QueryTypeFilter]. Unset means both.
   final QueryTypeFilter? type;
 
   /// Matches queries whose `isStale()` is this value: `true` for stale

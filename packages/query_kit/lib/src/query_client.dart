@@ -890,8 +890,9 @@ class QueryClient {
   /// refetches the active ones.
   ///
   /// Completes when the refetches have settled; a refetch's failure does not
-  /// fail the returned future (it lands in the query's state). [cancelRefetch]
-  /// (default `true`) cancels a fetch already in flight and starts over.
+  /// fail the returned future (it lands in the query's state). With [cancelRefetch]
+  /// (default `true`) a fetch already in flight on a query that holds data
+  /// is cancelled and started over; on a query without data it is joined.
   ///
   /// `async`, like [cancelQueries] and [refetchQueries]: a throwing filter
   /// predicate fails the returned future rather than throwing out of the
@@ -936,9 +937,10 @@ class QueryClient {
   /// ```
   ///
   /// The returned future completes when the refetches have settled; their
-  /// failures land in the queries' states, not here. [cancelRefetch]
-  /// (default `true`) restarts a fetch already in flight so the result
-  /// reflects the invalidation. `async` for the reason [resetQueries] is.
+  /// failures land in the queries' states, not here. With [cancelRefetch]
+  /// (default `true`) a fetch already in flight on a query that holds data
+  /// is restarted so the result reflects the invalidation; on a query
+  /// without data it is joined. `async` for the reason [resetQueries] is.
   Future<void> invalidateQueries({
     QueryFilters filters = const QueryFilters(),
     RefetchType? refetchType,
@@ -978,8 +980,8 @@ class QueryClient {
   /// Skipped are queries that cannot fetch on their own: disabled ones
   /// ([Enabled.no], or an [Enabled.when] saying no) and ones an observer
   /// marks [StaleTime.static]. With [cancelRefetch] (default `true`) a fetch
-  /// already in flight is cancelled and started again; `false` joins it
-  /// instead.
+  /// already in flight is cancelled and started again if the query holds
+  /// data, and joined if it does not; `false` always joins it.
   ///
   /// The returned future completes when every refetch has settled; failures
   /// land in the queries' states and do not fail it. A fetch paused for the
@@ -1185,9 +1187,10 @@ class QueryClient {
   /// The client-wide defaults in force.
   DefaultOptions getDefaultOptions() => _defaultOptions;
 
-  /// Replaces the client-wide defaults. Takes effect on the next options
-  /// resolution — an observer's next `setOptions` or a query's next fetch —
-  /// not retroactively.
+  /// Replaces the client-wide defaults. Takes effect wherever options are
+  /// resolved next — a new observer, an observer's next `setOptions`, or a
+  /// client call such as [query]. Options already resolved, such as those a
+  /// query holds, are not changed.
   void setDefaultOptions(DefaultOptions options) => _defaultOptions = options;
 
   /// Defaults for every query whose key starts with [queryKey].

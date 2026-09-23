@@ -96,8 +96,9 @@ sealed class QueryResult<TData> {
   /// reports progress here while still showing its last good data.
   final int failureCount;
 
-  /// What the latest failed attempt of the current fetch threw, while it may
-  /// still be retried. `null` between fetches and once an attempt succeeds.
+  /// What the latest failed attempt threw. It is kept while retries continue
+  /// and after the fetch finally fails. It is cleared when the next fetch
+  /// starts or an attempt succeeds.
   final Object? failureReason;
 
   /// The stack trace of the attempt that threw [failureReason]; `null`
@@ -155,8 +156,9 @@ sealed class QueryResult<TData> {
         QueryError<TData>() => QueryStatus.error,
       };
 
-  /// Whether this is a [QueryPending]: nothing has resolved yet. True during
-  /// the first load, and also for a disabled query that has never fetched.
+  /// Whether this is a [QueryPending]: no data and no error. True during
+  /// the first load, during a new fetch of a query without data whose last
+  /// fetch failed, and for a disabled query that has never fetched.
   bool get isPending => this is QueryPending<TData>;
 
   /// Whether this is a [QuerySuccess]: the query holds data, whether or not
@@ -229,11 +231,12 @@ sealed class QueryResult<TData> {
   int get hashCode => Object.hash(_identity, dataOrNull, errorOrNull);
 }
 
-/// The query has nothing to show yet: no fetch has succeeded or failed, and
-/// no data was seeded.
+/// The query has nothing to show: no data and no error.
 ///
-/// Usually the first load is running ([isLoading]); a disabled query that
-/// has never fetched is pending too, with [fetchStatus] `idle`.
+/// Usually the first load is running ([isLoading]). A query without data
+/// whose last fetch failed is pending again while it fetches anew, and so
+/// is a query after a reset. A disabled query that has never fetched is
+/// pending too, with [fetchStatus] `idle`.
 ///
 /// {@category Results}
 final class QueryPending<TData> extends QueryResult<TData> {
