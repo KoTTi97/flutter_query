@@ -15,8 +15,7 @@ import 'package:query_kit/query_kit.dart';
 /// With one exception, which is why the comparison masks `isStale`: it is
 /// read from the clock, and two reads a millisecond apart can straddle the
 /// moment the data goes stale. That flip notifies nobody (the observer's own
-/// stale timer does), so it is no loop, and must not be reported as one
-/// (fourth review, 2026-09-09).
+/// stale timer does), so it is no loop, and must not be reported as one.
 ///
 /// [who] names the reader in the message: "This widget", "This State".
 void debugCheckRepeatRead(

@@ -1,4 +1,5 @@
-/// Flutter's listenable adapter for the number of queries fetching.
+/// Flutter's listenable adapter for the number of queries fetching. See
+/// [IsFetchingController].
 library;
 
 import 'package:flutter/foundation.dart';
@@ -7,14 +8,40 @@ import 'package:query_kit/query_kit.dart';
 import 'controller_lifetime.dart';
 import 'notify_gate.dart';
 
-/// How many queries matching the filters are fetching right now — upstream's
-/// `useIsFetching`, the value behind a global loading indicator. Subscribed
-/// to the query cache only while something listens, and it notifies only
-/// when the count changes (final review, 2026-09-18, B-1).
+/// How many queries matching the filters are fetching right now, as a
+/// [ValueListenable] — the value behind a global loading indicator.
 ///
-/// `QueryClient.isFetching` is the same count as a snapshot; the mutation
-/// side's twin is a `MutationStateController` filtered on
-/// `MutationStatus.pending`.
+/// ```dart
+/// final fetching = IsFetchingController(client);
+///
+/// ValueListenableBuilder<int>(
+///   valueListenable: fetching,
+///   builder: (context, count, _) => count > 0
+///       ? const LinearProgressIndicator()
+///       : const SizedBox.shrink(),
+/// );
+///
+/// // Only the task queries:
+/// final fetchingTasks = IsFetchingController(
+///   client,
+///   filters: QueryFilters(queryKey: tasksKey),
+/// );
+///
+/// // When done:
+/// fetching.dispose();
+/// fetchingTasks.dispose();
+/// ```
+///
+/// Subscribed to the query cache only while something listens, and it
+/// notifies only when the count changes. A background refetch counts, so
+/// the indicator also shows while stale data is refreshed.
+///
+/// `QueryClient.isFetching` is the same count as a one-off snapshot. The
+/// mutation side's equivalent — how many mutations are running — is a
+/// [MutationStateController] filtered on `MutationStatus.pending`, whose
+/// list length is the count.
+///
+/// {@category Collections}
 class IsFetchingController extends ChangeNotifier
     implements ValueListenable<int> {
   /// Creates a count over [client]'s query cache, narrowed by [filters].

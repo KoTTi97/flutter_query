@@ -1,15 +1,17 @@
-/// The connectivity a `QueryClientProvider` brings, as one value
-/// (https://github.com/KoTTi97/flutter_query/issues/60).
+/// The connectivity a `QueryClientProvider` brings, as one value. See
+/// [OnlineStatus].
 library;
 
 import 'package:flutter/foundation.dart';
 
 /// What the client should believe about the network, and where later changes
-/// come from.
+/// come from. Passed as `QueryClientProvider.onlineStatus`.
 ///
 /// Connectivity is opt-in: nothing is installed by default, no connectivity
 /// package is a dependency of this one, and a client with no [OnlineStatus]
-/// assumes it is online — which is what upstream does with no listener.
+/// assumes it is online. While the client believes it is offline, queries
+/// and mutations with the default network mode pause instead of failing,
+/// and continue when it is back online.
 ///
 /// Two modes, and both of them answer "what is true *now*":
 ///
@@ -25,22 +27,60 @@ import 'package:flutter/foundation.dart';
 ///   current value: a provider that only listens starts out believing the
 ///   default — online — however long the first event takes, and an app
 ///   launched in airplane mode then fetches once against a network that is
-///   not there. Most connectivity packages answer the question directly
-///   (`connectivity_plus`'s `checkConnectivity()`).
+///   not there. Most connectivity packages answer the question directly.
 ///
-/// This is the shape every option with more than one mode has in this port —
-/// a sealed value type rather than a pair of half-answers
-/// (https://github.com/KoTTi97/flutter_query/issues/10), and `null` on the
-/// option itself is the only way to say "bring nothing".
+/// An example with the `connectivity_plus` package. It is *not* a dependency
+/// of this package — add it to your own app to use this:
+///
+/// ```dart
+/// // Requires `connectivity_plus` in your app's pubspec.
+/// Future<void> main() async {
+///   WidgetsFlutterBinding.ensureInitialized();
+///   final connectivity = Connectivity();
+///   bool isOnline(List<ConnectivityResult> results) =>
+///       !results.contains(ConnectivityResult.none);
+///
+///   // Built once, outside `build`: a new stream on every rebuild would be
+///   // listened to again each time.
+///   final changes = connectivity.onConnectivityChanged.map(isOnline);
+///   final online = isOnline(await connectivity.checkConnectivity());
+///
+///   runApp(
+///     QueryClientProvider.create(
+///       create: QueryClient.new,
+///       onlineStatus: OnlineStatus.stream(changes, initial: online),
+///       child: const MyApp(),
+///     ),
+///   );
+/// }
+/// ```
+///
+/// A link is not reachability: a phone on a captive-portal wifi reports
+/// "connected". Any `Stream<bool>` works — your own reachability check
+/// included.
+///
+/// Passing `null` as the provider's `onlineStatus` is the way to say "bring
+/// nothing".
+///
+/// {@category Connectivity & lifecycle}
 @immutable
 sealed class OnlineStatus {
   const OnlineStatus();
 
   /// The client is [online], with no source of later changes.
+  ///
+  /// ```dart
+  /// // A developer's offline switch, applied on every rebuild:
+  /// QueryClientProvider(
+  ///   client: client,
+  ///   onlineStatus: OnlineStatus.fixed(!simulateOffline),
+  ///   child: const MyApp(),
+  /// );
+  /// ```
   const factory OnlineStatus.fixed(bool online) = OnlineStatusFixed;
 
   /// The client follows [changes], and assumes [initial] until the first
-  /// event arrives.
+  /// event arrives. See the class doc for an example.
   const factory OnlineStatus.stream(
     Stream<bool> changes, {
     required bool initial,
@@ -56,6 +96,11 @@ sealed class OnlineStatus {
 }
 
 /// The [OnlineStatus.fixed] variant: one value, no stream.
+///
+/// Usually written as `OnlineStatus.fixed(online)`; the class is public so a
+/// `switch` over an [OnlineStatus] can name it.
+///
+/// {@category Connectivity & lifecycle}
 final class OnlineStatusFixed extends OnlineStatus {
   /// The client is [online].
   const OnlineStatusFixed(this.online);
@@ -80,6 +125,11 @@ final class OnlineStatusFixed extends OnlineStatus {
 
 /// The [OnlineStatus.stream] variant: a starting assumption and a stream of
 /// changes.
+///
+/// Usually written as `OnlineStatus.stream(changes, initial: …)`; the class
+/// is public so a `switch` over an [OnlineStatus] can name it.
+///
+/// {@category Connectivity & lifecycle}
 final class OnlineStatusStream extends OnlineStatus {
   /// Follows [changes] from [initial].
   const OnlineStatusStream(this.changes, {required this.initial});

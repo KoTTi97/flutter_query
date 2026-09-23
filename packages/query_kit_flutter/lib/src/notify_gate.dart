@@ -2,14 +2,10 @@
 /// its listeners have already seen is dropped.
 ///
 /// The builders and the two keyless reads each skip a rebuild whose value has
-/// not moved — that decision is `ReadEntry`, one implementation for all four
-/// call styles (C48, https://github.com/KoTTi97/flutter_query/issues/57). A
-/// *controller* had no such decision and passed every notification on, so a
-/// `ValueListenableBuilder` over one — which is the fourth call style —
-/// rebuilt for notifications carrying nothing. That asymmetry was C49's item
-/// 3 (https://github.com/KoTTi97/flutter_query/issues/55), and closing it is
-/// what makes "nothing rebuilds for nothing" true in all four styles rather
-/// than in three.
+/// not moved — that decision is `ReadEntry`. A `ValueListenableBuilder` over
+/// a controller — the fourth call style — has no such decision of its own,
+/// so the controller makes it here, before notifying. That is what makes
+/// "nothing rebuilds for nothing" true in all four styles.
 ///
 /// Two notifications carrying nothing, both real:
 ///

@@ -1,0 +1,13 @@
+dartdoc:
+  # Groups the binding's API on the generated pages. "Reading queries",
+  # "Mutations" and "Infinite queries" each list all four call styles — read
+  # in build (`QueryContext`), `QueryMixin`, the builder widgets and the
+  # controllers — side by side, as equal alternatives; none is the default.
+  categoryOrder:
+    - "Setup"
+    - "Reading queries"
+    - "Mutations"
+    - "Infinite queries"
+    - "Collections"
+    - "Side effects"
+    - "Connectivity & lifecycle"

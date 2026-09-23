@@ -4,8 +4,7 @@
 /// value and a `subscribe`, which is precisely what Flutter calls a
 /// [ValueListenable]. Saying so once makes every other integration free —
 /// `ValueListenableBuilder`, `ListenableBuilder`, `Listenable.merge`, and any
-/// signal or state-management package that can read a listenable
-/// (https://github.com/KoTTi97/flutter_query/issues/21).
+/// signal or state-management package that can read a listenable.
 ///
 /// Notifications are delivered through the client's `NotifyManager`, never
 /// straight from the observer. That is what puts them on the scheduler the
@@ -26,7 +25,7 @@ import 'notify_gate.dart';
 /// infinite query keeps its paging state on the controller instead — a fetch
 /// that switches direction leaves the result untouched — and that comparison
 /// would swallow a change the widget is showing. A controller says here what
-/// "everything its readers can see" means for it (third review, 2026-09-10).
+/// "everything its readers can see" means for it.
 abstract interface class ObservedState {
   /// The whole observable state, as one value with value equality.
   Object? get observedState;
@@ -39,17 +38,52 @@ Object? observedStateOf(ValueListenable<Object?> controller) =>
         ? (controller as ObservedState).observedState
         : controller.value;
 
-/// One query, as a [ValueListenable].
+/// One query, as a [ValueListenable] of its [QueryResult].
+///
+/// One of the four equal ways to read a query; the others are
+/// [QueryContext], [QueryMixin] and the builder widgets such as
+/// [QueryBuilder], all of which stand on this one. Nothing is hidden: you
+/// create it, listen to it and dispose it, which makes it the style for view
+/// models, for code tested without widgets, and for any state-management
+/// package that reads a listenable.
 ///
 /// ```dart
-/// final task = QueryController.create<Task>(client, taskQuery(id));
-/// // …
+/// final task = QueryController.create(client, taskQuery(id));
+///
+/// // In a widget:
+/// ValueListenableBuilder<QueryResult<Task>>(
+///   valueListenable: task,
+///   builder: (context, result, _) => Text(result.dataOrNull?.name ?? '…'),
+/// );
+///
+/// // Imperatively:
+/// await task.refetch();
+///
+/// // When done — it destroys the observer:
 /// task.dispose();
 /// ```
 ///
-/// The controller subscribes to its observer only while something is listening
-/// to *it*, so a controller nobody watches costs nothing but the observer's own
-/// cache entry.
+/// [QueryController.create] is the form without a `select`, with one type
+/// argument; the unnamed constructor takes either options shape, a
+/// [QuerySelectOptions] included, and has two.
+///
+/// **Subscribed only while listened to.** The controller subscribes to its
+/// observer when the first listener arrives — which is when the query
+/// fetches, if it needs to — and unsubscribes when the last one leaves, so a
+/// controller nobody watches costs nothing but its cache entry. Before the
+/// first listener, [value] is the *optimistic* result — `fetching` for a
+/// query that will fetch on subscribe — which is what every widget style
+/// shows on its first build.
+///
+/// **No notification for nothing.** Listeners are told only when the result
+/// actually changed, and — under a [QueryClientProvider] — never in the
+/// middle of a build: a result that changes during one is delivered after
+/// the frame.
+///
+/// **Options.** [setOptions] replaces them in place — a new key switches the
+/// observed query without recreating anything.
+///
+/// {@category Reading queries}
 class QueryController<TQueryData, TData> extends ChangeNotifier
     implements ValueListenable<QueryResult<TData>>, ObservedState {
   /// Creates the observer for [options] on [client]. Nothing is fetched until
@@ -88,16 +122,17 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
 
   /// The common case: no `select`, so the query's data type is what you get,
   /// and one type argument names it — from `queryFn`'s return type, or
-  /// written out as `QueryController.create<Task>(…)` (ADR-0001).
+  /// written out as `QueryController.create<Task>(…)`.
+  ///
+  /// ```dart
+  /// final task = QueryController.create(client, taskQuery(id));
+  /// ```
   ///
   /// A static method rather than a named constructor because it drops a type
   /// parameter, which a constructor cannot. It *creates* a controller — and
-  /// hands you something to [dispose] — so it deliberately does not use the
-  /// name `of`: in Flutter that means "find the one already there", and a
-  /// call in `build` that leaked an observer and its timers on every rebuild
-  /// would be the reader's reasonable mistake, not theirs to debug (sixth
-  /// review, 2026-09-10). In this package `of` belongs to
-  /// [QueryClientProvider.of] alone.
+  /// hands you something to [dispose] — so do not call it in `build`: every
+  /// rebuild would leak an observer and its timers. Create it in `initState`
+  /// or a view model, or use one of the widget styles, which own theirs.
   static QueryController<TData, TData> create<TData>(
     QueryClient client,
     QueryObserverOptions<TData> options,
@@ -123,7 +158,7 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   );
 
   /// The observer underneath, for the operations the controller does not
-  /// mirror (`refetch`, `currentQuery`).
+  /// mirror, such as `currentQuery`.
   QueryObserver<TQueryData, TData> get observer => _observer;
 
   /// Whether [dispose] has run.
@@ -138,10 +173,9 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// While nobody listens this is the *optimistic* result — what the observer
   /// would report the moment a listener arrived: `fetching` for a query that
   /// will fetch on subscribe, not the `idle` the observer holds until then.
-  /// That is the read upstream's `useBaseQuery` does on every render, and it
-  /// is what makes a controller read before it is listened to agree with what
-  /// every widget style shows on its first build. Once subscribed, the value
-  /// is the observer's own, kept current by its notifications.
+  /// That is what makes a controller read before it is listened to agree with
+  /// what every widget style shows on its first build. Once subscribed, the
+  /// value is the observer's own, kept current by its notifications.
   @override
   QueryResult<TData> get value => !_life.isSubscribed && !_life.isDisposed
       ? optimisticValue
@@ -158,23 +192,29 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   }
 
   /// Replaces the options — a changed key switches the observed query without
-  /// recreating anything (https://github.com/KoTTi97/flutter_query/issues/22).
+  /// recreating anything.
+  ///
+  /// ```dart
+  /// task.setOptions(taskQuery(nextId));
+  /// ```
   ///
   /// Deliberately does not notify: the observer notifies by itself when the
   /// *result* changes, and notifying here would rebuild the widget that just
   /// called this from its own `build`.
   ///
-  /// The observer first: when it refuses the options — a throwing
+  /// When the observer refuses the options — a throwing
   /// `InitialData.compute` for a query that exists without data, which
   /// leaves it on the old key — nothing is kept here either, so [value]
-  /// keeps reporting the key the observer is really on (release review
-  /// 2026-09-23, B2-3).
+  /// keeps reporting the key the observer is really on.
   void setOptions(QueryObserverOptionsBase<TQueryData, TData> options) {
     _observer.setOptions(options);
     _options = options;
   }
 
   /// Refetches, completing with the result the refetch produced.
+  ///
+  /// With [cancelRefetch] (the default) a fetch already in flight is
+  /// cancelled and started again; `false` joins the running fetch instead.
   Future<QueryResult<TData>> refetch({bool cancelRefetch = true}) =>
       _observer.refetch(cancelRefetch: cancelRefetch);
 
@@ -200,20 +240,43 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   }
 }
 
-/// One infinite query, as a [ValueListenable], with the paging operations the
-/// sealed result does not carry
-/// (https://github.com/KoTTi97/flutter_query/issues/16).
+/// One infinite query, as a [ValueListenable], with the paging operations and
+/// flags the sealed [QueryResult] does not carry.
+///
+/// The controller style for infinite queries, equal to `context.infiniteQuery`,
+/// `QueryMixin.watchInfiniteQuery` and `InfiniteQueryBuilder`. As with
+/// [QueryController], you create it, listen to it and dispose it.
 ///
 /// ```dart
 /// final feed = InfiniteQueryController(client, feedQuery());
-/// // …
-/// if (feed.hasNextPage) feed.fetchNextPage();
+///
+/// // In a widget — a paging flag changing notifies too:
+/// ListenableBuilder(
+///   listenable: feed,
+///   builder: (context, _) {
+///     final posts = feed.value.dataOrNull?.flatten<Post>() ?? const <Post>[];
+///     return Column(
+///       children: [
+///         for (final post in posts) Text(post.title),
+///         if (feed.hasNextPage)
+///           TextButton(
+///             onPressed: feed.isFetchingNextPage ? null : feed.fetchNextPage,
+///             child: const Text('Load more'),
+///           ),
+///       ],
+///     );
+///   },
+/// );
+///
+/// // When done:
+/// feed.dispose();
 /// ```
 ///
 /// No type arguments at the call site: either options shape carries all
 /// three, and inference reads them off it — `InfiniteQueryObserverOptions<List<Post>, int>`
-/// makes an `InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>`
-/// (ADR-0001).
+/// makes an `InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>`.
+///
+/// {@category Infinite queries}
 class InfiniteQueryController<TPageData, TPageParam, TData>
     extends QueryController<InfiniteData<TPageData, TPageParam>, TData> {
   /// Creates an [InfiniteQueryObserver] for [options] on [client], with the
@@ -241,7 +304,8 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
   InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>?
       _infiniteOptions;
 
-  /// The observer underneath, typed.
+  /// The observer underneath, typed as the [InfiniteQueryObserver] it is —
+  /// [observer] with the paging half visible.
   InfiniteQueryObserver<TPageData, TPageParam, TData> get infiniteObserver =>
       observer as InfiniteQueryObserver<TPageData, TPageParam, TData>;
 
@@ -342,7 +406,56 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
       infiniteObserver.fetchPreviousPage(cancelRefetch: cancelRefetch);
 }
 
-/// One mutation, as a [ValueListenable].
+/// One mutation, as a [ValueListenable] of its [MutationResult].
+///
+/// The controller style for mutations, equal to `context.mutation`,
+/// `QueryMixin.watchMutation` and `MutationBuilder`. Create it where it
+/// should live — a `State`'s `initState`, a view model — and dispose it
+/// there.
+///
+/// ```dart
+/// class _RenameState extends State<RenameButton> {
+///   late final rename = MutationController(
+///     QueryClientProvider.read(context),
+///     MutationOptions.simple(
+///       mutationFn: (String name) => api.rename(widget.id, name),
+///     ),
+///   );
+///
+///   @override
+///   void dispose() {
+///     rename.dispose(); // does not cancel a run in flight
+///     super.dispose();
+///   }
+///
+///   @override
+///   Widget build(BuildContext context) => ValueListenableBuilder(
+///         valueListenable: rename,
+///         builder: (context, result, _) => TextButton(
+///           onPressed: result.isPending
+///               ? null
+///               : () => rename.mutate(
+///                     'Kitchen',
+///                     callbacks: MutateCallbacks(
+///                       onSuccess: (data, name, _) =>
+///                           ScaffoldMessenger.of(context).showSnackBar(
+///                         SnackBar(content: Text('Renamed to $name')),
+///                       ),
+///                     ),
+///                   ),
+///           child: const Text('Rename'),
+///         ),
+///       );
+/// }
+/// ```
+///
+/// [mutate] is fire and forget; [mutateAsync] completes with the data or
+/// throws. The per-call `callbacks` run after the options' own, for as long
+/// as the controller is not disposed, whether or not anything listens to it.
+/// [cancel] fails the run in flight; [dispose] does not — a write the user
+/// started should normally finish.
+///
+/// {@category Mutations}
 class MutationController<TData, TVariables, TOnMutateResult>
     extends ChangeNotifier
     implements ValueListenable<MutationResult<TData, TVariables>> {
@@ -383,8 +496,7 @@ class MutationController<TData, TVariables, TOnMutateResult>
   /// controller's: `observer.mutate`/`mutateAsync` skip the hold
   /// [mutateAsync] keeps for a run, so on a controller nobody listens to the
   /// per-call callbacks are dropped, as the core drops them for an observer
-  /// without listeners (second pass of the release review 2026-09-23,
-  /// V-B-5). Run mutations through the controller.
+  /// without listeners. Run mutations through the controller.
   MutationObserver<TData, TVariables, TOnMutateResult> get observer =>
       _observer;
 
@@ -394,7 +506,8 @@ class MutationController<TData, TVariables, TOnMutateResult>
   @override
   MutationResult<TData, TVariables> get value => _observer.currentResult;
 
-  /// See [QueryController.setOptions] on why this does not notify.
+  /// Replaces the options the next run uses. Does not notify: the result
+  /// has not changed — see [QueryController.setOptions].
   void setOptions(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) =>
@@ -412,7 +525,15 @@ class MutationController<TData, TVariables, TOnMutateResult>
 
   /// Completes with the data, or throws.
   ///
-  /// The per-call [callbacks] run after the options' own, as upstream's do,
+  /// ```dart
+  /// try {
+  ///   await rename.mutateAsync('Kitchen');
+  /// } on Object catch (error) {
+  ///   // the run failed, or was cancelled
+  /// }
+  /// ```
+  ///
+  /// The per-call [callbacks] run after the options' own,
   /// for as long as this controller is not disposed — whether or not anything
   /// listens to it: a controller held by a view model and called
   /// imperatively gets them too. A run still going when the controller is
@@ -423,11 +544,9 @@ class MutationController<TData, TVariables, TOnMutateResult>
   /// widget is gone by the time it gets here — the mutation still runs, with
   /// its options' callbacks, and is collected after its `gcTime` like any
   /// mutation nobody watches. Nothing lands in [value], and the per-call
-  /// [callbacks] are dropped. Upstream re-attaches the forgotten observer, so
-  /// the mutation stays in the cache for good; a disposed controller here
-  /// does not come back (ninth review, 2026-09-10, C18). Hold the controller
-  /// above the
-  /// widget when the result is wanted after the widget is gone.
+  /// [callbacks] are dropped; a disposed controller does not come back. Hold
+  /// the controller above the widget when the result is wanted after the
+  /// widget is gone.
   Future<TData> mutateAsync(
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,
@@ -439,17 +558,17 @@ class MutationController<TData, TVariables, TOnMutateResult>
     }
     // The core runs per-call callbacks only while the observer has a
     // listener — a component that has gone must not be called back — and
-    // upstream's `useMutation` is subscribed for as long as its component is
-    // mounted, so there the two coincide. A controller's "mounted" is "not
-    // disposed", listened to or not: one called imperatively from a view
-    // model dropped its per-call callbacks without a word (release review
-    // 2026-09-23, B2-2). So the run holds a listener of its own until it
+    // TanStack Query's `useMutation` is subscribed for as long as its
+    // component is mounted, so there the two coincide. A controller's
+    // "mounted" is "not disposed", listened to or not: one called
+    // imperatively from a view model would drop its per-call callbacks
+    // without a word. So the run holds a listener of its own until it
     // settles — the callbacks run inside the settling action, before the
     // future completes — and [dispose], which drops every listener, is
     // still what skips them. It delivers nothing: the controller's own
     // subscription is what notifies. Held per run rather than for the
     // controller's life, so an unlistened controller still lets go of a
-    // settled mutation and its `gcTime` starts (C50).
+    // settled mutation and its `gcTime` starts.
     final release = _observer.subscribe((_) {});
     return _observer
         .mutateAsync(variables, callbacks: callbacks)
@@ -496,6 +615,6 @@ class MutationController<TData, TVariables, TOnMutateResult>
 /// `List<Object?>` is a `List<TData>` exactly for the top types, so the test
 /// survives the question whether such a slot is inferred as `dynamic` or
 /// `Object?`. The controllers assert it: a debug backstop for the one
-/// residue the options shapes cannot remove (ADR-0001), compiled out of
+/// residue the options shapes cannot remove, compiled out of
 /// release.
 bool _debugDataTypeIsAnchored<TData>() => <Object?>[] is! List<TData>;

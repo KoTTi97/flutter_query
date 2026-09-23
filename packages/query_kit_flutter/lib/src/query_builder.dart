@@ -1,16 +1,10 @@
 /// The builder-widget way to read a query — the `StreamBuilder` shape.
 ///
-/// One of four equal call styles
-/// (https://github.com/KoTTi97/flutter_query/issues/21). The most explicit and
-/// the most predictable: nothing happens that is not visible in the tree, and
-/// the rebuild is exactly this widget's subtree.
-///
 /// The four widgets here are four public surfaces over one state class family:
 /// what they each declare is a type slot and a `builder` signature, and what
 /// they share — the controller's lifetime, the options re-applied every build,
 /// and the rebuild decision of [ReadEntry] — is written once in
-/// [_ControllerBuilderState] (C48/C59,
-/// https://github.com/KoTTi97/flutter_query/issues/57).
+/// [_ControllerBuilderState].
 library;
 
 import 'package:flutter/foundation.dart';
@@ -35,11 +29,9 @@ mixin _BuilderWidget<T> on StatefulWidget {
   ///
   /// Options kept in a field are the same object on every build, and yet an
   /// `Enabled.when` in them may read outside state that changed: re-applying
-  /// them is what re-evaluates it (#84; release review 2026-09-23, BIND-3).
-  /// That costs one defaulting pass and nothing else: the observer compares
-  /// the *defaulted* options by value
-  /// (https://github.com/KoTTi97/flutter_query/issues/10) and only a real
-  /// difference reaches the query.
+  /// them is what re-evaluates it. That costs one defaulting pass and nothing
+  /// else: the observer compares the *defaulted* options by value and only a
+  /// real difference reaches the query.
   Object get options;
 
   /// Rebuilds this widget's subtree only for the changes it passes; see
@@ -53,7 +45,7 @@ mixin _BuilderWidget<T> on StatefulWidget {
 
 /// The two builders over a plain query — with a `select` and without — which
 /// differ in nothing their state can see but the type slot the cache's data
-/// fills (C59).
+/// fills.
 mixin _QueryBuilderWidget<TQueryData, TData>
     on _BuilderWidget<QueryResult<TData>> {
   @override
@@ -63,7 +55,13 @@ mixin _QueryBuilderWidget<TQueryData, TData>
   Widget Function(BuildContext context, QueryResult<TData> result) get builder;
 }
 
-/// Builds from a query's result.
+/// Builds its subtree from a query's result — the `StreamBuilder` shape.
+///
+/// One of the four equal ways to read a query; the others are
+/// [QueryContext], [QueryMixin] and the controllers such as
+/// [QueryController]. This one is the most explicit: nothing happens that is
+/// not visible in the tree, a change rebuilds exactly this widget's subtree,
+/// and it is a natural fit inside a list or a sliver.
 ///
 /// ```dart
 /// QueryBuilder<Task>(
@@ -76,13 +74,23 @@ mixin _QueryBuilderWidget<TQueryData, TData>
 /// )
 /// ```
 ///
-/// The one type argument is the query's data type; it comes from `queryFn`'s
-/// return type, or is written out as `QueryBuilder<Task>(…)` (ADR-0001).
-/// Use [QuerySelectBuilder] when the query needs a `select`.
+/// The widget owns an observer from its first build until it is disposed.
+/// Nothing is fetched before that first build, and two builders on one key
+/// share the query in the cache, so they cost one request.
 ///
-/// [options] built inline are re-applied on every build of this widget, as
-/// upstream re-applies them on every render; the observer decides what, if
-/// anything, actually changed. Every builder here takes its options that way.
+/// **The type argument** is the query's data type. It usually comes from
+/// `queryFn`'s return type, or is written out as `QueryBuilder<Task>(…)`. A
+/// key-only options literal with neither a `queryFn` nor a type argument
+/// cannot name it, and is refused with an assertion in debug builds. Use
+/// [QuerySelectBuilder] when the query needs a `select`.
+///
+/// **Options are re-applied on every build** of this widget, built inline or
+/// kept in a field, so an `Enabled.when` over outside state is re-evaluated.
+/// The observer compares them by value and only a real difference reaches
+/// the query; a changed key switches the observed query in place. Every
+/// builder widget takes its options that way.
+///
+/// {@category Reading queries}
 class QueryBuilder<TData> extends StatefulWidget
     with _BuilderWidget<QueryResult<TData>>, _QueryBuilderWidget<TData, TData> {
   /// Observes [options]'s query on [client] — or, when none is given, the
@@ -108,14 +116,21 @@ class QueryBuilder<TData> extends StatefulWidget
   final Widget Function(BuildContext context, QueryResult<TData> result)
       builder;
 
-  /// Skips rebuilds the builder does not care about — the port's answer to
-  /// upstream's `notifyOnChangeProps`, next to `select`
-  /// (https://github.com/KoTTi97/flutter_query/issues/15). Given the result
-  /// this widget last built from and the one it would build from now.
+  /// Skips rebuilds the builder does not care about. Given the result this
+  /// widget last *built* from and the one it would build from now, returns
+  /// whether to rebuild; `null` rebuilds for every changed result.
   ///
   /// ```dart
-  /// buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
+  /// buildWhen: (previous, current) =>
+  ///     previous.dataOrNull != current.dataOrNull,
   /// ```
+  ///
+  /// `select` narrows the *data* a widget sees; this narrows *when* it
+  /// rebuilds, which is the only way to ignore a change `select` cannot see —
+  /// a background refetch moves `fetchStatus` and `dataUpdatedAt`, and both
+  /// are part of a result's `==`. A result equal to the one last built never
+  /// reaches the predicate. `previous` is what is on screen: a result the
+  /// predicate skipped is not remembered.
   @override
   final BuildWhen<QueryResult<TData>>? buildWhen;
 
@@ -133,19 +148,29 @@ class QueryBuilder<TData> extends StatefulWidget
       _QueryBuilderState<QueryBuilder<TData>, TData, TData>();
 }
 
-/// [QueryBuilder] for a query with a `select`: what the cache holds and what
-/// the widget sees are two types, both anchored by a [QuerySelectOptions].
+/// [QueryBuilder] for a query with a `select`: the cache holds [TQueryData],
+/// the builder sees [TData].
 ///
 /// ```dart
 /// QuerySelectBuilder<Task, String>(
 ///   options: QuerySelectOptions(
 ///     queryKey: QueryKey(['tasks', id]),
-///     queryFn: (_) => api.task(id),
+///     queryFn: (_) => api.getTask(id),
 ///     select: (task) => task.name,
 ///   ),
 ///   builder: (context, result) => Text(result.dataOrNull ?? '…'),
 /// )
 /// ```
+///
+/// Takes a [QuerySelectOptions], whose required `select` is what lets Dart
+/// infer the second type. Everything else — lifetime, options re-applied on
+/// every build, [buildWhen], [client] — is as for [QueryBuilder]. A `select`
+/// that returns an equal value keeps the previous one, so `data` stays the
+/// same instance when nothing it depends on changed; the rest of the result
+/// (`fetchStatus`, `dataUpdatedAt`) still changes, which is what
+/// [buildWhen] is for.
+///
+/// {@category Reading queries}
 class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget
     with
         _BuilderWidget<QueryResult<TData>>,
@@ -160,21 +185,27 @@ class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget
     this.client,
   });
 
-  /// See [QueryBuilder.options].
+  /// The query and its `select`. Re-applied on every build; the observer
+  /// decides what changed, as for [QueryBuilder.options].
   @override
   final QuerySelectOptions<TQueryData, TData> options;
 
-  /// See [QueryBuilder.builder]. Sees the *selected* result — `TData`, not the
-  /// `TQueryData` the cache holds.
+  /// Builds this widget's subtree from the *selected* result — `TData`, not
+  /// the `TQueryData` the cache holds. Called on the first build and then
+  /// whenever the result changes and [buildWhen] lets it through.
   @override
   final Widget Function(BuildContext context, QueryResult<TData> result)
       builder;
 
-  /// See [QueryBuilder.buildWhen].
+  /// Whether a change from the result last built to the current one is worth
+  /// a rebuild; `null` rebuilds for every changed result. Compares selected
+  /// results; see [QueryBuilder.buildWhen].
   @override
   final BuildWhen<QueryResult<TData>>? buildWhen;
 
-  /// See [QueryBuilder.client].
+  /// The client to observe on; `null` uses the nearest
+  /// [QueryClientProvider]'s. A different client on a later build recreates
+  /// the observer; see [QueryBuilder.client].
   @override
   final QueryClient? client;
 
@@ -185,7 +216,7 @@ class QuerySelectBuilder<TQueryData, TData> extends StatefulWidget
 }
 
 /// The state of both query builders: one class, because a `select` is a type
-/// slot and nothing else to the widget that owns the controller (C59). [W] is
+/// slot and nothing else to the widget that owns the controller. [W] is
 /// the widget it is the state of — narrowing it is what keeps
 /// `createState`'s return type the widget's own.
 class _QueryBuilderState<W extends _QueryBuilderWidget<TQueryData, TData>,
@@ -203,26 +234,40 @@ class _QueryBuilderState<W extends _QueryBuilderWidget<TQueryData, TData>,
   Widget build(BuildContext context) => widget.builder(context, record());
 }
 
-/// Builds from an infinite query, handing the builder the controller so it can
-/// page.
+/// Builds its subtree from an infinite query, handing the builder the
+/// [InfiniteQueryController] so it can page.
 ///
 /// ```dart
 /// InfiniteQueryBuilder(
 ///   options: feedQuery(),
-///   builder: (context, feed) => ListView(
-///     children: [
-///       for (final page in feed.value.dataOrNull?.pages ?? const [])
-///         ...page.map(PostTile.new),
-///       if (feed.hasNextPage)
-///         TextButton(onPressed: feed.fetchNextPage, child: const Text('Mehr')),
-///     ],
-///   ),
+///   builder: (context, feed) {
+///     final posts = feed.value.dataOrNull?.flatten<Post>() ?? const <Post>[];
+///     return ListView(
+///       children: [
+///         for (final post in posts) ListTile(title: Text(post.title)),
+///         if (feed.hasNextPage)
+///           TextButton(
+///             onPressed: feed.isFetchingNextPage ? null : feed.fetchNextPage,
+///             child: const Text('Load more'),
+///           ),
+///       ],
+///     );
+///   },
 /// )
 /// ```
 ///
 /// No type arguments at the call site: either options shape —
 /// [InfiniteQueryObserverOptions] or [InfiniteQuerySelectOptions] — carries
-/// all three, and inference reads them off it (ADR-0001).
+/// the page type, the page-param type and the result type, and inference
+/// reads all three off it.
+///
+/// The widget owns the controller from its first build until it is
+/// disposed; do not dispose the one [builder] is handed. Options are
+/// re-applied on every build, as for [QueryBuilder]. A fetch that moves only
+/// the paging flags — `isFetchingNextPage`, `hasNextPage` and the like —
+/// rebuilds too, even when the result itself is unchanged.
+///
+/// {@category Infinite queries}
 class InfiniteQueryBuilder<TPageData, TPageParam, TData> extends StatefulWidget
     with _BuilderWidget<QueryResult<TData>> {
   /// Observes [options]'s infinite query on [client] or else the nearest
@@ -236,7 +281,9 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData> extends StatefulWidget
     this.client,
   });
 
-  /// See [QueryBuilder.options].
+  /// The infinite query: key, page function and paging functions.
+  /// Re-applied on every build; the observer decides what changed, as for
+  /// [QueryBuilder.options].
   @override
   final InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options;
 
@@ -251,11 +298,16 @@ class InfiniteQueryBuilder<TPageData, TPageParam, TData> extends StatefulWidget
     InfiniteQueryController<TPageData, TPageParam, TData> query,
   ) builder;
 
-  /// See [QueryBuilder.buildWhen]. Compares the controller's results.
+  /// Whether a change from the result last built to the current one is worth
+  /// a rebuild; `null` rebuilds for every changed result. Compares the
+  /// controller's results (see [QueryBuilder.buildWhen]); a change of the
+  /// paging flags alone rebuilds regardless.
   @override
   final BuildWhen<QueryResult<TData>>? buildWhen;
 
-  /// See [QueryBuilder.client].
+  /// The client to observe on; `null` uses the nearest
+  /// [QueryClientProvider]'s. A different client on a later build recreates
+  /// the controller; see [QueryBuilder.client].
   @override
   final QueryClient? client;
 
@@ -288,20 +340,35 @@ class _InfiniteQueryBuilderState<TPageData, TPageParam, TData>
   }
 }
 
-/// Builds from a mutation's result, and hands the builder the controller so it
-/// can start one.
+/// Builds its subtree from a mutation's result, and hands the builder the
+/// [MutationController] that starts a run.
 ///
 /// ```dart
-/// MutationBuilder<Task, RenameInput, void>(
-///   options: renameTask(),
-///   builder: (context, rename) => TextButton(
-///     onPressed: () => rename.mutate((id: id, name: 'Küche')),
-///     child: rename.value.isPending
-///         ? const CircularProgressIndicator()
-///         : const Text('Umbenennen'),
+/// MutationBuilder(
+///   options: MutationOptions.simple(
+///     mutationFn: (String name) => api.rename(id, name),
 ///   ),
+///   builder: (context, rename) => switch (rename.value) {
+///     MutationPending() => const CircularProgressIndicator(),
+///     MutationError(:final error) => Text('Could not rename: $error'),
+///     _ => TextButton(
+///         onPressed: () => rename.mutate('Kitchen'),
+///         child: const Text('Rename'),
+///       ),
+///   },
 /// )
 /// ```
+///
+/// The widget owns the controller from its first build until it is
+/// disposed; do not dispose the one [builder] is handed. Disposing it does
+/// not cancel a run in flight — the mutation finishes and its options'
+/// callbacks run — so a write the user started is not lost when the widget
+/// goes. Call [MutationController.cancel] first when it should be.
+///
+/// The type arguments come from [options]: `MutationOptions.simple`, for a
+/// mutation without an `onMutate` step, infers them from `mutationFn`.
+///
+/// {@category Mutations}
 class MutationBuilder<TData, TVariables, TOnMutateResult> extends StatefulWidget
     with _BuilderWidget<MutationResult<TData, TVariables>> {
   /// Observes a mutation with [options] on [client] or else the nearest
@@ -315,7 +382,8 @@ class MutationBuilder<TData, TVariables, TOnMutateResult> extends StatefulWidget
     this.client,
   });
 
-  /// See [QueryBuilder.options].
+  /// The mutation: its function and callbacks. Re-applied on every build, so
+  /// the next run uses the callbacks of the latest build.
   @override
   final MutationOptions<TData, TVariables, TOnMutateResult> options;
 
@@ -329,11 +397,20 @@ class MutationBuilder<TData, TVariables, TOnMutateResult> extends StatefulWidget
     MutationController<TData, TVariables, TOnMutateResult> mutation,
   ) builder;
 
-  /// See [QueryBuilder.buildWhen]. Compares the mutation's results.
+  /// Whether a change from the mutation result last built to the current one
+  /// is worth a rebuild; `null` rebuilds for every changed result. A
+  /// mutation has no `select`, so this is the only filter:
+  ///
+  /// ```dart
+  /// // A retrying run moves `failureCount` while it stays pending.
+  /// buildWhen: (previous, current) => previous.status != current.status,
+  /// ```
   @override
   final BuildWhen<MutationResult<TData, TVariables>>? buildWhen;
 
-  /// See [QueryBuilder.client].
+  /// The client to run on; `null` uses the nearest [QueryClientProvider]'s.
+  /// A different client on a later build recreates the controller; see
+  /// [QueryBuilder.client].
   @override
   final QueryClient? client;
 
@@ -371,7 +448,7 @@ class _MutationBuilderState<TData, TVariables, TOnMutateResult>
 /// was passed in or came from the provider above — and given new options in
 /// place otherwise; and the [ReadEntry] through which this widget watches it,
 /// which is where the rebuild decision lives — the same one the two keyless
-/// call styles make (C48).
+/// call styles make.
 ///
 /// A subclass says only what its controller is ([createController],
 /// [applyOptions]) and what its `build` does with [record]'s value; everything
@@ -426,23 +503,22 @@ abstract class _ControllerBuilderState<W extends _BuilderWidget<T>, T,
       return;
     }
     // The client this widget resolves to *now*, not the field: `null` and
-    // the provider's own client are the same client (BIND-5), and a provider
+    // the provider's own client are the same client, and a provider
     // that swapped its client in this very frame has not told
     // `didChangeDependencies` yet — it runs after this — so comparing the
     // fields would hand the new options to an observer on the old client,
-    // which fetched there (B2-1; release review 2026-09-23).
+    // which fetched there.
     if (_controllerClient != _client) {
       _disposeController();
       return;
     }
-    // Every build, as upstream's `useBaseQuery` re-applies options on every
-    // render and the keyless reads do: options kept in a field are the
-    // *same* object on every build, and skipping them skipped re-evaluating
-    // an `Enabled.when` over outside state (#84; BIND-3). The observer
-    // compares the defaulted options by value, so an unchanged set costs one
-    // defaulting pass. A changed key switches the observed query in place;
-    // the observer is never recreated
-    // (https://github.com/KoTTi97/flutter_query/issues/22).
+    // Every build, as TanStack Query's `useBaseQuery` re-applies options on
+    // every render and the keyless reads do: options kept in a field are the
+    // *same* object on every build, and skipping them skipped re-evaluating an
+    // `Enabled.when` over outside state. The observer compares the defaulted
+    // options by value, so an unchanged set costs one defaulting pass. A
+    // changed key switches the observed query in place; the observer is never
+    // recreated.
     applyOptions();
   }
 

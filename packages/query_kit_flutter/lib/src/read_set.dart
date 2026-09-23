@@ -1,14 +1,10 @@
 /// The reads one reader holds: the registry behind `QueryMixin` and
 /// `context.query` alike.
 ///
-/// Both keyless call styles
-/// (https://github.com/KoTTi97/flutter_query/issues/21) work the same way —
-/// a read is identified by its key and types unless it carries an `id`, the
-/// controller for an identity lives as long as builds keep asking for it, and
-/// what a build stops asking for is released after the frame. That was written
-/// out twice until C47
-/// (https://github.com/KoTTi97/flutter_query/issues/56), and each of the three
-/// fixes of 2026-09-10 had to be applied to both copies.
+/// Both keyless call styles work the same way — a read is identified by its
+/// key and types unless it carries an `id`, the controller for an identity
+/// lives as long as builds keep asking for it, and what a build stops asking
+/// for is released after the frame — so they share this one implementation.
 ///
 /// What the two callers actually differ in is two things, and they are this
 /// module's two constructor arguments: **how a reader is told to rebuild**
@@ -31,14 +27,10 @@
 ///   `QueryScopeElement`.
 /// * **The rebuild decision.** What a read records and when a notification is
 ///   worth a frame is [ReadEntry], which the builder widgets watch their one
-///   controller through as well (C48,
-///   https://github.com/KoTTi97/flutter_query/issues/57). The `buildWhen:`
-///   the two keyless styles gained with C49
-///   (https://github.com/KoTTi97/flutter_query/issues/55) is that entry's own
-///   argument: all three reads below take one and hand it over, so every call
-///   style — a query's four and a mutation's four
-///   (https://github.com/KoTTi97/flutter_query/issues/67) — filters through
-///   one implementation.
+///   controller through as well. The `buildWhen:` of the two keyless styles
+///   is that entry's own argument: all three reads below take one and hand
+///   it over, so every call style — a query's four and a mutation's four —
+///   filters through one implementation.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -59,10 +51,9 @@ typedef _Entry = ReadEntry<Object?>;
 
 /// What the debug ambiguity check compares two reads of one mutation
 /// identity by: the mutation function, its context twin and the four
-/// callbacks (third pass, V3-6), and the five fields that decide where and
-/// how it runs — `scope`, `retry`, `retryDelay`, `networkMode`, `gcTime`
-/// (fourth pass, V4-3), a retry closure by its variant only (fifth pass,
-/// V5-3). Not `meta`: see [ReadSet.readMutation].
+/// callbacks, and the five fields that decide where and how it runs —
+/// `scope`, `retry`, `retryDelay`, `networkMode`, `gcTime` — a retry closure
+/// by its variant only. Not `meta`: see [ReadSet.readMutation].
 typedef _MutationShape = (
   (Object?, Object?, Object?, Object?, Object?, Object?),
   (Object?, Object?, Object?, Object?, Object?),
@@ -80,17 +71,16 @@ typedef _MutationShape = (
 /// from a callback that runs *later* with the reader's context — a nested
 /// `ValueListenableBuilder`, `LayoutBuilder` or `AnimatedBuilder` using the
 /// outer `context` or `watchQuery`. Such a callback re-runs without the
-/// reader's `build`, and a generation opened by it alone released everything
-/// `build` had read (release review 2026-09-23, BIND-1). So a read made
+/// reader's `build`, and a generation opened by it alone would release
+/// everything `build` had read. So a read made
 /// outside the reader's own build is *additive*: it joins whatever the
 /// reader holds and releases nothing, and what such a callback stops reading
 /// is released at the reader's next own build that reads through it, or at
-/// unmount — a build that reads nothing opens no generation (V4-5).
+/// unmount — a build that reads nothing opens no generation.
 /// [beginBuild] tells the two apart.
 ///
-/// **One rule for every reader** (third pass, V3-1/V3-2; fourth pass,
-/// V4-1). A read is an own build only when that is provable, and a reader
-/// has as many proofs as Flutter gives it:
+/// **One rule for every reader.** A read is an own build only when that is
+/// provable, and a reader has as many proofs as Flutter gives it:
 ///
 /// * a `ComponentElement` — a `StatelessWidget`'s or a `State`'s element —
 ///   is in its own build when it is dirty, or when its parent has just
@@ -105,11 +95,11 @@ typedef _MutationShape = (
 ///   parent's new widget.
 ///
 /// Every other read is additive: a nested builder re-running with the
-/// reader's context, a row scrolling into a list. Two passes tried a per-run
-/// generation for readers that are no `ComponentElement` and dropped visible
-/// data both times (second pass, V-B-1: the `LayoutBuilder` read that a
-/// nested builder's frame released; V3-2: the rows an `itemBuilder` reading
-/// through an enclosing `LayoutBuilder` had built). Constraints and the set's
+/// reader's context, a row scrolling into a list. A per-run generation for
+/// readers that are no `ComponentElement` would drop visible data — the
+/// `LayoutBuilder` read that a nested builder's frame released, the rows an
+/// `itemBuilder` reading through an enclosing `LayoutBuilder` had built.
+/// Constraints and the set's
 /// own notification are proofs a nested builder's frame never carries: it
 /// neither changes the constraints nor is asked to rebuild by this set.
 ///
@@ -124,7 +114,7 @@ typedef _MutationShape = (
 ///
 /// Reading through a lazily built list's own item-builder context stays a
 /// debug-mode error that names the fix, a widget per row
-/// ([debugCheckReader], V-B-2): the list element is one reader for every
+/// ([debugCheckReader]): the list element is one reader for every
 /// row, so additive holds every row ever built until the list is rebuilt.
 /// Release builds treat it by the rule above.
 class ReadSet {
@@ -178,13 +168,12 @@ class ReadSet {
 
   /// Whether one of this set's own controllers has asked the reader to
   /// rebuild since its last own build — the signal a reader that is no
-  /// `ComponentElement` has for "the next run is the builder" (fourth pass,
-  /// V4-1).
+  /// `ComponentElement` has for "the next run is the builder".
   bool _marked = false;
 
   /// The constraints a layout builder's reader was last built with. A
   /// `LayoutBuilder` re-runs its builder when they change, and only then or
-  /// when it is rebuilt (fourth pass, V4-1).
+  /// when it is rebuilt.
   Constraints? _builtWith;
 
   /// What a controller this set holds calls: marks the reader, then asks it
@@ -211,7 +200,7 @@ class ReadSet {
   /// A [reader] that is no `ComponentElement` has no `dirty` to go by. A
   /// layout builder counts a change of constraints since its last own build
   /// and a rebuild one of this set's controllers asked for ([_marked]) as
-  /// well; a list's sliver only the new widget (fourth pass, V4-1).
+  /// well; a list's sliver only the new widget.
   ///
   /// Without the release a screen that switches from one key to another
   /// would stay subscribed to the key it no longer shows.
@@ -233,8 +222,8 @@ class ReadSet {
     }
     // Recorded for every own build, also one in a generation already open:
     // otherwise a widget handed over in that epoch still looks new at the
-    // next read, and a nested builder's frame alone would open a generation
-    // (fourth pass, V4-4).
+    // next read, and a nested builder's frame alone would open a
+    // generation.
     _builtFor = widget;
     _marked = false;
     _builtWith = constraints;
@@ -312,7 +301,7 @@ class ReadSet {
 
   /// Creates or reuses this reader's observer for [options] and returns its
   /// current result. Covers a plain read and a `select` one alike: the caller
-  /// anchors [TQueryData] and [TData] (ADR-0001).
+  /// anchors [TQueryData] and [TData].
   QueryResult<TData> readQuery<TQueryData, TData>(
     QueryClient client,
     QueryObserverOptionsBase<TQueryData, TData> options,
@@ -329,7 +318,7 @@ class ReadSet {
     );
     final controller = entry.controller as QueryController<TQueryData, TData>;
     final before = repeat ? controller.value : null;
-    // Unconditional, as upstream re-applies options on every render: the
+    // Unconditional, as TanStack Query re-applies options on every render: the
     // observer itself decides whether anything actually changed, and options
     // built inline carry a fresh closure every build anyway.
     controller.setOptions(options);
@@ -385,8 +374,7 @@ class ReadSet {
     // every build, and a controller keyed on it would be replaced — idle
     // again — by the very rebuild its own result caused. The types are part
     // of the identity the way they are for a query: the same `mutationKey`
-    // read with two type triples is two controllers, not a failed cast
-    // (fourth review, 2026-09-09).
+    // read with two type triples is two controllers, not a failed cast.
     final identity = (
       #mutation,
       id ?? options.mutationKey,
@@ -395,16 +383,15 @@ class ReadSet {
       TOnMutateResult,
     );
     assert(() {
-      // Two mutations of one identity in one build without `id` would share
-      // a controller, and the second `setOptions` would win: a tap on
-      // "archive" running the delete. A `mutationKey` does not rule that
-      // out: upstream's is a *category* — `setMutationDefaults`, the
-      // `isMutating` and `MutationState` filters, prefix matching — and two
-      // different mutations under `['todos']` are ordinary there (release
-      // review 2026-09-23, B1-1). Distinct keys still tell two reads apart;
-      // only an `id` names one.
+      // Two mutations of one identity in one build without `id` would share a
+      // controller, and the second `setOptions` would win: a tap on "archive"
+      // running the delete. A `mutationKey` does not rule that out: it is a
+      // *category* — `setMutationDefaults`, the `isMutating` and
+      // `MutationState` filters, prefix matching — and two different mutations
+      // under `['todos']` are ordinary. Distinct keys still tell two reads
+      // apart; only an `id` names one.
       //
-      // What is *not* ambiguous (second pass, V-B-4): a read outside the
+      // What is *not* ambiguous: a read outside the
       // reader's own build — a nested builder re-reading what `build` read
       // — is the same call site's controller handed on, and a repeat whose
       // function and callbacks are the same (`==`: one stored options
@@ -418,13 +405,13 @@ class ReadSet {
       // `ComponentElement`'s own `build()`. A reader that is no
       // `ComponentElement` has no build to tell a repeat from a nested
       // builder's re-read, so its reads — additive by the class doc's rule
-      // — are never compared (third pass, V3-5). The callbacks are compared
+      // — are never compared. The callbacks are compared
       // with the function because the last read's `setOptions` wins for all
       // of them: "delete, then pop" and "delete, then show a snackbar"
-      // sharing one controller would run whichever was read last (V3-6).
+      // sharing one controller would run whichever was read last.
       //
-      // The fields that decide *where and how* it runs are compared too
-      // (fourth pass, V4-3): rows reading `MutationScope('task-$id')` under
+      // The fields that decide *where and how* it runs are compared too:
+      // rows reading `MutationScope('task-$id')` under
       // one key and function would collapse into one controller whose last
       // scope serialises every row's run; `retry`, `retryDelay`,
       // `networkMode` and `gcTime` change the run the same way. They are
@@ -432,7 +419,7 @@ class ReadSet {
       // `RetryPolicy.never`/`.always`/`.times`, `RetryDelay.fixed`/
       // `.exponential` — except the two variants that carry a closure,
       // `RetryPolicy.when` and `RetryDelay.dynamic`, which are compared by
-      // variant only (fifth pass, V5-3): their `==` is the closure's
+      // variant only: their `==` is the closure's
       // identity, and a helper building `RetryPolicy.when((n, e, _) => …)`
       // inline is read twice as one mutation as often as it is two. Unlike
       // the mutation function and callbacks, a retry closure only decides
@@ -502,15 +489,13 @@ class ReadSet {
     // query's it is asked about every notification: a `MutationController`
     // has no `observedState` beside its value, so [ReadEntry]'s equality
     // gate is the same comparison `MutationObserver` already made before it
-    // notified at all (C49 follow-on,
-    // https://github.com/KoTTi97/flutter_query/issues/67).
+    // notified at all.
     entry.read(buildWhen: _erased(buildWhen));
     return controller;
   }
 
   /// What the mutation ambiguity check compares a retry option by: its value,
-  /// or — for the two variants carrying a closure — its variant alone
-  /// (fifth pass, V5-3).
+  /// or — for the two variants carrying a closure — its variant alone.
   static Object? _byVariant(Object? option) =>
       option is RetryWhen || option is RetryDelayDynamic
           ? option.runtimeType

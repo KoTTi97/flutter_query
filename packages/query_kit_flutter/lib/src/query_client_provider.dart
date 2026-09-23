@@ -1,5 +1,5 @@
 /// Where the [QueryClient] lives, and where the Flutter-side adapters are
-/// installed (https://github.com/KoTTi97/flutter_query/issues/22).
+/// installed. See [QueryClientProvider].
 library;
 
 import 'dart:async';
@@ -15,6 +15,47 @@ import 'query_context.dart';
 /// Provides a [QueryClient] to the widgets below it, and wires the client to
 /// Flutter while it is mounted.
 ///
+/// Put one above everything that reads a query — usually around the app:
+///
+/// ```dart
+/// void main() {
+///   runApp(
+///     QueryClientProvider.create(
+///       create: QueryClient.new,
+///       child: const MyApp(),
+///     ),
+///   );
+/// }
+/// ```
+///
+/// [QueryClientProvider.create] makes the client and owns it: it lives as
+/// long as the provider and is cleared after the provider unmounts. The
+/// unnamed constructor takes a client you made yourself — one you configure
+/// with `defaultOptions`, share with code outside the tree, or create in a
+/// test — and never clears it:
+///
+/// ```dart
+/// final client = QueryClient(
+///   defaultOptions: DefaultOptions(
+///     queries: QueryDefaults(
+///       staleTime: const StaleTime.duration(Duration(seconds: 30)),
+///     ),
+///   ),
+/// );
+///
+/// QueryClientProvider(client: client, child: const MyApp());
+/// ```
+///
+/// Below it, every call style finds the client on its own. Code that needs
+/// the client itself reads it with [of] (subscribes, for `build`),
+/// [maybeOf] (the same, `null` without a provider) or [read] (no
+/// subscription, for callbacks and `initState`):
+///
+/// ```dart
+/// onPressed: () => QueryClientProvider.read(context)
+///     .invalidateQueries(filters: QueryFilters(queryKey: tasksKey)),
+/// ```
+///
 /// Three things happen at mount:
 ///
 /// 1. **App lifecycle → focus.** Every [AppLifecycleState] the app reports —
@@ -27,20 +68,20 @@ import 'query_context.dart';
 ///    as "unfocused" would refetch the world on the way back; on macOS,
 ///    Windows and Linux it is precisely the window losing focus — the event
 ///    `refetchOnWindowFocus` is named after — and counts as unfocused. Pass
-///    [isAppShown] to decide it yourself.
+///    [isAppShown] to decide it yourself, or [observeAppLifecycle] `false` to
+///    switch the mapping off.
 /// 2. **The notify scheduler.** Notifications that arrive while a build is in
 ///    flight are deferred to a post-frame callback, so a query resolving
-///    mid-build cannot call `setState` during that build. The scheduler is
-///    installed on the client's own `NotifyManager` and the previous one is
-///    put back when the last provider using that manager goes away — the
-///    installation is counted per manager, so providers whose lifetimes
-///    overlap without nesting (siblings, or an old and a new one for a frame)
-///    cannot uninstall each other's.
+///    mid-build cannot call `setState` during that build. Several providers
+///    may share one client — siblings, or an old and a new one for a frame —
+///    and the scheduler stays installed until the last of them goes.
 /// 3. **Connectivity, only if you bring it.** Pass [onlineStatus] — an
 ///    [OnlineStatus.fixed] value, or an [OnlineStatus.stream] with the
 ///    assumption to start from — and the client follows it. Nothing is
-///    installed by default and no connectivity package is a dependency — see
-///    the README for the `connectivity_plus` snippet.
+///    installed by default and no connectivity package is a dependency; see
+///    [OnlineStatus] for a `connectivity_plus`-style example.
+///
+/// {@category Setup}
 class QueryClientProvider extends StatefulWidget {
   /// Creates and owns a client for this widget's lifetime. Rebuilding with a
   /// different [create] callback keeps the client; change [key] to replace it.
@@ -89,13 +130,22 @@ class QueryClientProvider extends StatefulWidget {
   /// stream from a stated starting assumption. `true` means "assume the
   /// network is reachable".
   ///
+  /// ```dart
+  /// QueryClientProvider.create(
+  ///   create: QueryClient.new,
+  ///   onlineStatus: OnlineStatus.stream(isOnlineChanges, initial: true),
+  ///   child: const MyApp(),
+  /// );
+  /// ```
+  ///
   /// `null` brings nothing and the client keeps its own default, which is
   /// online — and that is where it goes back to when a status is taken away
   /// on a later build, or when the provider leaves the tree: nothing is left
-  /// to revise an offline verdict then (release review 2026-09-23, BIND-4).
-  /// Only the *last* provider with a status for that client does this: a
-  /// replacement mounted before the old one is disposed — a new key, a move
-  /// to another parent — keeps its own verdict (V-B-3).
+  /// to revise an offline verdict then. Only the *last* provider with a
+  /// status for that client does this: a replacement mounted before the old
+  /// one is disposed — a new key, a move to another parent — keeps its own
+  /// verdict.
+  ///
   /// [OnlineStatus.initial] is applied whenever a client is given this
   /// status: at mount, to a client that arrives on a later build, and on
   /// any later build that changes the status — with one exception, one stream
@@ -103,32 +153,36 @@ class QueryClientProvider extends StatefulWidget {
   /// source and rewinding it to `initial` would flicker for anyone building
   /// their stream in `build`. That is also why a [OnlineStatus.fixed] works
   /// as a live switch: having no stream, applying it is the only way it can
-  /// reach the client (third review, 2026-09-10; reshaped from the
-  /// `Stream` + `initialOnlineStatus` pair by
-  /// https://github.com/KoTTi97/flutter_query/issues/60).
+  /// reach the client.
   final OnlineStatus? onlineStatus;
 
   /// Whether to map the app's lifecycle onto the client's focus state.
+  /// Defaults to `true`.
   ///
   /// Turn it **off** when you install a focus source of your own with
   /// `client.focusManager.setEventListener(...)`. The two are alternatives,
   /// not layers: both write through `setFocused`, so with both installed the
-  /// last writer wins and neither can see the other's verdict. The lifecycle
-  /// listener is this binding's equivalent of the browser listener upstream
-  /// installs by default, and `setEventListener` is the seam for a focus
-  /// source that is not the app lifecycle
-  /// (https://github.com/KoTTi97/flutter_query/issues/60).
+  /// last writer wins and neither can see the other's verdict.
   final bool observeAppLifecycle;
 
   /// Which [AppLifecycleState]s count as "the user is looking at the app",
   /// and so as focused for `refetchOnWindowFocus`.
   ///
+  /// ```dart
+  /// QueryClientProvider.create(
+  ///   create: QueryClient.new,
+  ///   // Only a fully resumed app counts, on every platform:
+  ///   isAppShown: (state) => state == AppLifecycleState.resumed,
+  ///   child: const MyApp(),
+  /// );
+  /// ```
+  ///
   /// `null` uses the built-in mapping the class doc describes, which reads
   /// `AppLifecycleState.inactive` differently per platform. Override it for a
   /// platform whose conventions differ, or to switch focus refetching to a
-  /// signal of your own (sixth review, 2026-09-10). The mapping given on the
-  /// latest build is the one in force: it is applied to the state the app is
-  /// in when it changes, and decides every transition after.
+  /// signal of your own. The mapping given on the latest build is the one in
+  /// force: it is applied to the state the app is in when it changes, and
+  /// decides every transition after.
   final bool Function(AppLifecycleState state)? isAppShown;
 
   /// The nearest client above [context].
@@ -155,7 +209,9 @@ class QueryClientProvider extends StatefulWidget {
   static QueryClient? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<QueryScope>()?.client;
 
-  /// Like [of], but without subscribing the calling element to changes.
+  /// Like [of], but without subscribing the calling element to changes —
+  /// the one to use in callbacks, `initState` and anywhere else outside
+  /// `build`. Throws when there is no provider.
   static QueryClient read(BuildContext context) {
     final element =
         context.getElementForInheritedWidgetOfExactType<QueryScope>();
@@ -222,7 +278,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
 
   /// Set when a failing `_follow` in [didUpdateWidget] gave back what this
   /// state held: Flutter abandons the element then, and should it dispose
-  /// it after all, nothing is given back twice (fifth pass, V5-2).
+  /// it after all, nothing is given back twice.
   bool _released = false;
 
   @override
@@ -232,17 +288,16 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     // Listened to first: the one step here that can fail, so nothing below
     // has happened when it throws. A stream *can* deliver during `listen` —
     // a synchronous controller whose `onListen` adds the current value — and
-    // then its value is already the client's (fifth pass, V5-1).
+    // then its value is already the client's.
     try {
       _follow(widget.onlineStatus);
     } catch (_) {
-      // B1-3's error for a stream already listened to. A `State` whose
+      // `_follow`'s error for a stream already listened to. A `State` whose
       // `initState` throws is never disposed, so what it took is given back
       // here, and it neither speaks for the client's connectivity nor tells
-      // the client anything: counted first, its count outlived it (release
-      // review 2026-09-23, third pass, V3-4); its `initial` applied first,
-      // an `initial: false` stayed with nobody left to revise it, or
-      // overrode another provider's verdict (fourth pass, V4-2).
+      // the client anything: counted first, its count would outlive it; its
+      // `initial` applied first, an `initial: false` would stay with nobody
+      // left to revise it, or override another provider's verdict.
       _unmountClient(widget.client);
       rethrow;
     }
@@ -279,8 +334,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     // are two of the transitions: `detached → resumed` fires neither, and
     // left the client unfocused for good. The mapping is read when the
     // transition arrives, not captured here: a `isAppShown` given on a later
-    // build then decides the next transition without re-wiring anything
-    // (ninth review, 2026-09-10, C17).
+    // build then decides the next transition without re-wiring anything.
     _lifecycle = AppLifecycleListener(
       onStateChange: (state) => _setFocused(client, _currentIsShown(state)),
     );
@@ -291,9 +345,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// report after a mount that found no lifecycle state yet: the client's
   /// focus is then unset, which already reads as focused, and `setFocused`
   /// would count unset → `true` as a focus change and refetch every stale
-  /// active query right after the mount fetched them. Upstream has the same
-  /// edge and never takes it, because no `visibilitychange` fires on load
-  /// (release review 2026-09-23, S3).
+  /// active query right after the mount fetched them.
   static void _setFocused(QueryClient client, bool shown) {
     if (client.focusManager.isFocused() != shown) {
       client.focusManager.setFocused(shown);
@@ -325,12 +377,12 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// time, so a client switch re-points it for free; cancelling and listening
   /// again would throw on a single-subscription stream (`Stream has already
   /// been listened to`), and [OnlineStatusStream.changes] promises nothing
-  /// about broadcast (fourth review, 2026-09-09).
+  /// about broadcast.
   void _follow(OnlineStatus? onlineStatus) {
     _cancelOnline();
     // What the old stream last said dies with it. Carrying it to a client
     // that arrives later would pin that client offline with nothing left to
-    // put it back online (third review, 2026-09-10).
+    // put it back online.
     _lastOnline = null;
     final changes = onlineStatus?.changes;
     if (changes == null) {
@@ -347,8 +399,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     } on StateError catch (error, stackTrace) {
       // A single-subscription stream some provider already listened to —
       // this one before a remount, a sibling, or this one before a detour
-      // through another status. Said in words a reader can act on (release
-      // review 2026-09-23, B1-3).
+      // through another status. Said in words a reader can act on.
       Error.throwWithStackTrace(
         FlutterError.fromParts([
           ErrorSummary(
@@ -374,7 +425,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// Cancels the subscription [_follow] made. `cancel()` returns a future
   /// that fails when the stream's `onCancel` does; nobody awaits it, so its
   /// error is reported like a stream error instead of reaching the zone
-  /// unhandled (release review 2026-09-23, B1-2).
+  /// unhandled.
   void _cancelOnline() {
     final cancelled = _onlineSubscription?.cancel();
     _onlineSubscription = null;
@@ -404,16 +455,16 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// online — once this provider stops speaking for its connectivity: the
   /// status taken away on a later build, or the provider gone. Whatever the
   /// status last said would otherwise stay, and an offline verdict with no
-  /// source left to revise it pins paused queries and mutations for good
-  /// (release review 2026-09-23, BIND-4). A client that leaves this provider
+  /// source left to revise it pins paused queries and mutations for good. A
+  /// client that leaves this provider
   /// for another client is left as it was ([reset] false).
   ///
   /// Only when *no* provider speaks for it any more. One client can be under
   /// two providers at once, and a replacement's `initState` runs before the
   /// old one's `dispose` — a new key, a move to another parent without a
-  /// `GlobalKey`. The old one putting the client back online then overrode
-  /// the new one's verdict, for good with an [OnlineStatus.fixed] (second
-  /// pass, V-B-3). So the speakers are counted per [OnlineManager], the way
+  /// `GlobalKey`. The old one putting the client back online would override
+  /// the new one's verdict, for good with an [OnlineStatus.fixed]. So the
+  /// speakers are counted per [OnlineManager], the way
   /// [_schedulerInstallations] counts the scheduler's installations, and the
   /// last one to stop is the one that resets.
   static void _releaseOnline(QueryClient client, {bool reset = true}) {
@@ -492,7 +543,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// is still running (notifications stop reaching the frame) and leaves the
   /// adapter installed after the last one is gone (notifications are deferred
   /// to a frame that is never coming). Counting per manager makes the
-  /// installation what it actually is: shared (third review, 2026-09-10).
+  /// installation what it actually is: shared.
   static final Map<NotifyManager, ({ScheduleFunction original, int count})>
       _schedulerInstallations =
       <NotifyManager, ({ScheduleFunction original, int count})>{};
@@ -526,10 +577,10 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// Runs [callback] now when that is safe, and after this frame when it is
   /// not. Called for every batch of cache notifications.
   ///
-  /// Synchronous on purpose, where upstream's default is a zero-delay timer:
-  /// a `setState` outside a build is exactly what Flutter expects from a tap
-  /// handler or a resolved future, and delivering right away means one `pump`
-  /// in a test — or one frame in an app — shows the new result.
+  /// Synchronous on purpose, where TanStack Query's default is a zero-delay
+  /// timer: a `setState` outside a build is exactly what Flutter expects from a
+  /// tap handler or a resolved future, and delivering right away means one
+  /// `pump` in a test — or one frame in an app — shows the new result.
   ///
   /// "During a build" is two things. The frame's build phase, which the
   /// scheduler phase names; a notification there waits for the frame to end.
@@ -571,8 +622,8 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     // when it throws nothing has been told to any client. Flutter abandons
     // an element whose `didUpdateWidget` threw without disposing it, so
     // what this state held for the old widget is given back here, the way
-    // `dispose` would (fifth pass, V5-2 — V4-2's twin: an `initial: false`
-    // applied first stayed, and so did the mount).
+    // `dispose` would (as in `initState`: an `initial: false` applied first
+    // would stay, and so would the mount).
     if (statusChanged && !sameStream) {
       try {
         _follow(widget.onlineStatus);
@@ -594,12 +645,12 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       // what the stream last said — but only while it is *the same* stream
       // still running. A connectivity source that has been taken away speaks
       // for nobody, and a value it left behind would pin a later client
-      // offline with nothing able to put it back (third review, 2026-09-10).
+      // offline with nothing able to put it back.
       if (lastOnline != null && sameStream) {
         widget.client.onlineManager.setOnline(lastOnline);
       } else if (_lastOnline == null) {
         // Unless a new stream already said something while it was listened
-        // to (V5-1).
+        // to.
         _applyOnlineStatus(widget.client);
       }
     }
@@ -613,7 +664,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
         oldWidget.isAppShown != widget.isAppShown) {
       // The listener reads the new mapping by itself; what it cannot do is
       // re-map the state the app is already in, which the class doc promises
-      // is mapped too (ninth review, 2026-09-10, C17).
+      // is mapped too.
       _applyCurrentLifecycleState(widget.client);
     }
     if (statusChanged) {
@@ -622,12 +673,12 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       // from a live source and `initial` is the wrong thing to rewind it to.
       // Anyone building their stream in `build` hands the provider a new
       // stream object every rebuild (the class doc's own example does not,
-      // but M6 proves the provider survives it), and re-applying `initial`
+      // but the provider survives it), and re-applying `initial`
       // there would yank the client back online between each rebuild and the
       // new stream's first event. A fixed status has no such source: applying
       // it here is the only way it can reach the client at all.
       // A new stream that delivered while it was listened to has already
-      // said more than `initial` can (V5-1). Changing only `initial` does
+      // said more than `initial` can. Changing only `initial` does
       // not replace the source or its latest event, and a single-subscription
       // stream cannot be listened to again: followed above, only when it is
       // a different stream.
@@ -638,7 +689,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
         _applyOnlineStatus(widget.client);
       }
     }
-    // Who speaks for which client's connectivity, counted (V-B-3): a client
+    // Who speaks for which client's connectivity, counted: a client
     // left for another is left as it was; a status taken away from the same
     // client lets it go back online once nobody else speaks for it.
     final spoke = oldWidget.onlineStatus != null;
@@ -670,11 +721,9 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     super.dispose();
   }
 
-  // One scope, not two. There were a private `_QueryClientScope` for `of` and
-  // a `QueryScope` for `context.query`, with the same field, the same
-  // `updateShouldNotify` and the same lifetime, nested one inside the other —
-  // two elements and two dependency sets for one fact (C59,
-  // https://github.com/KoTTi97/flutter_query/issues/66).
+  // One scope serves both `of` and `context.query`: the same field, the same
+  // `updateShouldNotify` and the same lifetime, so one element and one
+  // dependency set for one fact.
   @override
   Widget build(BuildContext context) =>
       QueryScope(client: widget.client, child: widget.child);
