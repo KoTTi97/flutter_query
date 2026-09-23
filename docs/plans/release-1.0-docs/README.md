@@ -30,16 +30,18 @@ starts once C3 has fixed the sidebar and slugs.
 | C7 | API reference pages, differences page, troubleshooting cleanup | | 3 | open |
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | open |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
+| R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | open |
+| X | Independent review by a Codex agent | after E; needs the Codex CLI installed and logged in by the maintainer | 6 | blocked |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | open |
 
 ## Decisions
 
 - **D1 — Name.** The product is `query_kit` in all prose (site title, README
   headings, landing page); the packages are `query_kit` and
-  `query_kit_flutter`. The GitHub repository stays `KoTTi97/flutter_query`
-  in URLs until its owner renames it: renaming is an outward-facing action the
-  agents do not take (GitHub redirects the old URL afterwards, and a rename is
-  one search-and-replace over the URLs). Historical records (`docs/research`,
+  `query_kit_flutter`. The maintainer approved renaming the repository; it
+  was renamed to `KoTTi97/query_kit` on 2026-09-23 (GitHub redirects the old
+  URL). Chunk R replaces the URLs and the site's base path `/flutter_query/`
+  → `/query_kit/` once wave 3 has merged. Historical records (`docs/research`,
   `docs/reviews`, PORTING_NOTES) are not rewritten.
 - **D2 — AI disclosure.** One wording, used everywhere a user can land first:
   *"query_kit is an entirely AI-coded project: all code, tests and
