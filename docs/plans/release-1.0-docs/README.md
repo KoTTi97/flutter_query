@@ -110,12 +110,12 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B18 | C5 | stale showcase texts: "combine is not ported", missing spec reference, pagination/offline notices overpromise | fixed `617f9da` |
 | B19 | C4d | `guides/filters.md`: `isMutating(filters:)` counts only pending, ignores `filters.status`; `isFetching` ignores `fetchStatus` | open → C4c review |
 | B20 | C4d | `reading-queries-in-widgets.md`: implies `QueryMixin` throws for item-builder contexts (only `context.query`); ranking words "most explicit/predictable" (also `query_builder.dart:62`) | open → C4a review / F1 |
-| B21 | C4d | `connectivity.md` gaps (swapped clients, reset timing); `queries.md` paused ≠ network only, disabled/static never stale; `combining-queries.md` refetch cancels only sources with data | open → C4a/C4b reviews |
+| B21 | C4d | `connectivity.md` gaps (swapped clients, reset timing); `queries.md` paused ≠ network only, disabled/static never stale; `combining-queries.md` refetch cancels only sources with data | connectivity checked `80e6dfa`; rest open → C4a review |
 | B22 | C4d | dartdoc: `resetQueries` "all four bulk operations" misleads about `removeQueries`; throwing `select` → `QueryError` undocumented; `CombinedResult.isPaused` covers app-hidden wait | open → F1 |
 | B23 | C5 review | `examples/index` renamed to .mdx broke 11 links (build failed); GitHub source links pinned to `main` instead of the built commit | fixed `4d6a791` |
 | B24 | C5 review | 6 P2 + 7 P3 "what to try" bullets promised what the screens don't show | fixed `4d6a791` |
 | B25 | C5 review | four-call-styles card 7 titled "two styles" but shows three panels | open → F1 |
-| B26 | C6a | `guides/infinite-queries.md` shows a pixel-offset scroll guard the showcase's load_more code says fails | open → C4b review |
+| B26 | C6a | `guides/infinite-queries.md` shows a pixel-offset scroll guard the showcase's load_more code says fails | fixed `80e6dfa` |
 | B27 | C6a | `QueryCancelToken` dartdoc says package:http has no cancellation; http ≥1.5 has `AbortableRequest` | open → F1 |
 
 ## Log
@@ -130,3 +130,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C3 | `2c7a472`, `3b4eb53` | TanStack-style IA: 6 getting-started, 42 guides, examples/cookbook index, reference, project; `/docs` redirect; LiveDemo now on quick-start |
 | 2026-09-23 | C11 | `617f9da` | example sources free of internal history, stale screen texts fixed, `build_demos.sh` reads templated baseUrl, jargon guard scans example sources (orchestrator spot-checked; comment/string-only) |
 | 2026-09-23 | C5 | `f915e2f`, `4d6a791` | 33 example pages, live demo each, source imported at build time (`DartSource`), grouped gallery, e2e over every page |
+| 2026-09-23 | C4b | `861ce26`, `80e6dfa` | 15 guide pages at depth (refetching, network mode, retries, cancellation, paging, infinite, scroll restoration, initial/placeholder data); review fixed 16 (6 P2: scroll guard, demo sentences, cancel-as-error) |
