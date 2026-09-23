@@ -119,9 +119,12 @@ QueryClientProvider(
 ```
 
 where `online` is what `Connectivity().checkConnectivity()` answered at
-startup. Any `Stream<bool>` will do, single-subscription included: the provider
-subscribes once per stream, and a swapped client inherits the last value the
-stream reported.
+startup. A broadcast stream always works. A single-subscription one works
+only while exactly one provider listens to it, once — no remount, no second
+provider — and a second listen throws a `FlutterError` that points to
+`asBroadcastStream()`; wrap it when in doubt. A swapped client inherits the
+last value the stream reported, and taking `onlineStatus` away (setting it to
+`null`) or disposing the provider puts the client back online.
 
 With no stream at all, a fixed status is the whole verdict, and a changed one
 reaches the client on the rebuild that changes it:

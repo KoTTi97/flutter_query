@@ -89,3 +89,5 @@ The documentation names no default.
   is the fastest route in.
 - Wondering whether something is here at all? [The feature
   matrix](reference/feature-matrix.md) says what is out and why.
+- Something behaves in a way you did not expect?
+  [Troubleshooting](reference/troubleshooting.md) is symptom first.

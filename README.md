@@ -73,7 +73,7 @@ fidelity claim is checked. It is not deployed anywhere yet — run it locally:
 cd website && npm ci && npm start
 ```
 
-The two package READMEs are the short form, and are what pub.dev will show.
+The two package READMEs are the short form, and are what pub.dev shows.
 
 ## Quick start
 
@@ -108,14 +108,14 @@ JavaScript names to the Dart ones — `useQuery` to the four equal call styles,
 `StaleTime.infinite`, and the rest — and names the showcase screen that
 demonstrates each.
 
-## Deliberately not in 0.1
+## Deliberately not in 1.0
 
 Each row is recorded, with its reason, in
 [PORTING_NOTES.md](packages/query_kit/test/PORTING_NOTES.md).
 
 | Upstream | Here |
 |---|---|
-| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 0.1; `Query.setState` is the door a persister would use |
+| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 1.0; `Query.setState` is the door a persister would use |
 | `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders |
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |

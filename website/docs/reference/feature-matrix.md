@@ -20,15 +20,21 @@ description: What is here, what is deliberately not, and where the reason for ea
 | Infinite queries, both directions, `maxPages` | `InfiniteQueryOptions` |
 | `initialData` and `placeholderData` | including `keepPrevious` |
 | `select` and structural sharing | `QuerySelectOptions`, a second options shape with `select` required ([ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md)); plus `buildWhen` on the builders and the keyless reads |
+| `select` from a shared options factory | `withSelect(select)` keeps every other field |
 | A list of queries | `QueriesObserver` / `QueriesBuilder` |
-| Cache-wide mutation state | `MutationStateObserver` / `MutationStateController` |
+| Combining results of different types | `(a, b).combine(…)` over a record, `combine` over a `List`, `combineWith`, `optional()`, `CombineMemo` |
+| How many queries are fetching (`useIsFetching`) | `client.isFetching()` / `IsFetchingController` |
+| Cancelling a mutation, a context for its function | `Mutation.cancel()`, `MutationController.cancel()`, `mutationFnWithContext` |
+| Giving up after N failures | `consecutiveErrorCount` on `QueryState` and `QueryResult` |
+| Structural sharing into your own classes | `StructurallyShareable` |
+| Cache-wide mutation state | `MutationStateObserver` / `MutationStateController`, and `.typed` for one mutation type |
 | Cache events and global callbacks | `queryCache.subscribe`, `mutationCache.subscribe`, `meta` |
 | Offline behaviour | `NetworkMode`, paused mutations, `resumePausedMutations` |
 | Per-client focus / online / notify managers | not module-level singletons |
 | A Flutter binding with four equal call styles | and no dependency beyond Flutter |
 | Widget tests | the teardown is a documented snippet, not an export — see [Testing](../guides/testing.md) |
 
-## Deliberately not in 0.1
+## Deliberately not in 1.0
 
 Every row is recorded, with its reason, in
 [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
@@ -36,12 +42,12 @@ No omission is silent.
 
 | Upstream | Here |
 |---|---|
-| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 0.1; `Query.setState` is the door a persister would use |
+| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 1.0; `Query.setState` is the door a persister would use |
 | `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders and the keyless reads, mutations included |
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |
-| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else, plus an optional `structuralSharing` hook |
-| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous. Different data types are combined with `combine` on a **record of results** — `(a, b).combine((a, b) => …)` gives a `CombinedResult` (pending / error / data with `refetchError`), with an optional `CombineMemo` |
+| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else, plus an optional `structuralSharing` hook; a class that implements `StructurallyShareable` is walked into |
+| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous. Different data types are combined with `combine` on a **record of results** — `(a, b).combine((a, b) => …)` gives a `CombinedResult` (pending / error / data with `refetchError`), with an optional `CombineMemo`; the same `combine` over a `List`, `combineWith` for a list plus a source of another type, `optional()` for a source the screen can do without |
 | `streamedQuery` | not ported |
 | `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
 | `select` on `fetchQuery` | map the future |

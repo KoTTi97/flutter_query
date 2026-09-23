@@ -31,6 +31,21 @@ management to use a cache.
 > nine external deep-dive reviews, and a rule that no reported finding is
 > acted on before it has been reproduced. Judge it on that.
 
+## Install
+
+```bash
+flutter pub add query_kit_flutter
+```
+
+That brings [`query_kit`](https://pub.dev/packages/query_kit) with it, and one
+import is enough — the binding re-exports the core:
+
+```dart snippet="prose-only: the one import line, which every other sample already shows in context"
+import 'package:query_kit_flutter/query_kit_flutter.dart';
+```
+
+Requires Flutter 3.27 or later.
+
 ## Four equal ways to read a query
 
 They are layered, not competing: each is a thin shell over the one below, and
@@ -39,15 +54,20 @@ per situation.
 
 ### `context.query(...)`
 
-```dart
+```dart snippet="guides/reading-a-query.md#context-query"
 class TaskScreen extends StatelessWidget {
+  const TaskScreen(this.id, {super.key});
+
+  final String id;
+
   @override
   Widget build(BuildContext context) {
     final task = context.query(taskQuery(id));
     return switch (task) {
       QueryPending() => const CircularProgressIndicator(),
       QuerySuccess(:final data) => TaskCard(data),
-      QueryError(:final error) => ErrorBanner(error),
+      QueryError(:final error, :final staleData) =>
+        ErrorBanner(error, staleData),
     };
   }
 }
@@ -61,15 +81,20 @@ they are released when the widget stops reading the key or unmounts. A widget
 that stops calling `context.query` *altogether* gives no signal Flutter can
 see, so its last observers stay until it unmounts — put a conditional read in
 its own small widget. Read in `build`, not in a handler: the read is reconciled
-against the previous build. `context.selectQuery` is the form with a `select`;
-it takes a `QuerySelectOptions`. `context.query` always reads the
+against the previous build. A read inside a nested builder callback — a
+`ListView.builder` item, a `LayoutBuilder`, a `ValueListenableBuilder` — is
+added to the enclosing widget's reads and does not release them; a key such a
+callback stops reading goes on that widget's next own build. Give a list item
+its own widget when its reads should come and go with the item.
+`context.selectQuery` is the form with a `select`; it takes a
+`QuerySelectOptions`. `context.query` always reads the
 provider's client and takes no `client:` — a `BuildContext` names exactly one
 provider; for a client that is not the provider's, use the builders (`client:`)
 or the controllers, or override `queryClient` on a `QueryMixin` State.
 
 ### `QueryBuilder`
 
-```dart
+```dart snippet="excerpt: guides/reading-a-query.md#builder"
 QueryBuilder<Task>(
   options: taskQuery(id),
   builder: (context, result) => switch (result) { … },
@@ -84,12 +109,12 @@ sliver. Several queries on one screen means several nested builders.
 
 ### `QueryMixin`
 
-```dart
+```dart snippet="excerpt: guides/reading-a-query.md#mixin"
 class _TaskScreenState extends State<TaskScreen> with QueryMixin {
   @override
   Widget build(BuildContext context) {
     final task = watchQuery(taskQuery(widget.id));
-    final rename = watchMutation(renameTask());
+    final rename = watchMutation(renameTask(widget.id));
     …
   }
 }
@@ -110,8 +135,8 @@ the placeholder has nothing previous to show.
 
 ### `QueryController`
 
-```dart
-final task = QueryController.create(client, taskQuery(id));   // no select
+```dart snippet="guides/reading-a-query.md#controller"
+final task = QueryController.create(client, taskQuery(id));
 // … task.value, task.addListener, task.refetch() …
 task.dispose();
 ```
@@ -155,11 +180,14 @@ analyzer:
 The same four shapes. Paging lives on the controller, which is what every style
 hands back for an infinite query:
 
-```dart
-final feed = context.infiniteQuery(feedQuery());      // or watchInfiniteQuery,
-// InfiniteQueryBuilder(builder: (context, feed) => …), InfiniteQueryController
-final pages = feed.value.dataOrNull?.pages ?? const [];
-if (feed.hasNextPage) feed.fetchNextPage();
+```dart snippet="guides/infinite-queries.md#read"
+final feed = context.infiniteQuery(feedQuery());
+// or watchInfiniteQuery(...), InfiniteQueryBuilder(...), InfiniteQueryController
+
+final posts = feed.value.dataOrNull?.flatten<Post>() ?? const <Post>[];
+if (feed.hasNextPage && !feed.isFetchingNextPage) {
+  feed.fetchNextPage().ignore();
+}
 ```
 
 Mutations likewise: `context.mutation(...)`, `watchMutation(...)`,
@@ -174,11 +202,12 @@ stops reading it.
 
 The third type argument is what `onMutate` returns — the rollback handle of an
 optimistic update. A mutation without one uses `MutationOptions.simple`, which
-fixes it to `void` and lets the other two infer from `mutationFn`:
+fixes it to `void` and lets the other two infer from `mutationFn` — here a
+`Future<void> Function(String)`:
 
-```dart
+```dart snippet="packages/query_kit_flutter/README.md#mutation-simple"
 final add = context.mutation(MutationOptions.simple(
-  mutationFn: (String name) => api.add(name),
+  mutationFn: api.addTask,
   onSuccess: (_, __, ___) => client.invalidateQueries(
     filters: QueryFilters(queryKey: tasksKey),
   ),
@@ -196,13 +225,15 @@ rebuild their `child`. Nothing fires on mount, only later transitions, and
 callbacks are delivered off the build phase, so navigating or showing a
 snackbar from one is safe:
 
-```dart
+```dart snippet="packages/query_kit_flutter/README.md#listener"
 QueryListener<Task, Task>(
   controller: task,
-  listenWhen: (previous, next) => previous.errorOrNull != next.errorOrNull,
+  listenWhen: (previous, next) =>
+      previous.errorOrNull != next.errorOrNull,
   listener: (context, result) => ScaffoldMessenger.of(context)
-      .showSnackBar(const SnackBar(content: Text('Could not load the task'))),
-  child: const TaskTile(),
+      .showSnackBar(
+          const SnackBar(content: Text('Could not load the task'))),
+  child: const TasksScreen(),
 )
 ```
 
@@ -213,7 +244,7 @@ callback sees the transition it actually followed.
 Observers are reused by key and occurrence, so reordering starts no requests,
 and duplicate keys share one cache entry while keeping their own options:
 
-```dart
+```dart snippet="packages/query_kit_flutter/README.md#queries-builder"
 QueriesBuilder<Task, String>(
   queries: [
     for (final id in visibleIds)
@@ -276,7 +307,7 @@ every keyless read (`context.query`, `context.selectQuery`,
 `context.infiniteQuery`, `context.mutation`, `watchQuery`, `watchSelectQuery`,
 `watchInfiniteQuery`, `watchMutation`):
 
-```dart
+```dart snippet="excerpt: guides/rebuilds.md#build-when-builder"
 QueryBuilder<Task>(
   options: taskQuery(id),
   buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
@@ -296,20 +327,9 @@ no predicate; it only drops notifications that carry an unchanged result.
 
 ## Setting up
 
-Nothing is on pub.dev yet. From a checkout, the binding is a path dependency
-**plus an override**, because it asks for a hosted `query_kit`:
+One `QueryClient`, above everything that reads it:
 
-```yaml
-dependencies:
-  query_kit_flutter:
-    path: ../flutter_query/packages/query_kit_flutter
-
-dependency_overrides:
-  query_kit:
-    path: ../flutter_query/packages/query_kit
-```
-
-```dart
+```dart snippet="packages/query_kit_flutter/README.md#setup"
 final client = QueryClient();
 
 runApp(
@@ -336,11 +356,11 @@ client itself and `clear()`s it once the tree comes down, which is what an app
 with a single root client usually wants. A rebuild with a different callback
 keeps the client; give the widget a new `key` to replace it.
 
-```dart
+```dart snippet="packages/query_kit_flutter/README.md#provider-create"
 QueryClientProvider.create(
   create: QueryClient.new,
   child: const MyApp(),
-);
+)
 ```
 
 That does three things while it is mounted:
@@ -376,7 +396,7 @@ source of its own and `OnlineStatus.stream(changes, initial: …)` for one that
 follows a stream. Six lines with `connectivity_plus`, which stays *your*
 dependency:
 
-```dart
+```dart snippet="prose-only: needs connectivity_plus, which neither published package may depend on"
 // Built once — a stream built in `build` would be a new one on every rebuild,
 // and the provider would resubscribe each time.
 final connectivity = Connectivity()
@@ -394,9 +414,12 @@ QueryClientProvider(
 only listens believes the default — online — however long the first event
 takes, and an app launched in airplane mode then fetches once against a network
 that is not there. `Connectivity().checkConnectivity()` answers it at startup.
-Any `Stream<bool>` will do, single-subscription included: the provider
-subscribes once per stream, and a swapped client inherits the last value the
-stream reported. Worth knowing: `connectivity_plus` reports a *link*, not
+A broadcast stream always works. A single-subscription one works only while
+exactly one provider listens to it, once — no remount, no second provider —
+and a second listen throws a `FlutterError` that says so; wrap it with
+`asBroadcastStream()` to be safe. A swapped client inherits the last value
+the stream reported, and taking `onlineStatus` away (or disposing the
+provider) puts the client back online. Worth knowing: `connectivity_plus` reports a *link*, not
 reachability. A phone on hotel wifi with a captive portal reports "connected".
 
 ## Signals, hooks and other reactive packages
@@ -405,7 +428,7 @@ Not dependencies here, and not planned as such. Because a controller is a
 `ValueListenable`, a signals package reads it with whatever it offers for
 listenables — `signals_flutter` has `valueListenableToSignal`, for one:
 
-```dart
+```dart snippet="prose-only: needs signals_flutter, which neither published package may depend on"
 final task = QueryController.create(client, taskQuery(id));
 final signal = valueListenableToSignal(task);        // signals_flutter
 final done = computed(() => signal.value.dataOrNull?.done ?? false);
@@ -421,7 +444,7 @@ the tree comes down, and it checks that **before** any `tearDown` runs, so the
 cleanup has to happen inside the test body. The end of a query widget test
 is therefore always the same steps:
 
-```dart
+```dart snippet="guides/testing.md#teardown"
 testWidgets('the list loads', (tester) async {
   final client = QueryClient();
   await tester.pumpWidget(QueryClientProvider(
@@ -452,6 +475,12 @@ not a regular one, so nothing a test needs sits in your app's dependency
 graph. Write the steps once per suite as a `queryWidgetTest` wrapper — the
 [testing guide](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/guides/testing.md)
 has the fifteen lines, and both example apps wrap the same shape.
+
+## When something surprises you
+
+The traps people have actually fallen into — a read that never refetches, a
+rebuild that never stops, a key that never matches — and their cures are in
+[troubleshooting](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/reference/troubleshooting.md).
 
 ## Licence
 

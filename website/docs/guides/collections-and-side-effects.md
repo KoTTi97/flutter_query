@@ -91,8 +91,17 @@ The rules, in order:
    `refetchError`: content on screen is not blanked.
 
 `isFetching` is "any source is", and `refetch()` refetches all of them. Two to
-six results; past six, combine two combinations. Controllers combine the same
-way under a `ListenableBuilder` over `Listenable.merge([a, b])`.
+six results; past six, put the sources in a list typed by what they have in
+common — `<QueryResult<Object?>>[a, b, …]` — combine that, and cast in the
+combiner. A `CombinedResult` is deliberately not a source, so two combinations
+do not nest. Controllers combine the same way under a `ListenableBuilder` over
+`Listenable.merge([a, b])`.
+
+Two combinations that share a source each refetch it: `refetch()` and
+`retry()` cancel a fetch in flight and start their own, as an observer's
+`refetch()` does. To refresh several combinations at once without fetching a
+shared source twice, pass `refetch(cancelRefetch: false)` — the second call
+then joins the fetch the first one started.
 
 The combiner runs on every call — every build. For a constructor call that is
 nothing; for a join over long lists, keep a `CombineMemo<R>` next to the reads
@@ -127,8 +136,9 @@ CombinedResult<int> doneCount(List<QueryResult<Task>> tasks) =>
 A list **and** a source of another type — typically the query the list of
 queries was derived from — is `combineWith`. It is one combination, not two
 nested ones: the rules read the same, and the deriving query's failure is an
-error rather than an empty list. (`combineWith2` takes two such sources. A
-`CombinedResult` is deliberately not a source itself.)
+error rather than an empty list. More than one extra source goes the same way
+as more than six: one list typed by what the sources have in common, cast in
+the combiner.
 
 ```dart snippet="guides/collections-and-side-effects.md#combine-with"
 CombinedResult<List<Comment>> allComments(

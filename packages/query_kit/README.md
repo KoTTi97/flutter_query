@@ -3,7 +3,9 @@
 A Dart port of [TanStack Query](https://github.com/TanStack/query)'s
 `query-core`: a cache that knows about staleness, background refetching,
 retries, cancellation, mutations and infinite queries — with **no Flutter
-dependency**. The Flutter binding lives in a separate package.
+dependency**. The Flutter binding lives in a separate package,
+[`query_kit_flutter`](https://pub.dev/packages/query_kit_flutter), which
+re-exports all of this.
 
 > ### Where this comes from, and what it is not
 >
@@ -56,9 +58,18 @@ DC — what the review found in *this file*".
 
 Pinned upstream revision: `50680b98c`.
 
+## Install
+
+```bash
+dart pub add query_kit
+```
+
+In a Flutter app, add `query_kit_flutter` instead
+(`flutter pub add query_kit_flutter`); it brings this package with it.
+
 ## A first query
 
-```dart
+```dart snippet="packages/query_kit/README.md#first-query"
 final client = QueryClient();
 
 // Imperative: fetch and cache, completing with the data.
@@ -66,7 +77,7 @@ final tasks = await client.query<List<Task>>(
   QueryOptions<List<Task>>(
     queryKey: QueryKey(<Object?>['tasks']),
     queryFn: (context) => api.listTasks(signal: context.signal),
-    staleTime: StaleTime.duration(const Duration(seconds: 45)),
+    staleTime: const StaleTime.duration(Duration(seconds: 45)),
   ),
 );
 
@@ -121,7 +132,8 @@ matter at the call site:
   `select` required ([ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md);
   `InfiniteQueryObserverOptions` / `InfiniteQuerySelectOptions` mirror it).
   There is no `TError` (errors are `Object` plus a `StackTrace`) and no
-  `TQueryKey`.
+  `TQueryKey`. `withSelect(select)` turns a shared `QueryObserverOptions`
+  into the select shape without copying its fields.
 - **`QueryKey` is a value type**, deep-frozen with structural equality — not a
   hashed string. `queryKeyHashFn` is gone; the hash string survives as
   `debugString`.
@@ -134,8 +146,11 @@ matter at the call site:
   related type is welcome: `setQueryData` infers its type from the value, so
   an existing entry takes any value its own type can hold — a `String` into
   a `String?` query, a sealed type's variant into a query of the sealed
-  type — and the entry's type stays what it was. Name the type when the
-  write creates the entry: `setQueryData<List<Task>>(key, [])`.
+  type — and the entry's type stays what it was; `updateQueryData` and
+  `updateQueriesData` are as lenient. Name the type when the write creates
+  the entry: `setQueryData<List<Task>>(key, [])`. A bare
+  `setQueryData(key, null)` infers `Null` and writes nothing, as upstream's
+  `undefined` does; `setQueryData<Task?>(key, null)` stores a null.
 - **Every option union is a sealed value type.** `StaleTime`, `GcTime`,
   `Enabled`, `RetryPolicy`, `RetryDelay`, `RefetchOn`, `RefetchInterval`. `null`
   means "not configured" on every field; "off" is a value, never a magic number.
@@ -146,6 +161,8 @@ matter at the call site:
 - **`QueryClient.query` replaces `fetchQuery`, `prefetchQuery` and
   `ensureQueryData`**, all three deprecated upstream. Prefetch is
   `.ignore()`; "only if nothing is cached" is `staleTime: StaleTime.static`.
+  It joins a fetch already in flight — `refetchQueries` starts one after your
+  write — and the options it is given, `retry` included, stay on the query.
 - **An infinite query's function is `pageFn`**, taking a typed
   `InfinitePageContext` with `pageParam` and `direction`; the paging surface
   (`hasNextPage`, `fetchNextPage`) is on `InfiniteQueryObserver`.
@@ -156,32 +173,45 @@ matter at the call site:
 - **A list of queries is `QueriesObserver`**, upstream's `useQueries` without
   the heterogeneous tuple: one data type per collection, `select` when the
   selected type differs, and observers reused by key and occurrence. Results
-  of **different** types combine as a record: `(a, b).combine((a, b) => …)`.
+  of **different** types combine as a record: `(a, b).combine((a, b) => …)`;
+  the same `combine` works over a `List`, `combineWith` adds a source of
+  another type to a list, and `optional()` marks a source the screen can do
+  without.
+- **Structural sharing walks into your own classes** when they implement
+  `StructurallyShareable`; otherwise a value class is a leaf, compared by
+  its `==`.
+- **Giving up is readable.** `consecutiveErrorCount` — on `QueryState` and on
+  every `QueryResult` — counts failed fetches in a row, so a
+  `RefetchInterval.dynamic` can stop after N and a widget can say so; only a
+  fetched success resets it, not a manual write.
 - **Cache-wide mutation state is `MutationStateObserver`**, upstream's
   `useMutationState`: `MutationFilters` plus a `select`, with concurrent runs
-  under one key kept apart.
+  under one key kept apart; `MutationStateObserver.typed` selects the
+  mutations of one type, typed.
 - **`AppFocusManager(refetchMinBackgroundDuration:)`** suppresses focus
   refetches after an absence too short to matter — a divergence from upstream,
   which always refetches. It never blocks paused work from resuming, and the
   default of `Duration.zero` is upstream's behaviour.
 
 The full JS-to-Dart name map is
-[in the documentation](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/reference/coming-from-react-query.md).
+[in the documentation](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/reference/coming-from-react-query.md),
+and the traps people fall into are in
+[troubleshooting](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/reference/troubleshooting.md).
 
-## Deliberately not in 0.1
+## Deliberately not in 1.0
 
 Each row is recorded, with its reason, in
 [`test/PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
 
 | Upstream | Here |
 |---|---|
-| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 0.1; `Query.setState` is the door a persister would use |
+| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 1.0; `Query.setState` is the door a persister would use |
 | `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the binding's builders |
 | `throwOnError` | errors live in the sealed result (`QueryError`) |
 | `queryKeyHashFn` | `QueryKey` is a value type |
-| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook. Two limits: a map is shared **whole**, so one changed leaf shares nothing beneath it; and a hook governs the cache write and unselected placeholders: `select` output is shared by the default comparison unless the option is `noStructuralSharing()` — upstream's `false` — which turns it off too, because the hook is typed for the query's data and cannot be routed over a selection |
+| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`, or `StructurallyShareable` to be walked into), plus an optional `structuralSharing` hook. Two limits: a map is shared **whole**, so one changed leaf shares nothing beneath it; and a hook governs the cache write and unselected placeholders: `select` output is shared by the default comparison unless the option is `noStructuralSharing()` — upstream's `false` — which turns it off too, because the hook is typed for the query's data and cannot be routed over a selection |
 | Observer options in `setQueryDefaults` / `defaultOptions.queries` | `QueryDefaults` is a subset: no `initialData`, `initialDataUpdatedAt(Compute)`, `placeholderData`, `select` or `behavior`. A default that decides what a query *holds* belongs at the call site, where its type is known |
-| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous. Different data types are combined with `combine` on a **record of results** — `(a, b).combine((a, b) => …)` gives a `CombinedResult` (pending / error / data with `refetchError`), with an optional `CombineMemo` |
+| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous. Different data types are combined with `combine` on a **record of results** — `(a, b).combine((a, b) => …)` gives a `CombinedResult` (pending / error / data with `refetchError`), with an optional `CombineMemo`; the same `combine` over a `List`, `combineWith` for a list plus a source of another type, `optional()` for a source the screen can do without |
 | `streamedQuery` | not ported |
 | `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
 | `select` on `fetchQuery` | map the future |

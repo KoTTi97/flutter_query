@@ -58,6 +58,14 @@
 /// stops compiling, and whoever fixes it is looking at a marker naming the
 /// page that shows it.
 ///
+/// The two package READMEs are held to the same rule (REL-8, release review
+/// 2026-09-23). Each is a pub.dev landing page frozen into the archive it
+/// ships in, so a sample that stops compiling there cannot be fixed without a
+/// new release. Their fences are read as pages named by their repository
+/// path — `packages/query_kit/README.md` — so a README-only twin's id is
+/// `packages/query_kit/README.md#<slug>`, and a README fence that shows a
+/// site sample names the site's id.
+///
 /// This test lives in `examples/doc_snippets/test/` and not in `tool/` for
 /// two reasons: it runs inside the existing `doc snippet tests` step in both
 /// the `gates` and `floors` jobs, so CI needs no new step; and it is a test
@@ -71,7 +79,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final Directory repo = _repoRoot();
-  final List<_Fence> fences = _fencesOf(Directory('${repo.path}/website/docs'));
+  final List<_Fence> fences = <_Fence>[
+    ..._fencesOf(Directory('${repo.path}/website/docs')),
+    for (final String readme in _readmes)
+      ..._fencesOfPage(File('${repo.path}/$readme'), readme),
+  ];
   final Map<String, _Region> regions = _regionsOf(repo);
 
   // A guard on the guard: if the glob or the root ever stops resolving, every
@@ -345,8 +357,13 @@ final List<String> _duplicateRegionIds = <String>[];
 
 final RegExp _snippetAttribute = RegExp(r'snippet="([^"]*)"');
 
+/// The published READMEs, by repository path — which is also their page name.
+const List<String> _readmes = <String>[
+  'packages/query_kit/README.md',
+  'packages/query_kit_flutter/README.md',
+];
+
 List<_Fence> _fencesOf(Directory docs) {
-  final List<_Fence> fences = <_Fence>[];
   final List<File> pages = docs
       .listSync(recursive: true)
       .whereType<File>()
@@ -354,40 +371,49 @@ List<_Fence> _fencesOf(Directory docs) {
       .toList()
     ..sort((File a, File b) => a.path.compareTo(b.path));
 
-  for (final File page in pages) {
-    final String rel = page.path
-        .substring(docs.path.length + 1)
-        .replaceAll(Platform.pathSeparator, '/');
-    final List<String> lines = page.readAsLinesSync();
-    for (int i = 0; i < lines.length; i++) {
-      if (!lines[i].startsWith('```dart')) continue;
-      final String meta = lines[i].substring('```dart'.length);
-      int j = i + 1;
-      while (j < lines.length && !lines[j].startsWith('```')) {
-        j++;
-      }
-      final String? attribute = _snippetAttribute.firstMatch(meta)?.group(1);
-      final bool proseOnly = attribute?.startsWith('prose-only:') ?? false;
-      final bool excerpt = attribute?.startsWith('excerpt:') ?? false;
-      final String? value =
-          excerpt ? attribute!.substring('excerpt:'.length) : attribute;
-      final String? reason =
-          proseOnly ? attribute!.substring('prose-only:'.length) : null;
-      fences.add(_Fence(
-        page: rel,
-        line: i + 1,
-        lines: lines.sublist(i + 1, j),
-        regionIds: proseOnly || value == null
-            ? const <String>[]
-            : value
-                .split(RegExp(r'\s+'))
-                .where((String s) => s.isNotEmpty)
-                .toList(),
-        isExcerpt: excerpt,
-        proseOnlyReason: reason,
-      ));
-      i = j;
+  return <_Fence>[
+    for (final File page in pages)
+      ..._fencesOfPage(
+        page,
+        page.path
+            .substring(docs.path.length + 1)
+            .replaceAll(Platform.pathSeparator, '/'),
+      ),
+  ];
+}
+
+/// The ```dart fences of one page, named [rel].
+List<_Fence> _fencesOfPage(File page, String rel) {
+  final List<_Fence> fences = <_Fence>[];
+  final List<String> lines = page.readAsLinesSync();
+  for (int i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith('```dart')) continue;
+    final String meta = lines[i].substring('```dart'.length);
+    int j = i + 1;
+    while (j < lines.length && !lines[j].startsWith('```')) {
+      j++;
     }
+    final String? attribute = _snippetAttribute.firstMatch(meta)?.group(1);
+    final bool proseOnly = attribute?.startsWith('prose-only:') ?? false;
+    final bool excerpt = attribute?.startsWith('excerpt:') ?? false;
+    final String? value =
+        excerpt ? attribute!.substring('excerpt:'.length) : attribute;
+    final String? reason =
+        proseOnly ? attribute!.substring('prose-only:'.length) : null;
+    fences.add(_Fence(
+      page: rel,
+      line: i + 1,
+      lines: lines.sublist(i + 1, j),
+      regionIds: proseOnly || value == null
+          ? const <String>[]
+          : value
+              .split(RegExp(r'\s+'))
+              .where((String s) => s.isNotEmpty)
+              .toList(),
+      isExcerpt: excerpt,
+      proseOnlyReason: reason,
+    ));
+    i = j;
   }
   return fences;
 }

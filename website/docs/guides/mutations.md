@@ -163,10 +163,13 @@ which has the controller hold the error instead). Only
 its controller leaves an attempt in flight to settle, so there is nothing to
 abort. A mutation
 that is paused, queued behind its scope or still in `onMutate` fails the same
-way without its function ever running.
+way without its function ever running. So does one restored `pending` from
+persistence that has not been resumed yet. Once the function has returned,
+`cancel()` does nothing: the write went through.
 
-One function per mutation — both at once is an `ArgumentError`, in release
-builds too — and a
+One function per mutation — both at once fails an assertion at the options
+literal in a debug build, and is an `ArgumentError` when the client resolves
+them in a release build — and a
 function registered with `setMutationDefaults` has no context form.
 
 ## A mutation outlives its widget
@@ -218,8 +221,10 @@ none: it *is* the notifier.
 
 In the context and mixin styles a mutation is identified by `id:` if you give
 one, else by its `mutationKey`, each together with its three type arguments;
-without either, by the types alone. Two mutations of the same shape in one
-build without an `id:` are caught by an assertion in debug builds.
+without either, by the types alone. A `mutationKey` is a category, as
+upstream's is, not a name: two mutations of the same shape under one key in
+one build without an `id:` are caught by an assertion in debug builds — they
+would otherwise share one controller. Give each an `id:`.
 
 Like a query, a mutation is released after the frame once a build stops reading
 it.
@@ -239,13 +244,26 @@ MutationOptions<void, String, void> serialisedWrite(String id) =>
 
 That is the tool for "two edits of the same row must not race".
 
+Only the **function** waits its turn. `onMutate` runs when the mutation is
+submitted, so a snapshot it takes, a patch it applies or a `cancelQueries` it
+calls happens at enqueue time, before the writes ahead of it have landed —
+roll back the row this mutation changed rather than restoring a whole-list
+snapshot. The scope is held until the running mutation's `onSettled` future
+completes, and until then the mutation is still `pending` and
+`client.isMutating()` counts it — inside its own `onSettled` too. The
+per-call callbacks passed to `mutate` run after the state has moved on. A
+queued run reports `isPaused`, as a run waiting for the network does.
+
 ## Offline
 
 A mutation started while the client believes it is offline is **paused**, not
 failed. `client.resumePausedMutations()` releases them, and the client does it
 itself when the online manager flips back — as long as the client is
 [mounted](lifecycle-and-connectivity.md). See
-[network mode](lifecycle-and-connectivity.md#network-mode).
+[network mode](lifecycle-and-connectivity.md#network-mode). A mutation that
+could run offline (`NetworkMode.always`) but is queued behind a scope-mate
+that cannot stays paused until the scope moves; `resumePausedMutations()`
+does not wait for it.
 
 ## Cache-wide mutation state
 
@@ -278,8 +296,10 @@ Two things to know, because an empty list after a filter looks harmless:
   `Mutation<Object?, String, Object?>`, whatever it was called with — it drops
   out silently. Options with a typed `mutationFn` infer correctly; check the
   ones assembled from pieces.
-- A later `setOptions` on the controller replaces filter and select with
-  untyped ones.
+- The type is the controller's for its life: a later `setOptions` may
+  replace the filters or the select, and the selection still sees only
+  mutations of that type (a new select receives them erased, as the untyped
+  one does).
 - A typed selection does not replace an untyped one where the mutations are
   mixed on purpose: "is *any* write in flight?" over a scope that holds two
   variable types is still one untyped controller, next to the typed one.

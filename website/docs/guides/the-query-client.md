@@ -34,6 +34,16 @@ The last one is stale-while-revalidate as an imperative call: cached data comes
 back at once while a stale entry refreshes behind it; with nothing cached, the
 fetch is awaited as usual.
 
+`client.query` **joins** a fetch already in flight for its key rather than
+starting another — so a call right after your write may hand back what the
+running fetch brings, and a cancelled fetch that reverts resolves it with the
+reverted data. Use `refetchQueries` for a fetch that starts after your write.
+And the options it is given become the query's, as an observer's do: an
+explicit `retry` in them is the policy a later invalidation or focus refetch
+of that query uses too, until an observer or another call hands in its own.
+Only the no-retry default, for a call that configured none, is limited to
+that one fetch.
+
 `QueryClient.query` also accepts `InfiniteQueryOptions`, because an
 `InfiniteQueryOptions` carries its own paging behaviour.
 
@@ -77,6 +87,14 @@ client.updateQueriesData<Task>((previous) => …, filters: QueryFilters(…));
 returning `null` from it leaves the cache untouched. For an infinite query, the
 typed read is `getInfiniteQueryData<TPageData, TPageParam>(key)`.
 
+The updater forms are as lenient as `setQueryData`: an existing entry takes
+whatever its own type can hold, so `(String? old) => 'c'` on a `String?`
+entry writes. `updateQueriesData` runs every updater and checks every result
+before writing any. `setQueryData` returns what the cache stored, after
+structural sharing. A bare `setQueryData(key, null)` infers `Null` and writes
+nothing — upstream's `undefined`; write `setQueryData<Task?>(key, null)` to
+store a null.
+
 :::danger One key, one exact type
 A key is bound to the data type it was first used with, and reading it as any
 other type throws `QueryDataTypeError` — **related types included**. `int` and
@@ -88,7 +106,8 @@ key's first use. It is the single most likely thing to catch you out when
 porting JavaScript, and it is catching a real bug.
 
 A **write** is the one place a related type is welcome. `setQueryData` infers
-its type from the value, so an entry that already exists takes any value its
+its type from the value (and so do `updateQueryData` and `updateQueriesData`
+from the updater), so an entry that already exists takes any value its
 own type can hold — a `String` into a `String?` query, a sealed type's variant
 into a query of the sealed type — and keeps its type. Name the type when the
 write *creates* the entry, as when seeding a key before its query exists:

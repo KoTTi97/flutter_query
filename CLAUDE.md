@@ -62,12 +62,27 @@ after five failures. The sharing
 trade-off stays discussable on [#86](https://github.com/KoTTi97/flutter_query/issues/86);
 the traps opened the site's `reference/troubleshooting.md`.
 
-## Where the work stands (2026-09-12)
+The **2026-09-23 release review** was a deep dive over both repositories —
+library line by line against upstream at the pin (L1–L5, B1–B2), the BR64
+app's use of it (E1–E4), a release-readiness lens (REL-1–21) — and it set the
+version at **1.0.0**, not 0.1.0: a breaking change is now a major. Fifty-six
+findings were worked in three passes, each reproduced first: 21 on the core's
+query side, 20 on client, keys and mutations, 15 in the binding (REL-13 did
+not reproduce) — PORTING_NOTES' three "Release review 2026-09-23" sections, a
+row each. What users meet: `withSelect`, `QueryResult.consecutiveErrorCount`,
+`CombinedResult.refetch(cancelRefetch:)`; `combineWith2`, the `canFetch`
+export and `typedMutationSelection` gone; #84 holding in all four call styles;
+reads in nested builders additive. The docs pass put the README samples under
+`site_fences_test.dart`, took the binding's example out of the workspace
+(`docs/releasing.md`, "What the archives hold") and gave `publish.yml` a
+Flutter SDK. Core **818 VM / 814 browser**, binding **167**.
+
+## Where the work stands (2026-09-23)
 
 | Phase | State |
 |---|---|
-| **`packages/query_kit/`** — the pure-Dart core | **pre-release deep-dive review done (2026-09-12), not published.** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
-| **`packages/query_kit_flutter/`** — the Flutter binding | **done, nine times reviewed, then restructured by map #49.** 128 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
+| **`packages/query_kit/`** — the pure-Dart core | **1.0.0, release review done (2026-09-23), not published** — 818 VM / 814 browser tests since; the rest of this cell is the 2026-09-12 state. **Pre-release deep-dive review done (2026-09-12).** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
+| **`packages/query_kit_flutter/`** — the Flutter binding | **1.0.0, done, nine times reviewed, restructured by map #49, release-reviewed 2026-09-23.** 167 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46; deduplicated 2026-09-12, map #49).** 30 screens (`combine` and `mutation-cancel` joined on 2026-09-20), 247 widget tests against a dio fake of the backend and 177 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 25 cases against fake and server, and `catalogue_test.dart`, which holds the **five** per-feature artefact sets level. It found two library bugs no ported test could reach |
 | **`examples/task_manager/`** — the acceptance demo, one whole app | **done.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, **15 contract cases** run against its fake and its real server (map #49 — twelve of the fourteen were red against the fake), and 10 Playwright end-to-end tests in a real browser against that server; iOS and web generated |
 
@@ -114,6 +129,10 @@ cd examples/showcase && flutter test
 ```bash
 cd examples/doc_snippets && flutter test
 ```
+
+The binding's example is outside the workspace (it ships; see
+`docs/releasing.md`), so after a fresh clone run `flutter pub get` in
+`packages/query_kit_flutter/example` once before the analyzer:
 
 ```bash
 dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test tool
@@ -182,7 +201,8 @@ exactly like an open one.
   Its Notes are the oldest standing rules (AFK, the upstream pin, no
   third-party dependency, the four equal call styles); **start there** when
   you need to know why something is the way it is.
-- [#33](https://github.com/KoTTi97/flutter_query/issues/33) — release 0.1.0.
+- [#33](https://github.com/KoTTi97/flutter_query/issues/33) — release 0.1.0
+  (the version became 1.0.0 at the 2026-09-23 release review).
   Worked off the ninth review's findings C1–C46, two of them as ADRs under
   [`docs/adr/`](docs/adr/), and ended at the wizard's door with the release
   commit (#47).
@@ -341,7 +361,7 @@ semantics.
 - **`Defaulted*Options` are distinct types**, not a flag. Only `QueryClient` can
   produce them, so nothing downstream can be handed half-resolved options. They
   carry value equality, which is what tells a rebuild that nothing changed.
-- **An option field costs about forty lines, in eight places.** There is no
+- **An option field costs about forty lines, in nine places.** There is no
   macro and no code-generation package (neither published package may require
   one), so each field is written out per class and per role, and a missed one
   is a silent bug — an option that does not survive a `copyWith`, or a rebuild
@@ -350,8 +370,11 @@ semantics.
   entry, (4) its `copyWith` parameter and (5) body, (6) the `super.` parameter
   and `copyWith` of *each* subclass — plain and select, and again on the
   infinite side, (7) the `Defaulted*` constructor, field, `==` and `hashCode`,
-  and (8) the client's defaulting. Explored and kept as the price of const
-  value classes ([#62](https://github.com/KoTTi97/flutter_query/issues/62)).
+  (8) the client's defaulting, and (9) the copy in
+  `QueryObserverOptions.withSelect` and `InfiniteQueryObserverOptions.withSelect`
+  (LIB-3's test fails for a forgotten field only if it sets that field).
+  Explored and kept as the price of const value classes
+  ([#62](https://github.com/KoTTi97/flutter_query/issues/62)).
 - **When porting a test, port it — don't rewrite it.** Keep the upstream name so
   the two files diff against each other, and if the assertion has to change,
   record why in PORTING_NOTES.md. Port-only behaviour goes in `smoke_test.dart`,

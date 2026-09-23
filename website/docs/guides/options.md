@@ -55,6 +55,12 @@ The plain entry points (`QueryBuilder`, `context.query`, `watchQuery`,
 the general `QueryController(client, options)` takes either. Infinite queries
 mirror this — see [infinite queries](infinite-queries.md).
 
+A factory that builds the plain shape serves a projecting reader too:
+`taskQuery(id).withSelect((task) => task.name)` is a `QuerySelectOptions`
+with every other field kept — no copying fields by hand, and no field
+forgotten when one is added. `InfiniteQueryObserverOptions.withSelect` does
+the same for the paged shape.
+
 ## Staleness
 
 `StaleTime` decides whether cached data counts as fresh. Fresh data is
