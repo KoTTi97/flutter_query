@@ -43,9 +43,11 @@ const config: Config = {
   projectName: repository,
   trailingSlash: false,
 
-  // A link to a page that does not exist fails the build. That is the point
-  // of building the site in CI.
+  // A link to a page that does not exist fails the build, and so does a
+  // link to a heading that does not exist. That is the point of building the
+  // site in CI.
   onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
   markdown: { hooks: { onBrokenMarkdownLinks: 'throw' } },
 
   future: { v4: true, faster: true },

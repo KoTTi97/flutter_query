@@ -251,7 +251,7 @@ widget's state. Three details make it work:
 - **A `staleTime`.** The prefetched page is fresh for thirty seconds, so the
   reader that moves to it finds it fresh and does not fetch again. With the
   default `staleTime` of zero it would be shown at once — and refetched
-  straight away. See [prefetching](prefetching.md#where-to-prefetch).
+  straight away. See [prefetching](prefetching.md).
 
 Try it: in the screen below, press *Next page* a few times. Each page is
 there at once, because the one after the page on screen was prefetched as
