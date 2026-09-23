@@ -50,8 +50,8 @@ The result is the same sealed `QueryResult` a Flutter widget switches over;
 the binding's readers are this observer with a widget's lifetime around it.
 The *Simple* example is that Flutter version of one query: press the refetch
 button and watch the post stay on screen while the *refreshing* pill shows
-and the strip's `fetches` goes up — every one of those facts is a field of
-the result above.
+and the strip's `fetches` goes up. The post and the pill are fields of the
+result above; the count comes from the cache's events.
 
 <LiveDemo feature="simple" />
 

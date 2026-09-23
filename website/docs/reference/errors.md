@@ -22,18 +22,20 @@ Debug-build checks (asserts and debug-only `FlutterError`s) are listed at the
 end. They cost nothing in a release build — and do not protect you there
 either.
 
+A TanStack Query name is given only where it differs from the Dart one.
+
 For symptoms rather than error names, see [troubleshooting](troubleshooting.md).
 The [debugging guide](../guides/debugging.md) shows how to watch errors as
 they happen.
 
 ## Exported error types
 
-| Type | Package | Carries | TanStack |
-|---|---|---|---|
-| [`QueryDataTypeError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryDataTypeError-class.html) | `query_kit` | `queryKey` (`QueryKey?`), `expected` (`Type`), `actual` (`Type`) | — |
-| [`MissingQueryFunctionError`](https://pub.dev/documentation/query_kit/latest/query_kit/MissingQueryFunctionError-class.html) | `query_kit` | `queryKey` (`QueryKey`) | a plain `Error` with a message |
-| [`MissingMutationFunctionError`](https://pub.dev/documentation/query_kit/latest/query_kit/MissingMutationFunctionError-class.html) | `query_kit` | `mutationKey` (`QueryKey?`) | a plain `Error` with a message |
-| [`CancelledError`](https://pub.dev/documentation/query_kit/latest/query_kit/CancelledError-class.html) | `query_kit` | `revert` (`bool`, default `false`), `silent` (`bool`, default `false`) | `CancelledError` |
+| Type | Package | Carries |
+|---|---|---|
+| [`QueryDataTypeError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryDataTypeError-class.html) | `query_kit` | `queryKey` (`QueryKey?`), `expected` (`Type`), `actual` (`Type`). No TanStack counterpart. |
+| [`MissingQueryFunctionError`](https://pub.dev/documentation/query_kit/latest/query_kit/MissingQueryFunctionError-class.html) | `query_kit` | `queryKey` (`QueryKey`). TanStack: a plain `Error` with a message. |
+| [`MissingMutationFunctionError`](https://pub.dev/documentation/query_kit/latest/query_kit/MissingMutationFunctionError-class.html) | `query_kit` | `mutationKey` (`QueryKey?`). TanStack: a plain `Error` with a message. |
+| [`CancelledError`](https://pub.dev/documentation/query_kit/latest/query_kit/CancelledError-class.html) | `query_kit` | `revert` (`bool`, default `false`), `silent` (`bool`, default `false`) |
 
 All four implement `Exception`, so `on Exception catch` sees them and an
 `Error`-only handler does not. The binding exports no error type of its own:
@@ -54,7 +56,8 @@ a subtype, a supertype, or the non-nullable form of a nullable one — throws
 | `QueryCache.get`, `client.getQueryData`, `getInfiniteQueryData`, `getQueryState` | The type argument differs from the type the entry holds. |
 | `client.getQueriesData` | Any matching entry holds another type. |
 | `client.setQueryData` | The value is not something the entry's own type can hold. An inferred type argument alone does not throw: an entry of `List<Todo>?` takes a `List<Todo>`. |
-| `client.updateQueryData`, `updateQueriesData` | Any matching entry holds another type. Every entry is checked before any is written, so a throw writes nothing. |
+| `client.updateQueryData` | The entry holds data that is not a `TQueryData`, so the updater cannot be handed it, or the updater returns a value the entry's own type cannot hold. |
+| `client.updateQueriesData` | The same, for any matching entry. Every updater runs before anything is written, so a throw writes nothing. |
 | `client.query`, `client.infiniteQuery` | The key's entry holds another type. Thrown before any future exists, so it is not a rejected future. |
 | `QueryObserver` constructor, `setOptions`, `getOptimisticResult` | The options' type does not match the entry. This is what surfaces from `context.query`, `QueryController` and the other binding reads. |
 
@@ -123,7 +126,7 @@ them.
 | `client.cancelQueries` (default `revert: true`) | `true` / `false` | The state goes back to what it was before the fetch; no error is recorded and `onError` does not run. A caller awaiting the fetch gets the data the query held, or the `CancelledError` when it held none. | no |
 | `Query.cancel()`, or `cancelQueries(revert: false)` | `false` / `false` | Recorded as the query's error; the cache's `onError` and `onSettled` run with it. | no |
 | a new fetch with `cancelRefetch` over a running one | `false` / `true` | Nothing: the callers of the cancelled fetch ride on the new one. | no |
-| the last observer leaving while the query function used its signal | `true` / `false` | As with `cancelQueries`: the state is put back. | no |
+| the last observer leaving while the query function used its signal, or while a first fetch is paused | `true` / `false` | As with `cancelQueries`: the state is put back. | no |
 | `Query.fetch` on a query already removed from the cache | `false` / `true` | The returned future fails with it; the query's state is untouched. | no |
 | `Mutation.cancel`, `MutationObserver.cancel`, `MutationController.cancel` | `false` / `false` | The mutation fails with it: `status: error`, `onError` and `onSettled` run, `mutateAsync` throws it. Nothing is reverted — undo optimistic updates in `onError`. | no |
 | a paused mutation removed from the cache, or the cache cleared | `false` / `false` | The mutation fails with it. | no |
@@ -147,8 +150,8 @@ arguments cannot work. None of them is retried; none reaches a result.
 
 | Error | Thrown by | When | Fix |
 |---|---|---|---|
-| `ArgumentError` | `QueryObserver` constructor, `setOptions` | No `select`, and the cached type is not the reported type. | Add a `select`, or make the two types the same. |
-| `ArgumentError` | `QueriesObserver` constructor, `setQueries` | "QueriesObserver requires select when data types differ." A throwing `setQueries` leaves the list as it was. | Give every entry whose types differ a `select`. |
+| `ArgumentError` | `QueryObserver` constructor, `setOptions`, `getOptimisticResult` | No `select`, and the cached type is not the reported type. | Add a `select`, or make the two types the same. |
+| `ArgumentError` | `QueriesObserver` constructor, `setQueries` | "QueriesObserver requires select when data types differ." A throwing `setQueries` leaves the list as it was, except that members before the failing entry keep their new options. | Give every entry whose types differ a `select`. |
 | `ArgumentError` | `client.defaultQueryOptions`, and so every query read | Both `initialDataUpdatedAt` and `initialDataUpdatedAtCompute` are set. | Set one. |
 | `ArgumentError` | `client.defaultMutationOptions`, and so `MutationObserver` and every mutation | Both `mutationFn` and `mutationFnWithContext` are set, counting defaults. The `MutationOptions` constructor also asserts it in debug builds. | Set one. |
 | `ArgumentError` | `QueryCache.build(state:)`, `Query.setState` | The state is inconsistent — `success` without data, say. | Build the state with the constructors `QueryState` offers, or restore what was saved unchanged. |
@@ -157,7 +160,7 @@ arguments cannot work. None of them is retried; none reaches a result.
 | `ArgumentError` | `InfiniteData` constructor | `pages` and `pageParams` differ in length. | Keep them paired. |
 | `ArgumentError` | `InfiniteData.flatten<T>` | A page is not an `Iterable<T>`. | Name the element type the pages really hold, or flatten with your own `expand`. |
 | `ArgumentError` | `copyWith` on `InfiniteQueryOptions`, `InfiniteQueryObserverOptions`, `InfiniteQuerySelectOptions` | `queryFn:` passed — an infinite query's function is `pageFn`. On the two observer option types, also `pages:` — an observer refetches as many pages as the query holds. | Change `pageFn`; pass a page count to `client.infiniteQuery` instead. |
-| `UnsupportedError` | `InfiniteQueryObserver.setOptions` | Plain observer options were passed. | Use `setInfiniteOptions` with options from `client.infiniteObserverOptions`. |
+| `UnsupportedError` | `InfiniteQueryObserver.setOptions`, `getOptimisticResult` | Plain observer options were passed. | Use `setInfiniteOptions` with options from `client.infiniteObserverOptions`. |
 | `ArgumentError` | `AppFocusManager` constructor | `refetchMinBackgroundDuration` is negative. | Pass zero or more. |
 
 ## Errors from callbacks and listeners
@@ -175,7 +178,8 @@ What happens when your own code throws depends on where it runs.
 - a callback registered with a cancel token's `onCancel`;
 - a callback queued on the `NotifyManager`;
 - in the binding, the callbacks of `QueryListener`, `InfiniteQueryListener`
-  and `MutationListener`.
+  and `MutationListener` — these go to `FlutterError.reportError`, which
+  calls `FlutterError.onError`, rather than to the zone.
 
 **Change the outcome:**
 
@@ -192,7 +196,7 @@ runs.
 | Error | Build modes | When | Fix |
 |---|---|---|---|
 | [`QueryClientProvider.of`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/of.html), `.read`: `FlutterError` "No QueryClientProvider found above this widget…" | all | No `QueryClientProvider` above the context. | Put one above the widget, or pass `client:` to the builder or controller. `QueryClientProvider.maybeOf` returns `null` instead of throwing. |
-| `context.query`, `selectQuery`, `infiniteQuery`, `mutation`: `FlutterError` | all | The same, with a message naming the call. `QueryMixin` reads and builders without `client:` throw through `of`. | As above. |
+| `context.query`, `selectQuery`, `infiniteQuery`, `mutation`: `FlutterError` | all | The same, with a message that names `context.query()` whichever of these was called. `QueryMixin` reads and builders without `client:` throw through `of`. | As above. |
 | `QueryClientProvider`: `FlutterError` "QueryClientProvider could not listen to its onlineStatus" | all | `onlineStatus` is a single-subscription stream and a second provider, or a replaced one, listened to it again. | Pass `stream.asBroadcastStream()`. |
 | `onlineStatus` stream errors | all | The stream emits an error, or cancelling it throws. Reported through `FlutterError.reportError`, not thrown; the online state is unchanged. | Handle errors in the stream. |
 
@@ -208,7 +212,7 @@ without the check, with the behaviour described.
 | `FlutterError` for two different mutations | `context.mutation`, `watchMutation` | Two reads without `id` in the reader's own build differ in the function, a callback, `scope`, `retry`, `retryDelay`, `networkMode` or `gcTime`. `meta` is not compared; `RetryPolicy.when` and `RetryDelay.dynamic` are compared by kind only. | Both reads share one mutation observer with the later options. | Pass a distinct `id:` to each read. |
 | `AssertionError` on a top type | `QueryController`, `InfiniteQueryController`, `QueryController.observing` | The data type is `dynamic` or `Object?` — usually an inferred type argument. | The controller works, untyped. | Name the data type. |
 | `AssertionError` on the mutation function | `MutationOptions` | Both `mutationFn` and `mutationFnWithContext` are set. Resolving the options throws `ArgumentError` in every mode. | `ArgumentError` when the options are resolved. | Set one. |
-| `AssertionError` on a key part | `QueryKey` | A part of the key has no value equality — a class without `==` and `hashCode`, a closure. | The key compares by identity and a new instance per build misses the cache. | Use strings, numbers, records, lists, maps, or classes with value equality. See [query keys](../guides/query-keys.md). |
+| `AssertionError` on a key part | `QueryKey` | A part of the key has no value equality — a class without `==` and `hashCode`, a closure — or a map in it is keyed by a collection. | The key compares by identity and a new instance per build misses the cache. | Use strings, numbers, records, lists, maps, or classes with value equality. See [query keys](../guides/query-keys.md). |
 
 ## How this differs from TanStack Query
 

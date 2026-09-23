@@ -26,7 +26,7 @@ reference](api.md) pages, with their types and defaults.
 | `select` from a shared options factory | `withSelect(select)` keeps every other field |
 | A list of queries | `QueriesObserver` / `QueriesBuilder` |
 | Combining results of different types | `(a, b).combine(…)` over a record, `combine` over a `List`, `combineWith`, `optional()`, `CombineMemo` |
-| How many queries are fetching (`useIsFetching`) | `client.isFetching()` / `IsFetchingController` |
+| How many queries are fetching, how many mutations are running (`useIsFetching`, `useIsMutating`) | `client.isFetching()` / `IsFetchingController`, `client.isMutating()` |
 | Cancelling a mutation, a context for its function | `Mutation.cancel()`, `MutationController.cancel()`, `mutationFnWithContext` |
 | Giving up after N failures | `consecutiveErrorCount` on `QueryState` and `QueryResult` |
 | Structural sharing into your own classes | `StructurallyShareable` |

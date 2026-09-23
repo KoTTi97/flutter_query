@@ -47,9 +47,10 @@ re-creates the query it names — gc timer included.
 Nothing here is exported by the package. `flutter_test` is a dev dependency
 of `query_kit_flutter`, not a regular one, so nothing a test needs sits in
 your app's dependency graph. Copy the steps, or the harness below, into your
-own test folder. The samples on this page are the cases of
-[`examples/doc_snippets/test/teardown_snippet_test.dart`](https://github.com/KoTTi97/flutter_query/blob/main/examples/doc_snippets/test/teardown_snippet_test.dart),
-which CI runs, so they cannot rot.
+own test folder. The Flutter samples on this page are test cases in
+[`examples/doc_snippets/test/`](https://github.com/KoTTi97/flutter_query/tree/main/examples/doc_snippets/test)
+— the teardown and the harness in `teardown_snippet_test.dart` — which CI
+runs, so they cannot rot.
 
 ## A harness
 
@@ -212,7 +213,7 @@ class FakeAdapter implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
-    Stream<List<int>>? requestStream,
+    Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -401,8 +402,10 @@ await tester.pump(const Duration(milliseconds: 300)); // the fake's latency
 await tester.pumpAndSettle();
 ```
 
-A screen that polls or retries never settles at all — `pumpAndSettle` will time
-out. Drive those with `pump(duration)` only.
+So `pumpAndSettle` never reaches the next poll or retry: it returns as soon
+as no frame is scheduled, long before the timer is due — or, with a spinner
+on screen while a query retries, it times out. Drive those with
+`pump(duration)` only.
 
 **`tester.pump()` with no duration does not let a `dio` response resolve.**
 `dio` hangs its pipeline off zero-duration timers, and `FakeAsync` runs those

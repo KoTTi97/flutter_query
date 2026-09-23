@@ -44,14 +44,17 @@ The events, each carrying the `query` it is about:
 | `QueryRemoved` | an entry leaves the cache — garbage collection, `removeQueries`, `clear` |
 | `QueryUpdated` | the entry's state changed; its `action` says how (a fetch started, succeeded, failed, paused, was invalidated, …) |
 | `QueryObserverAdded` / `QueryObserverRemoved` | a reader subscribed or left |
-| `QueryObserverOptionsUpdated` | a reader was handed options — on **every build** of every reader |
-| `QueryObserverResultsUpdated` | a reader was handed a new result |
+| `QueryObserverOptionsUpdated` | a reader was handed options that are not `==` to its last ones — with a `queryFn` closure written in the options, that is **every build** of that reader |
+| `QueryObserverResultsUpdated` | a reader delivered a new result to its listeners |
 
 The last two are about readers, not about the cache, and the first of them
-fires on every rebuild: leave both out of a log, or it grows with nobody
-touching the screen. `client.mutationCache.subscribe` is the same for
-mutations, with `MutationAdded`, `MutationRemoved`, `MutationUpdated` and the
-observer events. The full lists, with the actions, are on [caches and
+usually fires on every rebuild: leave both out of a log, or it grows with
+nobody touching the screen. `client.mutationCache.subscribe` is the same for
+mutations, with `MutationAdded`, `MutationRemoved`, `MutationUpdated`,
+`MutationObserverAdded`, `MutationObserverRemoved` and
+`MutationObserverOptionsUpdated` — the last one only once the reader has run
+a mutation; there is no results event on the mutation side. The full lists,
+with the actions, are on [caches and
 observers](../reference/caches-and-observers.md).
 
 Only a log? The cache-wide callbacks are shorter: `QueryCache(onError: …)`

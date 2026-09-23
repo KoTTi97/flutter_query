@@ -46,8 +46,8 @@ open `doc/api/index.html`. For a package in your pub cache, run it there.
 | the whole imperative surface | [`QueryClient`](query-client.md) |
 | what a widget is handed | [`QueryResult`](results.md#queryresult), and its `QueryPending` / `QuerySuccess` / `QueryError` cases |
 | every option and what unset means | [the options](query-options.md), then [the option values](query-options.md#option-values) |
-| paging | [the infinite fields](query-options.md), [`InfiniteData`](results.md#infinitedata), [`InfiniteQueryObserver`](caches-and-observers.md#infinitequeryobserver) |
-| writes | [the mutation fields](query-options.md), [`MutationResult`](results.md#mutationresult), [`MutationController`](widgets-and-controllers.md#mutationcontroller) |
+| paging | [the infinite fields](query-options.md#infinite-query-fields), [`InfiniteData`](results.md#infinitedata), [`InfiniteQueryObserver`](caches-and-observers.md#infinitequeryobserver) |
+| writes | [the mutation fields](query-options.md#mutation-fields), [`MutationResult`](results.md#mutationresult), [`MutationController`](widgets-and-controllers.md#mutationcontroller) |
 | the caches | [`QueryCache`](caches-and-observers.md#querycache), [`MutationCache`](caches-and-observers.md#mutationcache), [filters](caches-and-observers.md#filters) |
 | the Flutter side | [`QueryClientProvider`](widgets-and-controllers.md#queryclientprovider) and [the four call styles](widgets-and-controllers.md#the-four-call-styles-at-a-glance) |
 | widget tests | nothing exported: the teardown is a documented snippet, see [Testing](../guides/testing.md) |
@@ -62,8 +62,9 @@ open `doc/api/index.html`. For a package in your pub cache, run it there.
 - [Coming from React Query](../coming-from-react-query.md) — the name map.
 
 :::note[In React Query]
-The TanStack reference is split the same way: `QueryClient`, `useQuery` (the
-options and the result on one page), `useMutation`, `QueryCache`,
-`MutationCache`, and the observer classes. Here the options and the results
-have a page each, because the four call styles share them.
+TanStack Query's React reference is generated, one page per function, class
+and interface: `useQuery`, `QueryClient`, `QueryCache`, `QueryObserverOptions`,
+`QueryObserverSuccessResult` and so on. Here the pages group by surface
+instead, and the options and the results have a page each, because the four
+call styles share them.
 :::

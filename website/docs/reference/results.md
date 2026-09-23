@@ -9,8 +9,9 @@ A reader never gets a bag of booleans. It gets a sealed value: a
 `QueryResult<T>` for a query, a `MutationResult<TData, TVariables>` for a
 mutation, a `CombinedResult<T>` for several queries read together. A
 `switch` over one is exhaustive, and each case carries exactly the fields
-that exist in it. This page lists every field and getter, which case carries
-it, and the TanStack Query name it corresponds to.
+that exist in it. This page lists every field and getter and which case carries
+it. A TanStack Query name is given only where it differs from the Dart one,
+and a member with no counterpart there says so.
 
 Where a result comes from — an observer's `currentResult`, a controller's
 `value`, a builder's argument — is on [widgets and
@@ -39,39 +40,39 @@ the flags derived from it, which vary independently of the case. See
 
 "All" means the field is declared on `QueryResult` and every case carries it.
 
-| Name | Type | On which cases | Meaning | TanStack |
-|---|---|---|---|---|
-| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/status.html) | `QueryStatus` | all | The case, as an enum: `pending`, `success` or `error`. For storing or comparing rather than matching. | `status` |
-| [`fetchStatus`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/fetchStatus.html) | `FetchStatus` | all | What the query is doing: `fetching`, `paused` or `idle`. | `fetchStatus` |
-| [`isPending`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isPending.html) | `bool` | all | This is a `QueryPending`. | `isPending` |
-| [`isSuccess`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isSuccess.html) | `bool` | all | This is a `QuerySuccess`, whether or not a refresh is running. | `isSuccess` |
-| [`isError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isError.html) | `bool` | all | This is a `QueryError`. | `isError` |
-| [`isFetching`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isFetching.html) | `bool` | all | `fetchStatus` is `fetching`: a first load or a refetch is in flight. | `isFetching` |
-| [`isPaused`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isPaused.html) | `bool` | all | `fetchStatus` is `paused`: a fetch wants to run but waits for the network (per `networkMode`) or for the app to return to the foreground before its next retry. | `isPaused` |
-| [`isLoading`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isLoading.html) | `bool` | all | Pending **and** fetching: the first load. False for a pending query that is not fetching, such as a disabled one. | `isLoading` |
-| [`isRefetching`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isRefetching.html) | `bool` | all | Fetching and **not** pending: a background refresh of data on screen, or a refetch after an error. | `isRefetching` |
-| [`dataOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/dataOrNull.html) | `TData?` | all | `data` on a success, `staleData` on an error, `null` when pending. | `data` |
-| [`errorOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/errorOrNull.html) | `Object?` | all | `error` on a `QueryError`, `null` otherwise. | `error` |
-| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/QuerySuccess/data.html) | `TData` | `QuerySuccess` | The data, after `select` when the observer has one. A placeholder when `isPlaceholderData` is true. | `data` |
-| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/error.html) | `Object` | `QueryError` | What the last attempt of the failed fetch threw, or what `select` threw. A cancelled fetch that was not reverted fails with a `CancelledError`. | `error` |
-| [`stackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/stackTrace.html) | `StackTrace` | `QueryError` | Where `error` was thrown. | — |
-| [`staleData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/staleData.html) | `TData?` | `QueryError` | The data from the last successful fetch or write, kept through the error; `null` when there was none. | `data` (in the error state) |
-| [`hasStaleData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/hasStaleData.html) | `bool` | `QueryError` | Whether `staleData` means anything. Tells a real `null` from none when `TData` is nullable. | — |
-| [`isLoadingError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/isLoadingError.html) | `bool` | `QueryError` | The first load failed; there is nothing to show (`!hasStaleData`). | `isLoadingError` |
-| [`isRefetchError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/isRefetchError.html) | `bool` | `QueryError` | A refetch failed over data that is still on screen (`hasStaleData`). | `isRefetchError` |
-| [`dataUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/dataUpdatedAt.html) | `DateTime?` | all | When the data was last written, by a fetch or by hand — what `staleTime` counts from. `null` until something has been. | `dataUpdatedAt` (`0` when unset) |
-| [`errorUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/errorUpdatedAt.html) | `DateTime?` | all | When the query last ended in an error (or `select` last threw). Not cleared by a later success. | `errorUpdatedAt` (`0` when unset) |
-| [`failureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/failureCount.html) | `int` | all | Failed attempts within the current fetch. Reset when a new fetch starts. | `failureCount` |
-| [`failureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/failureReason.html) | `Object?` | all | What the latest failed attempt threw. Kept while retries continue and after the fetch finally fails; cleared when the next fetch starts or an attempt succeeds. | `failureReason` |
-| [`failureStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/failureStackTrace.html) | `StackTrace?` | all | The stack trace of `failureReason`; `null` whenever it is. | — |
-| [`errorUpdateCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/errorUpdateCount.html) | `int` | all | How many times the query has ended in an error over its whole life. Never goes down. | `errorUpdateCount` |
-| [`consecutiveErrorCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/consecutiveErrorCount.html) | `int` | all | Fetches in a row that ended in an error. Back to zero with the next *fetched* data; a manual write and a cancelled fetch leave it alone. See [polling](../guides/polling.md). | — |
-| [`isStale`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isStale.html) | `bool` | all | The data is older than this observer's `staleTime`, or was invalidated. A query with no data is stale; a disabled one never is. `StaleTime.static` data is never stale, invalidated or not. | `isStale` |
-| [`isEnabled`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isEnabled.html) | `bool` | all | This observer's `enabled` currently lets the query fetch on its own. `refetch` runs regardless. | `isEnabled` |
-| [`isFetched`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isFetched.html) | `bool` | all | Anything has ever been fetched or written, successfully or not. | `isFetched` |
-| [`isFetchedAfterMount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isFetchedAfterMount.html) | `bool` | all | A fetch or write has completed since this observer attached, as opposed to data already in the cache. | `isFetchedAfterMount` |
-| [`isPlaceholderData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isPlaceholderData.html) | `bool` | all (true only on `QuerySuccess`) | `data` is the observer's `placeholderData`, not cached data. See [placeholder data](../guides/placeholder-query-data.md). | `isPlaceholderData` |
-| [`refetch`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/refetch.html) | [`QueryRefetch<TData>`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryRefetch.html) | all | `refetch({bool cancelRefetch = true})`: fetches again regardless of `enabled` and `staleTime`, and completes with the result that follows — never with an error. `cancelRefetch: true` cancels a fetch in flight on a query that holds data and starts over; a first load is joined. `false` joins the fetch in flight. | `refetch` |
+| Name | Type | On which cases | Meaning |
+|---|---|---|---|
+| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/status.html) | `QueryStatus` | all | The case, as an enum: `pending`, `success` or `error`. For storing or comparing rather than matching. |
+| [`fetchStatus`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/fetchStatus.html) | `FetchStatus` | all | What the query is doing: `fetching`, `paused` or `idle`. |
+| [`isPending`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isPending.html) | `bool` | all | This is a `QueryPending`. |
+| [`isSuccess`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isSuccess.html) | `bool` | all | This is a `QuerySuccess`, whether or not a refresh is running. |
+| [`isError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isError.html) | `bool` | all | This is a `QueryError`. |
+| [`isFetching`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isFetching.html) | `bool` | all | `fetchStatus` is `fetching`: a first load or a refetch is in flight. |
+| [`isPaused`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isPaused.html) | `bool` | all | `fetchStatus` is `paused`: a fetch wants to run but waits for the network (per `networkMode`) or for the app to return to the foreground before its next retry. |
+| [`isLoading`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isLoading.html) | `bool` | all | Pending **and** fetching: the first load. False for a pending query that is not fetching, such as a disabled one. |
+| [`isRefetching`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isRefetching.html) | `bool` | all | Fetching and **not** pending: a background refresh of data on screen, including data still held after a failed refetch. A query without data that fetches again is pending, so this is false. |
+| [`dataOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/dataOrNull.html) | `TData?` | all | `data` on a success, `staleData` on an error, `null` when pending. TanStack: `data`. |
+| [`errorOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/errorOrNull.html) | `Object?` | all | `error` on a `QueryError`, `null` otherwise. TanStack: `error`. |
+| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/QuerySuccess/data.html) | `TData` | `QuerySuccess` | The data, after `select` when the observer has one. A placeholder when `isPlaceholderData` is true. |
+| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/error.html) | `Object` | `QueryError` | What the last attempt of the failed fetch threw, or what `select` threw. A cancelled fetch that was not reverted fails with a `CancelledError`. |
+| [`stackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/stackTrace.html) | `StackTrace` | `QueryError` | Where `error` was thrown. No TanStack counterpart. |
+| [`staleData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/staleData.html) | `TData?` | `QueryError` | The data from the last successful fetch or write, kept through the error; `null` when there was none. TanStack: `data`, in the error state. |
+| [`hasStaleData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/hasStaleData.html) | `bool` | `QueryError` | Whether `staleData` means anything. Tells a real `null` from none when `TData` is nullable. No TanStack counterpart. |
+| [`isLoadingError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/isLoadingError.html) | `bool` | `QueryError` | The first load failed; there is nothing to show (`!hasStaleData`). |
+| [`isRefetchError`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryError/isRefetchError.html) | `bool` | `QueryError` | A refetch failed over data that is still on screen (`hasStaleData`). |
+| [`dataUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/dataUpdatedAt.html) | `DateTime?` | all | When the data was last written, by a fetch or by hand — what `staleTime` counts from. `null` until something has been. |
+| [`errorUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/errorUpdatedAt.html) | `DateTime?` | all | When the query last ended in an error (or `select` last threw). Not cleared by a later success. |
+| [`failureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/failureCount.html) | `int` | all | Failed attempts within the current fetch. Reset when a new fetch starts. |
+| [`failureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/failureReason.html) | `Object?` | all | What the latest failed attempt threw. Kept while retries continue and after the fetch finally fails; cleared when the next fetch starts or an attempt succeeds. |
+| [`failureStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/failureStackTrace.html) | `StackTrace?` | all | The stack trace of `failureReason`; `null` whenever it is. No TanStack counterpart. |
+| [`errorUpdateCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/errorUpdateCount.html) | `int` | all | How many times the query has ended in an error over its whole life. Never goes down. |
+| [`consecutiveErrorCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/consecutiveErrorCount.html) | `int` | all | Fetches in a row that ended in an error. Back to zero with the next *fetched* data; a manual write and a cancelled fetch leave it alone. See [polling](../guides/polling.md). No TanStack counterpart. |
+| [`isStale`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isStale.html) | `bool` | all | The data is older than this observer's `staleTime`, or was invalidated. A query with no data is stale; a disabled one never is. `StaleTime.static` data is never stale, invalidated or not. |
+| [`isEnabled`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isEnabled.html) | `bool` | all | This observer's `enabled` currently lets the query fetch on its own. `refetch` runs regardless. |
+| [`isFetched`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isFetched.html) | `bool` | all | Anything has ever been fetched or written, successfully or not. |
+| [`isFetchedAfterMount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isFetchedAfterMount.html) | `bool` | all | A fetch or write has completed since this observer attached, as opposed to data already in the cache. |
+| [`isPlaceholderData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/isPlaceholderData.html) | `bool` | all (true only on `QuerySuccess`) | `data` is the observer's `placeholderData`, not cached data. See [placeholder data](../guides/placeholder-query-data.md). |
+| [`refetch`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult/refetch.html) | [`QueryRefetch<TData>`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryRefetch.html) | all | `refetch({bool cancelRefetch = true})`: fetches again regardless of `enabled` and `staleTime`, and completes with the result that follows — never with an error. `cancelRefetch: true` cancels a fetch in flight on a query that holds data and starts over; a first load is joined. `false` joins the fetch in flight. |
 
 TanStack Query's `isInitialLoading` (a deprecated alias of `isLoading`) and
 `promise` have no counterpart.
@@ -122,26 +123,26 @@ entry (`QueryCache.build`, `Query.setState`). A `success` state must have
 constructor is the initial state: pending, idle, no data, every counter at
 zero.
 
-| Name | Type | Default | Meaning | TanStack |
-|---|---|---|---|---|
-| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/status.html) | `QueryStatus` | `pending` | What the query holds. | `status` |
-| [`fetchStatus`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchStatus.html) | `FetchStatus` | `idle` | What the query is doing. | `fetchStatus` |
-| [`hasData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/hasData.html) | `bool` | `false` | Whether `data` is meaningful: true once the query has resolved to data, even `null` data; stays true through a later error. | — |
-| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/data.html) | `TQueryData?` | `null` | The cached data. Meaningful only while `hasData` is true. | `data` |
-| [`dataUpdateCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/dataUpdateCount.html) | `int` | `0` | How many times data has been written, by fetches and `setQueryData` alike. | `dataUpdateCount` |
-| [`dataUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/dataUpdatedAt.html) | `DateTime?` | `null` | When `data` was last written. | `dataUpdatedAt` |
-| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/error.html) | `Object?` | `null` | Why the last fetch failed. Cleared by the next success, and by the start of a new fetch on a query without data; a query with data keeps it alongside the error while it refetches. | `error` |
-| [`errorStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/errorStackTrace.html) | `StackTrace?` | `null` | The stack trace of `error`. | — |
-| [`errorUpdateCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/errorUpdateCount.html) | `int` | `0` | Errors over the query's whole life. Never goes down. | `errorUpdateCount` |
-| [`consecutiveErrorCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/consecutiveErrorCount.html) | `int` | `0` | Fetches in a row that failed, retries exhausted. Back to zero with the next fetched data; unchanged by a manual write or a cancelled fetch. | — |
-| [`errorUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/errorUpdatedAt.html) | `DateTime?` | `null` | When the query last ended in an error. Not cleared with `error`. | `errorUpdatedAt` |
-| [`fetchFailureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchFailureCount.html) | `int` | `0` | Failed attempts inside the current fetch; reset when a new fetch starts. Surfaces as `QueryResult.failureCount`. | `fetchFailureCount` |
-| [`fetchFailureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchFailureReason.html) | `Object?` | `null` | What the latest failed attempt threw. Surfaces as `QueryResult.failureReason`. | `fetchFailureReason` |
-| [`fetchFailureStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchFailureStackTrace.html) | `StackTrace?` | `null` | The stack trace of `fetchFailureReason`. | — |
-| [`fetchMeta`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchMeta.html) | `Object?` | `null` | Whatever the fetch behaviour attached to the current fetch. Infinite queries carry the page direction here. | `fetchMeta` |
-| [`isInvalidated`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/isInvalidated.html) | `bool` | `false` | Stale regardless of `staleTime`: set by `invalidateQueries` and by a fetch that finally fails; reset by the next successful fetch or data write. | `isInvalidated` |
-| [`isFetched`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/isFetched.html) | `bool` (getter) | — | `dataUpdateCount + errorUpdateCount > 0`. | — |
-| [`copyWith`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/copyWith.html) | method | — | This state with fields replaced. Pass `hasData` whenever you pass `data`; `clearData`, `clearError`, `clearFetchFailure` and `clearFetchMeta` set fields back to nothing. | — |
+| Name | Type | Default | Meaning |
+|---|---|---|---|
+| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/status.html) | `QueryStatus` | `pending` | What the query holds. |
+| [`fetchStatus`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchStatus.html) | `FetchStatus` | `idle` | What the query is doing. |
+| [`hasData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/hasData.html) | `bool` | `false` | Whether `data` is meaningful: true once the query has resolved to data, even `null` data; stays true through a later error. No TanStack counterpart. |
+| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/data.html) | `TQueryData?` | `null` | The cached data. Meaningful only while `hasData` is true. |
+| [`dataUpdateCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/dataUpdateCount.html) | `int` | `0` | How many times data has been written, by fetches and `setQueryData` alike. |
+| [`dataUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/dataUpdatedAt.html) | `DateTime?` | `null` | When `data` was last written. |
+| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/error.html) | `Object?` | `null` | Why the last fetch failed. Cleared by the next success, and by the start of a new fetch on a query without data; a query with data keeps it alongside the error while it refetches. |
+| [`errorStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/errorStackTrace.html) | `StackTrace?` | `null` | The stack trace of `error`. No TanStack counterpart. |
+| [`errorUpdateCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/errorUpdateCount.html) | `int` | `0` | Errors over the query's whole life. Never goes down. |
+| [`consecutiveErrorCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/consecutiveErrorCount.html) | `int` | `0` | Fetches in a row that failed, retries exhausted. Back to zero with the next fetched data; unchanged by a manual write or a cancelled fetch. No TanStack counterpart. |
+| [`errorUpdatedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/errorUpdatedAt.html) | `DateTime?` | `null` | When the query last ended in an error. Not cleared with `error`. |
+| [`fetchFailureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchFailureCount.html) | `int` | `0` | Failed attempts inside the current fetch; reset when a new fetch starts. Surfaces as `QueryResult.failureCount`. |
+| [`fetchFailureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchFailureReason.html) | `Object?` | `null` | What the latest failed attempt threw. Surfaces as `QueryResult.failureReason`. |
+| [`fetchFailureStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchFailureStackTrace.html) | `StackTrace?` | `null` | The stack trace of `fetchFailureReason`. No TanStack counterpart. |
+| [`fetchMeta`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/fetchMeta.html) | `Object?` | `null` | Whatever the fetch behaviour attached to the current fetch. Infinite queries carry the page direction here. |
+| [`isInvalidated`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/isInvalidated.html) | `bool` | `false` | Stale regardless of `staleTime`: set by `invalidateQueries` and by a fetch that finally fails; reset by the next successful fetch or data write. |
+| [`isFetched`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/isFetched.html) | `bool` (getter) | — | `dataUpdateCount + errorUpdateCount > 0`. No TanStack counterpart. |
+| [`copyWith`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryState/copyWith.html) | method | — | This state with fields replaced. Pass `hasData` whenever you pass `data`; `clearData`, `clearError`, `clearFetchFailure` and `clearFetchMeta` set fields back to nothing. No TanStack counterpart. |
 
 `QueryState` compares by value; the stack traces take no part.
 
@@ -156,18 +157,21 @@ type. See [infinite queries](../guides/infinite-queries.md).
 
 [`InfiniteData<TPageData, TPageParam>`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData-class.html)
 
-| Name | Type | Meaning | TanStack |
-|---|---|---|---|
-| [`pages`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/pages.html) | `List<TPageData>` | The pages in order. A forward fetch appends, a backward fetch prepends, `maxPages` drops from the far end. | `pages` |
-| [`pageParams`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/pageParams.html) | `List<TPageParam>` | The param each page was fetched with, index for index with `pages`. | `pageParams` |
-| [`isEmpty`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/isEmpty.html) | `bool` | `pages.isEmpty`. A fetched value always holds at least one page; an empty one comes from `initialData` or `setQueryData`. | — |
-| [`flatten`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/flatten.html) | `Iterable<TItem> flatten<TItem>()` | Every item of every page, when each page is an `Iterable<TItem>`. A page that is not throws an `ArgumentError` before iteration starts. Name the item type: without it the result is `Iterable<dynamic>`. | — |
-| [`copyWith`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/copyWith.html) | method | This value with either list replaced. A replacement list is copied into an unmodifiable one; a list passed back unchanged keeps its identity. | — |
+| Name | Type | Meaning |
+|---|---|---|
+| [`pages`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/pages.html) | `List<TPageData>` | The pages in order. A forward fetch appends, a backward fetch prepends, `maxPages` drops from the far end. |
+| [`pageParams`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/pageParams.html) | `List<TPageParam>` | The param each page was fetched with, index for index with `pages`. |
+| [`isEmpty`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/isEmpty.html) | `bool` | `pages.isEmpty`. A fetched value always holds at least one page; an empty one comes from `initialData` or `setQueryData`. No TanStack counterpart. |
+| [`flatten`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/flatten.html) | `Iterable<TItem> flatten<TItem>()` | Every item of every page, when each page is an `Iterable<TItem>`. A page that is not throws an `ArgumentError` before iteration starts. Name the item type: without it the result is `Iterable<dynamic>`. No TanStack counterpart. |
+| [`copyWith`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteData/copyWith.html) | method | This value with either list replaced. A replacement list is copied into an unmodifiable one; a list passed back unchanged keeps its identity. No TanStack counterpart. |
 
 The constructor refuses lists of different lengths with an `ArgumentError`.
-Every value the library writes holds unmodifiable lists, so
-`pages.add(…)` on data read back from the cache throws `UnsupportedError`:
-write a new value with `setQueryData` instead. Equality is element by
+A value built by a fetch or by `copyWith` holds unmodifiable lists, so
+`pages.add(…)` on fetched data read back from the cache throws
+`UnsupportedError`. A value you build yourself and pass in — as `initialData` or through
+`setQueryData` — can keep the growable lists you gave it until the next
+fetch replaces it. Either way, write a new value with `setQueryData` rather than changing
+the lists in place. Equality is element by
 element over both lists.
 
 ### Paging members
@@ -182,18 +186,18 @@ which every infinite read style hands you. A change in any of these flags
 notifies listeners even when the result itself is unchanged. (TanStack Query
 puts them on its infinite result object.)
 
-| Name | Type | Meaning | TanStack |
-|---|---|---|---|
-| `hasNextPage` | `bool` | `getNextPageParam` returns a param for the last page held. False before the first page arrives. | `hasNextPage` |
-| `hasPreviousPage` | `bool` | `getPreviousPageParam` is set and returns a param for the first page held. False before the first page arrives. | `hasPreviousPage` |
-| `isFetchingNextPage` | `bool` | The fetch in flight is a `fetchNextPage`. | `isFetchingNextPage` |
-| `isFetchingPreviousPage` | `bool` | The fetch in flight is a `fetchPreviousPage`. | `isFetchingPreviousPage` |
-| `isFetchNextPageError` | `bool` | The result is a `QueryError` that came from a `fetchNextPage`. | `isFetchNextPageError` |
-| `isFetchPreviousPageError` | `bool` | The result is a `QueryError` that came from a `fetchPreviousPage`. | `isFetchPreviousPageError` |
-| `isRefetching` | `bool` | The pages already held are being refetched. Unlike the result's own `isRefetching`, a page being added does not count. | `isRefetching` |
-| `isRefetchError` | `bool` | A refetch of the held pages failed, as opposed to a page fetch. | `isRefetchError` |
-| `fetchNextPage` | `Future<QueryResult<TData>> fetchNextPage({bool cancelRefetch = true})` | Fetches the page after the last one and appends it. Does nothing when `hasNextPage` is false; on a query with no pages it loads the first one. Completes with the result, never with an error. | `fetchNextPage` |
-| `fetchPreviousPage` | `Future<QueryResult<TData>> fetchPreviousPage({bool cancelRefetch = true})` | The mirror of `fetchNextPage`, prepending. | `fetchPreviousPage` |
+| Name | Type | Meaning |
+|---|---|---|
+| `hasNextPage` | `bool` | `getNextPageParam` returns a param for the last page held. False before the first page arrives. |
+| `hasPreviousPage` | `bool` | `getPreviousPageParam` is set and returns a param for the first page held. False before the first page arrives. |
+| `isFetchingNextPage` | `bool` | The fetch in flight is a `fetchNextPage`. |
+| `isFetchingPreviousPage` | `bool` | The fetch in flight is a `fetchPreviousPage`. |
+| `isFetchNextPageError` | `bool` | The result is a `QueryError` that came from a `fetchNextPage`. |
+| `isFetchPreviousPageError` | `bool` | The result is a `QueryError` that came from a `fetchPreviousPage`. |
+| `isRefetching` | `bool` | The pages already held are being refetched. Unlike the result's own `isRefetching`, a page being added does not count. |
+| `isRefetchError` | `bool` | A refetch of the held pages failed, as opposed to a page fetch. |
+| `fetchNextPage` | `Future<QueryResult<TData>> fetchNextPage({bool cancelRefetch = true})` | Fetches the page after the last one and appends it. Does nothing when `hasNextPage` is false; on a query with no pages it loads the first one. Completes with the result, never with an error. |
+| `fetchPreviousPage` | `Future<QueryResult<TData>> fetchPreviousPage({bool cancelRefetch = true})` | The mirror of `fetchNextPage`, prepending. |
 
 With `cancelRefetch: true` a fetch already running on a query that holds
 pages is cancelled; with `false`, or while the first page is loading, the
@@ -215,27 +219,27 @@ Flutter hands a widget. It is sealed, with one case per `MutationStatus`:
 
 See [mutations](../guides/mutations.md).
 
-| Name | Type | On which cases | Meaning | TanStack |
-|---|---|---|---|---|
-| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/status.html) | `MutationStatus` | all | The case, as an enum. | `status` |
-| [`isIdle`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isIdle.html) | `bool` | all | This is a `MutationIdle`. | `isIdle` |
-| [`isPending`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isPending.html) | `bool` | all | This is a `MutationPending`. Handy for disabling a submit button. | `isPending` |
-| [`isSuccess`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isSuccess.html) | `bool` | all | This is a `MutationSuccess`. | `isSuccess` |
-| [`isError`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isError.html) | `bool` | all | This is a `MutationError`. | `isError` |
-| [`dataOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/dataOrNull.html) | `TData?` | all | `data` on a success, `null` otherwise. | `data` |
-| [`errorOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/errorOrNull.html) | `Object?` | all | `error` on an error, `null` otherwise. | `error` |
-| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationSuccess/data.html) | `TData` | `MutationSuccess` | What the mutation function returned. | `data` |
-| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationError/error.html) | `Object` | `MutationError` | What the last attempt threw — or what a success callback threw, which counts the same. | `error` |
-| [`stackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationError/stackTrace.html) | `StackTrace` | `MutationError` | Where `error` was thrown. | — |
-| [`variables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/variables.html) | `TVariables?` | all | The variables of the run in flight or last finished — what an optimistic UI shows while pending. | `variables` |
-| [`hasVariables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/hasVariables.html) | `bool` | all | Whether `variables` means anything: false while idle; tells a real `null` from none. | — |
-| [`failureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/failureCount.html) | `int` | all | Failed attempts of the current run. Reset when a new run starts. | `failureCount` |
-| [`failureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/failureReason.html) | `Object?` | all | What the latest failed attempt threw. `null` once an attempt succeeds or a new run starts. | `failureReason` |
-| [`isPaused`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isPaused.html) | `bool` | all (set only while pending) | The run is parked: offline under `NetworkMode.online`, a retry waiting for the foreground, or queued behind another mutation in its `MutationScope`. | `isPaused` |
-| [`submittedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/submittedAt.html) | `DateTime?` | all | When the current run was submitted. `null` while idle. | `submittedAt` (`0` when unset) |
-| [`mutate`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/mutate.html) | `void Function(TVariables)` | all | Starts a new run and returns at once. Errors go to the callbacks and the next result, never to the caller. Takes only the variables, so it passes as a plain callback. | `mutate` |
-| [`mutateAsync`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/mutateAsync.html) | `Future<TData> Function(TVariables)` | all | Starts a new run; completes with its data or throws its error, once its callbacks have run. | `mutateAsync` (`useMutation`) |
-| [`reset`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/reset.html) | `void Function()` | all | Detaches from the mutation and goes back to `MutationIdle`. The mutation keeps running and still fires its callbacks. | `reset` |
+| Name | Type | On which cases | Meaning |
+|---|---|---|---|
+| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/status.html) | `MutationStatus` | all | The case, as an enum. |
+| [`isIdle`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isIdle.html) | `bool` | all | This is a `MutationIdle`. |
+| [`isPending`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isPending.html) | `bool` | all | This is a `MutationPending`. Handy for disabling a submit button. |
+| [`isSuccess`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isSuccess.html) | `bool` | all | This is a `MutationSuccess`. |
+| [`isError`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isError.html) | `bool` | all | This is a `MutationError`. |
+| [`dataOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/dataOrNull.html) | `TData?` | all | `data` on a success, `null` otherwise. TanStack: `data`. |
+| [`errorOrNull`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/errorOrNull.html) | `Object?` | all | `error` on an error, `null` otherwise. TanStack: `error`. |
+| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationSuccess/data.html) | `TData` | `MutationSuccess` | What the mutation function returned. |
+| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationError/error.html) | `Object` | `MutationError` | What the last attempt threw — or what a success callback threw, which counts the same. |
+| [`stackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationError/stackTrace.html) | `StackTrace` | `MutationError` | Where `error` was thrown. No TanStack counterpart. |
+| [`variables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/variables.html) | `TVariables?` | all | The variables of the run in flight or last finished — what an optimistic UI shows while pending. |
+| [`hasVariables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/hasVariables.html) | `bool` | all | Whether `variables` means anything: false while idle; tells a real `null` from none. No TanStack counterpart. |
+| [`failureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/failureCount.html) | `int` | all | Failed attempts of the current run. Reset when a new run starts. |
+| [`failureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/failureReason.html) | `Object?` | all | What the latest failed attempt threw. `null` once an attempt succeeds or a new run starts. |
+| [`isPaused`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/isPaused.html) | `bool` | all (set only while pending) | The run is parked: offline under `NetworkMode.online`, a retry waiting for the foreground, or queued behind another mutation in its `MutationScope`. |
+| [`submittedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/submittedAt.html) | `DateTime?` | all | When the current run was submitted. `null` while idle. |
+| [`mutate`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/mutate.html) | `void Function(TVariables)` | all | Starts a new run and returns at once. Errors go to the callbacks and the next result, never to the caller. Takes only the variables, so it passes as a plain callback. |
+| [`mutateAsync`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/mutateAsync.html) | `Future<TData> Function(TVariables)` | all | Starts a new run; completes with its data or throws its error, once its callbacks have run. |
+| [`reset`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationResult/reset.html) | `void Function()` | all | Detaches from the mutation and goes back to `MutationIdle`. The mutation keeps running and still fires its callbacks. |
 
 Not on the result:
 
@@ -272,21 +276,21 @@ state](../guides/mutation-state.md)), a `MutationCache` listener, or
 mutation through `MutationCache.build`. The no-argument constructor is the
 idle state.
 
-| Name | Type | Default | Meaning | TanStack |
-|---|---|---|---|---|
-| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/status.html) | `MutationStatus` | `idle` | Where the mutation is in its life. | `status` |
-| [`hasData`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/hasData.html) | `bool` | `false` | Whether `data` is authoritative, so a function that returned `null` still reads as having data. | — |
-| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/data.html) | `TData?` | `null` | What the last successful run returned. Cleared when a run fails. | `data` |
-| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/error.html) | `Object?` | `null` | Why the last run failed; `null` unless `status` is `error`. | `error` |
-| [`errorStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/errorStackTrace.html) | `StackTrace?` | `null` | The stack trace of `error`. | — |
-| [`variables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/variables.html) | `TVariables?` | `null` | The variables of the run in flight or last finished. | `variables` |
-| [`hasVariables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/hasVariables.html) | `bool` | `false` | Whether a run has set `variables`; a `null` value is real once this is true. | — |
-| [`onMutateResult`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/onMutateResult.html) | `TOnMutateResult?` | `null` | What `onMutate` returned for the run in flight or last finished — the rollback handle of an optimistic update. | `context` |
-| [`failureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/failureCount.html) | `int` | `0` | Failed attempts of the current run. Reset on success and when a new run starts; one more when the run settles in error. | `failureCount` |
-| [`failureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/failureReason.html) | `Object?` | `null` | What the last failed attempt threw, kept while retries continue. | `failureReason` |
-| [`isPaused`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/isPaused.html) | `bool` | `false` | The run is parked: network, foreground, or its scope. | `isPaused` |
-| [`submittedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/submittedAt.html) | `DateTime?` | `null` | When the current or last run was submitted. | `submittedAt` |
-| [`copyWith`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/copyWith.html) | method | — | A copy with fields replaced; `clearData`, `clearError` and `clearFailureReason` set fields back to nothing. | — |
+| Name | Type | Default | Meaning |
+|---|---|---|---|
+| [`status`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/status.html) | `MutationStatus` | `idle` | Where the mutation is in its life. |
+| [`hasData`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/hasData.html) | `bool` | `false` | Whether `data` is authoritative, so a function that returned `null` still reads as having data. No TanStack counterpart. |
+| [`data`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/data.html) | `TData?` | `null` | What the last successful run returned. Cleared when a new run starts and when a run fails. |
+| [`error`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/error.html) | `Object?` | `null` | Why the last run failed; `null` unless `status` is `error`. |
+| [`errorStackTrace`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/errorStackTrace.html) | `StackTrace?` | `null` | The stack trace of `error`. No TanStack counterpart. |
+| [`variables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/variables.html) | `TVariables?` | `null` | The variables of the run in flight or last finished. |
+| [`hasVariables`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/hasVariables.html) | `bool` | `false` | Whether a run has set `variables`; a `null` value is real once this is true. No TanStack counterpart. |
+| [`onMutateResult`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/onMutateResult.html) | `TOnMutateResult?` | `null` | What `onMutate` returned for the run in flight or last finished — the rollback handle of an optimistic update. TanStack: `context`. |
+| [`failureCount`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/failureCount.html) | `int` | `0` | Failed attempts of the current run. Reset on success and when a new run starts; one more when the run settles in error. |
+| [`failureReason`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/failureReason.html) | `Object?` | `null` | What the last failed attempt threw. Kept while retries continue and after the run fails; cleared on success and when a new run starts. |
+| [`isPaused`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/isPaused.html) | `bool` | `false` | The run is parked: network, foreground, or its scope. |
+| [`submittedAt`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/submittedAt.html) | `DateTime?` | `null` | When the current or last run was submitted. |
+| [`copyWith`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationState/copyWith.html) | method | — | A copy with fields replaced; `clearData`, `clearError` and `clearFailureReason` set fields back to nothing. No TanStack counterpart. |
 
 A restored `pending` state needs variables unless `TVariables` is nullable,
 and a `success` state needs `hasData` unless `TData` is nullable or `void`;

@@ -1,6 +1,6 @@
 ---
 title: Widgets and controllers
-description: Every public widget, controller, extension and mixin of query_kit_flutter, with its parameters, defaults and TanStack Query counterpart.
+description: Every public widget, controller, extension and mixin of query_kit_flutter, with its parameters, defaults and meaning; the TanStack Query counterpart is named where there is one.
 ---
 
 # Widgets and controllers
@@ -9,7 +9,8 @@ This page lists the Flutter binding's public surface: the provider, the four
 call styles for reading queries and mutations, the side-effect listeners, the
 collection helpers and the connectivity value. Everything here comes from one
 import, `package:query_kit_flutter/query_kit_flutter.dart`, which also
-re-exports the whole core.
+re-exports the whole core. Where a member has a TanStack Query counterpart,
+its description names it ("TanStack: `useQuery`").
 
 For the options these widgets take, see [query options](query-options.md);
 for what they hand back, see [results](results.md); for the client itself,
@@ -21,16 +22,17 @@ what: [four ways to read a query](../guides/reading-queries-in-widgets.md),
 ## The four call styles at a glance
 
 The binding reads queries, infinite queries and mutations in four equal
-styles. None is the default, the order of the columns means nothing, and the
+styles. None is the default, the order of the rows means nothing, and the
 styles mix freely inside one screen. Each takes the same options objects and
 each takes a [`buildWhen`](#buildwhen-and-listenwhen) (a controller filters in
 its listener instead, because it is the notifier).
 
-| | Builder widgets | Controllers | `BuildContext` extension | `State` mixin |
-|---|---|---|---|---|
-| **Query** | `QueryBuilder`, `QuerySelectBuilder` | `QueryController`, `QueryController.create` | `context.query`, `context.selectQuery` | `watchQuery`, `watchSelectQuery` |
-| **Infinite query** | `InfiniteQueryBuilder` | `InfiniteQueryController` | `context.infiniteQuery` | `watchInfiniteQuery` |
-| **Mutation** | `MutationBuilder` | `MutationController` | `context.mutation` | `watchMutation` |
+| Style | Query | Infinite query | Mutation |
+|---|---|---|---|
+| **Builder widgets** | `QueryBuilder`, `QuerySelectBuilder` | `InfiniteQueryBuilder` | `MutationBuilder` |
+| **Controllers** | `QueryController`, `QueryController.create` | `InfiniteQueryController` | `MutationController` |
+| **`BuildContext` extension** | `context.query`, `context.selectQuery` | `context.infiniteQuery` | `context.mutation` |
+| **`State` mixin** | `watchQuery`, `watchSelectQuery` | `watchInfiniteQuery` | `watchMutation` |
 
 What they share:
 
@@ -44,7 +46,7 @@ What they share:
 - **No notification for nothing.** A reader is never rebuilt for a
   notification carrying what it is already showing. Under a
   `QueryClientProvider`, a result that changes during a build is delivered
-  after the frame.
+  once the build is over.
 - **Infinite queries hand out the controller.** Paging lives on
   `InfiniteQueryController`, so the infinite-query form of each style gives
   you the controller rather than a bare result. A change of the paging flags
@@ -71,15 +73,15 @@ that reads a query.
 
 ### Parameters
 
-| Parameter | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| `create` (`.create` only) | `QueryClient Function()` | required | Makes the owned client, once, in `initState`. `QueryClient.new` is the shortest form. | `new QueryClient()` |
-| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/client.html) (unnamed only) | `QueryClient` | required | The client every builder, controller and keyless read below runs on unless it names its own. Swapping it recreates every observer below, because each belonged to the old client. | `client` prop |
-| [`child`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/child.html) | `Widget` | required | The subtree that can reach the client. | `children` |
-| [`onlineStatus`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/onlineStatus.html) | `OnlineStatus?` | `null` | Connectivity, if you bring it: [`OnlineStatus.fixed`](#onlinestatus) or `OnlineStatus.stream`. `null` installs nothing and the client assumes it is online. | `onlineManager.setEventListener` |
-| [`observeAppLifecycle`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/observeAppLifecycle.html) | `bool` | `true` | Whether to map the app's lifecycle onto the client's focus state. Turn it off when you install your own focus source with `client.focusManager.setEventListener(…)`: both write through `setFocused`, so with both the last writer wins. | `focusManager` (the default browser `visibilitychange` listener) |
-| [`isAppShown`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/isAppShown.html) | `bool Function(AppLifecycleState state)?` | `null` (built-in mapping) | Which lifecycle states count as focused. The mapping given on the latest build is in force: it is applied to the current state when it changes, and decides every transition after. | — |
-| `key` | `Key?` | `null` | For `.create`, a new key is the way to get a new client. | — |
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `create` (`.create` only) | `QueryClient Function()` | required | Makes the owned client, once, in `initState`. `QueryClient.new` is the shortest form. TanStack: `new QueryClient()`. |
+| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/client.html) (unnamed only) | `QueryClient` | required | The client every builder, controller and keyless read below runs on unless it names its own. Swapping it recreates every observer below, because each belonged to the old client. TanStack: the provider's `client` prop. |
+| [`child`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/child.html) | `Widget` | required | The subtree that can reach the client. TanStack: `children`. |
+| [`onlineStatus`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/onlineStatus.html) | `OnlineStatus?` | `null` | Connectivity, if you bring it: [`OnlineStatus.fixed`](#onlinestatus) or `OnlineStatus.stream`. `null` installs nothing and the client assumes it is online. TanStack: `onlineManager.setEventListener`. |
+| [`observeAppLifecycle`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/observeAppLifecycle.html) | `bool` | `true` | Whether to map the app's lifecycle onto the client's focus state. Turn it off when you install your own focus source with `client.focusManager.setEventListener(…)`: both write through `setFocused`, so with both the last writer wins. TanStack: `focusManager`, whose default listens to the browser's `visibilitychange`. |
+| [`isAppShown`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/isAppShown.html) | `bool Function(AppLifecycleState state)?` | `null` (built-in mapping) | Which lifecycle states count as focused. The mapping given on the latest build is in force: it is applied to the current state when it changes, and decides every transition after. |
+| `key` | `Key?` | `null` | For `.create`, a new key is the way to get a new client. |
 
 The built-in focus mapping: `resumed` is focused; `hidden`, `paused` and
 `detached` are not. `inactive` counts as focused on iOS, Android and Fuchsia,
@@ -90,18 +92,19 @@ not only later transitions. See [app focus
 refetching](../guides/window-focus-refetching.md).
 
 At mount the provider also installs a notify scheduler on the client:
-notifications arriving while a build is in flight are deferred to a
-post-frame callback, so a query resolving mid-build cannot call `setState`
-during that build. Several providers may share one client; the scheduler
+a notification arriving during a frame's build, layout or paint is deferred
+to a post-frame callback, and one arriving during a build outside a frame
+(the root's first build in `runApp`) to a microtask, so a query resolving mid-build cannot
+call `setState` during that build. Several providers may share one client; the scheduler
 stays until the last of them goes.
 
 ### Static members
 
-| Member | Type | Meaning | TanStack equivalent |
-|---|---|---|---|
-| [`of(context)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/of.html) | `QueryClient` | The nearest client above `context`, subscribing the caller to a change of client. For `build`. Throws a `FlutterError` when there is no provider. | `useQueryClient()` |
-| [`maybeOf(context)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/maybeOf.html) | `QueryClient?` | The same, `null` without a provider. Subscribes like `of`. | — |
-| [`read(context)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/read.html) | `QueryClient` | Like `of`, without subscribing. For callbacks, `initState` and anywhere outside `build`. Throws a `FlutterError` when there is no provider. | — |
+| Member | Type | Meaning |
+|---|---|---|
+| [`of(context)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/of.html) | `QueryClient` | The nearest client above `context`, subscribing the caller to a change of client. For `build`. Throws a `FlutterError` when there is no provider. TanStack: `useQueryClient()`. |
+| [`maybeOf(context)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/maybeOf.html) | `QueryClient?` | The same, `null` without a provider. Subscribes like `of`. |
+| [`read(context)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryClientProvider/read.html) | `QueryClient` | Like `of`, without subscribing. For callbacks, `initState` and anywhere outside `build`. Throws a `FlutterError` when there is no provider. |
 
 ## Builder widgets
 
@@ -124,13 +127,13 @@ are applied in place.
 from `queryFn`'s return type or is written out; an options literal with
 neither is refused by an assertion in debug builds.
 
-| Parameter | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| [`options`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/options.html) | [`QueryObserverOptions<TData>`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptions-class.html) | required | The query. Re-applied whenever the parent rebuilds this widget. | the options object |
-| [`builder`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/builder.html) | `Widget Function(BuildContext context, QueryResult<TData> result)` | required | Builds the subtree from the sealed [`QueryResult`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult-class.html). Called on the first build, then for each changed result `buildWhen` lets through. | the hook's return value |
-| [`buildWhen`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/buildWhen.html) | `BuildWhen<QueryResult<TData>>?` | `null` (every change) | Whether a change from the result last built to the current one rebuilds. | `notifyOnChangeProps` (different mechanism) |
-| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/client.html) | `QueryClient?` | `null` (provider's) | The client to observe on. | the `queryClient` argument |
-| `key` | `Key?` | `null` | | — |
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| [`options`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/options.html) | [`QueryObserverOptions<TData>`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptions-class.html) | required | The query. Re-applied whenever the parent rebuilds this widget. |
+| [`builder`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/builder.html) | `Widget Function(BuildContext context, QueryResult<TData> result)` | required | Builds the subtree from the sealed [`QueryResult`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryResult-class.html). Called on the first build, then for each changed result `buildWhen` lets through. |
+| [`buildWhen`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/buildWhen.html) | `BuildWhen<QueryResult<TData>>?` | `null` (every change) | Whether a change from the result last built to the current one rebuilds. TanStack: `notifyOnChangeProps`, a different mechanism. |
+| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryBuilder/client.html) | `QueryClient?` | `null` (provider's) | The client to observe on. TanStack: the hook's `queryClient` argument. |
+| `key` | `Key?` | `null` | The widget's key. |
 
 ### `QuerySelectBuilder`
 
@@ -147,6 +150,7 @@ types:
 | `builder` | `Widget Function(BuildContext context, QueryResult<TData> result)` | required | Built from the *selected* result. |
 | `buildWhen` | `BuildWhen<QueryResult<TData>>?` | `null` | Compares selected results. |
 | `client` | `QueryClient?` | `null` | As for `QueryBuilder`. |
+| `key` | `Key?` | `null` | The widget's key. |
 
 A `select` that returns an equal value keeps the previous instance, but the
 rest of the result (`fetchStatus`, `dataUpdatedAt`) still changes; that is
@@ -160,12 +164,13 @@ what `buildWhen` is for.
 `InfiniteQueryBuilder<TPageData, TPageParam, TData>` — no type arguments at
 the call site; inference reads all three off the options.
 
-| Parameter | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| `options` | [`InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteQueryObserverOptionsBase-class.html) (`InfiniteQueryObserverOptions` or `InfiniteQuerySelectOptions`) | required | Key, page function and paging functions. Re-applied whenever the parent rebuilds this widget. | the options object |
-| `builder` | `Widget Function(BuildContext context, InfiniteQueryController<TPageData, TPageParam, TData> query)` | required | Given the controller, not a bare result: the pages are in `query.value`, paging is `query.fetchNextPage` and its siblings. | the hook's return value |
-| `buildWhen` | `BuildWhen<QueryResult<TData>>?` | `null` | Compares the controller's results. A change of the paging flags alone rebuilds regardless. | — |
-| `client` | `QueryClient?` | `null` | As for `QueryBuilder`. | the `queryClient` argument |
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `options` | [`InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteQueryObserverOptionsBase-class.html) (`InfiniteQueryObserverOptions` or `InfiniteQuerySelectOptions`) | required | Key, page function and paging functions. Re-applied whenever the parent rebuilds this widget. |
+| `builder` | `Widget Function(BuildContext context, InfiniteQueryController<TPageData, TPageParam, TData> query)` | required | Given the controller, not a bare result: the pages are in `query.value`, paging is `query.fetchNextPage` and its siblings. |
+| `buildWhen` | `BuildWhen<QueryResult<TData>>?` | `null` | Compares the controller's results. A change of the paging flags alone rebuilds regardless. |
+| `client` | `QueryClient?` | `null` | As for `QueryBuilder`. TanStack: the hook's `queryClient` argument. |
+| `key` | `Key?` | `null` | The widget's key. |
 
 ### `MutationBuilder`
 
@@ -176,12 +181,13 @@ the call site; inference reads all three off the options.
 come from the options; `MutationOptions.simple` infers them from
 `mutationFn`.
 
-| Parameter | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| `options` | [`MutationOptions<TData, TVariables, TOnMutateResult>`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationOptions-class.html) | required | The mutation function and callbacks. Re-applied whenever the parent rebuilds this widget, so the next run uses the latest ones. | the options object |
-| `builder` | `Widget Function(BuildContext context, MutationController<TData, TVariables, TOnMutateResult> mutation)` | required | Given the controller: the result is `mutation.value`, and `mutate` or `mutateAsync` starts a run. | the hook's return value |
-| `buildWhen` | `BuildWhen<MutationResult<TData, TVariables>>?` | `null` | The only filter a mutation reader has; it has no `select`. | — |
-| `client` | `QueryClient?` | `null` | The client to run on. | the `queryClient` argument |
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `options` | [`MutationOptions<TData, TVariables, TOnMutateResult>`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationOptions-class.html) | required | The mutation function and callbacks. Re-applied whenever the parent rebuilds this widget, so the next run uses the latest ones. |
+| `builder` | `Widget Function(BuildContext context, MutationController<TData, TVariables, TOnMutateResult> mutation)` | required | Given the controller: the result is `mutation.value`, and `mutate` or `mutateAsync` starts a run. |
+| `buildWhen` | `BuildWhen<MutationResult<TData, TVariables>>?` | `null` | The only filter a mutation reader has; it has no `select`. |
+| `client` | `QueryClient?` | `null` | The client to run on. TanStack: the hook's `queryClient` argument. |
+| `key` | `Key?` | `null` | The widget's key. |
 
 Disposing the widget does not cancel a run in flight: the mutation finishes
 and its options' callbacks run. Call `MutationController.cancel` first when
@@ -209,19 +215,21 @@ in the middle of a build.
 `QueryController<TQueryData, TData>` extends `ChangeNotifier` and implements
 `ValueListenable<QueryResult<TData>>`.
 
-| Member | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| [`QueryController(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/QueryController.html) | constructor; `options` is `QueryObserverOptionsBase<TQueryData, TData>` | — | Creates the observer. Takes either options shape, a `QuerySelectOptions` included. Nothing is fetched until the first listener. Asserts in debug builds that `TData` is not a top type. | `new QueryObserver(client, options)` |
-| [`QueryController.create(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/create.html) | static, returns `QueryController<TData, TData>`; `options` is `QueryObserverOptions<TData>` | — | The form without `select`, with one type argument. | — |
-| [`QueryController.observing(client, observer)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/QueryController.observing.html) | constructor; `observer` is `QueryObserver<TQueryData, TData>` | — | Wraps an observer built elsewhere and owns it from then on. Holds no options of its own, so `value` before the first listener is the observer's current result. | — |
-| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/client.html) | `QueryClient` | — | The client the observer runs on. | — |
-| [`value`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/value.html) | `QueryResult<TData>` | — | The current result. While nobody listens it is the *optimistic* result — `fetching` for a query that will fetch on subscribe — which is what every widget style shows on its first build. | the hook's return value |
-| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/setOptions.html) | `void`; `QueryObserverOptionsBase<TQueryData, TData>` | — | Replaces the options in place; a new key switches the observed query. Does not notify. When the observer refuses the options, nothing is kept. | `observer.setOptions` |
-| [`refetch({cancelRefetch})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/refetch.html) | `Future<QueryResult<TData>>` | `cancelRefetch: true` | Refetches. `true` cancels a fetch in flight and starts again; `false` joins it. | `refetch` |
-| [`observer`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/observer.html) | `QueryObserver<TQueryData, TData>` | — | The observer underneath, for what the controller does not mirror, such as `currentQuery`. | — |
-| [`isDisposed`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/isDisposed.html) | `bool` | — | Whether `dispose` has run. | — |
-| `addListener` / `removeListener` | `void` | — | The first listener subscribes, the last one leaving unsubscribes. | — |
-| `dispose()` | `void` | — | Destroys the observer. Runs once. | component unmount |
+| Member | Type | Default | Meaning |
+|---|---|---|---|
+| [`QueryController(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/QueryController.html) | constructor; `options` is `QueryObserverOptionsBase<TQueryData, TData>` | — | Creates the observer. Takes either options shape, a `QuerySelectOptions` included. Nothing is fetched until the first listener. Asserts in debug builds that `TData` is not a top type. TanStack: `new QueryObserver(client, options)`. |
+| [`QueryController.create(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/create.html) | static, returns `QueryController<TData, TData>`; `options` is `QueryObserverOptions<TData>` | — | The form without `select`, with one type argument. |
+| [`QueryController.observing(client, observer)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/QueryController.observing.html) | constructor; `observer` is `QueryObserver<TQueryData, TData>` | — | Wraps an observer built elsewhere and owns it from then on. Holds no options of its own, so `value` before the first listener is the observer's current result. The same top-type assertion as the unnamed constructor. |
+| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/client.html) | `QueryClient` | — | The client the observer runs on. |
+| [`value`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/value.html) | `QueryResult<TData>` | — | The current result. While nobody listens it is the *optimistic* result — `fetching` for a query that will fetch on subscribe — which is what every widget style shows on its first build. |
+| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/setOptions.html) | `void`; `QueryObserverOptionsBase<TQueryData, TData>` | — | Replaces the options in place; a new key switches the observed query. Does not notify by itself: a listener hears of the change only when the observer's result changes, as for any other notification. When the observer refuses the options, nothing is kept. TanStack: `observer.setOptions`. |
+| [`refetch({cancelRefetch})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/refetch.html) | `Future<QueryResult<TData>>` | `cancelRefetch: true` | Refetches. `true` cancels a fetch in flight and starts again; `false` joins it. TanStack: `refetch`. |
+| [`observer`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/observer.html) | `QueryObserver<TQueryData, TData>` | — | The observer underneath, for what the controller does not mirror, such as `currentQuery`. |
+| [`isDisposed`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/isDisposed.html) | `bool` | — | Whether `dispose` has run. |
+| [`observedState`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/observedState.html) | `Object?` | — | What a notification is compared on before a reader is told: `value` for a plain query; for an infinite one, `value` together with its six paging flags. The binding's readers use it; application code rarely needs it. |
+| [`optimisticValue`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryController/optimisticValue.html) | `QueryResult<TData>` (`@protected`) | — | The result the observer would report on subscribing now; what `value` reports while nobody listens. For subclasses. |
+| `addListener` / `removeListener` | `void` | — | The first listener subscribes, the last one leaving unsubscribes. |
+| `dispose()` | `void` | — | Destroys the observer. Runs once. |
 
 ### `InfiniteQueryController`
 
@@ -234,22 +242,22 @@ in the middle of a build.
 notifications also cover the paging flags: two fetches in opposite
 directions leave the result equal and still notify.
 
-| Member | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| [`InfiniteQueryController(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/InfiniteQueryController.html) | constructor; `options` is `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>` | — | Creates an `InfiniteQueryObserver`. Same contract as `QueryController`. | `new InfiniteQueryObserver(client, options)` |
-| [`setInfiniteOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/setInfiniteOptions.html) | `void`; `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>` | — | Replaces the options, paging half included. Does not notify. | `observer.setOptions` |
-| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/setOptions.html) | `void` | — | Accepts only options that carry the paging behaviour; plain observer options throw an `UnsupportedError` in every build mode. | `observer.setOptions` |
-| [`hasNextPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/hasNextPage.html) | `bool` | — | `getNextPageParam` returns a param for the pages held. False before the first page. | `hasNextPage` |
-| [`hasPreviousPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/hasPreviousPage.html) | `bool` | — | `getPreviousPageParam` returns a param. Always false without one. | `hasPreviousPage` |
-| [`isFetchingNextPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchingNextPage.html) | `bool` | — | The fetch in flight is a `fetchNextPage`. | `isFetchingNextPage` |
-| [`isFetchingPreviousPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchingPreviousPage.html) | `bool` | — | The fetch in flight is a `fetchPreviousPage`. | `isFetchingPreviousPage` |
-| [`isFetchNextPageError`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchNextPageError.html) | `bool` | — | The result's error came from a `fetchNextPage`; the pages held are still there. | `isFetchNextPageError` |
-| [`isFetchPreviousPageError`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchPreviousPageError.html) | `bool` | — | The error came from a `fetchPreviousPage`. | `isFetchPreviousPageError` |
-| [`isRefetching`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isRefetching.html) | `bool` | — | The pages held are being refetched, as opposed to a page being added. | `isRefetching` |
-| [`isRefetchError`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isRefetchError.html) | `bool` | — | A refetch of the held pages failed, as opposed to a page fetch. | `isRefetchError` |
-| [`fetchNextPage({cancelRefetch})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/fetchNextPage.html) | `Future<QueryResult<TData>>` | `cancelRefetch: true` | Fetches the page after the ones held. | `fetchNextPage` |
-| [`fetchPreviousPage({cancelRefetch})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/fetchPreviousPage.html) | `Future<QueryResult<TData>>` | `cancelRefetch: true` | Fetches the page before the ones held. | `fetchPreviousPage` |
-| [`infiniteObserver`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/infiniteObserver.html) | `InfiniteQueryObserver<TPageData, TPageParam, TData>` | — | `observer`, typed with the paging half visible. | — |
+| Member | Type | Default | Meaning |
+|---|---|---|---|
+| [`InfiniteQueryController(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/InfiniteQueryController.html) | constructor; `options` is `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>` | — | Creates an `InfiniteQueryObserver`. Same contract as `QueryController`. TanStack: `new InfiniteQueryObserver(client, options)`. |
+| [`setInfiniteOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/setInfiniteOptions.html) | `void`; `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>` | — | Replaces the options, paging half included. Does not notify by itself, as for `QueryController.setOptions`. TanStack: `observer.setOptions`. |
+| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/setOptions.html) | `void`; `QueryObserverOptionsBase<InfiniteData<TPageData, TPageParam>, TData>` | — | Accepts only options that carry the paging behaviour; plain observer options throw an `UnsupportedError` in every build mode. TanStack: `observer.setOptions`. |
+| [`hasNextPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/hasNextPage.html) | `bool` | — | `getNextPageParam` returns a param for the pages held. False before the first page. TanStack: `hasNextPage`. |
+| [`hasPreviousPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/hasPreviousPage.html) | `bool` | — | `getPreviousPageParam` returns a param. Always false without one. TanStack: `hasPreviousPage`. |
+| [`isFetchingNextPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchingNextPage.html) | `bool` | — | The fetch in flight is a `fetchNextPage`. TanStack: `isFetchingNextPage`. |
+| [`isFetchingPreviousPage`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchingPreviousPage.html) | `bool` | — | The fetch in flight is a `fetchPreviousPage`. TanStack: `isFetchingPreviousPage`. |
+| [`isFetchNextPageError`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchNextPageError.html) | `bool` | — | The result's error came from a `fetchNextPage`; the pages held are still there. TanStack: `isFetchNextPageError`. |
+| [`isFetchPreviousPageError`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isFetchPreviousPageError.html) | `bool` | — | The error came from a `fetchPreviousPage`. TanStack: `isFetchPreviousPageError`. |
+| [`isRefetching`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isRefetching.html) | `bool` | — | The pages held are being refetched, and no `fetchNextPage` or `fetchPreviousPage` is in flight. TanStack: `isRefetching`. |
+| [`isRefetchError`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/isRefetchError.html) | `bool` | — | A refetch of the held pages failed, as opposed to a page fetch. TanStack: `isRefetchError`. |
+| [`fetchNextPage({cancelRefetch})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/fetchNextPage.html) | `Future<QueryResult<TData>>` | `cancelRefetch: true` | Fetches the page after the ones held. TanStack: `fetchNextPage`. |
+| [`fetchPreviousPage({cancelRefetch})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/fetchPreviousPage.html) | `Future<QueryResult<TData>>` | `cancelRefetch: true` | Fetches the page before the ones held. TanStack: `fetchPreviousPage`. |
+| [`infiniteObserver`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/InfiniteQueryController/infiniteObserver.html) | `InfiniteQueryObserver<TPageData, TPageParam, TData>` | — | `observer`, typed with the paging half visible. |
 
 ### `MutationController`
 
@@ -260,19 +268,20 @@ directions leave the result equal and still notify.
 `ChangeNotifier` and implements
 `ValueListenable<MutationResult<TData, TVariables>>`.
 
-| Member | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| [`MutationController(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/MutationController.html) | constructor; `options` is `MutationOptions<TData, TVariables, TOnMutateResult>` | — | Creates a `MutationObserver`. Idle until a run starts. | `new MutationObserver(client, options)` |
-| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/client.html) | `QueryClient` | — | The client the observer runs on. | — |
-| [`value`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/value.html) | `MutationResult<TData, TVariables>` | — | The current result. | the hook's return value |
-| [`mutate(variables, {callbacks})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/mutate.html) | `void`; `callbacks` is `MutateCallbacks<TData, TVariables, TOnMutateResult>?` | `callbacks: null` | Fire and forget: the result lands in `value`, errors never reach the caller. | `mutate` |
-| [`mutateAsync(variables, {callbacks})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/mutateAsync.html) | `Future<TData>` | `callbacks: null` | Completes with the data or throws. The per-call callbacks run after the options' own for as long as the controller is not disposed, listened to or not. Called after `dispose`, the mutation still runs with its options' callbacks, nothing lands in `value`, and the per-call callbacks are dropped. | `mutateAsync` |
-| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/setOptions.html) | `void` | — | Replaces the options the next run uses. Does not notify. | `observer.setOptions` |
-| [`reset()`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/reset.html) | `void` | — | Back to idle, detaching from the mutation being observed. | `reset` |
-| [`cancel()`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/cancel.html) | `void` | — | Fails the run this controller shows with a `CancelledError`; its error callbacks run. See [cancelling mutations](../guides/cancelling-mutations.md). | — |
-| [`observer`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/observer.html) | `MutationObserver<TData, TVariables, TOnMutateResult>` | — | The observer underneath, for its defaulted `options`, say. Run mutations through the controller: `observer.mutate` on a controller nobody listens to drops the per-call callbacks. | — |
-| [`isDisposed`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/isDisposed.html) | `bool` | — | Whether `dispose` has run. | — |
-| `dispose()` | `void` | — | Detaches the observer from whatever mutation it ran, so that mutation can be collected. Does **not** cancel a run in flight. | component unmount |
+| Member | Type | Default | Meaning |
+|---|---|---|---|
+| [`MutationController(client, options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/MutationController.html) | constructor; `options` is `MutationOptions<TData, TVariables, TOnMutateResult>` | — | Creates a `MutationObserver`. Idle until a run starts. TanStack: `new MutationObserver(client, options)`. |
+| [`client`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/client.html) | `QueryClient` | — | The client the observer runs on. |
+| [`value`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/value.html) | `MutationResult<TData, TVariables>` | — | The current result. |
+| [`mutate(variables, {callbacks})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/mutate.html) | `void`; `callbacks` is `MutateCallbacks<TData, TVariables, TOnMutateResult>?` | `callbacks: null` | Fire and forget: the result lands in `value`, errors never reach the caller. TanStack: `mutate`. |
+| [`mutateAsync(variables, {callbacks})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/mutateAsync.html) | `Future<TData>` | `callbacks: null` | Completes with the data or throws. The per-call callbacks run after the options' own for as long as the controller is not disposed, listened to or not. Called after `dispose`, the mutation still runs with its options' callbacks, nothing lands in `value`, and the per-call callbacks are dropped. TanStack: `mutateAsync`. |
+| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/setOptions.html) | `void`; `MutationOptions<TData, TVariables, TOnMutateResult>` | — | Replaces the options the next run uses. Does not notify: the result has not changed. TanStack: `observer.setOptions`. |
+| [`reset()`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/reset.html) | `void` | — | Back to idle, detaching from the mutation being observed. TanStack: `reset`. |
+| [`cancel()`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/cancel.html) | `void` | — | Fails the run this controller shows with a `CancelledError`; its error callbacks run. See [cancelling mutations](../guides/cancelling-mutations.md). |
+| [`observer`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/observer.html) | `MutationObserver<TData, TVariables, TOnMutateResult>` | — | The observer underneath, for its defaulted `options`, say. Run mutations through the controller: `observer.mutate` on a controller nobody listens to drops the per-call callbacks. |
+| [`isDisposed`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/isDisposed.html) | `bool` | — | Whether `dispose` has run. |
+| `addListener` / `removeListener` | `void` | — | The first listener subscribes the controller to its observer, the last one leaving unsubscribes it. A run started by `mutate` or `mutateAsync` holds its own subscription until it settles, so its per-call callbacks run on a controller nobody listens to. |
+| `dispose()` | `void` | — | Detaches the observer from whatever mutation it ran, so that mutation can be collected. Does **not** cancel a run in flight. |
 
 ## `context.query` and its siblings
 
@@ -285,12 +294,12 @@ widgets that read a query rebuild when it changes. There is no `client:`
 parameter: it always reads the nearest `QueryClientProvider`'s client, and
 without a provider every member throws a `FlutterError`.
 
-| Member | Returns | Parameters | TanStack equivalent |
+| Member | Returns | Parameters | Meaning |
 |---|---|---|---|
-| [`query<TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/query.html) | `QueryResult<TData>` | `QueryObserverOptions<TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | `useQuery` |
-| [`selectQuery<TQueryData, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/selectQuery.html) | `QueryResult<TData>` | `QuerySelectOptions<TQueryData, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | `useQuery` with `select` |
-| [`infiniteQuery<TPageData, TPageParam, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/infiniteQuery.html) | `InfiniteQueryController<TPageData, TPageParam, TData>` | `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | `useInfiniteQuery` |
-| [`mutation<TData, TVariables, TOnMutateResult>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/mutation.html) | `MutationController<TData, TVariables, TOnMutateResult>` | `MutationOptions<TData, TVariables, TOnMutateResult> options`, `Object? id`, `BuildWhen<MutationResult<TData, TVariables>>? buildWhen` | `useMutation` |
+| [`query<TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/query.html) | `QueryResult<TData>` | `QueryObserverOptions<TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | The query's current result; this widget rebuilds when it changes. TanStack: `useQuery`. |
+| [`selectQuery<TQueryData, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/selectQuery.html) | `QueryResult<TData>` | `QuerySelectOptions<TQueryData, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | `query` with a `select`: the cache holds `TQueryData`, this widget sees `TData`. TanStack: `useQuery` with `select`. |
+| [`infiniteQuery<TPageData, TPageParam, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/infiniteQuery.html) | `InfiniteQueryController<TPageData, TPageParam, TData>` | `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | The infinite query's controller, owned by this widget. TanStack: `useInfiniteQuery`. |
+| [`mutation<TData, TVariables, TOnMutateResult>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryContext/mutation.html) | `MutationController<TData, TVariables, TOnMutateResult>` | `MutationOptions<TData, TVariables, TOnMutateResult> options`, `Object? id`, `BuildWhen<MutationResult<TData, TVariables>>? buildWhen` | A mutation's controller, owned by this widget. TanStack: `useMutation`. |
 
 The controllers `infiniteQuery` and `mutation` return belong to the reading
 widget and are disposed for you; do not dispose them. `id` and `buildWhen`
@@ -343,13 +352,13 @@ element, and lives as long as that element's own builds keep reading it.
 flat in a `State`'s `build`, and everything it creates belongs to the
 `State`: disposed with it, and recreated when its client changes.
 
-| Member | Returns | Parameters | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| [`queryClient`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/queryClient.html) | `QueryClient` (getter) | — | The client every read runs on; `QueryClientProvider.of(context)` by default. Override it to read from another client, `widget.client` say. Looked up again at every read: a different client releases everything held and recreates it on the new one. A `build` that reads nothing needs no provider. | `useQueryClient()` |
-| [`watchQuery<TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchQuery.html) | `QueryResult<TData>` | `QueryObserverOptions<TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | Subscribes this `State` to the query and returns its current result. | `useQuery` |
-| [`watchSelectQuery<TQueryData, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchSelectQuery.html) | `QueryResult<TData>` | `QuerySelectOptions<TQueryData, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | `watchQuery` with a `select`. | `useQuery` with `select` |
-| [`watchInfiniteQuery<TPageData, TPageParam, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchInfiniteQuery.html) | `InfiniteQueryController<TPageData, TPageParam, TData>` | `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | The controller belongs to the `State`; do not dispose it. | `useInfiniteQuery` |
-| [`watchMutation<TData, TVariables, TOnMutateResult>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchMutation.html) | `MutationController<TData, TVariables, TOnMutateResult>` | `MutationOptions<TData, TVariables, TOnMutateResult> options`, `Object? id`, `BuildWhen<MutationResult<TData, TVariables>>? buildWhen` | A mutation owned by this `State`, not shared. | `useMutation` |
+| Member | Returns | Parameters | Meaning |
+|---|---|---|---|
+| [`queryClient`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/queryClient.html) | `QueryClient` (getter) | — | The client every read runs on; `QueryClientProvider.of(context)` by default. Override it to read from another client, `widget.client` say. Looked up again at every read: a different client releases everything held and recreates it on the new one. A `build` that reads nothing needs no provider. TanStack: `useQueryClient()`. |
+| [`watchQuery<TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchQuery.html) | `QueryResult<TData>` | `QueryObserverOptions<TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | Subscribes this `State` to the query and returns its current result. TanStack: `useQuery`. |
+| [`watchSelectQuery<TQueryData, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchSelectQuery.html) | `QueryResult<TData>` | `QuerySelectOptions<TQueryData, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | `watchQuery` with a `select`. TanStack: `useQuery` with `select`. |
+| [`watchInfiniteQuery<TPageData, TPageParam, TData>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchInfiniteQuery.html) | `InfiniteQueryController<TPageData, TPageParam, TData>` | `InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options`, `Object? id`, `BuildWhen<QueryResult<TData>>? buildWhen` | The controller belongs to the `State`; do not dispose it. TanStack: `useInfiniteQuery`. |
+| [`watchMutation<TData, TVariables, TOnMutateResult>(options, {id, buildWhen})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/QueryMixin/watchMutation.html) | `MutationController<TData, TVariables, TOnMutateResult>` | `MutationOptions<TData, TVariables, TOnMutateResult> options`, `Object? id`, `BuildWhen<MutationResult<TData, TVariables>>? buildWhen` | A mutation owned by this `State`, not shared. TanStack: `useMutation`. |
 
 The mixin also overrides `dispose`, releasing everything the `State` read.
 
@@ -417,7 +426,9 @@ transition, and a rejected one still becomes the `previous` of the next.
 
 Run a side effect — a snackbar, a navigation, a log line — when a
 controller's result changes, without rebuilding `child`. Each listens to a
-controller you own and never disposes it. See [side
+controller you own and never disposes it. Its listening counts like any
+other: a controller nobody listened to is subscribed when the listener
+mounts, and a query fetches then if it needs to. See [side
 effects](../guides/side-effects.md).
 
 | Parameter | Type | Default | Meaning |
@@ -426,7 +437,7 @@ effects](../guides/side-effects.md).
 | `listener` | `void Function(BuildContext context, T result)` | required | The side effect. `T` is `QueryResult<TData>` for the two query listeners and `MutationResult<TData, TVariables>` for `MutationListener`. |
 | `listenWhen` | `ListenWhen<T>?` | `null` (every change) | Which transitions run `listener`. |
 | `child` | `Widget` | required | Returned unchanged; a transition never rebuilds it. |
-| `key` | `Key?` | `null` | |
+| `key` | `Key?` | `null` | The widget's key. |
 
 When `listener` runs:
 
@@ -457,12 +468,12 @@ every run of the controller.
 `QueriesBuilder<TQueryData, TData>` builds from a list of queries of one
 type that may change length or order. It owns a `QueriesController`.
 
-| Parameter | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| `queries` | `List<QueryObserverOptionsBase<TQueryData, TData>>` | required | The queries, in the order their results are handed to `builder`. Re-applied whenever the parent rebuilds this widget; an unchanged list moves nothing. | `queries` |
-| `builder` | `Widget Function(BuildContext context, List<QueryResult<TData>> results)` | required | Built from one result per entry of `queries`, first and again whenever a result or the list changes. | the hook's return value |
-| `client` | `QueryClient?` | `null` (provider's) | As for `QueryBuilder`. | the `queryClient` argument |
-| `key` | `Key?` | `null` | | — |
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `queries` | `List<QueryObserverOptionsBase<TQueryData, TData>>` | required | The queries, in the order their results are handed to `builder`. Re-applied whenever the parent rebuilds this widget; an unchanged list moves nothing. TanStack: `queries`. |
+| `builder` | `Widget Function(BuildContext context, List<QueryResult<TData>> results)` | required | Built from one result per entry of `queries`, first and again whenever a result or the list changes. |
+| `client` | `QueryClient?` | `null` (provider's) | As for `QueryBuilder`. TanStack: the hook's `queryClient` argument. |
+| `key` | `Key?` | `null` | The widget's key. |
 
 - **Observers are reused by key and occurrence**, so reordering starts no
   requests. Duplicate keys share one cache entry and keep their own options.
@@ -483,14 +494,15 @@ type that may change length or order. It owns a `QueriesController`.
 `ValueListenable<List<QueryResult<TData>>>`, the same collection outside a
 widget.
 
-| Member | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| `QueriesController(client, queries)` | constructor; `List<QueryObserverOptionsBase<TQueryData, TData>> queries` | — | Creates the collection. Nothing fetches until the first listener; then every enabled query that needs to does. | `new QueriesObserver(client, queries)` |
-| `client` | `QueryClient` | — | The client every query in the collection uses. | — |
-| `value` | `List<QueryResult<TData>>` | — | The results, in order. Before the first listener, the optimistic list. | the hook's return value |
-| `setQueries(queries)` | `void` | — | Replaces the list, reusing observers by key occurrence. A new key fetches like any new query. | `observer.setQueries` |
-| `observer` | `QueriesObserver<TQueryData, TData>` | — | The core observer, including its underlying observers. | — |
-| `dispose()` | `void` | — | Destroys every observer. | component unmount |
+| Member | Type | Default | Meaning |
+|---|---|---|---|
+| `QueriesController(client, queries)` | constructor; `List<QueryObserverOptionsBase<TQueryData, TData>> queries` | — | Creates the collection. Nothing fetches until the first listener; then every enabled query that needs to does. TanStack: `new QueriesObserver(client, queries)`. |
+| `client` | `QueryClient` | — | The client every query in the collection uses. |
+| `value` | `List<QueryResult<TData>>` | — | The results, in order. Before the first listener, the optimistic list. |
+| `setQueries(queries)` | `void` | — | Replaces the list, reusing observers by key occurrence. A new key fetches like any new query. TanStack: `observer.setQueries`. |
+| `observer` | `QueriesObserver<TQueryData, TData>` | — | The core observer, including its underlying observers. |
+| `addListener` / `removeListener` | `void` | — | The first listener subscribes the collection, the last one leaving unsubscribes it. |
+| `dispose()` | `void` | — | Destroys every observer. |
 
 Listeners are told only when a result changed, compared element by element;
 each result's `refetch` target is compared too, so replacing or reordering
@@ -505,13 +517,14 @@ A `ValueListenable<int>`: how many queries matching the filters are fetching
 right now. A background refetch counts. Subscribed to the query cache only
 while something listens, and notifies only when the count changes.
 
-| Member | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| `IsFetchingController(client, {filters})` | constructor | `filters: const QueryFilters()` (all queries) | Creates the count over `client`'s query cache. | `useIsFetching(filters)` |
-| `client` | `QueryClient` | — | The client whose queries are counted. | — |
-| `filters` | [`QueryFilters`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryFilters-class.html) | all queries | Which queries count. Fixed for the controller's life; other filters are another controller. | `filters` |
-| `value` | `int` | — | `client.isFetching(filters: filters)`. | the hook's return value |
-| `dispose()` | `void` | — | Unsubscribes. | — |
+| Member | Type | Default | Meaning |
+|---|---|---|---|
+| `IsFetchingController(client, {filters})` | constructor | `filters: const QueryFilters()` (all queries) | Creates the count over `client`'s query cache. TanStack: `useIsFetching(filters)`. |
+| `client` | `QueryClient` | — | The client whose queries are counted. |
+| `filters` | [`QueryFilters`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryFilters-class.html) | all queries | Which queries count. Fixed for the controller's life; other filters are another controller. TanStack: `filters`. |
+| `value` | `int` | — | `client.isFetching(filters: filters)`. |
+| `addListener` / `removeListener` | `void` | — | The first listener subscribes to the query cache, the last one leaving unsubscribes. |
+| `dispose()` | `void` | — | Unsubscribes. |
 
 `QueryClient.isFetching` is the same count as a one-off snapshot. For
 mutations in flight, use a `MutationStateController` filtered on
@@ -529,14 +542,15 @@ somewhere other than where they started — a "saving" badge, a pending row for
 a write started on another screen. See [mutation
 state](../guides/mutation-state.md).
 
-| Member | Type | Default | Meaning | TanStack equivalent |
-|---|---|---|---|---|
-| `MutationStateController(client, {filters, required select})` | constructor; `select` is `MutationStateSelect<TSelected>`, a `TSelected Function(Mutation<Object?, Object?, Object?> mutation)` | `filters: const MutationFilters()` | A selection over the mutation cache. `select` runs over every matching mutation on every cache change, so keep it cheap. | `useMutationState({ filters, select })` |
-| [`MutationStateController.typed(client, {filters, required select})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationStateController/typed.html) | static; `select` is `TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>`, a `TSelected Function(Mutation<TData, TVariables, TOnMutateResult> mutation)` | `filters: const MutationFilters()` | Selects from mutations of one type only, typed. The types usually come from `select`'s parameter; a type left as `Object?` matches anything. The type test stays through a later `setOptions`. | — |
-| `client` | `QueryClient` | — | The client whose mutations are selected. | — |
-| `value` | `List<TSelected>` | — | The current selection. | the hook's return value |
-| `setOptions({filters, select})` | `void`; `MutationFilters?`, `MutationStateSelect<TSelected>?` | both `null` (unchanged) | Replaces the filters and/or selector. The selection is recomputed at once, and listeners are told when it changed. | — |
-| `dispose()` | `void` | — | Destroys the observer. | — |
+| Member | Type | Default | Meaning |
+|---|---|---|---|
+| `MutationStateController(client, {filters, required select})` | constructor; `select` is `MutationStateSelect<TSelected>`, a `TSelected Function(Mutation<Object?, Object?, Object?> mutation)` | `filters: const MutationFilters()` | A selection over the mutation cache. `select` runs over every matching mutation on every cache change, so keep it cheap. TanStack: `useMutationState({ filters, select })`. |
+| [`MutationStateController.typed(client, {filters, required select})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationStateController/typed.html) | static; `select` is `TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>`, a `TSelected Function(Mutation<TData, TVariables, TOnMutateResult> mutation)` | `filters: const MutationFilters()` | Selects from mutations of one type only, typed. The types usually come from `select`'s parameter; a type left as `Object?` matches anything. The type test stays through a later `setOptions`. |
+| `client` | `QueryClient` | — | The client whose mutations are selected. |
+| `value` | `List<TSelected>` | — | The current selection, as an unmodifiable list. Read while nobody listens, it is recomputed from the cache. |
+| `setOptions({filters, select})` | `void`; `MutationFilters?`, `MutationStateSelect<TSelected>?` | both `null` (unchanged) | Replaces the filters and/or selector. The selection is recomputed at once, and listeners are told when it changed. |
+| `addListener` / `removeListener` | `void` | — | The first listener subscribes to the mutation cache, the last one leaving unsubscribes. |
+| `dispose()` | `void` | — | Destroys the observer. |
 
 Subscribed to the mutation cache only while something listens; listeners are
 told only when the selection changed, element by element.
