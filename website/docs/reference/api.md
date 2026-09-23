@@ -1,15 +1,14 @@
 ---
 title: API reference
-sidebar_position: 3
 description: Where the generated dartdoc lives, and how to build it locally.
 ---
+
+{/* depth: todo */}
 
 # API reference
 
 The API reference is **generated from the source**, not written twice. Every
-public member of both packages carries a dartdoc comment, and CI runs
-`dart doc --validate-links` on every push, so a broken cross-reference fails
-the build rather than shipping.
+public member of both packages carries a dartdoc comment.
 
 ## On pub.dev
 
@@ -20,15 +19,8 @@ pub.dev builds and hosts the reference for every published version:
 
 ## Locally
 
-```bash
-cd packages/query_kit && dart doc
-```
-
-```bash
-cd packages/query_kit_flutter && dart doc
-```
-
-The output lands in `doc/api/` (gitignored). Open `doc/api/index.html`.
+`dart doc` in a package's directory writes the same reference to `doc/api/`;
+open `doc/api/index.html`. For a package in your pub cache, run it there.
 
 ## Where to start reading
 
@@ -36,17 +28,18 @@ The output lands in `doc/api/` (gitignored). Open `doc/api/index.html`.
 |---|---|
 | the whole imperative surface | `QueryClient` |
 | what a widget is handed | `QueryResult`, and its `QueryPending` / `QuerySuccess` / `QueryError` cases |
-| every option and what unset means | `QueryObserverOptions` and `QuerySelectOptions`, then `option_values.dart` for the sealed types |
+| every option and what unset means | `QueryObserverOptions` and `QuerySelectOptions`, then the sealed value types — `StaleTime`, `GcTime`, `Enabled`, `RetryPolicy`, `RetryDelay`, `RefetchOn`, `RefetchInterval` |
 | paging | `InfiniteQueryOptions`, `InfiniteData`, `InfiniteQueryObserver` |
 | writes | `MutationOptions`, `MutationResult`, `MutationObserver` |
+| the caches | `QueryCache`, `MutationCache`, `QueryFilters`, `MutationFilters` |
 | the Flutter side | `QueryClientProvider`, `QueryController`, `QueryBuilder`, `QueryMixin`, and the `context.query` extension |
 | widget tests | nothing exported: the teardown is a documented snippet, see [Testing](../guides/testing.md) |
 
-## The other reference
+## Beyond signatures
 
-For *behaviour* rather than signatures, the ported test suite is the more
-honest document: `packages/query_kit/test/` names each upstream file it came
-from, keeps upstream's test names, and
-[`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md)
-lists every case that was *not* ported and why. See [how fidelity is
-proven](../project/fidelity.md).
+- [Feature matrix](feature-matrix.md) — what exists, per TanStack Query
+  feature.
+- [Differences from TanStack Query](differences-from-tanstack.md) — where the
+  behaviour differs, and why.
+- [Troubleshooting](troubleshooting.md) — symptoms, causes and fixes.
+- [Coming from React Query](../coming-from-react-query.md) — the name map.

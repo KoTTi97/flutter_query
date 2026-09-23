@@ -93,6 +93,22 @@ each example, the documentation site, the two Playwright end-to-end suites and
 the whole suite again on the declared Flutter floor. The examples' READMEs say
 how to run their backends and their browser suites locally.
 
+## Depending on a checkout
+
+To try unreleased work from `main` in an app of your own, depend on the
+checkout by path — with an override for the core, because the binding asks
+for a *hosted* `query_kit` and would otherwise take the published one:
+
+```yaml
+dependencies:
+  query_kit_flutter:
+    path: ../flutter_query/packages/query_kit_flutter
+
+dependency_overrides:
+  query_kit:
+    path: ../flutter_query/packages/query_kit
+```
+
 ## Conventions that are load-bearing
 
 These are not style preferences; breaking them breaks the tests or the

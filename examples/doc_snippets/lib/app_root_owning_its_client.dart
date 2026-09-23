@@ -1,4 +1,4 @@
-/// `getting-started/first-query.md`'s second root: the provider builds the
+/// `quick-start.md`'s second root: the provider builds the
 /// client and `clear()`s it when the tree comes down.
 ///
 /// A separate file for the reason [app_root.dart] gives — one `main` per
@@ -12,7 +12,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import 'doc_snippets.dart';
 
-// >>> getting-started/first-query.md#main-owning-its-client
+// >>> quick-start.md#main-owning-its-client
 void main() {
   runApp(
     QueryClientProvider.create(

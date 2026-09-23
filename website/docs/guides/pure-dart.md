@@ -1,8 +1,9 @@
 ---
 title: Without Flutter
-sidebar_position: 10
 description: Using query_kit on its own — observers, subscribe, and the one thing you have to do yourself.
 ---
+
+{/* demo: simple */}
 
 # Without Flutter
 
@@ -69,19 +70,18 @@ or `destroy()` before the client is cleared.
 **Focus and online, if they mean anything to you.** There is no window and no
 connectivity plugin outside Flutter, so `client.focusManager.setFocused(…)`
 and `client.onlineManager.setOnline(…)` are yours to drive — or to leave
-alone, in which case the client stays focused and online, which is upstream's
-behaviour with no listener.
+alone, in which case the client stays focused and online.
 
 ## Where it runs
 
-The core is tested on the Dart VM **and** compiled to JavaScript, both in CI,
+The core is tested on the Dart VM **and** compiled to JavaScript,
 because a cache full of timers and microtasks is exactly the sort of code where
 the two disagree. Timers are clamped to 2^31−1 ms so a 30-day `gcTime` does not
 fire immediately on the web.
 
 ## What is Dart rather than JavaScript
 
-The port follows upstream's behaviour, not its type tricks. The differences you
+The core follows TanStack Query's behaviour, not its type tricks. The differences you
 feel at the call site:
 
 - **Two type parameters, not five.** `Query<TQueryData>` at the cache layer,
@@ -89,13 +89,15 @@ feel at the call site:
   `TError` — errors are `Object` plus a `StackTrace` — and no `TQueryKey`.
 - **`QueryKey` is a value type**, deep-frozen with structural equality, not a
   hashed string. `queryKeyHashFn` is gone; the hash survives as `debugString`.
-- **One key, one exact type** — see [the query
-  client](the-query-client.md#reading-and-writing-the-cache).
-- **Every option union is a sealed value type** — see [options](options.md).
+- **One key, one exact type** — see [type safety in
+  Dart](../dart-type-safety.md#one-key-one-exact-type).
+- **Every option union is a sealed value type** — see [describing a query
+  once](query-options.md).
 - **Cancellation is `QueryCancelToken.onCancel`**, because Dart has no
   ecosystem-wide cancellation primitive.
 - **Time goes through `package:clock`**, so `fake_async` controls it
   completely.
 
 The full name map is [coming from React
-Query](../reference/coming-from-react-query.md).
+Query](../coming-from-react-query.md), and the behaviour that differs is in
+[differences from TanStack Query](../reference/differences-from-tanstack.md).

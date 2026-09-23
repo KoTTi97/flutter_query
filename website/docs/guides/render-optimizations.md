@@ -1,12 +1,13 @@
 ---
 title: What rebuilds, and when
-sidebar_position: 3
 description: select narrows what a widget reads; buildWhen narrows when it rebuilds. They are not the same tool.
 ---
 
+{/* demo: select-and-sharing, build-when */}
+
 # What rebuilds, and when
 
-The rule is upstream's: **a widget rebuilds whenever its result changes** — and
+The rule is TanStack Query's: **a widget rebuilds whenever its result changes** — and
 a background refetch that brings back *equal* data is still a change, because
 `dataUpdatedAt` moved.
 
@@ -20,7 +21,7 @@ A `select` runs at the observer. A fetch that brings back data whose
 `data` is unchanged and anything compared on it (a `buildWhen` over
 `dataOrNull`, a child keyed on the data) sees no change.
 
-```dart snippet="guides/rebuilds.md#select"
+```dart snippet="guides/render-optimizations.md#select"
 QuerySelectOptions<List<Task>, int> doneCountQuery() => QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
@@ -51,7 +52,7 @@ For the part `select` does control, equality is `==`:
 Give such a model `==`, or select a list or a scalar. Dart **records** already
 have value equality, which makes them the easy pick:
 
-```dart snippet="guides/rebuilds.md#record-select"
+```dart snippet="guides/render-optimizations.md#record-select"
 select: (data) => (
   done: data.where((s) => s.done).length,
   total: data.length,
@@ -66,7 +67,7 @@ On every builder — `QueryBuilder`, `QuerySelectBuilder`,
 `context.query`, `context.selectQuery`, `context.infiniteQuery`,
 `context.mutation`.
 
-```dart snippet="excerpt: guides/rebuilds.md#build-when-builder"
+```dart snippet="excerpt: guides/render-optimizations.md#build-when-builder"
 QueryBuilder<Task>(
   options: taskQuery(id),
   buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
@@ -74,16 +75,16 @@ QueryBuilder<Task>(
 )
 ```
 
-```dart snippet="guides/rebuilds.md#build-when-keyless"
+```dart snippet="guides/render-optimizations.md#build-when-keyless"
 final task = context.query(
   taskQuery(id),
   buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
 );
 ```
 
-It is upstream's `notifyOnChangeProps`, expressed as a function of two results.
-The same predicate, the same semantics and the same implementation in all
-twelve places — the difference is only *whose* rebuild it decides. A builder's
+It is the counterpart of `notifyOnChangeProps`, expressed as a function of two
+results. The same predicate and the same semantics in all twelve places — the
+difference is only *whose* rebuild it decides. A builder's
 is its own subtree, because a builder reads exactly one query or one mutation.
 A keyless read's is per read, and its reader is the whole widget or the whole
 `State`: several reads each filter their own query, and a change any one of
@@ -94,7 +95,7 @@ them lets through rebuilds the reader.
 result `buildWhen` skipped is not remembered, so the next comparison is against
 what is actually on screen.
 
-That is the documented semantics of the field, and it is the **opposite** of
+It is the **opposite** of
 `bloc`'s `buildWhen`, where `previous` is the last state emitted whether or not
 it was built.
 :::
@@ -110,7 +111,7 @@ compare and the reader is showing the stale half.
 The same predicate over a `MutationResult`, and it is the *only* narrowing a
 mutation reader has: there is no `select` on a mutation.
 
-```dart snippet="guides/rebuilds.md#build-when-mutation"
+```dart snippet="guides/render-optimizations.md#build-when-mutation"
 final rename = context.mutation(
   renameTask(id),
   // A retrying run moves `failureCount` while it stays pending; a spinner
@@ -120,17 +121,13 @@ final rename = context.mutation(
 ```
 
 It is also asked more often than a query's. A `MutationObserver` drops a
-notification whose result is equal before it sends one at all, so the equality
-above never answers first for a mutation — every notification a mutation
-reader gets reaches its predicate. Across the binding, showcase and task
-manager suites that is 91 questions the mutation reads would be asked, against
-zero notifications the equality has ever had to drop.
+notification whose result is equal before it sends one at all, so every
+notification a mutation reader gets reaches its predicate.
 
 ### A controller has none, on purpose
 
 No controller takes a `buildWhen` — not `QueryController`,
-`InfiniteQueryController` or `MutationController` — and that is not a fourth
-exception to the four styles being equal. A controller **is** the notifier: a
+`InfiniteQueryController` or `MutationController`. A controller **is** the notifier: a
 predicate on it would impose one listener's filter on every listener of it. What it gives
 instead is the guarantee underneath — it notifies only when something a reader
 can see has actually moved, so a `ValueListenableBuilder` over one never
@@ -144,31 +141,33 @@ package offers for a listenable.
 
 A collection has no one result to filter on: a predicate over a whole
 `List<QueryResult>` would fire for any query in the list and say nothing about
-which. `QueriesBuilder` is not one of the four call styles and has no keyless
-twin, so there is no inequality to close — and a reader who wants per-query
-filtering has it already, by reading each query with its own `QueryBuilder` or
+which. A reader who wants per-query filtering has it already, by reading each query with its own `QueryBuilder` or
 `context.query`, each with its own `buildWhen`. It makes the other half of the
 guarantee: the collection notifies only when a result in it actually moved,
 compared element by element.
 
-## Why not upstream's trick
+## Why not track which fields were read
 
-Upstream narrows this further than the port does. React Query tracks which
-fields of the result a component actually touched during a render
-(`trackedProps`) and re-renders only when one of those changed.
+React Query tracks which fields of the result a component touched during a
+render (`trackedProps`) and re-renders only when one of those changed. That
+needs a proxy around the result and a render pass it can observe; a Flutter
+widget reads its result in `build` with no such seam. So whole results are
+compared instead, and a widget rebuilds where React Query sometimes would not.
+`buildWhen` is the explicit form of the same thing. See [differences from
+TanStack Query](../reference/differences-from-tanstack.md).
 
-That trick needs a proxy around the result and a render pass it can observe. A
-Flutter widget reads its result in `build` with no such seam, so this port
-compares whole results instead, and rebuilds where upstream sometimes would
-not. `buildWhen` is the explicit form of the same thing.
+## Build-aware delivery
 
-This is one of the recorded divergences; the reasoning is in the divergence
-table at the end of
-[`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
+Results are delivered right away outside a build — a tap handler or a
+resolved future is where Flutter expects a `setState`, and one `pump` in a
+test shows the new result — and **after** the build when they arrive inside
+one, so a query resolving during a build can never call `setState` into it.
+That covers the frame's build phase and the app's very first build, which
+`runApp` runs outside any frame.
 
 ## Seeing it
 
-The showcase's `select-and-sharing` screen puts a build counter next to each
+The `select-and-sharing` screen in the [examples](../examples/index.md) puts a build counter next to each
 reader and lets you refetch with equal or changed data, so the difference
 between "the fetch happened" and "the widget rebuilt" is on screen rather than
 in your head.
@@ -179,3 +178,5 @@ what the predicate costs and saves is the difference between two counters
 rather than a claim. A knob swaps the predicate for `(_, __) => false` and for
 `(_, __) => true`, which freezes the filtered half and then makes it its twin
 again.
+
+What `select` keeps depends on [structural sharing](structural-sharing.md).

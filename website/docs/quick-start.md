@@ -1,17 +1,19 @@
 ---
-title: Your first query
-sidebar_position: 2
+title: Quick start
 description: A provider at the root, an options function, a widget that reads it — and the mutation that invalidates it.
 ---
 
-# Your first query
+{/* demo: basic */}
 
-Three pieces: a client at the root of the app, a function that describes the
-query, and a widget that reads it.
+# Quick start
+
+Four pieces: a client at the root of the app, a function that describes the
+query, a widget that reads it, and a write that tells the cache what it made
+stale.
 
 ## 1. A client at the root
 
-```dart snippet="getting-started/first-query.md#main"
+```dart snippet="quick-start.md#main"
 void main() {
   runApp(
     QueryClientProvider(
@@ -31,7 +33,7 @@ If you want the provider to own the client as well, use
 `QueryClientProvider.create`, which builds it and `clear()`s it when the tree
 comes down:
 
-```dart snippet="getting-started/first-query.md#main-owning-its-client"
+```dart snippet="quick-start.md#main-owning-its-client"
 void main() {
   runApp(
     QueryClientProvider.create(
@@ -42,12 +44,15 @@ void main() {
 }
 ```
 
+Create the client once — never in a `build` method, where every rebuild would
+start an empty cache.
+
 ## 2. Describe the query once
 
 Put the options behind a function. Nothing forces this, but it is what makes
 the same query readable from several widgets without drift:
 
-```dart snippet="getting-started/first-query.md#key getting-started/first-query.md#options"
+```dart snippet="quick-start.md#key quick-start.md#options"
 final QueryKey tasksKey = QueryKey(<Object?>['tasks']);
 
 QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
@@ -57,39 +62,21 @@ QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
     );
 ```
 
-Four things are worth noticing here.
-
-**The one type argument is the data type.** It comes from `queryFn`'s return
-type, or is written out as here — `QueryObserverOptions<List<Task>>`. A query
-whose widgets see a projection of the data is the other shape,
-`QuerySelectOptions<TQueryData, TData>`, with `select` required; see
-[options](../guides/options.md#two-shapes). The one literal neither shape can
-type is a key-only one with neither a `queryFn` nor a type argument. The
-binding's controllers refuse that in debug builds with a message naming the
-cure, and the analyzer reports it at the literal once your
-`analysis_options.yaml` asks it to — recommended:
-
-```yaml
-analyzer:
-  language:
-    strict-inference: true
-```
-
-**`QueryKey` is a value type**, deep-frozen with structural equality — not a
-hashed string. Two keys built from equal contents *are* the same key.
-
-**`context.signal` is a `QueryCancelToken`.** Dart has no ecosystem-wide
-cancellation primitive, so `signal.onCancel(…)` is the interop point — hand it
-`dio`'s `CancelToken.cancel`, or ignore it entirely with a client that cannot
-cancel. See [cancellation](../guides/the-query-client.md#cancellation).
-
-**`StaleTime.duration(…)` rather than a number.** Every option that has a real
-"off" value is a sealed value type, so `null` can mean "not configured" on
-every field. [Options](../guides/options.md) has the full set.
+- The **key** identifies the data in the cache. `QueryKey` is a value type:
+  two keys built from equal parts are the same key. See [query
+  keys](guides/query-keys.md).
+- The **function** fetches it, and must throw when it fails. `context.signal`
+  lets it cancel its request. See [query functions](guides/query-functions.md).
+- The **one type argument** is the data type. A query that shows a projection
+  of its data uses the other shape, `QuerySelectOptions`. See [describing a
+  query once](guides/query-options.md).
+- **`StaleTime.duration(…)`** rather than a number: every option with a real
+  "off" value is a sealed value type. See [important
+  defaults](important-defaults.md).
 
 ## 3. Read it
 
-```dart snippet="getting-started/first-query.md#screen"
+```dart snippet="quick-start.md#screen"
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
 
@@ -116,15 +103,17 @@ class TasksScreen extends StatelessWidget {
 `QueryResult` is sealed, so the `switch` is exhaustive and there is no `data!`
 anywhere. `QueryError` also carries `staleData` — the last good value — which
 is what lets an error banner sit *above* the data that is still on screen
-rather than replacing it.
+rather than replacing it. [Queries](guides/queries.md) explains every state a
+result can be in.
 
-This is one of [four equal ways to read a query](../guides/reading-a-query.md).
-The other three are a builder widget, a `State` mixin and a plain
-`ValueListenable`; none of them is the default.
+This is one of [four equal ways to read a
+query](guides/reading-queries-in-widgets.md). The other three are a builder
+widget, a `State` mixin and a plain `ValueListenable`; none of them is the
+default.
 
 ## 4. Write something, and invalidate
 
-```dart snippet="getting-started/first-query.md#mutation"
+```dart snippet="quick-start.md#mutation"
 @override
 Widget build(BuildContext context) {
   // Take the client here, in build — not inside the callback. A mutation
@@ -151,26 +140,23 @@ Widget build(BuildContext context) {
 
 A mutation hands back a `MutationController` rather than a result, because you
 need `mutate` as well as the state: `add.value` is the `MutationResult`,
-`add.mutate(vars)` starts it.
-
-`MutationOptions.simple` is the form without an `onMutate` step; it fixes the
-rollback type to `void` so the other two infer from `mutationFn`. The full
-story, including optimistic updates and rollback, is in
-[mutations](../guides/mutations.md).
+`add.mutate(vars)` starts it. Invalidating the list marks it stale and
+refetches it while it is on screen. See [mutations](guides/mutations.md) and
+[invalidation from mutations](guides/invalidations-from-mutations.md).
 
 ## What you just got
 
 Without writing any of it:
 
-- **One request for N readers.** Mount the same query in five widgets and the
-  cache deduplicates it.
+- **One request for many readers.** Mount the same query in five widgets and
+  the cache deduplicates it.
 - **Stale-while-revalidate.** A second visit renders from cache immediately and
   refetches behind it if the data is older than `staleTime`.
 - **Refetch on focus and on reconnect**, retries with exponential backoff, and
   garbage collection of entries nobody is watching.
 - **Cancellation** the moment nothing is observing the query any more.
 
-Which of those fire, and when, is [options](../guides/options.md).
+Which of those fire, and when, is [important defaults](important-defaults.md).
 
 ## A runnable version
 
@@ -178,5 +164,4 @@ Which of those fire, and when, is [options](../guides/options.md).
 a provider, a query read two ways and a mutation that invalidates it, with
 no server. `flutter run` in that directory.
 
-For the full catalogue, every feature as its own screen against a real
-backend, see [the examples](../project/examples.md).
+For every feature as its own screen, see [the examples](examples/index.md).

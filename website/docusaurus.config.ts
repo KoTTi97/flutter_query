@@ -91,7 +91,8 @@ const config: Config = {
       logo: { alt: '', src: 'img/logo.svg', width: 26, height: 26 },
       items: [
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
-        { to: '/docs/reference/coming-from-react-query', position: 'left', label: 'From React Query' },
+        { to: '/docs/coming-from-react-query', position: 'left', label: 'From React Query' },
+        { to: '/docs/examples', position: 'left', label: 'Examples' },
         { to: '/docs/project/fidelity', position: 'left', label: 'Fidelity' },
         { to: '/docs/project/credits', position: 'left', label: 'Credits' },
         {
@@ -108,9 +109,9 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            { label: 'Installation', to: '/docs/getting-started/installation' },
-            { label: 'Your first query', to: '/docs/getting-started/first-query' },
-            { label: 'Reading a query', to: '/docs/guides/reading-a-query' },
+            { label: 'Installation', to: '/docs/installation' },
+            { label: 'Quick start', to: '/docs/quick-start' },
+            { label: 'Four ways to read a query', to: '/docs/guides/reading-queries-in-widgets' },
             { label: 'Feature matrix', to: '/docs/reference/feature-matrix' },
           ],
         },
@@ -119,7 +120,7 @@ const config: Config = {
           items: [
             { label: 'Credits, and what this is not', to: '/docs/project/credits' },
             { label: 'How fidelity is proven', to: '/docs/project/fidelity' },
-            { label: 'Examples', to: '/docs/project/examples' },
+            { label: 'How the examples are built', to: '/docs/project/examples' },
             { label: 'Contributing', href: 'https://github.com/KoTTi97/flutter_query/blob/main/CONTRIBUTING.md' },
             { label: 'Porting notes', href: 'https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md' },
           ],

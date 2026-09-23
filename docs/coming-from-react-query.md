@@ -3,7 +3,7 @@
 This page moved into the documentation site, so that there is one copy of it
 rather than two that drift:
 
-**[`website/docs/reference/coming-from-react-query.md`](../website/docs/reference/coming-from-react-query.md)**
+**[`website/docs/coming-from-react-query.md`](../website/docs/coming-from-react-query.md)**
 
 It maps every JavaScript name to its Dart counterpart — `useQuery` to the four
 equal call styles, `fetchQuery` to `QueryClient.query`, `staleTime: Infinity`

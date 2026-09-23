@@ -1,4 +1,4 @@
-/// `getting-started/first-query.md`'s first sample: a whole entrypoint.
+/// `quick-start.md`'s first sample: a whole entrypoint.
 ///
 /// Its own file, and not a function in `doc_snippets.dart`, because a Dart
 /// library holds one `main` and the page shows two roots — one handed a
@@ -12,7 +12,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 import 'doc_snippets.dart';
 
-// >>> getting-started/first-query.md#main
+// >>> quick-start.md#main
 void main() {
   runApp(
     QueryClientProvider(

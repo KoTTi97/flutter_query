@@ -54,7 +54,7 @@ const points = [
         The documentation names no default — that was a deliberate ruling.
       </>
     ),
-    to: '/docs/guides/reading-a-query',
+    to: '/docs/guides/reading-queries-in-widgets',
     cta: 'See all four',
   },
   {
@@ -68,7 +68,7 @@ const points = [
         dependency.
       </>
     ),
-    to: '/docs/guides/lifecycle-and-connectivity',
+    to: '/docs/guides/connectivity',
     cta: 'Lifecycle and connectivity',
   },
   {
@@ -81,7 +81,7 @@ const points = [
         that is a value type. One key, one exact type.
       </>
     ),
-    to: '/docs/reference/coming-from-react-query',
+    to: '/docs/coming-from-react-query',
     cta: 'The full name map',
   },
 ]
@@ -111,11 +111,11 @@ export default function Home(): ReactNode {
             <div className={styles.actions}>
               <Link
                 className="button button--primary button--lg"
-                to="/docs/getting-started/first-query"
+                to="/docs/quick-start"
               >
                 Your first query
               </Link>
-              <Link className={styles.textAction} to="/docs/">
+              <Link className={styles.textAction} to="/docs/overview">
                 What this is <span aria-hidden="true">→</span>
               </Link>
             </div>

@@ -15,19 +15,19 @@
 /// the region:
 ///
 /// ```dart
-/// // >>> guides/rebuilds.md#select-counts
+/// // >>> guides/render-optimizations.md#select-counts
 /// select: (tasks) => tasks.where((s) => s.done).length,
 /// // <<<
 /// ```
 ///
-///     ```dart snippet="guides/rebuilds.md#select-counts"
+///     ```dart snippet="guides/render-optimizations.md#select-counts"
 ///
 /// A fence that shows two declarations together names both, in the order it
 /// shows them, and they are compared with one blank line between — because a
 /// page often introduces a key and the options that use it as one block while
 /// the twin keeps each where Dart wants it:
 ///
-///     ```dart snippet="getting-started/first-query.md#key first-query.md#options"
+///     ```dart snippet="quick-start.md#key quick-start.md#options"
 ///
 /// The id rides on the fence's **metastring** rather than on an adjacent HTML
 /// comment, because an editor can move a comment away from its fence and
@@ -177,7 +177,7 @@ void main() {
         reason: 'These regions are marked in a twin and shown on no page. '
             'Delete the markers, or add the fence:\n  ${orphans.join('\n  ')}');
 
-    // The same sample may appear on two pages — `rebuilds.md` and
+    // The same sample may appear on two pages — `render-optimizations.md` and
     // `mutations.md` both show the mutation `buildWhen`, and duplicating it
     // in the twin so each page could own a copy would be the drift this file
     // exists to prevent. Twice on *one* page is still a mistake.
@@ -327,7 +327,7 @@ class _Fence {
     required this.proseOnlyReason,
   });
 
-  /// The page's path under `website/docs`, e.g. `guides/rebuilds.md`.
+  /// The page's path under `website/docs`, e.g. `guides/render-optimizations.md`.
   final String page;
   final int line;
   final List<String> lines;

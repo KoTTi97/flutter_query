@@ -1,16 +1,14 @@
 ---
 title: Coming from React Query
-sidebar_position: 1
 description: Every JavaScript name mapped to its Dart counterpart — reading a query, the client, options, infinite queries, mutations.
 ---
 
 # Coming from TanStack Query (JS)
 
-The behaviour is upstream's — the tests say so — but the surface is Dart's.
-This page maps the JavaScript names to the ones here. The source of truth for
-every deliberate difference is the divergence table at the end of
-[`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md);
-each row there names the ticket that decided it.
+The behaviour is TanStack Query's — the tests say so — but the surface is Dart's.
+This page maps the JavaScript names to the ones here. Where the port
+deliberately *behaves* differently, [differences from TanStack
+Query](reference/differences-from-tanstack.md) says how.
 
 Two rules shape most of the table:
 
@@ -35,6 +33,7 @@ alternatives — there is no recommended default, pick per situation:
 | | `context.query(options)` in any widget under a `QueryClientProvider` |
 | `useInfiniteQuery` | `InfiniteQueryBuilder` / `InfiniteQueryController` / `watchInfiniteQuery` / `context.infiniteQuery` |
 | `useMutation` | `MutationBuilder` / `MutationController` / `watchMutation` / `context.mutation` |
+| `useQueryClient()` outside a build (a handler) | `QueryClientProvider.read(context)` — the same client, without subscribing |
 | `useQueryClient()` | `QueryClientProvider.of(context)` |
 | `QueryClientProvider` | `QueryClientProvider(client: …, child: …)` |
 | `new QueryObserver(client, options)` | `client.observe(options)` or `QueryObserver(client, options)` |
@@ -100,7 +99,7 @@ alternatives — there is no recommended default, pick per situation:
 | `throwOnError` | gone: errors are the `QueryError` case of the sealed result |
 | `structuralSharing` | on by default: lists are shared element by element, maps and sets whole when deep-equal, everything else by `==`, so typed models need `==`/`hashCode`; `structuralSharing: (previous, next) => …` replaces it for the cache write and placeholder data; what `select` produced is still shared by the default comparison, because the hook is typed for the query's data and cannot be handed a selection |
 | `structuralSharing: false` | `structuralSharing: noStructuralSharing()` — off for the cache write, placeholder data and `select` output alike; a hook of your own such as `(_, next) => next` does not reach `select` |
-| `queryCache.find({ queryKey })` | `queryCache.find(filters: QueryFilters(queryKey: …))` — exact by default, as upstream; `exact: false` for a prefix |
+| `queryCache.find({ queryKey })` | `queryCache.find(filters: QueryFilters(queryKey: …))` — exact by default, as in TanStack Query; `exact: false` for a prefix |
 
 ## Infinite queries
 
@@ -110,6 +109,7 @@ alternatives — there is no recommended default, pick per situation:
 | `initialPageParam`, `getNextPageParam`, `getPreviousPageParam` | the same names on `InfiniteQueryOptions` |
 | `data.pages`, `data.pageParams` | `InfiniteData.pages`, `InfiniteData.pageParams` |
 | `hasNextPage`, `fetchNextPage()` on the result | on `InfiniteQueryObserver` / `InfiniteQueryController`; the sealed result keeps one shape |
+| `maxPages` | `maxPages` |
 
 ## Mutations
 
@@ -121,36 +121,61 @@ alternatives — there is no recommended default, pick per situation:
 | `onMutate` returning rollback context | `onMutate` returning `TOnMutateResult`, the observer's third type parameter |
 | `useMutation` without `onMutate` | `MutationOptions.simple(mutationFn: …)` — fixes the third type parameter to `void`, so the other two infer from `mutationFn` |
 | `result.context` (what `onMutate` returned, on the mutation result) | not on `MutationResult`: its job is the rollback, which `onError` and `onSettled` receive as their last argument |
+| `scope: { id }` | `scope: MutationScope(id)` |
+| — | `cancel()` on a `MutationController`, observer or `Mutation`: fails the run with a `CancelledError` — see [cancelling a mutation](guides/cancelling-mutations.md) |
+
+## Caches and events
+
+| JS | Here |
+|---|---|
+| `new QueryCache({ onError, onSuccess, onSettled })` | `QueryCache(onError: …, onSuccess: …, onSettled: …)` — final constructor arguments; see [global callbacks](guides/global-callbacks.md) |
+| `new MutationCache({ onMutate, onSuccess, onError, onSettled })` | `MutationCache(…)`, the same four |
+| `queryCache.subscribe(listener)` | `queryCache.subscribe((event) => …)`; the event is a sealed `QueryCacheEvent` — `QueryAdded`, `QueryRemoved`, `QueryUpdated`, … |
+| `meta` | `meta`, an `Object?`, on query and mutation options; `context.meta` in the function, `query.meta` in the cache callbacks |
 
 ## See it running
 
-Every row above has a screen in [the showcase](../project/examples.md)
-that shows the behaviour on a real backend, with widget tests and end-to-end
-tests that prove it. Open the app and pick the feature, or read the screen's
-file — each starts with what it shows and how it is proven:
+Every row above has a screen in [the showcase](examples/index.md)
+that shows the behaviour, with widget tests and end-to-end tests that prove
+it. Open the app and pick the feature, or read the screen's file — each
+starts with what it shows and how it is proven:
 
 | Topic | Screen |
 |---|---|
 | reading a query, the four call styles | `simple`, `four-call-styles` |
-| `select`, `buildWhen`, structural sharing | `select-and-sharing` |
+| `select`, `buildWhen`, structural sharing | `select-and-sharing`, `build-when` |
 | `initialData`, `placeholderData` | `initial-and-placeholder` |
 | `staleTime`, `gcTime` | `stale-and-gc`, `cache-inspector` |
 | `enabled` | `dependent-queries` |
 | the client's imperative surface, filters | `invalidation-and-filters`, `prefetching`, `default-query-function` |
 | infinite queries | `load-more`, `max-pages`; `pagination` for the page-numbered shape |
 | mutations, optimistic updates | `mutations`, `optimistic-updates`, `playground` |
+| cancelling a mutation, `mutationFnWithContext` | `mutation-cancel` |
 | retries, cancellation | `retry`, `cancellation` |
 | `refetchInterval`, focus, online | `auto-refetching`, `focus-refetch`, `offline` |
 | cache callbacks, `meta` | `global-callbacks` |
-| a list of queries (`useQueries`) | `query-collections` |
+| a list of queries (`useQueries`) | `query-collections`, `parallel-queries` |
+| `useQueries`' `combine` | `combine` |
 | cache-wide mutation state (`useMutationState`) | `mutation-state` |
 | the provider's knobs — `QueryClientProvider.create`, `isAppShown`, `onlineStatus`, `maybeOf` | `focus-refetch` |
 | the errors the port adds — `QueryDataTypeError`, `MissingMutationFunctionError` | `diagnostics` |
 
 ## Not here at all
 
-Persistence and hydration, `streamedQuery`,
-Suspense, SSR and
-devtools are out of the first release; [the feature matrix](feature-matrix.md)
-lists them, and [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md)
-records the reason for each.
+- **Suspense.** React-only. The sealed result is the answer: a `switch` over
+  `QueryPending` / `QuerySuccess` / `QueryError` puts the loading and error
+  states in the same place as the data, with no boundary to set up.
+- **SSR and hydration.** There is no server rendering in Flutter, so
+  `isServer`, `dehydrate`/`hydrate` and `HydrationBoundary` have nothing to
+  do.
+- **Devtools.** None. The cache is observable, though: [inspecting the
+  cache](guides/debugging.md) shows how to watch it, and the showcase's
+  `cache-inspector` screen is a small inspector built that way.
+- **Persistence.** Not in 1.0. A persister would restore entries with
+  `setQueryData` at start-up and save them from a `queryCache.subscribe`
+  listener; there is no ready-made one.
+- **`streamedQuery`.** Not ported. A stream subscription that writes into the
+  cache with `setQueryData`, or invalidates it, does the same job.
+
+[The feature matrix](reference/feature-matrix.md) lists everything that is
+out.

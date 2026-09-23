@@ -1,50 +1,11 @@
 ---
-title: Collections and side effects
-sidebar_position: 7
-description: QueriesBuilder for a list of queries, the listener widgets for side effects, and MutationStateController for cache-wide write state.
+title: Combining queries
+description: combine over a record or a list of results — the pending, error and data rules, optional sources, combineWith, CombineMemo and keys.
 ---
 
-# Collections and side effects
+{/* demo: combine */}
 
-Three widgets sit beside the [four call styles](reading-a-query.md) rather than
-among them, because none of them is a way of *reading* one query.
-
-## A list of queries
-
-`QueriesBuilder` observes a list that may change length or order — upstream's
-`useQueries`, minus the heterogeneous tuple — for which see
-[combining queries of different types](#combining-queries-of-different-types).
-
-```dart snippet="guides/collections-and-side-effects.md#queries-builder"
-Widget queriesBuilderSample(List<String> visibleIds) =>
-    QueriesBuilder<Task, String>(
-      queries: <QuerySelectOptions<Task, String>>[
-        for (final id in visibleIds)
-          QuerySelectOptions<Task, String>(
-            queryKey: taskKey(id),
-            queryFn: (context) => api.getTask(id, signal: context.signal),
-            select: (task) => task.name,
-          ),
-      ],
-      builder: (context, results) => Column(
-        children: <Widget>[
-          for (final result in results) Text(result.dataOrNull ?? '…'),
-        ],
-      ),
-    );
-```
-
-- **Observers are reused by key and occurrence**, so reordering the list starts
-  no requests.
-- **Duplicate keys** share one cache entry while keeping their own options.
-- **Each query fails and settles on its own**; one error does not disturb its
-  neighbours.
-
-It is homogeneous: one data type per collection, because a Dart `List` has
-one element type. `QueriesObserver` is the same thing without Flutter. For
-queries of **different** types, combine their results instead.
-
-## Combining queries of different types
+# Combining queries
 
 A record has a type per position, so `combine` is a function over a **record
 of results** — from `context.query`, a builder, the mixin or a controller's
@@ -52,7 +13,7 @@ of results** — from `context.query`, a builder, the mixin or a controller's
 you already have rebuild the widget, and `combine` says what they amount to
 together.
 
-```dart snippet="guides/collections-and-side-effects.md#combine"
+```dart snippet="guides/combining-queries.md#combine"
 class TaskWithComments extends StatelessWidget {
   const TaskWithComments(this.id, {super.key});
 
@@ -108,7 +69,8 @@ nothing; for a join over long lists, keep a `CombineMemo<R>` next to the reads
 (a `State` field) and pass it as `memo:`. The combiner is then skipped while
 every source holds the identical data instance — which structural sharing
 makes the normal case for a refetch that changed nothing — and an equal
-result keeps its instance, as upstream shares the output of `combine`.
+result keeps its instance, as TanStack Query shares the output of
+`combine`.
 
 A source the screen can do without is `optional()`: it never blocks and never
 fails the combination — its value is `null` until there is one — while
@@ -116,7 +78,7 @@ fails the combination — its value is `null` until there is one — while
 behind it failed. And a **list** of results of one type, a
 `QueriesController`'s value, combines by the same rules:
 
-```dart snippet="guides/collections-and-side-effects.md#combine-optional-and-lists"
+```dart snippet="guides/combining-queries.md#combine-optional-and-lists"
 CombinedResult<String> taskWithOptionalComments(
   QueryResult<Task> task,
   QueryResult<List<Comment>> comments,
@@ -140,7 +102,7 @@ error rather than an empty list. More than one extra source goes the same way
 as more than six: one list typed by what the sources have in common, cast in
 the combiner.
 
-```dart snippet="guides/collections-and-side-effects.md#combine-with"
+```dart snippet="guides/combining-queries.md#combine-with"
 CombinedResult<List<Comment>> allComments(
   QueryResult<List<Post>> feed,
   List<QueryResult<List<Comment>>> perPost,
@@ -160,57 +122,7 @@ source changes. Do that work on the combined data, after `combine` — or name
 what the combiner reads with `keys: [search]`, which is compared with `==` and
 re-runs the combiner when it differs.
 
-## Side effects
+## See it running
 
-`QueryListener`, `InfiniteQueryListener` and `MutationListener` run a callback
-on a controller they **borrow** — the owner still disposes it — and never
-rebuild their `child`.
-
-```dart snippet="guides/collections-and-side-effects.md#listener"
-Widget queryListenerSample(QueryController<Task, Task> task) =>
-    QueryListener<Task, Task>(
-      controller: task,
-      listenWhen: (previous, next) => previous.errorOrNull != next.errorOrNull,
-      listener: (context, result) => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task unreachable')),
-      ),
-      child: const SizedBox.shrink(),
-    );
-```
-
-Two properties make these safe for navigation and snackbars, which is the whole
-point of having them:
-
-- **Nothing fires on mount** — only later transitions.
-- **Callbacks are delivered off the build phase**, so a result that arrives
-  mid-build reaches the listener after the frame.
-
-A rejected `listenWhen` still advances the comparison state, so the next
-callback sees the transition it actually followed. (That is the opposite of
-`buildWhen`, where `previous` is what was last *built* — the two fields have
-genuinely different jobs.)
-
-## Cache-wide mutation state
-
-`MutationStateController` reads every mutation matching a filter through a
-`select` — upstream's `useMutationState`:
-
-```dart snippet="guides/collections-and-side-effects.md#mutation-state"
-final saving = MutationStateController<int>(
-  client,
-  filters: const MutationFilters(status: MutationStatus.pending),
-  select: (mutation) => 1,
-);
-// saving.value.length is "how many writes are in flight"
-```
-
-That is how a "saving…" badge in an app bar works without any widget owning the
-mutation. Concurrent runs under one key are kept apart.
-
-`MutationStateObserver` is the Flutter-free version.
-
-## On screen
-
-`query-collections` (a list that grows, shrinks and reorders, with duplicate
-keys and a partial failure), `mutation-state` and `global-callbacks` in the
-[showcase](../project/examples.md).
+The `combine` screen shows the rules one source at a time; see
+[examples](../examples/index.md).

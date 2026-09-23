@@ -1,8 +1,9 @@
 ---
 title: Infinite queries
-sidebar_position: 5
 description: pageFn, getNextPageParam, maxPages — and why paging lives on the controller rather than in the result.
 ---
+
+{/* demo: load-more, max-pages */}
 
 # Infinite queries
 
@@ -23,7 +24,7 @@ InfiniteQueryObserverOptions<List<Post>, int> feedQuery() =>
 
 :::note Two shapes, as with plain queries
 A *reader* takes one of two observer shapes, mirroring
-[`QueryObserverOptions` and `QuerySelectOptions`](options.md#two-shapes):
+[`QueryObserverOptions` and `QuerySelectOptions`](query-options.md#two-shapes):
 `InfiniteQueryObserverOptions<TPageData, TPageParam>`, above, has no
 `select` and its data is the whole `InfiniteData<TPageData, TPageParam>`;
 `InfiniteQuerySelectOptions<TPageData, TPageParam, TData>` has a required
@@ -67,8 +68,8 @@ On the controller: `hasNextPage`, `hasPreviousPage`, `fetchNextPage()`,
 `isFetchNextPageError`, `isFetchPreviousPageError`, `isRefetching`,
 `isRefetchError`.
 
-Those flags **notify** — a direction changing is a change a widget can see,
-which was not true of an earlier version and is now a regression test.
+Those flags **notify**: a direction starting or finishing is a change a
+widget can see, and it rebuilds.
 
 ## The data
 
@@ -91,8 +92,7 @@ argument.
 
 ## Scroll-triggered loading
 
-Worth stating because the showcase got it wrong once and CI caught it: a
-scroll listener is **level-triggered**. A view resting near the bottom keeps
+A scroll listener is **level-triggered**. A view resting near the bottom keeps
 receiving notifications — a page landing changes the content dimensions and
 sends one — so "am I near the end?" alone asks for the next page again and
 again, and how many pages you get depends on how fast the machine is.
@@ -114,9 +114,15 @@ void onScroll() {
 }
 ```
 
-## On screen
+## Related
 
-`load-more` (append on scroll, and cache survival across navigation),
-`max-pages` (both directions with `maxPages: 3`) and `pagination` (the
-page-numbered shape, with `PlaceholderData.keepPrevious()`) in the
-[showcase](../project/examples.md).
+- [Scroll restoration](scroll-restoration.md) — why a list comes back where
+  it was.
+- [Paginated queries](paginated-queries.md) — the page-numbered shape, one
+  page at a time.
+
+## See it running
+
+`load-more` (append on scroll, and cache survival across navigation) and
+`max-pages` (both directions with `maxPages: 3`) in the
+[examples](../examples/index.md).
