@@ -146,5 +146,5 @@ the config already point at `https://kotti97.github.io/query_kit/` — the
 path is the repository's name, written once as a constant at the top of
 `docusaurus.config.ts`, so a rename is one edit there — and
 `.github/workflows/pages.yml` builds and deploys it on a `query_kit-v*` tag or
-by hand. It does nothing until Pages is switched on for the repository
-(source: GitHub Actions) — that switch is the maintainer's.
+by hand. Pages is switched on for the repository (source: GitHub Actions),
+so the first such run publishes the site.

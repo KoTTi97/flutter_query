@@ -90,9 +90,7 @@ jobs:
       # top CHANGELOG entry and the dartdoc. The self-test proves the patterns.
       - name: docs jargon self-test
         run: dart run tool/check_docs_jargon.dart --self-test
-      # flip to blocking once C1/C3/C8 have landed
       - name: docs jargon
-        continue-on-error: true
         run: dart run tool/check_docs_jargon.dart
       - name: formatter
         run: dart format --set-exit-if-changed --output=none packages examples/task_manager/lib examples/task_manager/test examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test tool
