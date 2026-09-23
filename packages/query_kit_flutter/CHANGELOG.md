@@ -41,8 +41,8 @@ port, not affiliated with or endorsed by TanStack.
 **Rebuilds**
 
 - A widget rebuilds when its result changes. `select` narrows the data it
-  sees; `buildWhen`, on every builder and every keyless read, decides when it
-  rebuilds.
+  sees; `buildWhen`, taken by every builder and every read (`context.query`,
+  `watchQuery`, …), decides when it rebuilds.
 - Results that arrive during a build are delivered after the frame.
 
 **Beside the four styles**
@@ -50,7 +50,8 @@ port, not affiliated with or endorsed by TanStack.
 - `QueryListener`, `InfiniteQueryListener` and `MutationListener` for side
   effects (snackbars, navigation), with `listenWhen`.
 - `QueriesBuilder` and `QueriesController` for a dynamic list of queries;
-  `combine` over results of different types in every call style.
+  the core's `combine` over results of different types, whichever call
+  style read them.
 - `MutationStateController` (and `.typed`) for cache-wide mutation state,
   `IsFetchingController` for a global loading indicator.
 

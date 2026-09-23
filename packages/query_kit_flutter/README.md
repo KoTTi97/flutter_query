@@ -12,8 +12,9 @@ of four equal styles suits the screen. **No dependency beyond Flutter** — not
 >
 > **A port, not affiliated.** The behaviour is
 > [TanStack Query](https://tanstack.com/query)'s, and upstream's own test
-> suite is ported case for case and run against the core — with thanks to
-> Tanner Linsley and the TanStack team. This package is not affiliated with,
+> suite is ported case by case — every case left out is listed with its
+> reason — and run against the core, with thanks to Tanner Linsley and the
+> TanStack team. This package is not affiliated with,
 > endorsed by or connected to them; please take problems to
 > [this repository's issues](https://github.com/KoTTi97/flutter_query/issues),
 > not to TanStack.
@@ -121,8 +122,8 @@ tasks.dispose();
 ```
 
 A `QueryController` is a `ValueListenable<QueryResult<T>>`, so it also works
-with `ValueListenableBuilder`, `provider`, `riverpod`, `bloc` or a signals
-package, unchanged.
+with `ValueListenableBuilder` and with any state-management package that can
+listen to a `Listenable`.
 
 ### 3. A first mutation
 
@@ -179,6 +180,30 @@ Mutations come in the same four styles: `context.mutation`, `watchMutation`,
   `MutationStateController` for a "saving…" badge.
 - **Testable without magic**: controllers work without widgets, and widget
   tests need only a short, documented teardown.
+
+## Connectivity
+
+Nothing listens to the network by default. Pass an `OnlineStatus` and the
+client follows it — here with `connectivity_plus`, which stays your
+dependency:
+
+```dart snippet="prose-only: needs connectivity_plus, which neither published package may depend on"
+// Built once: a stream built in `build` would be resubscribed on every rebuild.
+final connectivity = Connectivity()
+    .onConnectivityChanged
+    .map((results) => !results.contains(ConnectivityResult.none));
+
+QueryClientProvider(
+  client: client,
+  onlineStatus: OnlineStatus.stream(connectivity, initial: online),
+  child: const MyApp(),
+)
+```
+
+`initial` is required because a stream has no current value; answer it at
+startup with `Connectivity().checkConnectivity()`. Use a broadcast stream.
+`connectivity_plus` reports a *link*, not reachability: a captive-portal
+wifi counts as connected.
 
 ## Widget tests
 

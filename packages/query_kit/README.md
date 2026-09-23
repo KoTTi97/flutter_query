@@ -14,8 +14,9 @@ re-exports all of this.
 >
 > **A port, not affiliated.** The behaviour is
 > [TanStack Query](https://tanstack.com/query)'s, and upstream's own test
-> suite is ported case for case and run against this code — with thanks to
-> Tanner Linsley and the TanStack team. This package is not affiliated with,
+> suite is ported case by case — every case left out is listed with its
+> reason — and run against this code, with thanks to Tanner Linsley and the
+> TanStack team. This package is not affiliated with,
 > endorsed by or connected to them; please take problems to
 > [this repository's issues](https://github.com/KoTTi97/flutter_query/issues),
 > not to TanStack.
@@ -33,10 +34,11 @@ Dart SDK 3.6 or later. In a Flutter app, add `query_kit_flutter` instead
 
 ### Create a client
 
-One `QueryClient` holds the cache. Mounting it lets it react to focus and
-connectivity changes — refetch on focus and on reconnect, resume paused
-mutations. The Flutter binding does this for you; in pure Dart it is your
-call.
+One `QueryClient` holds the cache. Mounting it lets it react to the focus
+and connectivity changes its `focusManager` and `onlineManager` report —
+refetch on focus and on reconnect, resume paused mutations. The Flutter
+binding mounts the client and feeds both managers for you; in pure Dart
+nothing reports a change until you do (`client.onlineManager.setOnline`).
 
 ```dart snippet="packages/query_kit/README.md#setup"
 final client = QueryClient();
@@ -125,14 +127,16 @@ Unsubscribe (or `destroy()`) observers first: an observer with a
 - **Background refetching** on focus, on reconnect, on an interval, and after
   invalidation.
 - **Retries** with exponential backoff, and **cancellation** through
-  `QueryCancelToken`, which you can hand to `dio` or any other client.
+  `QueryCancelToken`, whose `onCancel` hook wires into `dio`'s `CancelToken`
+  or any other client that can abort a request.
 - **Mutations** with `onMutate` / `onSuccess` / `onError` / `onSettled`,
   optimistic updates and rollback, serialised writes through
   `MutationScope`, and paused mutations that resume when you are back online.
 - **Infinite queries** with `fetchNextPage` / `fetchPreviousPage` and
   `maxPages`.
 - **Initial and placeholder data**, `select` to derive what a reader sees,
-  and **structural sharing**, so an unchanged refetch keeps your instances.
+  and **structural sharing**, so an unchanged refetch keeps your lists and
+  maps — and, through `StructurallyShareable`, your own classes.
 - **Lists and combinations of queries**: `QueriesObserver` for a dynamic
   list, and `(a, b).combine(…)` for results of different types.
 - **Cache-wide state**: `isFetching`, `isMutating`, `MutationStateObserver`,
@@ -140,7 +144,7 @@ Unsubscribe (or `destroy()`) observers first: an observer with a
 - **Dart-first types**: sealed results, sealed option values (`StaleTime`,
   `RetryPolicy`, `Enabled`, …) instead of magic numbers, and `QueryKey` as a
   value type. A key is bound to one data type, and a mismatched read throws
-  a `QueryDataTypeError` naming the cure.
+  a `QueryDataTypeError` naming both types.
 - **Testable**: time goes through `package:clock`, so `fake_async` controls
   every timer.
 

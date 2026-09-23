@@ -1,3 +1,8 @@
+// query_kit is an entirely AI-coded project: all code, tests and
+// documentation were written by AI coding agents (Anthropic's Claude). A
+// human maintainer set the goals and reviews releases, but did not write the
+// code.
+//
 // A pure-Dart tour of the core: one imperative fetch, one observer, a cache
 // write, an invalidation, and the cleanup that lets the process exit.
 //

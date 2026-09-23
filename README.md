@@ -2,7 +2,8 @@
 
 TanStack Query for Dart and Flutter: cached server state with background
 refetching, retries, cancellation, mutations and infinite queries — a port of
-TanStack Query's `query-core`, proven by porting upstream's own test suite.
+TanStack Query's `query-core`, checked against upstream's own test suite,
+ported case by case.
 
 > **query_kit is an entirely AI-coded project: all code, tests and
 > documentation were written by AI coding agents (Anthropic's Claude). A human
