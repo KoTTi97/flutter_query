@@ -61,10 +61,12 @@ themselves.
 ## It was written by AI
 
 :::warning[An AI-written project]
-Effectively **all** of the code, the tests and the documentation in this
-repository were written by AI agents, working from a plan the agents also
-wrote. A human is in the loop only rarely.
+query_kit is an entirely AI-coded project: all code, tests and documentation
+were written by AI coding agents (Anthropic's Claude). A human maintainer set
+the goals and reviews releases, but did not write the code.
 :::
+
+The agents also wrote the plan they worked from.
 
 That is not a disclaimer bolted on afterwards; it is how the project was run,
 and the repository records it. Every decision is settled by an agent, and the
@@ -72,7 +74,7 @@ record states the options, the answer, and why it beats the alternatives, so
 any call can be reopened from the record alone. The plan, its decisions and
 the research behind them are all public.
 
-What the human actually decided is a short list: the destination; that the
+What the maintainer decided is a short list: the destination; that the
 binding's API shape would offer four equal call styles with no recommended
 default; and that neither published package may require a third-party
 dependency. Everything else — the architecture, the divergences, the test

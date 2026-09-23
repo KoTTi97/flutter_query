@@ -3,8 +3,6 @@ title: Without Flutter
 description: Using query_kit on its own — observers, subscribe, and the one thing you have to do yourself.
 ---
 
-{/* demo: simple */}
-
 # Without Flutter
 
 `query_kit` has no Flutter dependency. A CLI, a server, a shared package, a
@@ -47,6 +45,15 @@ final unsubscribe = observer.subscribe((result) {
   }
 });
 ```
+
+The result is the same sealed `QueryResult` a Flutter widget switches over;
+the binding's readers are this observer with a widget's lifetime around it.
+The *Simple* example is that Flutter version of one query: press the refetch
+button and watch the post stay on screen while the *refreshing* pill shows
+and the strip's `fetches` goes up — every one of those facts is a field of
+the result above.
+
+<LiveDemo feature="simple" />
 
 `client.observeInfinite` is the same for an infinite query. `QueriesObserver`
 observes a list; `MutationObserver` and `MutationStateObserver` are the write

@@ -1,19 +1,22 @@
 ---
 title: Debugging
-description: There are no devtools — what the cache can tell you instead, by subscribing to its events or reading its entries.
+description: There are no devtools — what the cache can tell you instead, by subscribing to its events, reading its entries, or putting a small inspector on screen.
 ---
-
-{/* depth: todo */}
-{/* demo: cache-inspector, diagnostics */}
 
 # Debugging
 
-There is no devtools panel. The cache can tell you everything one would show,
-though: every entry, its state and its observers.
+"Why did this refetch?", "is this still cached?", "who is holding that
+query?" — in React, the devtools panel answers these. query_kit has no
+devtools package, but everything such a panel shows is public: every entry of
+the cache, its state, its readers, and an event for every change. This page
+turns that into a log line, a small on-screen inspector, and a list of what
+the library throws when something is wrong.
 
 ## Listening to the cache
 
-`queryCache.subscribe` reports every change as a `QueryCacheEvent`:
+`client.queryCache.subscribe` calls you back with a `QueryCacheEvent` for
+every change and returns the function that unsubscribes. Put it next to the
+client, in `lib/main.dart`, under `kDebugMode`:
 
 ```dart snippet="guides/debugging.md#subscribe"
 void Function() logCacheEvents(QueryClient client) =>
@@ -33,25 +36,154 @@ void Function() logCacheEvents(QueryClient client) =>
     });
 ```
 
-The function it returns unsubscribes. The events are `QueryAdded`,
-`QueryRemoved`, `QueryUpdated`, `QueryObserverAdded`, `QueryObserverRemoved`,
-`QueryObserverOptionsUpdated` and `QueryObserverResultsUpdated`; the mutation
-cache has its own `subscribe`. Call it once, at start-up, under
-`kDebugMode`.
+The events, each carrying the `query` it is about:
+
+| Event | When |
+|---|---|
+| `QueryAdded` | an entry is created — by a reader, `client.query` or `setQueryData` |
+| `QueryRemoved` | an entry leaves the cache — garbage collection, `removeQueries`, `clear` |
+| `QueryUpdated` | the entry's state changed; its `action` says how (a fetch started, succeeded, failed, paused, was invalidated, …) |
+| `QueryObserverAdded` / `QueryObserverRemoved` | a reader subscribed or left |
+| `QueryObserverOptionsUpdated` | a reader was handed options — on **every build** of every reader |
+| `QueryObserverResultsUpdated` | a reader was handed a new result |
+
+The last two are about readers, not about the cache, and the first of them
+fires on every rebuild: leave both out of a log, or it grows with nobody
+touching the screen. `client.mutationCache.subscribe` is the same for
+mutations, with `MutationAdded`, `MutationRemoved`, `MutationUpdated` and the
+observer events. The full lists, with the actions, are on [caches and
+observers](../reference/caches-and-observers.md).
+
+Only a log? The cache-wide callbacks are shorter: `QueryCache(onError: …)`
+runs once per fetch that fails for good, whichever widget asked. See [global
+callbacks](global-callbacks.md).
 
 ## Reading the cache
 
-- `client.queryCache.queries` — every entry right now.
-- `query.state` — `status`, `fetchStatus`, `dataUpdatedAt`, `error`,
-  `consecutiveErrorCount`, `isInvalidated`.
-- `query.observersCount` — how many readers hold it. An entry with none is
-  waiting for garbage collection.
-- `query.isStale()` — whether the next trigger would refetch it.
-- `key.debugString` — the key, readable.
+What an inspector reads, all public:
 
-A screen that lists these is a devtools of your own; the `cache-inspector`
-screen in the [examples](../examples/index.md) is one, and `diagnostics`
-shows the type errors and debug-build assertions the library raises.
+- `client.queryCache.queries` — every entry right now.
+- `query.state` — `status`, `fetchStatus`, `dataUpdatedAt`, `dataUpdateCount`,
+  `error`, `fetchFailureCount`, `consecutiveErrorCount`, `isInvalidated`.
+- `query.observersCount` — how many readers hold it. An entry with none is
+  waiting for garbage collection, `gcTime` after its last reader left.
+- `query.isStale()` — whether the next trigger would refetch it.
+- `query.options` — the options it runs with, every default filled in.
+- `key.debugString` — the key, readable.
+- `client.isFetching()` and `client.isMutating()` — how much is in flight.
+
+## A small inspector
+
+A widget that lists the cache and rebuilds on its events, to drop into a
+debug drawer or behind a long-press. It lives in your app, for instance in
+`lib/debug/cache_inspector.dart`:
+
+```dart snippet="guides/debugging.md#inspector"
+/// Every entry of the query cache, one line each. For debug builds.
+class CacheInspector extends StatefulWidget {
+  const CacheInspector({super.key});
+
+  @override
+  State<CacheInspector> createState() => _CacheInspectorState();
+}
+
+class _CacheInspectorState extends State<CacheInspector> {
+  QueryClient? _client;
+  void Function()? _unsubscribe;
+  bool _rebuildPending = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final client = QueryClientProvider.of(context);
+    if (client == _client) return;
+    _unsubscribe?.call();
+    _client = client;
+    _unsubscribe = client.queryCache.subscribe((event) {
+      // About the readers, not the cache — and the first fires on every
+      // reader's build.
+      if (event is QueryObserverOptionsUpdated ||
+          event is QueryObserverResultsUpdated) {
+        return;
+      }
+      _rebuildAfterFrame();
+    });
+  }
+
+  /// An event can arrive while a frame is being built, when `setState` is
+  /// not allowed; rebuild once that frame is done, however many came.
+  void _rebuildAfterFrame() {
+    if (_rebuildPending) return;
+    _rebuildPending = true;
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) {
+        _rebuildPending = false;
+        if (mounted) setState(() {});
+      })
+      ..scheduleFrame();
+  }
+
+  @override
+  void dispose() {
+    _unsubscribe?.call();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final query in _client!.queryCache.queries)
+            Text(
+              '${query.queryKey.debugString} '
+              '${query.state.status.name}/${query.state.fetchStatus.name} '
+              'observers=${query.observersCount} '
+              'stale=${query.isStale()}',
+            ),
+        ],
+      );
+}
+```
+
+It reads the cache directly and holds no observer, so it never keeps an entry
+alive or triggers a fetch — what it shows is what the cache holds.
+
+The *Cache inspector* example is a fuller version: a table of every entry
+with *Refetch*, *Invalidate* and *Remove* buttons, the mutations, and the
+event log. Press *Load posts*, then *Invalidate* on its row and watch the
+log; switch on *Keep readers* and see `observers` go to one, then off again
+and watch the entry disappear five seconds later.
+
+<LiveDemo feature="cache-inspector" />
+
+## What the library throws
+
+Some mistakes fail loudly rather than showing up as wrong data:
+
+- **`QueryDataTypeError`** — a key holds exactly one type, and reading or
+  writing it as another throws at the call. The message names the key, the
+  type asked for and the type held. Usually two options functions share a
+  key; see [type safety in Dart](../dart-type-safety.md#one-key-one-exact-type).
+- **`MissingQueryFunctionError`** and **`MissingMutationFunctionError`** — a
+  query or mutation ran with no function and no default registered for its
+  key. They become the error state, and are not retried.
+- **Assertions in debug builds** — for example, `context.query` read through
+  a `ListView.builder`'s item context. Each message says what to do instead.
+
+In the *Diagnostics* example, press *Read as String* and *Write a String*
+against an `int` entry, then *Mutate without a function*, and *Register a
+default mutationFn* to see the same mutation succeed.
+
+<LiveDemo feature="diagnostics" />
+
+Every error, with when it is thrown, is on the [errors
+reference](../reference/errors.md).
+
+:::note[In React Query]
+The React devtools (`@tanstack/react-query-devtools`) have no counterpart
+here. The events they are built on are the same: `queryCache.subscribe` and
+`mutationCache.subscribe`, with the same event names in Dart class form.
+:::
 
 ## Common surprises
 

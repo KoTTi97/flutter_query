@@ -186,7 +186,7 @@ with data from before it.
 **Mechanism.** `client.query` joins a fetch already in flight for the key —
 one that may have started before your write — rather than starting another,
 and a cancelled fetch that reverts resolves it with the reverted data.
-`fetchQuery` does the same.
+TanStack Query's `fetchQuery` does the same.
 
 **Fix.** `await client.refetchQueries(filters: QueryFilters(queryKey: key))`,
 whose `cancelRefetch` defaults to `true`, then read the cache.
@@ -199,7 +199,7 @@ either.
 
 **Mechanism.** The options a call hands in become the query's options, as an
 observer's do: the cache entry is shared and refetches with what it was last
-given. `fetchQuery` is the same. Only the no-retry default of a
+given, as with TanStack Query's `fetchQuery`. Only the no-retry default of a
 call that configured nothing is limited to that one fetch.
 
 **Fix.** Leave `retry` out of the imperative call when it should not stick,

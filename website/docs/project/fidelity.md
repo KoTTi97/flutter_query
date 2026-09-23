@@ -33,14 +33,19 @@ so the ported tests and the behaviour they check describe the same version.
 
 ## What is ported
 
+**414 of the 536** upstream cases in seventeen suites are ported:
+
 | upstream suite | ported | upstream suite | ported |
 |---|---|---|---|
 | `query` | 44 / 51 | `mutation` | 28 / 28 |
 | `queryCache` | 14 / 16 | `mutationCache` | 16 / 16 |
 | `queryObserver` | 64 / 75 | `mutationObserver` | 16 / 16 |
 | `queryClient` | 106 / 156 | `infiniteQueryBehavior` | 7 / 9 |
-| `retryer` | 13 / 13 | `infiniteQueryObserver` | 6 / 7 |
-| `queriesObserver` | 12 / 23 | | |
+| `queriesObserver` | 12 / 23 | `infiniteQueryObserver` | 6 / 7 |
+| `retryer` | 13 / 13 | `utils` | 48 / 78 |
+| `subscribable` | 9 / 9 | `removable` | 11 / 12 |
+| `notifyManager` | 6 / 7 | `focusManager` | 7 / 9 |
+| `onlineManager` | 7 / 11 | | |
 
 The gap is almost entirely React-specific tests, JavaScript-helper tests with
 no Dart counterpart, and features [deliberately not
@@ -90,7 +95,8 @@ information survives.
 ## What the examples found
 
 Two library bugs that no ported test could reach, because neither is visible
-without a real widget: a read whose key changed lost `keepPreviousData`, and
+without a real widget: a read whose key changed lost its
+`PlaceholderData.keepPrevious()` placeholder, and
 `structuralSharing` was invisible to every reader because the observer
 re-shared the cache's data against its own last result. Both were reproduced in
 the library's own suite before anything was changed.

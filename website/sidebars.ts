@@ -123,6 +123,12 @@ const sidebars: SidebarsConfig = {
       label: 'API reference',
       items: [
         'reference/api',
+        'reference/query-client',
+        'reference/query-options',
+        'reference/results',
+        'reference/widgets-and-controllers',
+        'reference/caches-and-observers',
+        'reference/errors',
         'reference/feature-matrix',
         'reference/troubleshooting',
         'reference/differences-from-tanstack',
