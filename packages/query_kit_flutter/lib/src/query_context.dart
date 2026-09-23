@@ -66,8 +66,9 @@ import 'read_set.dart';
 /// selectors of the same output type; reading two of them without one is
 /// caught in debug builds.
 ///
-/// An `id` is then the read's whole identity: a read that carries one keeps
-/// its observer when its key changes. That is what
+/// An `id` then takes the key's place in the read's identity (the types
+/// stay part of it): a read that carries one keeps its observer when its key
+/// changes. That is what
 /// `PlaceholderData.compute((previous, _) => previous)` needs to keep showing
 /// the previous key's data while the next key loads; without an `id`, a new
 /// key is a new observer with nothing previous to show.
@@ -101,9 +102,10 @@ import 'read_set.dart';
 ///   `LayoutBuilder` callback runs later than `build`, and it releases
 ///   nothing the widget's own build read. A key such a callback stops reading
 ///   stays subscribed until the widget's next own build that reads through
-///   this context, or its unmount — and a `build` that reads nothing itself
-///   never starts over. Read in `build`, or give the nested part a widget of
-///   its own.
+///   this context, or its unmount. A `build` that reads nothing itself never
+///   starts over: those keys stay until the parent rebuilds this widget
+///   (hands it a new widget instance), or it unmounts. Read in `build`, or
+///   give the nested part a widget of its own.
 /// * **A `LayoutBuilder`'s own context.** Reads through the `context` a
 ///   `LayoutBuilder`, `SliverLayoutBuilder` or `OrientationBuilder` hands its
 ///   builder start over whenever that builder provably runs: its constraints

@@ -38,8 +38,9 @@ import 'query_client_provider.dart';
 /// * **Homogeneous**: one data type per collection, because a Dart `List`
 ///   has one element type. For queries of different types, read each one
 ///   and combine their results.
-/// * **The list is re-applied on every build**, as the single-query builders
-///   re-apply their options; an unchanged list moves nothing.
+/// * **The list is re-applied whenever the parent rebuilds this widget**, as
+///   the single-query builders re-apply their options; an unchanged list
+///   moves nothing.
 ///
 /// **No `buildWhen`.** There is no single result to filter on: a predicate
 /// over the whole list would fire for any query in it and say nothing about
@@ -63,8 +64,8 @@ class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
   });
 
   /// The queries to observe, in the order their results are handed to
-  /// [builder]. Re-applied on every build; duplicate keys keep independent
-  /// observer options.
+  /// [builder]. Re-applied whenever the parent rebuilds this widget;
+  /// duplicate keys keep independent observer options.
   final List<QueryObserverOptionsBase<TQueryData, TData>> queries;
 
   /// Builds from the results, one per entry of [queries] in the same order —

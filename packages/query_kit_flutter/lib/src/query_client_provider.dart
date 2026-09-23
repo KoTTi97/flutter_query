@@ -148,12 +148,14 @@ class QueryClientProvider extends StatefulWidget {
   ///
   /// [OnlineStatus.initial] is applied whenever a client is given this
   /// status: at mount, to a client that arrives on a later build, and on
-  /// any later build that changes the status — with one exception, one stream
-  /// swapped for another, where the client already has a verdict from a live
-  /// source and rewinding it to `initial` would flicker for anyone building
-  /// their stream in `build`. That is also why a [OnlineStatus.fixed] works
-  /// as a live switch: having no stream, applying it is the only way it can
-  /// reach the client.
+  /// any later build that changes the status — except where a live stream
+  /// already has a verdict. A stream that delivers while it is being
+  /// listened to is believed over its `initial`; a client that arrives under
+  /// the same stream starts from that stream's last event; and one stream
+  /// swapped for another keeps the client's verdict, since rewinding it to
+  /// `initial` would flicker for anyone building their stream in `build`.
+  /// That is also why a [OnlineStatus.fixed] works as a live switch: having
+  /// no stream, applying it is the only way it can reach the client.
   final OnlineStatus? onlineStatus;
 
   /// Whether to map the app's lifecycle onto the client's focus state.

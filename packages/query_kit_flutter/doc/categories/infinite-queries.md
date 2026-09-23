@@ -1,0 +1,1 @@
+Paged data in the same four styles: `context.infiniteQuery`, `QueryMixin.watchInfiniteQuery`, `InfiniteQueryBuilder` and `InfiniteQueryController`. Each gives you an `InfiniteQueryController`, which holds the pages in its `value` and loads more with `fetchNextPage` and `fetchPreviousPage`.

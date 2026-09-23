@@ -26,8 +26,9 @@ import 'query_controller.dart';
 ///
 /// It is asked only when the value really changed: a notification carrying
 /// what the reader is already showing never rebuilds, predicate or not. When
-/// it returns `false`, the reader keeps showing [previous], and the next
-/// change is compared against that.
+/// it returns `false`, the reader keeps showing [previous] — unless something
+/// else rebuilds it — and the next change is compared against what it
+/// shows.
 ///
 /// ```dart
 /// // Rebuild only when the task's name changes:

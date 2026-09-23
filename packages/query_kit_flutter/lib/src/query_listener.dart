@@ -46,10 +46,11 @@ typedef ListenWhen<T> = bool Function(T previous, T next);
 ///   transition.
 /// * **Outside the build phase**, in a microtask after the notification, so
 ///   it may show a dialog, navigate or call `setState`. Each transition is
-///   delivered with the value it carried, not the latest one.
-/// * **Once per notification, with the latest value.** Two cache writes
-///   inside one `notifyManager.batch` are one transition to the second
-///   value, not two.
+///   delivered with the value it carried, even when a later one has arrived
+///   by the time the microtask runs.
+/// * **Once per notification.** Two cache writes inside one
+///   `notifyManager.batch` notify once, so they are one transition, to the
+///   second value — not two.
 /// * **[listenWhen] sees every transition**, and a rejected one still moves
 ///   the "previous" the next one is compared against.
 ///

@@ -1,0 +1,1 @@
+The same four styles for mutations: `context.mutation`, `QueryMixin.watchMutation`, `MutationBuilder` and `MutationController`. Each hands you a `MutationController` to start a run with `mutate` or `mutateAsync`; disposing it does not cancel a run in flight, `cancel` does.

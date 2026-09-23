@@ -3,6 +3,21 @@ dartdoc:
   # "Mutations" and "Infinite queries" each list all four call styles — read
   # in build (`QueryContext`), `QueryMixin`, the builder widgets and the
   # controllers — side by side, as equal alternatives; none is the default.
+  categories:
+    "Setup":
+      markdown: doc/categories/setup.md
+    "Reading queries":
+      markdown: doc/categories/reading-queries.md
+    "Mutations":
+      markdown: doc/categories/mutations.md
+    "Infinite queries":
+      markdown: doc/categories/infinite-queries.md
+    "Collections":
+      markdown: doc/categories/collections.md
+    "Side effects":
+      markdown: doc/categories/side-effects.md
+    "Connectivity & lifecycle":
+      markdown: doc/categories/connectivity-and-lifecycle.md
   categoryOrder:
     - "Setup"
     - "Reading queries"

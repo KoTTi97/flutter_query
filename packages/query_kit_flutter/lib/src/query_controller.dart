@@ -273,8 +273,9 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
 /// ```
 ///
 /// No type arguments at the call site: either options shape carries all
-/// three, and inference reads them off it — `InfiniteQueryObserverOptions<List<Post>, int>`
-/// makes an `InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>`.
+/// three, and inference reads them off it:
+/// `InfiniteQueryObserverOptions<List<Post>, int>` makes an
+/// `InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>`.
 ///
 /// {@category Infinite queries}
 class InfiniteQueryController<TPageData, TPageParam, TData>

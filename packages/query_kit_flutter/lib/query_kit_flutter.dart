@@ -45,7 +45,9 @@
 ///     );
 /// ```
 ///
-/// **3. Read it**, and **4. change it with a mutation** that invalidates it:
+/// **3. Read it**, and **4. change it with a mutation** that invalidates it.
+/// This one reads in `build` with `context.query`; any of the four call
+/// styles below reads the same options the same way:
 ///
 /// ```dart
 /// class TasksScreen extends StatelessWidget {

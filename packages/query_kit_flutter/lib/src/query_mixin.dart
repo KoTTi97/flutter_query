@@ -58,11 +58,12 @@ import 'read_set.dart';
 /// `if` is fine. What that identity does *not* tell apart — two reads of one
 /// key with different selectors of the same output type, or two mutations of
 /// the same shape, the same `mutationKey` included — takes an `id:`, and
-/// reading two of them without one is caught in debug builds. An `id` is
-/// then the read's whole identity: the read keeps its observer when its key
-/// changes, which is what `PlaceholderData.compute((previous, _) =>
-/// previous)` needs to keep showing the previous key's data while the next
-/// loads.
+/// reading two that differ without one is caught in debug builds (see
+/// [watchMutation] for what a mutation is compared by). An `id` then takes
+/// the key's place in the read's identity, the types staying part of it:
+/// the read keeps its observer when its key changes, which is what
+/// `PlaceholderData.compute((previous, _) => previous)` needs to keep
+/// showing the previous key's data while the next loads.
 ///
 /// ## When a read is released
 ///
