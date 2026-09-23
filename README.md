@@ -9,7 +9,7 @@ ported case by case.
 > documentation were written by AI coding agents (Anthropic's Claude). A human
 > maintainer set the goals and reviews releases, but did not write the
 > code.** What stands in for a human author is adversarial checking:
-> upstream's test suite ported case for case, repeated review rounds run by
+> upstream's test suite ported case by case, repeated review rounds run by
 > independent AI agents, and a rule that no reported finding is acted on
 > before it has been reproduced. Judge it on that basis; the evidence is in
 > this repository.
@@ -62,8 +62,9 @@ rendering and devtools.
 
 **This is a port of [TanStack Query](https://tanstack.com/query)** — not a
 library that was inspired by it in passing. The behaviour is upstream's, the
-architecture is upstream's, and upstream's own test suite is ported case for
-case and run against this code. That is the entire point of the project.
+architecture is upstream's, and upstream's own test suite is ported case by
+case — every case left out is listed with its reason — and run against this
+code. That is the entire point of the project.
 
 **Thank you to Tanner Linsley and to everyone who has built, maintained and
 supported TanStack Query.** This repository exists for one reason: we used

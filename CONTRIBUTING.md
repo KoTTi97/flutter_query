@@ -21,8 +21,8 @@ first because everything else follows from it.
 ## The unusual rule: fidelity is proven, not asserted
 
 This is a port. Its claim is that it behaves the way TanStack Query behaves,
-and the evidence is that upstream's own test suite runs against it, case for
-case. So:
+and the evidence is that upstream's own test suite, ported case by case, runs
+against it — with every case left out listed and its reason given. So:
 
 - **When a ported test fails, the assumption is that the port is wrong, not
   the test.** Change an assertion only when a design decision genuinely makes
@@ -85,7 +85,7 @@ cd examples/doc_snippets && flutter test
 ```
 
 ```bash
-dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test tool
+dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test examples/task_manager/lib examples/task_manager/test tool
 ```
 
 CI runs the same gates plus `dart doc`, both publish dry-runs, a web build of
