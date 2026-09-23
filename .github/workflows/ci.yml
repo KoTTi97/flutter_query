@@ -25,8 +25,10 @@ jobs:
       - name: example dependencies
         run: flutter pub get
         working-directory: packages/query_kit_flutter/example
+      # Both suites record line coverage as they run; the `coverage floors`
+      # step below reads it.
       - name: core tests
-        run: dart test
+        run: dart test --coverage=${{ runner.temp }}/core-coverage
         working-directory: packages/query_kit
       # The port serves the web as a first-class target, and two reviews found
       # bugs only a JavaScript runtime shows (32-bit timers, int/double being
@@ -35,8 +37,24 @@ jobs:
         run: dart test --platform chrome
         working-directory: packages/query_kit
       - name: binding tests
-        run: flutter test
+        run: flutter test --coverage --coverage-path=${{ runner.temp }}/binding.lcov
         working-directory: packages/query_kit_flutter
+      # The binding compiled to JavaScript as well. One case reads the barrel
+      # through dart:io and is tagged `vm-only` (see its dart_test.yaml).
+      - name: binding tests, compiled to JavaScript
+        run: flutter test --platform chrome --exclude-tags vm-only
+        working-directory: packages/query_kit_flutter
+      # Each floor is the line coverage the suites reached when it was set,
+      # rounded down to a tenth (core 99.83 %, binding 99.77 %, measured on
+      # this Flutter version). The eight lines left are defensive branches no
+      # public path reaches (PORTING_NOTES, "Release 1.0 test gaps"); raise a
+      # floor, never lower it to make a change pass.
+      - name: coverage floors
+        run: |
+          dart pub global activate coverage
+          (cd packages/query_kit && dart pub global run coverage:format_coverage --lcov --in=${{ runner.temp }}/core-coverage --out=${{ runner.temp }}/core.lcov --report-on=lib)
+          dart run tool/check_coverage.dart ${{ runner.temp }}/core.lcov 99.8 --files
+          dart run tool/check_coverage.dart ${{ runner.temp }}/binding.lcov 99.7 --files
       - name: demo tests
         run: flutter test
         working-directory: examples/task_manager
@@ -67,6 +85,15 @@ jobs:
       - name: binding docs
         run: dart doc --validate-links
         working-directory: packages/query_kit_flutter
+      # Internal bookkeeping — review rounds, dates, finding and ticket IDs,
+      # the upstream pin — in what a user reads: the site, the READMEs, the
+      # top CHANGELOG entry and the dartdoc. The self-test proves the patterns.
+      - name: docs jargon self-test
+        run: dart run tool/check_docs_jargon.dart --self-test
+      # flip to blocking once C1/C3/C8 have landed
+      - name: docs jargon
+        continue-on-error: true
+        run: dart run tool/check_docs_jargon.dart
       - name: formatter
         run: dart format --set-exit-if-changed --output=none packages examples/task_manager/lib examples/task_manager/test examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test tool
       - name: demo web build

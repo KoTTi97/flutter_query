@@ -90,7 +90,12 @@ dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-c
 
 CI runs the same gates plus `dart doc`, both publish dry-runs, a web build of
 each example, the documentation site, the two Playwright end-to-end suites and
-the whole suite again on the declared Flutter floor. The examples' READMEs say
+the whole suite again on the declared Flutter floor. It also holds line
+coverage to a floor (`tool/check_coverage.dart`; raise it, never lower it)
+and keeps internal bookkeeping — review rounds, dates, finding and issue
+numbers — out of what a user reads (`tool/check_docs_jargon.dart`); a line
+that must keep such a reference carries `<!-- jargon-ok -->`,
+`{/* jargon-ok */}` in MDX, or `// jargon-ok` in a doc comment. The examples' READMEs say
 how to run their backends and their browser suites locally.
 
 ## Conventions that are load-bearing

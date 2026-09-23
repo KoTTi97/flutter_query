@@ -1631,7 +1631,8 @@ void main() {
 
       expect(hidden('query_controller'), {'ObservedState', 'observedStateOf'});
       expect(hidden('query_context'), {'QueryScope', 'QueryScopeElement'});
-    });
+      // Reads the barrel through dart:io: excluded from the browser run.
+    }, tags: 'vm-only');
   });
 
   // The three regions of the reader registry the suite did not reach before

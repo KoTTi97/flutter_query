@@ -1,0 +1,4 @@
+tags:
+  # Reads a source file through dart:io, which a browser does not have. The
+  # CI's `flutter test --platform chrome` step excludes it; the VM run keeps it.
+  vm-only:

@@ -6587,3 +6587,88 @@ second case was green there and guards the reorder.
 - core 826; task_manager 32, showcase 247, doc_snippets 9.
 
 All green.
+
+## Release 1.0 test gaps (2026-09-23)
+
+Chunk C9 of the release-1.0 pass closed the coverage gaps the demos-and-tests
+audit listed, and put a floor under them in CI. No production code changed;
+nothing here is a ported case, so every file is port-only.
+
+**What was added.**
+
+- `value_semantics_test.dart` (core) — the value contract of every public
+  value class, as tables. Each table sets every field to a non-default value
+  and then changes one field at a time, so a field forgotten in a
+  constructor, `toString`, `copyWith`, a subclass, a `Defaulted*` class's
+  `==`/`hashCode`, the client's defaulting or `withSelect` fails a row by
+  name — the nine places an option field is written out. Covered: the sealed
+  option values, `QueryDefaults`/`MutationDefaults`/`DefaultOptions` (with
+  `mergedWith` per field), `QueryState`, `QueryResult` and `MutationResult`
+  per variant, `CombinedResult`, `QueryOptions`, both observer shapes and
+  their select twins, the three infinite shapes, and the client's resolution
+  of each into its `Defaulted*` class. The field lists were checked against
+  the classes' fields in `lib/`; `behavior`, which no `copyWith` takes, has a
+  case of its own (a copy must carry it), and `QueryState`'s two stack traces
+  are pinned as *not* compared — a `StackTrace` compares by identity.
+- `coverage_gaps_test.dart` (core) — error paths and messages a user reads
+  (`MissingQueryFunctionError`, `MissingMutationFunctionError`,
+  `QueryDataTypeError` without a key), the retryer cancelled from inside its
+  own retry decision (the policy, the delay, `onFail` with `immediately`),
+  `QueriesObserver.getOptimisticResult`, a placeholder through the query's
+  sharing hook, a removed mutation refused by `MutationCache.add`, and a
+  reconnect resume that throws reaching the zone.
+- `coverage_gaps_test.dart` (binding) — `QueryController.refetch`, every
+  paging flag of `InfiniteQueryController`, `MutationController.reset`, a
+  throwing `QueryListener` reported to `FlutterError`, an `onlineStatus`
+  stream error, the desktop lifecycle mapping without `isAppShown`, a client
+  swapped under lifecycle observation and under a `QueriesBuilder` its parent
+  does not rebuild, and the sliver arm of the layout-builder rule (a resize
+  re-runs the builder without its parent; the next write still reaches it).
+
+**Coverage**, lines, `dart test --coverage` + `format_coverage
+--report-on=lib` and `flutter test --coverage`, Flutter 3.38.8:
+
+| Package | Before | After | Lines left |
+|---|---|---|---|
+| core | 89.97 % | **99.83 %** (3505 / 3511) | 6 |
+| binding | 97.44 % | **99.77 %** (857 / 859) | 2 |
+
+The eight lines left, each a defensive branch no public path reaches:
+
+| Where | What it guards | Why it is not reached |
+|---|---|---|
+| `queries_observer.dart:94` | `unsubscribe()` when the observer was dropped, or the listeners went, during its own `subscribe` | needs a first notification that synchronously calls `setQueries` and removes that very observer; no public sequence found does both |
+| `query.dart:859–860` | `fetch`'s `superseded()` arm for a newer fetch started from inside this one's setup | the removed arm (858) is reached; a re-fetch from inside `setOptions`, the function borrow or the behaviour's `onFetch` is not — none of them calls back into the query |
+| `query.dart:1203` | a `QuerySuccessAction`/`QuerySetStateAction` of another data type | the type system routes every action to a query of its own type; the arm makes the `switch` exhaustive |
+| `query_client.dart:1233` | `defaultMutationOptions` refusing both `mutationFn` and `mutationFnWithContext` | release builds only: the constructor asserts first, and the suites run with asserts on (REL-12) |
+| `query_observer.dart:976` | `shouldFetchOptionally` resolving `enabled` itself when `wasEnabled` is not passed | both in-package callers pass `wasEnabled` |
+| `query_client_provider.dart:661` | `dispose` after `_released` | Flutter abandons an element whose `didUpdateWidget` threw without disposing it (V5-2); the early return is for a Flutter that would |
+| `read_set.dart:269` | a layout builder's render object that is neither a box nor a sliver | Flutter's layout builders are one or the other |
+
+**CI.** Both suites record coverage; `tool/check_coverage.dart` fails below
+a floor of 99.8 % (core) and 99.7 % (binding) — the figures above rounded
+down to a tenth, measured on the CI's Flutter. Raise a floor, never lower it
+to make a change pass. The binding also runs compiled to JavaScript,
+`flutter test --platform chrome --exclude-tags vm-only`: one case (the
+barrel's hidden names, `review_regressions_test.dart`) reads a source file
+through `dart:io` and is tagged `vm-only`, declared in the binding's
+`dart_test.yaml`. `tool/check_docs_jargon.dart` looks for internal
+bookkeeping in what a user reads (site pages, READMEs, the top CHANGELOG
+entry, dartdoc); its self-test is blocking, its scan not yet — the docs
+chunks that reword the hits have not landed. A line that must keep a
+reference carries `<!-- jargon-ok -->`, `{/* jargon-ok */}` (MDX) or
+`// jargon-ok`.
+
+**Fresh review of the chunk.** A reviewer over the diff found: `CombinedData`
+compares five things besides its data and the table varied only the data
+(four flags and `refetchError` added, each shown red by removing it from
+`==`); `QueryOptions.behavior` in no table; the sliver case asserting the
+text survived a resize but not that the subscription did; the jargon guard
+missing four ID shapes the dartdoc uses (`L3-2`, `R3-1`, `API-02`, `IN-02`),
+flagging "the second pass over the list" as a review round, exempting no
+changelog version heading and having no MDX opt-out; and floors of 99 %
+where the comment promised the measured figure rounded down.
+
+**Counts after:** core **1157** VM / **1153** browser (826 and 822, plus
+331 each), binding **299** VM / **298** browser (the `vm-only` case). All
+green.
