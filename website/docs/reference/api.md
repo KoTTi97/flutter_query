@@ -1,7 +1,7 @@
 ---
 title: API reference
 sidebar_position: 3
-description: Where the generated dartdoc lives, and how to build it locally before the packages are published.
+description: Where the generated dartdoc lives, and how to build it locally.
 ---
 
 # API reference
@@ -11,17 +11,14 @@ public member of both packages carries a dartdoc comment, and CI runs
 `dart doc --validate-links` on every push, so a broken cross-reference fails
 the build rather than shipping.
 
-## Once published
+## On pub.dev
 
-pub.dev builds and hosts the reference for every version:
+pub.dev builds and hosts the reference for every published version:
 
-- `https://pub.dev/documentation/query_kit/latest/`
-- `https://pub.dev/documentation/query_kit_flutter/latest/`
+- [pub.dev/documentation/query_kit](https://pub.dev/documentation/query_kit/latest/)
+- [pub.dev/documentation/query_kit_flutter](https://pub.dev/documentation/query_kit_flutter/latest/)
 
-Nothing is published yet, so those links are [what they will
-be](../project/releasing.md), not what they are.
-
-## Locally, today
+## Locally
 
 ```bash
 cd packages/query_kit && dart doc

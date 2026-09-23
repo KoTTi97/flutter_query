@@ -14,7 +14,7 @@ body:
     attributes:
       label: Version
       description: Which package, and which version.
-      placeholder: query_kit_flutter 0.1.0, Flutter 3.35.1
+      placeholder: query_kit_flutter 1.0.0, Flutter 3.35.1
     validations:
       required: true
 

@@ -4,10 +4,11 @@
 
 | Version | Supported |
 |---|---|
-| 0.1.x | yes |
+| 1.x | yes |
 
-Before 1.0 only the latest published version gets fixes. A security fix ships
-as a new patch release; there are no backports to earlier 0.x lines.
+Only the latest published version gets fixes. A security fix ships as a new
+patch release of the current major line; there are no backports to earlier
+releases.
 
 ## Reporting a vulnerability
 

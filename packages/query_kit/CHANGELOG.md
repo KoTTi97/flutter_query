@@ -1,18 +1,21 @@
 # Changelog
 
-## 0.1.0
+## 1.0.0
 
 First release. `query_kit` is a Dart port of TanStack Query's `query-core`,
 pinned at upstream `50680b98c`: queries, mutations, infinite queries, their
-observers, the client and both caches, with no Flutter dependency.
+observers, the client and both caches, with no Flutter dependency. It starts
+at 1.0.0 because the surface is meant to hold: a breaking change is a major
+version.
 
 The claim it makes is fidelity. Upstream's own test suite is ported case for
 case — 17 suites, **414 of their 536** cases, every omitted case accounted for
 in `test/PORTING_NOTES.md` by name or by the upstream block it belongs to,
-with its category and its reason. The complete core suite has **783** VM tests;
-**779** also run compiled to JavaScript (four barrel checks are VM-only),
-including pre-release ownership regressions, the cases found by the example
-apps and 32 bounded confidence sequences over the public API. Closeness to
+with its category and its reason. The complete core suite has **818** VM tests;
+**814** also run compiled to JavaScript (four barrel checks are VM-only),
+including pre-release ownership regressions, the regressions of the release
+review, the cases found by the example apps and a first real integration, and
+32 bounded confidence sequences over the public API. Closeness to
 upstream is a tiebreaker, not a goal: where a Dart idiom is better the port
 diverges, and every divergence is a row of the notes' table. The ones a user
 meets first:
@@ -94,12 +97,42 @@ meets first:
 - Removing a restored scope head releases the queue it was blocking even if
   its options change before the release runs (F6).
 
+**Release review (2026-09-23)**
+
+- A `CancelledError` the query function throws itself — it awaited another
+  query that was cancelled, say — is an ordinary error of that query; it used
+  to revert silently and never settle. It does not count toward
+  `consecutiveErrorCount`.
+- `client.query` of an infinite key that has an observer, without a page
+  function, borrows the observer's paging, and so does an invalidation driven
+  by a select-only reader; both used to throw "missing queryFn".
+- `setOptions` with an `InitialData.compute` that throws leaves the observer
+  and the previous key's running fetch untouched, and `QueriesObserver.setQueries`
+  is atomic: a member whose options throw leaves the collection as it was.
+- A `keepPrevious` placeholder is not reported as the new key's `staleData`
+  when that key's `select` throws; the result is a loading error.
+- `==` is symmetric across type arguments for `InitialData`,
+  `PlaceholderData` and `InfiniteData`. The debug assertion after
+  `StructurallyShareable.shareWith` fires only when the hook returns
+  `previous` itself.
+- Mutations: one started paused that could run by the time an async
+  `onMutate` returned no longer reports `isPaused` while its function runs;
+  `cancel()` on one restored `pending` from persistence fails it instead of
+  doing nothing; offline, `resumePausedMutations()` no longer waits for an
+  `always` mutation queued behind an `online` scope-mate that cannot run; a
+  second run whose `onMutate` threw no longer hands the first run's
+  `onMutateResult` to its error callbacks.
+- A `FocusSetup` / `OnlineSetup` that throws when it is reinstalled is
+  reported to the zone and no longer leaks the listener.
+
 **Types and options**
 
 - Two options shapes, not one (ADR-0001): `QueryObserverOptions<TData>` has
   no `select` and one type slot, anchored by `queryFn`;
   `QuerySelectOptions<TQueryData, TData>` has a *required* `select`. Mirrored
-  for infinite queries. Without a query function or an expected type, an
+  for infinite queries. `withSelect(select)` turns the first into the second
+  and keeps every other field, so one options factory serves a projecting
+  reader too. Without a query function or an expected type, an
   options literal still needs an explicit type argument; Dart can otherwise
   infer `dynamic`. Consumer strict-inference lints provide an additional check.
 - Every option union is a sealed value type — `StaleTime`, `GcTime`,
@@ -114,6 +147,9 @@ meets first:
 - `QueryKey` is a value type with structural equality. One key, one exact
   type: a covariant read (`int` under `int?`, `List<Task>` under
   `List<Object?>`) throws `QueryDataTypeError` at the call, naming the cure.
+  `DateTime` parts compare by instant — UTC and local of one moment are one
+  key, as upstream's JSON hash makes them. A map part may be keyed by any
+  valid part (a record, an enum, a value class), not by a collection.
 - No `TError` (an error is `Object` plus a `StackTrace`) and no `TQueryKey`.
   `throwOnError`, `notifyOnChangeProps` and `trackResult` have no counterpart:
   errors live in the sealed `QueryResult`, narrowing is `select`.
@@ -123,7 +159,19 @@ meets first:
 - One `QueryClient.query` in place of `fetchQuery`, `prefetchQuery` and
   `ensureQueryData`: prefetch is `.ignore()`, ensure is
   `staleTime: StaleTime.static`, stale-while-revalidate is
-  `revalidateIfStale: true`. It has no `select`; map the future.
+  `revalidateIfStale: true`. It has no `select`; map the future. It joins a
+  fetch already in flight — use `refetchQueries` for one that starts after
+  your write — and the options it is given, `retry` included, stay on the
+  query.
+- `setQueryData`, `updateQueryData` and `updateQueriesData` let an existing
+  entry take any value its own type can hold, so the ordinary
+  optimistic-update spellings write; `updateQueriesData` checks every
+  updater's result before it writes anything, and paged data keeps the exact
+  rule. `setQueryData` returns what the cache stored, after structural
+  sharing. A bare `setQueryData(key, null)` infers `Null` and writes nothing,
+  as upstream's `undefined` does; `setQueryData<T?>(key, null)` stores a null.
+- `isFetching(filters:)` and `isMutating(filters:)` override the filter's
+  `fetchStatus` / `status`, as upstream does.
 - Every filter parameter is a named `filters:`; `invalidateQueries` freezes
   its match set before invalidating.
 - The focus, online and notify managers are instances the client owns
@@ -146,10 +194,17 @@ meets first:
 
 **Mutations**
 
-- A mutation function takes its variables only; there is no
-  `MutationFunctionContext`. `MutationOptions.simple` is the shape without an
-  optimistic step; the callbacks are the typedefs `OnMutate`,
-  `OnMutationSuccess`, `OnMutationError` and `OnMutationSettled`.
+- `mutationFn` takes its variables only; `mutationFnWithContext` is the
+  two-argument form (below). Setting both is a debug assertion at the options
+  literal and an `ArgumentError` when the client resolves them.
+  `MutationOptions.simple` is the shape without an optimistic step; the
+  callbacks are the typedefs `OnMutate`, `OnMutationSuccess`,
+  `OnMutationError` and `OnMutationSettled`.
+- In a `MutationScope` only the function waits its turn: `onMutate` runs at
+  submission, and the scope is held until `onSettled`'s future completes —
+  `isMutating()` counts the mutation inside its own `onSettled`.
+  `MutationResult.isPaused` covers a run queued behind its scope or waiting
+  for focus, not only the network.
 - `MutationResult.mutate` takes the variables only; per-call callbacks are
   `MutationObserver.mutate(variables, callbacks: MutateCallbacks(…))`. What `onMutate`
   returned goes to `onError` and `onSettled`, not onto the result.
@@ -188,19 +243,29 @@ meets first:
   (with `keys:` for whatever else the combiner reads), `optional()` for a
   source the screen can do without, the same `combine` over a
   `List<QueryResult<T>>`, and `combineWith` for such a list plus a source of
-  another type.
+  another type; sources of more types go in a list typed by what they have
+  in common, cast in the combiner. Stands in for `useQueries`' heterogeneous
+  tuple and `combine` step. `refetch(cancelRefetch: false)` and
+  `retry(cancelRefetch: false)` join a fetch in flight, so two combinations
+  sharing a source and refreshed together fetch it once.
 - `StructurallyShareable<T>`: a value class implements `shareWith(previous)`
   and structural sharing walks into it — a wrapper around a list is otherwise
   a leaf, and one changed element renews every instance.
-  Stands in for `useQueries`' heterogeneous tuple and `combine` step.
-- `QueryState.consecutiveErrorCount` — failed fetches in a row, zero again with
-  the next *fetched* data; a manual write and a cancelled fetch leave it alone — so a `RefetchInterval.dynamic` can give up after N; and
+- `QueryState.consecutiveErrorCount`, carried on `QueryResult` too — failed
+  fetches in a row, zero again with the next *fetched* data; a manual write
+  and a cancelled fetch leave it alone — so a `RefetchInterval.dynamic` can
+  give up after N and a widget can say so from the result it has; and
   `MutationStateObserver.typed`, a mutation-state selection filtered by and
-  typed to one mutation type.
+  typed to one mutation type, for the observer's life — a later `setOptions`
+  keeps the type.
 - An `Enabled.when` over state outside the cache is re-evaluated when the
   observer is handed its options again — every rebuild — because `setOptions`
-  compares against the observer's last result rather than resolving the old
-  options at the same instant, as upstream does.
+  compares against what the observer last committed rather than resolving the
+  old options at the same instant, as upstream does; a query update between
+  the flip and the rebuild no longer hides it. `StaleTime.dynamic` over
+  outside state is re-evaluated the same way. A predicate over the query
+  itself whose answer changes between rebuilds refetches on the next rebuild
+  if the data is stale, which upstream does not.
 - `mutationFnWithContext: (variables, context)` — upstream's
   `MutationFunctionContext` (`client`, `meta`, `mutationKey`) plus a typed
   `onMutateResult` and a `signal` — and `cancel()` on `Mutation` and

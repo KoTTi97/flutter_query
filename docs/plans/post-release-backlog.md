@@ -1,7 +1,7 @@
 # Post-release backlog for `query_kit`
 
 What the pre-release deep-dive review of 2026-09-12 found and **deliberately did
-not fix before 0.1.0**, with the reason each one waits. Everything a user could
+not fix before 1.0.0**, with the reason each one waits. Everything a user could
 lose data or time to was fixed; the evidence is in
 [PORTING_NOTES](../../packages/query_kit/test/PORTING_NOTES.md), sections
 "Pre-release deep-dive review" and "Final review of the pre-release branch".
@@ -22,11 +22,11 @@ quadratic cost for one data shape. The items below are what remains below the
 line: P3, contract questions and nits, none of them wrong data, a crash or a
 realistic-path slowdown.
 
-## Contract questions — decide before 1.0, all breaking to change later
+## Contract questions — shipped as they stand in 1.0.0, breaking to change now
 
 | ID | Question | Current state |
 |---|---|---|
-| API-07 | The four `*Error` types implement `Exception`; three are programming or configuration errors, which Dart spells `Error` | Kept for 0.1.0 |
+| API-07 | The four `*Error` types implement `Exception`; three are programming or configuration errors, which Dart spells `Error` | Kept for 1.0.0 |
 | API-06 | Method names that follow JavaScript rather than Dart idiom: `getDefaultOptions()`/`setDefaultOptions()`, `isFocused()`, `isOnline()`, `isFetching()`/`isMutating()` returning `int` | Kept: upstream familiarity is the migration story |
 | API-05 | `.when` / `.dynamic` / `.compute` are three names for "computed per query" across the option value types | Kept: each name says what its callback receives |
 | DC-12 | "`null` means not configured" leaves no per-call way to *clear* a key or client default for `meta`, `scope`, `queryFn`, `structuralSharing` | Undocumented limitation; document or add an explicit unset |

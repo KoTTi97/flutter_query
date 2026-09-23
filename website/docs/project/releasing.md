@@ -69,7 +69,7 @@ Before tagging: both pubspecs carry the release version with no `-dev`, both
 changelogs have a heading for exactly that version, and CI is green on `main`.
 
 One tag per package, named after the package and the version
-(`query_kit-v0.1.0`). Pushing it runs `.github/workflows/publish.yml`, which
+(`query_kit-v1.0.0`). Pushing it runs `.github/workflows/publish.yml`, which
 publishes via pub.dev's automated publishing — GitHub OIDC, no secrets. **That
 only works once the package's pub.dev admin page has automated publishing
 enabled** for this repository and that tag pattern, and the *first* publish of
