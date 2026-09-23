@@ -1,0 +1,84 @@
+---
+title: Playground
+description: A todo list and an editor with four live knobs — stale time, gc time, latency and error rate — turned while the queries are on screen.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/playground/playground_screen.dart'
+
+A list, an editor for one of its rows, and four knobs you turn while both
+are live. Stale time and gc time go into the client's defaults with
+`setDefaultOptions`, so every reader on the screen picks them up on its next
+build; latency and error rate go to the backend. It is the place to get a
+feel for the numbers before you pick them for a real screen: how long a
+device list may stay fresh before a revisit refetches it, how long a product
+detail should stay cached after the user leaves it, and what a flaky
+connection looks like while the retries run.
+
+<LiveDemo feature="playground" />
+
+## What to try
+
+- Set **Stale time** to `30 s`: the `todos-reader` facts flip to
+  `isStale=false` without a request. Set it back to `0` and they read
+  `isStale=true` again. The live reader picked up the new default on its
+  next build.
+- Set **Error rate** to `100 %` and press the **Refetch** icon on the list:
+  `failureCount` climbs through the three retries, 300 ms apart, and the
+  list stays on screen under a *Refetch failed* notice. Set the rate back to
+  `0` and refetch to recover.
+- Set **GC time** to `5 s`, open a todo by tapping its text, then press
+  **Close editor**. Five seconds later the `todo-<id>` debug strip reads
+  `status=absent`: nothing observes the entry any more, so it is collected.
+  With `5 min` it stays.
+- Rename a todo in the editor, or tick **Done**: the answer is written to the
+  editor's entry, and only the list is refetched.
+- Press **Invalidate everything**: the list and the open editor's entry both
+  refetch, and `fetches` goes up by one on each strip.
+
+## The code
+
+The list sets neither stale time nor gc time, on purpose: both come from the
+client's defaults, which is what the knobs change.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/playground/playground_screen.dart"
+  from="/// The list. Stale time and gc time are left unset on purpose"
+  to="    );"
+/>
+
+A knob merges its value into the defaults the app already had, so the other
+defaults survive.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/playground/playground_screen.dart"
+  from="/// The two knobs over the app's defaults"
+  to="  }"
+/>
+
+The editor's query seeds itself from the cached list with
+`InitialData.compute`, dated with the list's own `dataUpdatedAt`, so under a
+non-zero stale time opening the editor costs no request.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/playground/playground_screen.dart"
+  from="/// One todo, for the editor."
+  to="    );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/playground/playground_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Caching](../guides/caching.md), [Query options](../guides/query-options.md), [Initial query data](../guides/initial-query-data.md), [Query retries](../guides/query-retries.md)
+- Upstream: TanStack's React [`playground`](https://github.com/TanStack/query/tree/main/examples/react/playground) example
+- Tested by `test/features/playground_test.dart` (widget) and `e2e/tests/playground.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/playground)

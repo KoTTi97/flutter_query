@@ -1,0 +1,32 @@
+/* A gallery that reads as an index, not a wall of cards: two columns of
+   entries separated by hairlines, the title as the link and the summary
+   under it. One column on a phone. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  column-gap: 2rem;
+  margin: 0.75rem 0 2rem;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--qk-rule);
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.7rem 0 0.8rem;
+  border-bottom: 1px solid var(--qk-rule);
+}
+
+.title {
+  font-weight: 600;
+}
+
+.summary {
+  color: var(--qk-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}

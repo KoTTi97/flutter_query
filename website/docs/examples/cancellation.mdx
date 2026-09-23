@@ -1,0 +1,88 @@
+---
+title: Cancellation
+description: A slow fetch cancelled by hand, with and without the signal reaching the transport, and search-as-you-type that cancels the needle in flight.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/cancellation/cancellation_screen.dart'
+
+Two cards. The first is a three-second fetch you cancel by hand with
+`cancelQueries`: the entry goes back to what it was before the fetch began,
+and the answer is dropped. A switch decides whether the query function reads
+`context.signal`, which is what lets the HTTP request itself be aborted. The
+second card is search-as-you-type, where every needle is a key of its own and
+a new needle cancels the one still in flight. You need this wherever a
+request can outlive the reason it was sent: a product search that fires on
+every keystroke, a large export the user gives up on, a detail screen left
+before its data arrived.
+
+<LiveDemo feature="cancellation" />
+
+## What to try
+
+- The slow fetch starts when the screen opens. Press **Cancel** while the
+  *fetching* pill is up: `fetchStatus=idle`, `status=pending` (the entry is
+  back to how it was before its first fetch), and `cancels=1`, because the
+  signal's `onCancel` ran. Press **Start slow fetch** and let it finish:
+  `posts=30`.
+- Press **Cancel silently** during a fetch: the same revert, and no error
+  reaches the query's state.
+- Switch on **Ignore the signal**, start the fetch and cancel it: the query
+  is cancelled on the spot all the same, but `cancels` does not move. The
+  request was never told to stop, so it runs to completion and its answer is
+  thrown away.
+- Type into **Search posts**. Two keystrokes within 300 ms send one request,
+  for the last needle. Type again while a search is out and the old needle is
+  cancelled: `searchCancels` goes up, and the `previous` debug strip shows
+  its entry pending and idle.
+
+## The code
+
+The query function hands `context.signal` to the api client, which bridges
+it to dio's cancel token. The `onCancel` callback here only counts; the
+bridge is what aborts the request.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/cancellation/cancellation_screen.dart"
+  from="QueryObserverOptions<List<Post>> get _slowQuery =>"
+  end="      );"
+/>
+
+Cancelling is a client call with a filter. `revert` defaults to `true`, so
+the entry returns to its state from before the fetch. `silent` cancels
+without dispatching an error, which is meant for the case where a new fetch
+takes over; a silently cancelled fetch that nothing replaces still goes back
+to `idle`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/cancellation/cancellation_screen.dart"
+  from="/// A silent cancel dispatches no error into the query's state"
+  end="      .ignore();"
+/>
+
+Each needle is a key, and an empty box is disabled with `Enabled.no` so it
+asks the backend nothing. When the debounce window closes, the screen calls
+`cancelQueries` on the previous needle's key before it switches to the new
+one.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/cancellation/cancellation_screen.dart"
+  from="QueryObserverOptions<List<Post>> _searchQuery(String needle) =>"
+  end="      );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/cancellation/cancellation_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Query cancellation](../guides/query-cancellation.md), [Query functions](../guides/query-functions.md), [Query keys](../guides/query-keys.md)
+- Tested by `test/features/cancellation_test.dart` (widget) and `e2e/tests/cancellation.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/cancellation)

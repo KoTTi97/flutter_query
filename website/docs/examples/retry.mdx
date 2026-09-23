@@ -1,0 +1,86 @@
+---
+title: Retry
+description: Every retry policy and delay on one query, with failures scripted on the backend, and what the result reports while the retries run.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/retry/retry_screen.dart'
+
+One query for the server's time, three knobs for how it retries, and a
+panel that tells the backend to refuse the next few requests. Choose a
+policy (`never`, `2 times`, `always`, `when 5xx`) and a delay (a fixed
+300 ms, the default exponential backoff, or one computed from the error),
+then watch `failureCount` and `failureReason` climb while the retries run.
+Real apps need this as soon as they talk to anything that is sometimes
+unavailable: retry a gateway that answers 503 while a device reboots, give
+up at once on a 404 for a product that was deleted, wait longer before
+asking a rate-limited API again.
+
+<LiveDemo feature="retry" />
+
+## What to try
+
+- Pick **Fail the next** `2`, press **Arm**, set **Retry** to `2 times` and
+  press the **Refetch** icon: `failureCount` goes 1, then 2, while
+  `failureReason` shows the refusal, and the third attempt succeeds. With
+  `10` armed the same policy gives up at `failureCount=3`, and the old
+  server time stays on screen as `isRefetchError=true` with
+  `hasStaleData=true`.
+- Set **Retry** to `when 5xx`, **Status** to `404`, arm and refetch: one
+  request, and the error stands, because the policy retries only server
+  errors. Arm again with `503` and the same refetch retries.
+- Set **Retry** to `2 times`, **Delay** to `exponential`, arm two failures
+  and refetch: the first retry waits a second, the second two. With
+  `dynamic`, a 404 is retried after four seconds and anything else after
+  200 ms.
+- After a refetch has failed for good, press **Retry now** under the error:
+  it is the result's own `refetch`, and it spends whatever is still armed.
+
+## The code
+
+A policy that looks at the error, and a delay computed from it. Both are
+top-level functions, because `RetryPolicy.when` and `RetryDelay.dynamic`
+compare by the function's identity.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/retry/retry_screen.dart"
+  from="/// Retry a server error up to three times, and never a 404"
+  end="const RetryDelay _dynamic"
+/>
+
+The three knobs are ordinary options on the query. The screen reads it
+through a `QueryController`, so a changed knob reaches the live observer
+through `setOptions`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/retry/retry_screen.dart"
+  from="/// The screen's one query, with the three knobs"
+  end="    );"
+/>
+
+While the retries run, the result stays pending or keeps its data, and it
+carries the count and the last error. Once the retries are spent, a
+`QueryError` says whether the first load failed or a refetch did, and a
+failed refetch keeps the last good data as `staleData`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/retry/retry_screen.dart"
+  from="Widget _reading(BuildContext context, QueryResult<ServerTime> time) {"
+  end="  }"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/retry/retry_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Query retries](../guides/query-retries.md), [Queries](../guides/queries.md)
+- Tested by `test/features/retry_test.dart` (widget) and `e2e/tests/retry.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/retry)

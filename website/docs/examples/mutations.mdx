@@ -1,0 +1,87 @@
+---
+title: Mutations
+description: One write fired with mutate and with mutateAsync, its states and reset, the order its callbacks run in, scopes that queue writes, and a write that outlives its widget.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/mutations/mutations_screen.dart'
+
+A server-side counter and the writes that change it, walked through in four
+cards: one mutation fired both ways, the order its callbacks run in, two
+writes queued behind each other by a `MutationScope`, and a write that keeps
+running after the widget that fired it has gone. Every write invalidates the
+counter, so the number on screen always comes from the server. This is what
+sits behind any "save" button in an app: submitting a settings form, adding
+an item to a cart, renaming a device, where you want the pending and error
+states on screen and the affected queries refreshed afterwards.
+
+<LiveDemo feature="mutations" />
+
+## What to try
+
+- Press *Increment (mutate)*. The facts under card A go to `status=pending`,
+  then `status=success` with `data=1`, and only then does the header read
+  `counter=1`: the mutation stays pending until the invalidated counter has
+  refetched. *Reset* takes it back to `status=idle`.
+- Tick *Fail next* and increment again: `status=error` with
+  `error=Requested: 500` and `failureCount=1`. Mutations are not retried
+  unless asked, so the first failure is the error. The tick clears itself;
+  tick it again and use *Increment (mutateAsync)*, and the awaiting caller
+  gets the refusal as `mutateAsync threw=…`.
+- Press *Run with callbacks* in card B: six numbered lines show the order,
+  `onMutate`, `mutationFn`, then the options' `onSuccess` and `onSettled`,
+  then the ones passed to that `mutate` call.
+- In card C, *Run two scoped* shows `second=pending` with `secondPaused=true`
+  while the first runs: its request waits. *Run two unscoped* sends both at
+  once, and `client.isMutating()` counts both.
+- *Fire and leave* unmounts the reader in the same tap. The away view still
+  shows `isMutating=1` until the write lands, and *Back to reader* shows the
+  new count.
+
+## The code
+
+The main mutation uses `MutationOptions.simple`, for a mutation with no
+`onMutate`. Its `onSuccess` returns the invalidation's future, and the
+mutation waits for it before it reports success:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutations/mutations_screen.dart"
+  from="/// The main mutation."
+  end="    );"
+/>
+
+The reader's state mixes in `QueryMixin` and reads the counter and the
+mutation while it builds. The `id` tells two mutations read by the same
+widget apart:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutations/mutations_screen.dart"
+  from="final counter = watchQuery(counterQuery(_api));"
+  end="    );"
+/>
+
+The slow increment takes an optional scope. Card C builds two
+`MutationController`s with the same `MutationScope('counter')` and two
+without, so the scoped pair runs one at a time and the unscoped pair together:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutations/mutations_screen.dart"
+  from="MutationOptions<int, Increment, void> slowIncrementMutation("
+  end="    );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/mutations/mutations_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Mutations](../guides/mutations.md), [Invalidations from mutations](../guides/invalidations-from-mutations.md), [Mutation scopes](../guides/mutation-scopes.md)
+- Tested by `test/features/mutations_test.dart` (widget) and `e2e/tests/mutations.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/mutations)

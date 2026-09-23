@@ -1,0 +1,81 @@
+---
+title: Global callbacks
+description: QueryCache and MutationCache callbacks logged as they fire, meta deciding which failures get a SnackBar, and meta reaching the query function.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/global_callbacks/global_callbacks_screen.dart'
+
+A `QueryCache` and a `MutationCache` take `onSuccess`, `onError` and
+`onSettled` (and, for mutations, `onMutate`) in their constructors, and they
+run for every query and every mutation in the client. This screen builds a
+client with all of them, writes each call into a log, and uses a query's
+`meta` to decide which failures deserve a `SnackBar`. It is the place for
+what every screen of an app should get without asking: an error toast for
+failed loads, reporting to a crash tracker, a "saved" confirmation after any
+settings form is submitted.
+
+<LiveDemo feature="global-callbacks" />
+
+## What to try
+
+- On open the posts load, and the *Callback log* reads `query success posts`
+  then `query settled posts`.
+- Press *Fetch a missing post*: post 999 does not exist, the log shows
+  `query error post-999 (meta: toast)`, and a `SnackBar` says *Post not
+  found*. The query carries `meta: {'toast': true}`, and the cache's
+  `onError` reads it.
+- Press *Fetch with meta tag*: the query function reads `context.meta` and
+  echoes it, so the row shows `meta seen=showcase`.
+- Press *Create todo*: the log shows `mutation mutate`, `mutation success`,
+  `option onSuccess`, `mutation settled`, `option onSettled`. The cache's
+  callback runs before the mutation's own each time. *Create failing todo*
+  asks the backend to refuse, and the log shows `mutation error (…)` followed
+  by `option onError`.
+- The bin icon (*Clear log*) empties the log; the caches keep their entries.
+
+## The code
+
+The callbacks are constructor arguments of the caches, so the screen builds
+a client of its own with them and puts it under a nested
+`QueryClientProvider`:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/global_callbacks/global_callbacks_screen.dart"
+  from="/// The screen's own client, built with both caches configured."
+  end="  );"
+/>
+
+The missing post tags itself with `meta`. The map is `const`: options compare
+by value, and a new map on every build would count as a change.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/global_callbacks/global_callbacks_screen.dart"
+  from="/// Post 999, tagged for the cache's `onError`."
+  end="    );"
+/>
+
+The cache's `onError` receives the query, reads its `meta`, and shows the
+`SnackBar` only for queries that asked for one:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/global_callbacks/global_callbacks_screen.dart"
+  from="void _onQueryError(Object error, StackTrace _, Query<Object?> query) {"
+  end="  }"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/global_callbacks/global_callbacks_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Global callbacks](../guides/global-callbacks.md), [Mutations](../guides/mutations.md), [Query functions](../guides/query-functions.md)
+- Tested by `test/features/global_callbacks_test.dart` (widget) and `e2e/tests/global_callbacks.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/global_callbacks)

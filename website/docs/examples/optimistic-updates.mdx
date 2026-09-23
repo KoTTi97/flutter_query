@@ -1,0 +1,85 @@
+---
+title: Optimistic updates
+description: A new row on screen before the server confirms it, two ways — rendered from the pending mutation's variables, or written into the cache and rolled back on error.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/optimistic_updates/optimistic_updates_screen.dart'
+
+Adding a row to a list without waiting for the server, in the two shapes the
+pattern comes in. *Via variables* leaves the cache alone and renders the
+pending mutation's `variables` as one greyed row, turning it into an error
+row with *Retry* if the write is refused. *Via cache* writes the row into the
+cached list in `onMutate`, so every reader of that key sees it, and puts the
+snapshot back in `onError`. Both invalidate the list when the write settles.
+Reach for the first when only the screen that writes needs to show the row,
+a comment box under a post, say; the second when other screens read the same
+list, a cart badge and a cart page, or a device list and its detail.
+
+<LiveDemo feature="optimistic-updates" />
+
+## What to try
+
+- With *Via variables* selected, type into *New todo* and press *Add*. The
+  text appears at once as a greyed row with a *saving* pill, while the card
+  still reads the old `todos=` count: the cache has not been touched. After
+  the write and the refetch it becomes a real row with an id.
+- Tick *Refuse next write* and add again. The row turns into *Not saved:
+  Requested: 500* with a *Retry* button, and the count stays where it was.
+  *Retry* sends the same text again; the tick has cleared itself, so it
+  goes through.
+- Switch to *Via cache* and add a todo: the `todos=` count goes up before the
+  server answers, because the row is in the cache.
+- Tick *Refuse next write* and add under *Via cache*: the row appears, then
+  disappears again, and *Rolled back: Requested: 500* is shown. The debug
+  strip shows the refetch on settle still happening.
+
+## The code
+
+The variables shape needs no `onMutate` and nothing to roll back; returning
+the invalidation's future from `onSettled` keeps the mutation pending, and
+the *saving* row on screen, until the refetched list has landed:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/optimistic_updates/optimistic_updates_screen.dart"
+  from="MutationOptions<Todo, String, void> addTodoViaVariables("
+  end="    );"
+/>
+
+This variant reads with `context.query` and `context.mutation`, and switches
+over the mutation's sealed result to render the extra row from its
+`variables`, which survive an error:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/optimistic_updates/optimistic_updates_screen.dart"
+  from="final todos = context.query(todosQuery(api));"
+  end="      },"
+/>
+
+The cache shape cancels any fetch of the list in flight (its late answer
+would overwrite the new row), snapshots the list, writes the row with a
+temporary negative id and hands the snapshot to `onError`. The third type
+argument is what `onMutate` returns:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/optimistic_updates/optimistic_updates_screen.dart"
+  from="MutationOptions<Todo, String, TodosSnapshot> addTodoViaCache("
+  end="    );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/optimistic_updates/optimistic_updates_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Optimistic updates](../guides/optimistic-updates.md), [Mutations](../guides/mutations.md), [Query cancellation](../guides/query-cancellation.md)
+- Upstream: TanStack's React [`nextjs-app-optimistic-updates`](https://github.com/TanStack/query/tree/main/examples/react/nextjs-app-optimistic-updates) example
+- Tested by `test/features/optimistic_updates_test.dart` (widget) and `e2e/tests/optimistic_updates.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/optimistic_updates)

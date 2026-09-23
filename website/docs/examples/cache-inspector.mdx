@@ -1,0 +1,85 @@
+---
+title: Cache inspector
+description: Every entry and every event of the query and mutation caches, live, with buttons that load, refetch, invalidate and remove entries.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/cache_inspector/cache_inspector_screen.dart'
+
+A small devtools panel built from the public API. The screen subscribes to
+`client.queryCache` and `client.mutationCache` directly, with no observer and
+no call style, lists every entry with its status, staleness, observer count
+and update count, and logs each cache event as it happens. Buttons generate
+traffic and act on single rows. The same few lines make a debug overlay for
+a real app: a hidden screen in a debug build that shows what the device list
+or the order history holds right now, and why a screen did or did not
+refetch.
+
+<LiveDemo feature="cache-inspector" />
+
+## What to try
+
+- Press *Load posts*: the *Event log* shows `QueryAdded`, a
+  `QueryUpdated(QueryFetchAction)` and a `QueryUpdated(QuerySuccessAction)`,
+  and the *Entries* table gains a `["posts"]` row with `observers=0`. Nobody
+  reads it, and everything this screen creates has a five-second `gcTime`, so
+  a few seconds later the row goes and the log shows `QueryRemoved`.
+- Turn on *Keep readers*: a `QueryBuilder` mounts on each of the three keys,
+  the rows show `observers=1` and stay. *Invalidate* on a row marks it
+  `isStale=true` and refetches it; *Refetch* fetches it again; both raise
+  `updates`. *Remove* with a reader mounted is undone at once, because the
+  reader builds the entry again.
+- Press *Load a missing post*: the row lands with `status=error`.
+- Press *Add a todo*: the *Mutations* table shows a row going from
+  `status=pending` to `status=success`, and the log names it by its mutation
+  key.
+- The bin icon (*Clear log*) empties the log and leaves both caches alone.
+
+## The code
+
+Both subscriptions are opened once, when the client can first be looked up,
+and closed in `dispose`:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/cache_inspector/cache_inspector_screen.dart"
+  from="/// Both subscriptions are opened here"
+  end="  }"
+/>
+
+Cache events are a sealed family, so the log is a `switch`. The two events
+about readers rather than about the cache are dropped: options are applied
+again on every build of every reader, and logging that would grow the log
+with nobody touching the screen.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/cache_inspector/cache_inspector_screen.dart"
+  from="void _onQueryEvent(QueryCacheEvent event) {"
+  end="  }"
+/>
+
+The buttons are plain client calls. `client.query` fetches with no observer
+at all, and the invalidation asks for `RefetchType.all`, because most rows
+here have no observer and the default refetches only active queries.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/cache_inspector/cache_inspector_screen.dart"
+  from="/// The imperative read: no observer"
+  end="      );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/cache_inspector/cache_inspector_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Debugging](../guides/debugging.md), [Caching](../guides/caching.md), [Query invalidation](../guides/query-invalidation.md)
+- Upstream: TanStack ships devtools as a separate package; its React [`devtools-panel`](https://github.com/TanStack/query/tree/main/examples/react/devtools-panel) example is the nearest counterpart
+- Tested by `test/features/cache_inspector_test.dart` (widget)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/cache_inspector)

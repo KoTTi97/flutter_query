@@ -1,0 +1,62 @@
+---
+title: Simple
+description: One query read in build, its three states told apart with a switch, and a refetch that keeps the data on screen.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/simple/simple_screen.dart'
+
+The smallest useful screen: one widget reads one query while it builds,
+switches over the sealed result to draw a skeleton, an error or the post, and
+offers a refresh button that fetches again in the background while the old
+post stays visible. It is the shape of every "show one record" screen in an
+app, a profile header, an order summary, a settings page loaded from the
+server, before anything else is layered on.
+
+<LiveDemo feature="simple" />
+
+## What to try
+
+- Watch the skeleton give way to *Post #1*: one request, and the debug strip
+  under the card reads `status=success` and `fetches=1`.
+- Press the refresh icon. A *refreshing* pill appears beside it while the
+  fetch runs, the post never leaves the screen, and `fetches` goes up by one.
+- Press it several times in a row: the button is disabled while a fetch is
+  running, so each press is one request.
+
+## The code
+
+The query is a function returning options, so its `queryFn` can close over
+the screen's api client; the key is what the cache stores the post under.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/simple/simple_screen.dart"
+  from="QueryObserverOptions<Post> firstPostQuery"
+  to="    );"
+/>
+
+The screen reads it with `context.query` and switches over the result. A
+refetch that fails keeps the last good data (`QueryError(staleData: …)`), so
+the error pattern with data and the success pattern share one branch.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/simple/simple_screen.dart"
+  from="final post = context.query(firstPostQuery(api));"
+  to="QueryDebugStrip(queryKey: ShowcaseKeys.post(1), label: 'post'),"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/simple/simple_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Queries](../guides/queries.md), [Four ways to read a query](../guides/reading-queries-in-widgets.md)
+- Upstream: TanStack's React [`simple`](https://github.com/TanStack/query/tree/main/examples/react/simple) example
+- Tested by `test/features/simple_test.dart` (widget) and `e2e/tests/simple.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/simple)

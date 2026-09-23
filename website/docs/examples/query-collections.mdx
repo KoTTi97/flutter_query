@@ -1,0 +1,81 @@
+---
+title: Query collections
+description: A list of queries of one type that grows, shrinks and reorders at runtime, read with QueriesBuilder and again with a QueriesController.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/query_collections/query_collections_screen.dart'
+
+When the set of queries on a screen is data rather than code, one query per
+id in a list that changes, you need a collection: a `QueriesBuilder` over a
+list of options, one result per option, in the list's order. Observers are
+matched by key, so reordering the list starts no request, adding an id fetches
+only the newcomer, and removing one lets its observer go. A *Summary reader*
+switch adds the same collection as a `QueriesController`, a `ValueListenable`
+for code that is not a builder. Think of a comparison screen for the products
+a user picked, the live status of every device in a room, or the favourites
+pinned to a home screen.
+
+<LiveDemo feature="query-collections" />
+
+## What to try
+
+- Press *Reverse*. The cards swap order (`ids=3,2,1`) and every strip still
+  reads `fetches=1`: the results were reordered, nothing was fetched.
+- Press *Add post* and then *Remove last*. The new id is fetched on its own;
+  after removing it, its strip reads `observers=0` while the entry stays
+  cached.
+- Press *Duplicate first*. The first id appears twice and its strip reads
+  `observers=2`: two observers over one cache entry. The entry is stale by
+  then, so the second observer refetches it once for both.
+- Press *Add missing id*. Post 999 does not exist; its card shows the
+  backend's 404 on its own while the others keep their titles.
+- Turn on *Summary reader*. A `ready=n/m` and `failed=n` line appears, every
+  entry gains a second observer, and adding an id updates both readers with
+  one fetch between them.
+
+## The code
+
+Every member has the same options: the whole post is cached, and `select`
+narrows it to its title, so the collection is homogeneous in `String`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/query_collections/query_collections_screen.dart"
+  from="QuerySelectOptions<Post, String> postTitleQuery(ShowcaseApi api, int id) =>"
+  to="    );"
+/>
+
+The builder takes a freshly built list on every build; the results come back
+in the same order, so row *n* belongs to id *n*.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/query_collections/query_collections_screen.dart"
+  from="child: QueriesBuilder<Post, String>("
+  end="          ),"
+/>
+
+The controller version lives in a `State`: created once the client is known,
+handed the new list with `setQueries` when the ids change, and disposed with
+the widget.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/query_collections/query_collections_screen.dart"
+  from="class _SummaryReaderState extends State<_SummaryReader> {"
+  end="}"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/query_collections/query_collections_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Parallel queries](../guides/parallel-queries.md), [Combining queries](../guides/combining-queries.md)
+- Tested by `test/features/query_collections_test.dart` (widget) and `e2e/tests/query_collections.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/query_collections)

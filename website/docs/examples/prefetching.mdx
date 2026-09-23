@@ -1,0 +1,97 @@
+---
+title: Prefetching
+description: Fetch a detail into the cache before its screen opens, so opening it costs no request, and the three imperative reads side by side.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/prefetching/prefetching_screen.dart'
+
+A list of posts where every row has a prefetch button: it fetches that post
+into the cache with nobody watching, so opening the detail within `staleTime`
+shows the post at once and sends nothing. Below the list, one key is read
+three ways with `client.query`, awaited, with `revalidateIfStale` and as a
+static read, and a last card prefetches the first page of an infinite query.
+Reach for this when the next screen is predictable: the product a user is
+about to tap in a catalogue, the device detail behind a device list, the
+next step of a checkout that can load while the user fills in the current
+one.
+
+<LiveDemo feature="prefetching" />
+
+## What to try
+
+- Press *Prefetch post 1* (the download icon on the first row). A
+  *prefetched* pill appears on the row, and the `post-1` debug strip shows
+  the entry with `observers=0` and `fetches=1`: cached, held by no widget.
+- Press *Open post 1*. The title is there immediately and `fetches` stays
+  at 1. Go *Back to list* and open a post you did not prefetch: that one
+  shows a skeleton first and costs one request.
+- Prefetch the same post twice within ten seconds: the second press is a
+  no-op and `fetches` stays put. Wait more than ten seconds and press again,
+  and it fetches.
+- In *Imperative reads*, press *Read (await)*, then *Increment on the
+  server*, then *Read (revalidateIfStale)*: `returned` shows the old counter
+  on the spot while `cached` moves to the new one when the background fetch
+  lands. *Read (static)* hands back what is cached and `requests` does not
+  move.
+- Press *Prefetch the first page* in the last card: `pages=1`, `rows=10`, and
+  a second press within five minutes sends nothing.
+
+## The code
+
+The detail and the prefetch share a key and a `staleTime`, which is what
+lets the detail find the entry fresh. The prefetch uses the cache-layer
+`QueryOptions`, since nothing observes it, and says `RetryPolicy.never`
+explicitly.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/prefetching/prefetching_screen.dart"
+  from="QueryObserverOptions<Post> postQuery(ShowcaseApi api, int id) =>"
+  end="    );"
+/>
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/prefetching/prefetching_screen.dart"
+  from="QueryOptions<Post> postPrefetch(ShowcaseApi api, int id) => QueryOptions<Post>("
+  end="    );"
+/>
+
+A prefetch is `client.query(options)` with the future ignored. There is no
+separate prefetch method: when the entry is fresh the call returns the
+cached data without a request, and a failure lands in the cache, not in the
+widget.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/prefetching/prefetching_screen.dart"
+  from="  void _prefetch(int id) {"
+  end="  }"
+/>
+
+The same call awaited is an imperative read. With `revalidateIfStale: true`
+it returns what the cache holds at once and refreshes a stale entry behind
+it; it fails only when nothing is cached. Under `StaleTime.static` the entry
+is never stale, so a cached value comes back with no request at all.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/prefetching/prefetching_screen.dart"
+  from="/// The same read declared static."
+  end="    );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/prefetching/prefetching_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Prefetching](../guides/prefetching.md), [Caching](../guides/caching.md)
+- Upstream: TanStack's React [`prefetching`](https://github.com/TanStack/query/tree/main/examples/react/prefetching) example
+- Tested by `test/features/prefetching_test.dart` (widget) and `e2e/tests/prefetching.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/prefetching)

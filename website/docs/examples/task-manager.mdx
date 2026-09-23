@@ -1,0 +1,235 @@
+---
+title: Task manager
+description: One small, whole app on query_kit — a shared list and detail, optimistic writes with rollback, and a poll that stops once the server confirms.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import queries from '@site/../examples/task_manager/lib/src/queries.dart'
+import overview from '@site/../examples/task_manager/lib/src/screens/overview.dart'
+import header from '@site/../examples/task_manager/lib/src/widgets/header.dart'
+
+The showcase is a catalogue: one screen per feature, each on its own. The task
+manager is the other kind of example, an ordinary small app that needs six
+of those features at once, so you can see how they compose. It has an
+overview with search and a sync badge, a detail screen with a rename field
+and a reminder switch, and a backend that is slow on purpose and fails on
+cue. It was also the port's acceptance bar: every row of the checklist below
+had to work before the library was called done.
+
+<LiveDemo app="task_manager" height={720} />
+
+The demo answers from an in-memory copy of the backend inside the page, as
+slow as the real one: about 900 ms for the list, 350 ms for one task, 700 ms
+for a write, and three seconds for the reminder scheduler to confirm. It
+starts with three tasks.
+
+## What to try
+
+| Try this | What happens |
+|---|---|
+| Open a task | The detail renders at once: the row and the detail read the same cache entry, already filled by the list. |
+| Rename it, then go straight back | The row already shows the new name; the write is followed by one request for that task and no list refetch. |
+| Rename a task to `fail` | The backend refuses. The optimistic name reverts and an error shows. |
+| Toggle the reminder | The switch flips at once, the screen waits for the scheduler, polls until the confirmation arrives about three seconds later, then stops polling. |
+| Type in the search box | One request per pause in typing, not one per keystroke. |
+| Add a task (**+**) | Every list is invalidated: which tasks exist is the list's concern. |
+| Delete a task | The row disappears at once. Every second delete is refused, so the first one springs back with a notice; the next goes through. |
+| Look at the header badge | "x of y synced" is a second shape of the list's own cache entry; it costs no request. |
+
+## The cache policy, in one file
+
+Everything the app decides about caching, fetching, seeding, polling and
+rolling back lives in `lib/src/queries.dart`. The screens only call the
+functions it exports. What follows walks through it top to bottom.
+
+### Client defaults
+
+The app turns the eager defaults down: no refetch when the app comes back to
+the foreground or the network returns, and one retry instead of three. A
+backend that needs most of a second per list should not be asked again every
+time the window regains focus. The acceptance tests build their client from
+the same constant, so they test the policy the app ships.
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
+  from="const DefaultOptions appDefaultOptions"
+  to=");"
+/>
+
+### The list seeds each task
+
+Two kinds of query split the data. The list query owns *which* tasks exist;
+a per-task query owns *what each task is*. When a list arrives, its query
+function writes every task into that task's own entry. `initialData` could
+not do this: it is read only while an entry is empty, so later list responses
+would never reach a row that had already been built. Seeding also stamps
+each entry fresh, so rendering the rows does not start a burst of per-task
+fetches. The options are one shared function, never re-declared per screen,
+so every observer of the key runs the same query function.
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
+  from="QueryObserverOptions<TaskListResponse> taskListQuery("
+  to="    );"
+/>
+
+### Two widgets, two shapes, one request
+
+The header's sync badge uses the same key, function and stale time as the
+unfiltered list, and adds a `select`. It reads the entry the overview already
+fetched, so it costs nothing.
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
+  from="/// Used by the header. Same key"
+  end="}"
+/>
+
+### The per-task query: a fallback seed and a poll that stops
+
+Both the overview's rows and the detail screen read `taskQuery`. If a task is
+opened before any list has seeded it, the query looks for it in whatever lists
+the cache holds and uses that as initial data, **with the list's timestamp**,
+so old data does not pass for freshly fetched and still revalidates. Its
+`refetchInterval` is a function of the data: while the task has a reminder
+write the scheduler has not confirmed, it polls every half second; once the
+server confirms, the function returns `null` and polling stops. The poll keeps
+running in the background, so a confirmation that lands while the user looks
+away is still picked up.
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
+  from="QueryObserverOptions<Task> taskQuery("
+  end="}"
+/>
+
+### Optimistic rename with rollback
+
+The rename cancels any fetch of the task in flight (so a slow response cannot
+overwrite the patch), keeps the current value, and patches the entry. If the
+server refuses, `onError` writes the kept value back. Either way, one
+invalidation of one key reconciles both screens, because both read it.
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
+  from="MutationOptions<Task, RenameInput, TaskSnapshot> renameTaskMutation("
+  end="    );"
+/>
+
+### A reminder that is accepted before it is confirmed
+
+The reminder write puts the requested value in a separate field,
+`reminderTarget`, which the screen shows in preference to the confirmed one.
+It deliberately does not mark the task as pending: that would start the poll
+before the write had reached the server, and the first poll would read the
+old state. The server's answer carries `pending: true`, `onSuccess` writes it
+into the cache, and that is what starts the poll in `taskQuery`. No
+invalidation: the poll is the reconciliation.
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
+  from="MutationOptions<Task, ReminderInput, TaskSnapshot> setReminderMutation("
+  end="    );"
+/>
+
+### Create and delete touch membership
+
+Creating a task has no optimistic step, so it uses `MutationOptions.simple`
+and invalidates every list. Deleting removes the row from every cached list
+at once and keeps a snapshot of all of them for the rollback. The task's own
+entry is removed only once the server agrees, so a refused delete springs back
+to a row whose detail still renders from cache.
+
+<DartSource
+  source={queries}
+  path="examples/task_manager/lib/src/queries.dart"
+  from="MutationOptions<String, String, ListSnapshot> deleteTaskMutation("
+  end="    );"
+/>
+
+<details>
+<summary>The whole policy file</summary>
+
+<DartSource source={queries} path="examples/task_manager/lib/src/queries.dart" />
+
+</details>
+
+## The four call styles, one per screen
+
+The binding offers four equal ways to read a query. The app uses each where
+its screen's shape suits it, which also shows that they share one cache
+without friction.
+
+| Style | Where | Why there |
+|---|---|---|
+| `QueryController` | the overview's list | the toolbar and the body are siblings that both need the list |
+| `context.query` | each task row | rows read different keys; only the row whose task changed rebuilds |
+| `QueryMixin` | the detail screen | already stateful for the rename field; the query and both mutations sit at the top of `build` |
+| `QuerySelectBuilder` | the header badge | a leaf widget, so the builder stays visible in the tree |
+
+The overview creates its controller once and re-keys it in place when the
+filters change; the old entry stays cached until its garbage-collection time.
+
+<DartSource
+  source={overview}
+  path="examples/task_manager/lib/src/screens/overview.dart"
+  from="void didChangeDependencies() {"
+  end="  }"
+/>
+
+A row reads its own task:
+
+<DartSource
+  source={overview}
+  path="examples/task_manager/lib/src/screens/overview.dart"
+  from="final task = context.query(taskQuery(client, api, id)).dataOrNull;"
+  end="    }"
+/>
+
+The badge selects from the list's entry:
+
+<DartSource
+  source={header}
+  path="examples/task_manager/lib/src/widgets/header.dart"
+  from="QuerySelectBuilder<TaskListResponse, ({int synced, int total})>("
+  to="              },"
+/>
+
+## How it is tested
+
+Three layers, all in `examples/task_manager/`:
+
+- **Widget tests** (`test/acceptance_test.dart`): one test per row of the
+  checklist, plus regressions. They run the real app, with its own client
+  defaults, against the same in-memory backend the live demo uses, wired in
+  as a dio adapter with its latencies at zero. Only the transport is
+  replaced; the app's api class, JSON handling, errors and cancellation all
+  run.
+- **A contract test** (`test/backend_contract_test.dart`): the same cases
+  against the in-memory backend and, when a server is running, against the
+  real express server, so the stand-in cannot quietly drift from what it
+  stands in for.
+- **End-to-end tests** (`e2e/tests/tasks.spec.ts`): the real web build in
+  Chromium against the real server, asserting on what a user sees and on the
+  wire: how many requests a screen costs, that a rename shows before the write
+  returns (the test holds the request at the network layer rather than timing
+  it), that the reminder poll stops, that an unreachable backend is retried
+  exactly once.
+
+The widget-test teardown a `QueryClient` needs is on
+[Testing](../guides/testing.md).
+
+## Related
+
+- Guides: [Optimistic updates](../guides/optimistic-updates.md),
+  [Polling](../guides/polling.md),
+  [Initial query data](../guides/initial-query-data.md),
+  [Four ways to read a query](../guides/reading-queries-in-widgets.md)
+- [The app's README](https://github.com/KoTTi97/flutter_query/tree/main/examples/task_manager), with how to run it against the real backend
+- [View the app on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/task_manager/lib)

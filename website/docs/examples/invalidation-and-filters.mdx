@@ -1,0 +1,85 @@
+---
+title: Invalidation and filters
+description: The client's bulk operations — invalidate, refetch, reset, remove, cancel and update — run over one small cache with a key prefix, exact, type, stale and predicate filters.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/invalidation_and_filters/invalidation_and_filters_screen.dart'
+
+One small cache — a posts list, two post details with live readers, a
+third detail nobody watches, and a todo list that stays fresh for thirty
+seconds — and a row of buttons, one per operation the client runs over many
+entries at once. Each button uses a different filter, so you can see which
+entries it reaches and which of those actually fetch. This is the toolkit
+behind every "after this write, these screens are out of date" decision in an
+app: saving a product refreshes the product list and its detail but not the
+cart; logging out removes everything under the account's keys; a pull to
+refresh on a device list touches only that list.
+
+<LiveDemo feature="invalidation-and-filters" />
+
+## What to try
+
+- Press **Invalidate posts prefix**: the list, post 1 and post 2 refetch
+  (`fetches` goes up on their strips), post 3 only turns `isStale=true`
+  because nothing observes it, and the todos are left alone. Then press
+  **Invalidate inactive too** and post 3 refetches as well.
+- Press **Invalidate posts exactly**: `exact: true` reaches the list and
+  none of the details under it.
+- Tick **Fail post 2 next**, press **Refetch post 2** so it ends in an
+  error, then **Predicate: errored**: only post 2 refetches.
+- Press **Remove post 2**: its strip reads `status=absent`, but its reader
+  keeps showing the last post. **Re-attach post 2** resolves the key again
+  and the new entry fetches.
+- Press **Refetch posts slowly**, then **Cancel posts** before the two
+  seconds are up: the list goes back to idle with its old data, and the late
+  answer never lands.
+
+## The code
+
+A filter picks the entries, and `refetchType` decides which of them fetch.
+With `RefetchType.all`, inactive entries such as post 3 refetch too; by
+default only the ones someone observes do.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/invalidation_and_filters/invalidation_and_filters_screen.dart"
+  from="/// The same prefix, and the inactive post 3 refetches as well."
+  end="      .ignore();"
+/>
+
+The other bulk operations take the same `QueryFilters`. `stale: true`
+refetches only what is stale now, and `resetQueries` and `removeQueries`
+aim at a single entry with `exact`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/invalidation_and_filters/invalidation_and_filters_screen.dart"
+  from="/// `stale: true` across the whole cache"
+  end="  void _reattachPost2()"
+/>
+
+Filters also work for reads and writes that fetch nothing. Here a key
+prefix, `type: QueryTypeFilter.active` and a predicate on the key's length
+select the two watched details, and `updateQueriesData` rewrites their titles
+in the cache.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/invalidation_and_filters/invalidation_and_filters_screen.dart"
+  from="/// The two active details and nothing else"
+  end="  }"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/invalidation_and_filters/invalidation_and_filters_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Query invalidation](../guides/query-invalidation.md), [Filters](../guides/filters.md), [Query keys](../guides/query-keys.md), [Query cancellation](../guides/query-cancellation.md)
+- Tested by `test/features/invalidation_and_filters_test.dart` (widget) and `e2e/tests/invalidation_and_filters.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/invalidation_and_filters)

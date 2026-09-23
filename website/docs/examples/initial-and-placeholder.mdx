@@ -1,0 +1,100 @@
+---
+title: Initial and placeholder data
+description: Showing something before the first fetch returns, either as initial data written to the cache or as placeholder data that is only displayed.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/initial_and_placeholder/initial_and_placeholder_screen.dart'
+
+Four cards, each showing a post before its request has answered, in the two
+ways the library offers. `initialData` is written to the cache as if it had
+been fetched, and `staleTime` decides whether a fetch follows; card A seeds a
+detail from the list that is already cached, and card D dates a seed with a
+callback that runs only when the seed is written. `placeholderData` is only
+shown, never cached, and the result says so with `isPlaceholderData`; card B
+shows a fixed stand-in title, and card C keeps the previous post on screen
+while the next one loads. In an app, the first shape opens a product's
+detail instantly from the product list the user just scrolled; the second
+fills a settings screen with a skeleton record, or keeps last month's
+invoice visible while the next month loads.
+
+<LiveDemo feature="initial-and-placeholder" />
+
+## What to try
+
+- In card A, within 30 seconds of the list loading, press *Open post 1*.
+  The title is there at once, the detail reads `initialData source=list`,
+  and the `post-1` debug strip shows `fetches=0`: the seed is dated with the
+  list's own fetch time and counts as fresh for 30 seconds from it. Wait
+  longer and the same seed is stale on arrival, so a fetch follows.
+- Switch on *Treat initial data as old*, then open a post you have not
+  opened yet. The title still shows at once, but the seed is dated a minute
+  earlier, so it is stale and one fetch follows. A post opened before has an
+  entry already, and no seed is consulted for it.
+- Card B shows *Loading title…* with `isPlaceholderData=true` and
+  `cache=empty` while its slowed request runs, then the real title with
+  `isPlaceholderData=false` and `cache=post`. Press its *Refetch* button:
+  the real title stays, the placeholder does not come back.
+- In card C, switch from *Post 5* to *Post 6*. Post 5's title stays on
+  screen with `isPlaceholderData=true` until post 6 arrives.
+- In card D, pick *fresh*: `computeCalls=1`, `refetched=false`. Pick
+  *backdated*: the seed shows, then the mount refetches and `refetched=true`.
+  Press *Rebuild card D* or pick a mode a second time, and `computeCalls`
+  stays at 1.
+
+## The code
+
+Card A's detail seeds itself from the cached list with
+`InitialData.compute`; a callback returning `null` means no seed.
+`initialDataUpdatedAt` dates the seed, and `staleTime` is measured from it.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/initial_and_placeholder/initial_and_placeholder_screen.dart"
+  from="QueryObserverOptions<Post> seededPostQuery("
+  end="    );"
+/>
+
+Card B's placeholder is a fixed value. It shows while the entry has no
+data and is never written to the cache.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/initial_and_placeholder/initial_and_placeholder_screen.dart"
+  from="QueryObserverOptions<Post> placeholderPostQuery(ShowcaseApi api) =>"
+  end="    );"
+/>
+
+Card C's placeholder is computed from what the observer showed last. The
+function is a top-level tear-off, so the options built on each rebuild
+compare equal.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/initial_and_placeholder/initial_and_placeholder_screen.dart"
+  from="Post? keepPreviousPost(Post? previousData, Query<Post>? previousQuery) =>"
+  end="    );"
+/>
+
+The read passes an `id`, so the same observer follows the key when the
+post changes and has a previous post to hand to the placeholder.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/initial_and_placeholder/initial_and_placeholder_screen.dart"
+  from="final previous = watchQuery("
+  end="    );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/initial_and_placeholder/initial_and_placeholder_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Initial query data](../guides/initial-query-data.md), [Placeholder query data](../guides/placeholder-query-data.md)
+- Tested by `test/features/initial_and_placeholder_test.dart` (widget) and `e2e/tests/initial_and_placeholder.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/initial_and_placeholder)

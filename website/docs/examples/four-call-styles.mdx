@@ -1,0 +1,95 @@
+---
+title: Four call styles
+description: One query read through context.query, QueryBuilder, QueryMixin and QueryController at once, with the listeners and the mutation and infinite-query counterparts beside them.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/four_call_styles/four_call_styles_screen.dart'
+
+The post list is read five ways on one screen: through each of the four call
+styles and through a bare `QueryObserver` from `client.observe(...)`, which is
+what the four are built on. All five share one cache entry, so they make one
+request and show the same data. Below them, a `QueryListener` reacts to the
+same query without reading it, one mutation runs through `MutationBuilder`,
+`context.mutation` and a `MutationController` with a `MutationListener`, and
+one infinite query is read through `context.infiniteQuery`,
+`watchInfiniteQuery` and `client.observeInfinite`. The styles mix freely, so
+a real app can pick per widget: a product list's header, its rows and a
+detail sheet can each read the same catalogue query in whichever shape suits
+that widget.
+
+<LiveDemo feature="four-call-styles" />
+
+## What to try
+
+- On open the `posts` strip reads `observers=5` and `fetches=1`, and every
+  card shows `posts=30`.
+- Press *Refetch* (it goes through card 4's controller) or *Invalidate* (it
+  goes through the client): one request, and every card shows
+  `fetching=true` and then the data again. The `builds` counts move
+  together; card 4's can sit one ahead, because a `ListenableBuilder` has no
+  value to compare.
+- In card 6, press *Drop a post*: every reader shows 29, the listener logs one
+  line, and `child-builds=1` never moves. *Drop two posts* logs two
+  transitions, *Drop two posts, batched* logs one. A *Refetch* brings the 30
+  back; press it again and the listener says nothing, because `listenWhen`
+  refuses a fetch that returns the same posts (`listener-skips` goes up).
+- In card 7, press any of the *Increment* buttons: the counter in the card's
+  header goes up once the invalidation has refetched it. Under *Increment
+  (controller)* the listener reports `mutation-last=pending->success`.
+- In card 8, press *Load next*: all three infinite readers show `pages=2`
+  after one request, and the listener reads `infinite-last=1->2`.
+
+## The code
+
+The four styles read the same `postsQuery(api)` options, one card each, in
+the order the screen shows them. `context.query` reads in the build of any
+widget:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/four_call_styles/four_call_styles_screen.dart"
+  from="class _ContextCard extends StatelessWidget {"
+  end="}"
+/>
+
+`QueryBuilder` puts the read in the tree and rebuilds its own subtree:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/four_call_styles/four_call_styles_screen.dart"
+  from="class _BuilderCard extends StatelessWidget {"
+  end="}"
+/>
+
+`QueryMixin` reads in a `State`'s build and releases with the `State`:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/four_call_styles/four_call_styles_screen.dart"
+  from="class _MixinCardState extends State<_MixinCard> with QueryMixin {"
+  end="}"
+/>
+
+`QueryController` is a `ValueListenable` you create and dispose yourself; here
+the screen owns it, and a `ListenableBuilder` reads it:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/four_call_styles/four_call_styles_screen.dart"
+  from="class _ControllerCard extends StatelessWidget {"
+  end="}"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/four_call_styles/four_call_styles_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Four ways to read a query](../guides/reading-queries-in-widgets.md), [Side effects](../guides/side-effects.md), [Mutations](../guides/mutations.md), [Infinite queries](../guides/infinite-queries.md)
+- Tested by `test/features/four_call_styles_test.dart` (widget) and `e2e/tests/four_call_styles.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/four_call_styles)

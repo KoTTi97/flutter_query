@@ -1,0 +1,95 @@
+---
+title: Select and structural sharing
+description: Five readers of one cache entry, each selecting something different, with build counters that show which changes reach which reader.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/select_and_sharing/select_and_sharing_screen.dart'
+
+One list of todos in the cache, read by five widgets at once: four of them
+use `select` to take one piece of it, a count, the first text, a done/open
+record, the list of texts, and the fifth reads the whole list. Each reader
+counts its builds, and `data builds` counts only the builds where its
+selected value changed. A refetch that brings back equal data, or a write
+that changes one field, then shows which readers it reaches. This is the
+pattern for a screen where several widgets derive from one response: a
+device list whose header shows a count of online devices, a badge with the
+number of unread items, a summary row over an order's lines. Each widget
+selects what it shows and is left alone when something else changes.
+
+<LiveDemo feature="select-and-sharing" />
+
+## What to try
+
+- Press *Refetch*. The `todos` debug strip shows `fetches=2`, but no
+  reader's `data builds` moves: structural sharing kept the old list, so
+  every selection is equal to the last one. The reader with `buildWhen`
+  (*QuerySelectBuilder + buildWhen*) does not move its `builds` either; the
+  others count the fetching and idle notifications in `builds`.
+- Press *Toggle todo 1*. Only the done/open record and the reader without
+  `select` get a new `data builds`; the count, the first text and the list
+  of texts are unchanged.
+- Press *Rename todo 2*. Now only the list of texts and the reader without
+  `select` move.
+- Switch on *Structural sharing off* and press *Refetch*. The list in the
+  cache is a new instance each time, so the reader without `select` moves,
+  and so does the list of texts, a new list on every run of its selector.
+  The count, the first text and the record are compared by value and stay
+  put.
+
+## The code
+
+The selectors are top-level functions, so the same function object is
+passed on every build.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/select_and_sharing/select_and_sharing_screen.dart"
+  from="int countTodos(List<Todo> todos) => todos.length;"
+  to="<String>[for (final todo in todos) todo.text];"
+/>
+
+Every reader shares one query; a `select` makes it a
+`QuerySelectOptions<List<Todo>, T>`. Leaving `structuralSharing` null keeps
+the default sharing, and `noStructuralSharing()` switches it off for the
+cache write and for what `select` produces.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/select_and_sharing/select_and_sharing_screen.dart"
+  from="QuerySelectOptions<List<Todo>, T> todosQuery<T>("
+  end="    );"
+/>
+
+The first reader is `context.selectQuery`, which returns a result whose
+data is the selected `int`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/select_and_sharing/select_and_sharing_screen.dart"
+  from="final result = context.selectQuery<List<Todo>, int>("
+  to="_counter.record(result.dataOrNull);"
+/>
+
+The second is a `QuerySelectBuilder` whose `buildWhen` lets a rebuild
+through only when the selected data changed.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/select_and_sharing/select_and_sharing_screen.dart"
+  from="Widget build(BuildContext context) => QuerySelectBuilder<List<Todo>, String>("
+  end="      );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/select_and_sharing/select_and_sharing_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Structural sharing](../guides/structural-sharing.md), [What rebuilds, and when](../guides/render-optimizations.md), [Four ways to read a query](../guides/reading-queries-in-widgets.md)
+- Tested by `test/features/select_and_sharing_test.dart` (widget) and `e2e/tests/select_and_sharing.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/select_and_sharing)

@@ -100,14 +100,89 @@ const sidebars: SidebarsConfig = {
         },
       ],
     },
-    // One page for now; the chunks that add its pages list them here, and
-    // the page itself stays the category's landing page.
+    // The same groups, in the same order, as the gallery on the index page
+    // (`docs/examples/index.mdx`).
     {
       type: 'category',
       label: 'Examples',
       className: 'qk-sidebar-heading',
       link: { type: 'doc', id: 'examples/index' },
-      items: [],
+      items: [
+        'examples/task-manager',
+        'examples/one-file-tour',
+        {
+          type: 'category',
+          label: 'Basics',
+          items: [
+            'examples/simple',
+            'examples/basic',
+            'examples/four-call-styles',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Queries',
+          items: [
+            'examples/default-query-function',
+            'examples/dependent-queries',
+            'examples/parallel-queries',
+            'examples/query-collections',
+            'examples/combine',
+            'examples/initial-and-placeholder',
+            'examples/select-and-sharing',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Paging',
+          items: [
+            'examples/pagination',
+            'examples/load-more',
+            'examples/max-pages',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Mutations',
+          items: [
+            'examples/mutations',
+            'examples/optimistic-updates',
+            'examples/mutation-cancel',
+            'examples/mutation-state',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Cache',
+          items: [
+            'examples/prefetching',
+            'examples/stale-and-gc',
+            'examples/invalidation-and-filters',
+            'examples/playground',
+            'examples/cache-inspector',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Network',
+          items: [
+            'examples/auto-refetching',
+            'examples/retry',
+            'examples/cancellation',
+            'examples/offline',
+            'examples/focus-refetch',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Advanced',
+          items: [
+            'examples/build-when',
+            'examples/global-callbacks',
+            'examples/diagnostics',
+          ],
+        },
+      ],
     },
     // One page for now; the chunks that add its pages list them here, and
     // the page itself stays the category's landing page.

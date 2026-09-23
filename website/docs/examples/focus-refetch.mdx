@@ -1,0 +1,92 @@
+---
+title: Focus refetch
+description: Every RefetchOn value for app focus and for mount, a minimum background time before a return refetches, and the provider's own focus and connectivity settings.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/focus_refetch/focus_refetch_screen.dart'
+
+Three entries of the same server reading sit side by side under different
+policies, so one return to the foreground gets a different answer from each.
+Entry A turns `refetchOnWindowFocus` through `never`, `ifStale`, `always` and
+a `RefetchOn.when` rule; entry B adds `refetchOnMount`, with a reader you can
+detach and attach again; entry C runs on a client of its own, under a nested
+`QueryClientProvider.create`, so its focus manager can carry a
+`refetchMinBackgroundDuration`. This is the choice every screen with live
+data makes: an account balance or a device list that should be current the
+moment the user comes back, a settings form that must never be refetched
+under the user's cursor, a dashboard that should skip the refetch when the
+user only glanced at a notification.
+
+<LiveDemo feature="focus-refetch" />
+
+## What to try
+
+- The browser gives the demo no app lifecycle of its own to leave, so the
+  *App focused* switch is the focus source: turning it off and on again calls
+  `client.focusManager.setFocused(false)` and `(true)`, which is what
+  `QueryClientProvider` does for a real app. With the default `ifStale` and a
+  30-second stale time nothing refetches, and both strips keep `fetches=1`.
+- Set entry A's *On focus* to `always` and cycle the switch: entry A's
+  `serial` goes up and its strip reads `fetches=2`, while entry B, still on
+  `ifStale` with fresh data, stays where it was. Set *Stale time* to `0` and
+  `ifStale` refetches too. `when` refetches only once the data is older than
+  ten seconds, whatever the stale time says.
+- On entry B, press *Detach entry B* and then *Attach entry B*: a new reader
+  is a mount, so *On mount* decides. `always` fetches, `never` does not, and
+  `ifStale` fetches only once the data is stale.
+- On entry C, set *Min background* to `long` (an hour) and cycle the *Entry C
+  focused* switch: the return reads `shouldRefetchOnFocus=false` and its
+  `fetches` count does not move. Under `none` the same cycle refetches.
+- Set *Initial online status* to `offline`: entry C mounts on a new client
+  with `fetchStatus=paused` and sends nothing until you turn *Entry C online*
+  on. The `nearest=` facts show which provider `QueryClientProvider.maybeOf`
+  finds: the app's on the screen, entry C's under the nested provider.
+
+## The code
+
+Each entry's options take their policies from the screen's knobs. The `when`
+choice is a top-level function wrapped in a `const RefetchOn.when`, so it
+compares equal from one build to the next.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/focus_refetch/focus_refetch_screen.dart"
+  from="/// The `RefetchOn.when` on offer."
+  end="    );"
+/>
+
+A minimum background time belongs to the focus manager, and a focus manager
+is given to a client when the client is built. So entry C builds its own:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/focus_refetch/focus_refetch_screen.dart"
+  from="/// A client whose focus manager carries"
+  end="      );"
+/>
+
+The nested provider creates that client, owns it and clears it when it
+unmounts. A new `key` is a new client, which is how the threshold and the
+initial online status are swapped; `isAppShown` is applied to the client as
+it stands.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/focus_refetch/focus_refetch_screen.dart"
+  from="QueryClientProvider.create("
+  end="              ),"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/focus_refetch/focus_refetch_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [App focus refetching](../guides/window-focus-refetching.md), [Connectivity](../guides/connectivity.md), [Important defaults](../important-defaults.md)
+- Tested by `test/features/focus_refetch_test.dart` (widget) and `e2e/tests/focus_refetch.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/focus_refetch)

@@ -1,6 +1,7 @@
 import type * as Preset from '@docusaurus/preset-classic'
 import type { Config } from '@docusaurus/types'
 import { themes as prismThemes } from 'prism-react-renderer'
+import dartSource from './plugins/dart-source'
 
 // Nothing is deployed yet. The url/baseUrl below are the GitHub Pages
 // coordinates the repository would use, so that `onBrokenLinks: 'throw'` has
@@ -78,6 +79,9 @@ const config: Config = {
   // No page lives at `/docs` itself; a reader who trims a docs URL back to
   // it lands on the overview rather than a 404.
   plugins: [
+    // `.dart` files importable as strings: the examples pages show the
+    // compiled source itself (`src/components/DartSource`).
+    dartSource,
     [
       '@docusaurus/plugin-client-redirects',
       { redirects: [{ from: '/docs', to: '/docs/overview' }] },
