@@ -12,15 +12,22 @@ class MutationStateController<TSelected> extends ChangeNotifier
     implements ValueListenable<List<TSelected>> {
   /// Creates a selection over [client]'s mutation cache.
   MutationStateController(
-    this.client, {
+    QueryClient client, {
     MutationFilters filters = const MutationFilters(),
     required MutationStateSelect<TSelected> select,
-  }) : _observer = MutationStateObserver<TSelected>(client,
-            filters: filters, select: select);
+  }) : this._(
+          client,
+          MutationStateObserver<TSelected>(client,
+              filters: filters, select: select),
+        );
+
+  MutationStateController._(this.client, this._observer);
 
   /// A selection over the mutations of one type, [select] receiving them
   /// typed — see `MutationStateObserver.typed`. The types usually come from
   /// [select]'s parameter, and a type left as `Object?` matches anything.
+  /// The type test stays through a later [setOptions], whatever filters and
+  /// select it passes.
   static MutationStateController<TSelected>
       typed<TData, TVariables, TOnMutateResult, TSelected>(
     QueryClient client, {
@@ -28,11 +35,12 @@ class MutationStateController<TSelected> extends ChangeNotifier
     required TypedMutationStateSelect<TData, TVariables, TOnMutateResult,
             TSelected>
         select,
-  }) {
-    final (typedFilters, typedSelect) = typedMutationSelection(filters, select);
-    return MutationStateController<TSelected>(client,
-        filters: typedFilters, select: typedSelect);
-  }
+  }) =>
+          MutationStateController<TSelected>._(
+            client,
+            MutationStateObserver.typed<TData, TVariables, TOnMutateResult,
+                TSelected>(client, filters: filters, select: select),
+          );
 
   /// The client whose mutations are selected.
   final QueryClient client;

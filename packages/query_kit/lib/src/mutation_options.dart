@@ -17,6 +17,29 @@ import 'query_key.dart';
 ///
 /// The reason it ships: replaying three edits to the same record concurrently
 /// reorders them, which is exactly what an offline queue must not do.
+///
+/// **What waits for the scope is the mutation function, not `onMutate`.**
+/// Upstream's order, kept here:
+///
+/// * `onMutate` — the cache-wide one and the mutation's own — runs when the
+///   mutation is *submitted*, while an earlier mutation of the scope may
+///   still be running. An optimistic patch, a snapshot for rolling it back,
+///   a `cancelQueries` all happen then, not when the function's turn comes.
+///   A snapshot taken there predates the writes still queued ahead of it,
+///   so a rollback that restores it whole also undoes those; roll back only
+///   what this mutation changed.
+/// * The scope is held until the running mutation has *finished*, callbacks
+///   included: the cache's and its options' `onSuccess`/`onError` and
+///   `onSettled` run, and the next
+///   mutation starts only once the future `onSettled` returned has
+///   completed. An `onSettled` that returns an invalidation's future holds
+///   the scope until that refetch is done; one that should not,
+///   `.ignore()`s it.
+///
+/// While it waits, a queued mutation is `pending` with `isPaused` set. No
+/// hook runs at the moment the scope admits a mutation: upstream has none,
+/// and the one case that asks for it — a snapshot taken at the turn — is
+/// served by rolling back per item (release review, 2026-09-23, LIB-1).
 @immutable
 final class MutationScope {
   /// Scopes with equal [id]s are the same scope.
@@ -177,7 +200,10 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
     this.gcTime,
     this.scope,
     this.meta,
-  });
+  }) : assert(
+          mutationFn == null || mutationFnWithContext == null,
+          'Pass mutationFn or mutationFnWithContext, not both.',
+        );
 
   /// Options for a mutation without an [onMutate] step.
   ///
@@ -237,8 +263,9 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
   /// [mutationFn] with a second argument: the [MutationFunctionContext] of the
   /// run — the client, `meta`, the key, what [onMutate] returned, and a
   /// `signal` that `Mutation.cancel` cancels. Instead of [mutationFn], never
-  /// beside it — both at once is an [ArgumentError] when the client resolves
-  /// the options, in release builds too; when set it also wins over a function registered with
+  /// beside it — both at once fails an assertion at the constructor in a
+  /// debug build, and is an [ArgumentError] when the client resolves the
+  /// options in a release build; when set it also wins over a function registered with
   /// `setMutationDefaults`, which has no context form.
   ///
   /// A second field rather than a second parameter on [mutationFn], which is
@@ -281,8 +308,10 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
   /// it. Default [GcTime.defaultValue], five minutes.
   final GcTime? gcTime;
 
-  /// Mutations in the same scope run one at a time — see [MutationScope].
-  /// Unset, mutations run concurrently.
+  /// Mutations in the same scope run one at a time — see [MutationScope],
+  /// which says what waits (the function, not [onMutate]) and for how long
+  /// (until the running one's [onSettled] has completed). Unset, mutations
+  /// run concurrently.
   ///
   /// Read when a run starts and fixed for that run: changing it through an
   /// observer's `setOptions` while the mutation is pending does not move the

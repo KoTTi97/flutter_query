@@ -448,10 +448,12 @@ class QueryClient {
   /// [MutationFilters.status] passed here is ignored rather than combined.
   ///
   /// A mutation counts until its run has finished, callbacks included: it is
-  /// `pending` while its own `onSuccess`/`onError` and `onSettled` run, and
-  /// until the future `onSettled` returned has completed. So `onSettled`
-  /// sees itself in this count — `isMutating(...) > 1` there means another
-  /// matching mutation is pending — as upstream's does.
+  /// `pending` while the cache's and its options' `onSuccess`/`onError` and
+  /// `onSettled` run, and until the future `onSettled` returned has
+  /// completed. So `onSettled` sees itself in this count —
+  /// `isMutating(...) > 1` there means another matching mutation is pending
+  /// — as upstream's does. The per-call callbacks passed to `mutate` run
+  /// after the state has moved on.
   int isMutating({MutationFilters filters = const MutationFilters()}) =>
       mutationCache
           .findAll(
@@ -1224,8 +1226,10 @@ class QueryClient {
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) {
     if (options.mutationFn != null && options.mutationFnWithContext != null) {
-      // Not an assert: two functions where one runs is wrong in a release
-      // build too, and there the context one would win without a word.
+      // Not only an assert: two functions where one runs is wrong in a
+      // release build too, and there the context one would win without a
+      // word. A debug build fails earlier, at the literal — the constructor
+      // asserts (release review, 2026-09-23, REL-12).
       throw ArgumentError(
           'Give a mutation one function: mutationFn or mutationFnWithContext.');
     }

@@ -135,6 +135,12 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   /// Fire and forget. Errors reach the callbacks and the result, never the
   /// zone — an unawaited failing future would otherwise fail the enclosing
   /// test file.
+  ///
+  /// `onMutate` runs now, even for a mutation that then waits its turn in a
+  /// `MutationScope`; only the mutation function waits. The result stays
+  /// `pending` until the cache's and the options' callbacks have run and
+  /// `onSettled`'s future has completed — see `MutationScope`; [callbacks]
+  /// run after that.
   void mutate(
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,
@@ -142,7 +148,9 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     mutateAsync(variables, callbacks: callbacks).ignore();
   }
 
-  /// Completes with the data, or throws.
+  /// Completes with the data, or throws — after the callbacks have run, as
+  /// [mutate]'s result settles. The same order applies: `onMutate` at
+  /// submission, the function in its scope's turn.
   Future<TData> mutateAsync(
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,

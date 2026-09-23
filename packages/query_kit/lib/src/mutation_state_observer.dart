@@ -17,33 +17,6 @@ typedef MutationStateSelect<TSelected> = TSelected Function(
 typedef TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>
     = TSelected Function(Mutation<TData, TVariables, TOnMutateResult> mutation);
 
-/// [filters] narrowed to the mutations that *are* a
-/// `Mutation<TData, TVariables, TOnMutateResult>`, and [select] adapted to
-/// the erased signature — the two halves of a typed selection, for the
-/// binding's controller to share. A type argument left as `Object?` matches
-/// anything, so `<Object?, SensorIntent, Object?>` is "every mutation whose
-/// variables are a `SensorIntent`".
-(MutationFilters, MutationStateSelect<TSelected>)
-    typedMutationSelection<TData, TVariables, TOnMutateResult, TSelected>(
-  MutationFilters filters,
-  TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>
-      select,
-) {
-  final predicate = filters.predicate;
-  return (
-    MutationFilters(
-      mutationKey: filters.mutationKey,
-      exact: filters.exact,
-      status: filters.status,
-      predicate: (mutation) =>
-          mutation is Mutation<TData, TVariables, TOnMutateResult> &&
-          (predicate == null || predicate(mutation)),
-    ),
-    (mutation) =>
-        select(mutation as Mutation<TData, TVariables, TOnMutateResult>),
-  );
-}
-
 /// Observes selected mutation values in cache insertion order.
 ///
 /// Subscribes to the cache only while it has listeners. Selection uses
@@ -51,11 +24,17 @@ typedef TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>
 class MutationStateObserver<TSelected> {
   /// Creates a selection, readable immediately through [currentResult].
   MutationStateObserver(
-    this._client, {
+    QueryClient client, {
     MutationFilters filters = const MutationFilters(),
     required MutationStateSelect<TSelected> select,
-  })  : _filters = filters,
-        _select = select {
+  }) : this._(client, filters, select, null);
+
+  MutationStateObserver._(
+    this._client,
+    this._filters,
+    this._select,
+    this._typeTest,
+  ) {
     _update(notify: false);
   }
 
@@ -78,24 +57,40 @@ class MutationStateObserver<TSelected> {
   /// The filter is a mutation's *declared* type arguments, not the runtime
   /// type of its variables: one built from options whose types were never
   /// written or inferred is a `Mutation<Object?, Object?, Object?>` and drops
-  /// out silently. A later [setOptions] replaces filters and select with
-  /// untyped ones.
-  static MutationStateObserver<TSelected>
-      typed<TData, TVariables, TOnMutateResult, TSelected>(
+  /// out silently.
+  ///
+  /// The type test belongs to the observer, not to [filters]: it applies on
+  /// top of whatever filters a later [setOptions] passes, so the selection
+  /// only ever holds mutations of the declared types. A select passed to
+  /// [setOptions] has the erased signature, and receives those mutations
+  /// only — cast one to its declared type to read it typed. It used to live
+  /// in the filters, and `setOptions(filters: …)` alone dropped it while the
+  /// casting select stayed: the next mutation of another type threw a
+  /// `TypeError` out of `setOptions`, and then out of every cache event
+  /// (release review, 2026-09-23, L4-1).
+  static MutationStateObserver<TSelected> typed<TData, TVariables,
+          TOnMutateResult, TSelected>(
     QueryClient client, {
     MutationFilters filters = const MutationFilters(),
     required TypedMutationStateSelect<TData, TVariables, TOnMutateResult,
             TSelected>
         select,
-  }) {
-    final (typedFilters, typedSelect) = typedMutationSelection(filters, select);
-    return MutationStateObserver<TSelected>(client,
-        filters: typedFilters, select: typedSelect);
-  }
+  }) =>
+      MutationStateObserver<TSelected>._(
+        client,
+        filters,
+        (mutation) =>
+            select(mutation as Mutation<TData, TVariables, TOnMutateResult>),
+        (mutation) => mutation is Mutation<TData, TVariables, TOnMutateResult>,
+      );
 
   final QueryClient _client;
   MutationFilters _filters;
   MutationStateSelect<TSelected> _select;
+
+  /// The declared-type test of a [typed] selection, `null` for an untyped
+  /// one. Fixed for the observer's life.
+  final bool Function(Mutation<Object?, Object?, Object?> mutation)? _typeTest;
   List<TSelected> _result = List<TSelected>.unmodifiable(<TSelected>[]);
   final ListenerRegistry<void Function(List<TSelected>)> _listeners =
       ListenerRegistry<void Function(List<TSelected>)>();
@@ -111,6 +106,7 @@ class MutationStateObserver<TSelected> {
   }
 
   /// Replaces filters and/or selection and immediately recomputes the result.
+  /// A [typed] observer keeps its type test — see there.
   void setOptions({
     MutationFilters? filters,
     MutationStateSelect<TSelected>? select,
@@ -135,8 +131,12 @@ class MutationStateObserver<TSelected> {
   }
 
   void _update({bool notify = true}) {
-    final next =
-        _client.mutationCache.findAll(filters: _filters).map(_select).toList();
+    final typeTest = _typeTest;
+    var matching = _client.mutationCache.findAll(filters: _filters);
+    if (typeTest != null) {
+      matching = matching.where(typeTest).toList();
+    }
+    final next = matching.map(_select).toList();
     final shared = replaceEqualDeep<List<TSelected>>(_result, next);
     if (identical(shared, _result)) return;
     _result = List<TSelected>.unmodifiable(shared);

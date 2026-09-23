@@ -190,7 +190,13 @@ void main() {
     client.clear();
   });
 
-  test('one function, not two — an ArgumentError, not an assert', () {
+  // Release review, 2026-09-23, REL-12: the constructor asserts, so a debug
+  // build fails at the literal. The resolve-time ArgumentError stays for
+  // release builds, where the context function would otherwise win without a
+  // word; a test runs with assertions on and cannot reach it.
+  test(
+      'one function, not two — an assert at the literal, and an '
+      'ArgumentError in release', () {
     final client = testClient();
     expect(
         () => MutationObserver<int, int, void>(
@@ -199,7 +205,7 @@ void main() {
               mutationFn: (v) => v,
               mutationFnWithContext: (v, _) => v,
             )),
-        throwsArgumentError);
+        throwsA(isA<AssertionError>()));
     client.clear();
   });
 

@@ -111,17 +111,18 @@ void main() {
     client.clear();
   });
 
+  // `typedMutationSelection` is gone since the release review of 2026-09-23
+  // (L4-1): the type test lives on the observer. The case keeps its intent.
   test('a typed selection keeps the caller\'s own predicate', () {
     final client = testClient();
-    final (
-      filters,
-      _
-    ) = typedMutationSelection<Object?, String, Object?, String>(
-        MutationFilters(predicate: (_) => false), (m) => m.state.variables!);
+    final selection = MutationStateObserver.typed(client,
+        filters: MutationFilters(predicate: (_) => false),
+        select: (Mutation<Object?, String, Object?> m) => m.state.variables!);
     final observer = MutationObserver<void, String, void>(
         client, MutationOptions.simple(mutationFn: (String _) async {}));
     observer.mutate('x');
-    expect(client.mutationCache.findAll(filters: filters), isEmpty);
+    expect(selection.currentResult, isEmpty);
+    selection.destroy();
     observer.destroy();
     client.clear();
   });

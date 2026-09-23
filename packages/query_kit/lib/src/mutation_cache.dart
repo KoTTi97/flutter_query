@@ -356,9 +356,23 @@ class MutationCache
   /// the ninth review, 2026-09-10, C4). Completes when the resumed runs have
   /// settled — callbacks run, states moved on — since `continueMutation`
   /// hands on the run's own future (ninth review, 2026-09-10, C10).
+  ///
+  /// A scope's turn is awaited only while whoever holds the scope — its
+  /// running owner, or failing that its first pending mutation — could get
+  /// on itself. An `always` mutation queued behind an `online` one that is
+  /// paused offline would otherwise be awaited until the network came back,
+  /// and every focus refetch of a mounted client with it; upstream, which
+  /// resumes nothing offline, cannot get there. Left alone, it runs when its
+  /// scope-mate settles, as any queued mutation does (release review,
+  /// 2026-09-23, L4-4).
   Future<void> resumePaused() async {
     final paused = _mutations
-        .where((mutation) => mutation.state.isPaused && mutation.canResume)
+        .where(
+          (mutation) =>
+              mutation.state.isPaused &&
+              mutation.canResume &&
+              _scopeCanMove(mutation),
+        )
         .toList();
     await Future.wait<void>(
       // Errors belong to each mutation's state, not to whoever resumed it —
@@ -367,6 +381,28 @@ class MutationCache
         (mutation) => mutation.continueMutation().catchError((Object _) {}),
       ),
     );
+  }
+
+  /// Whether the mutation holding [mutation]'s scope — its owner, or the
+  /// first pending mutation in it when nobody owns it yet — can get on under
+  /// the network as it is. Always true for an unscoped mutation and for the
+  /// holder itself. Reads the owners and never claims: see [canRunMutation].
+  bool _scopeCanMove(Mutation<Object?, Object?, Object?> mutation) {
+    final scope = _scopeOf(mutation);
+    if (scope == null) {
+      return true;
+    }
+    var holder = _scopeOwners[scope];
+    if (holder == null) {
+      for (final other in _mutations) {
+        if (_scopeOf(other) == scope &&
+            other.state.status == MutationStatus.pending) {
+          holder = other;
+          break;
+        }
+      }
+    }
+    return holder == null || identical(holder, mutation) || holder.canResume;
   }
 
   /// The scope a mutation is serialised under, or null for an unscoped one.
@@ -383,6 +419,13 @@ class MutationCache
   Object? _scopeOf(Mutation<Object?, Object?, Object?> mutation) =>
       mutation.schedulingScope?.id;
 
+  /// Answers whether [mutation] may run now, and **claims** the scope for it
+  /// when the answer is yes: the owner is recorded here and released only by
+  /// [onMutationSettled]. So only a run that will settle may ask — the
+  /// retryer before an attempt, and `Mutation`'s own pending dispatches,
+  /// which the run's `finally` balances. A "could it run?" probe from
+  /// anywhere else would take the scope and never give it back (release
+  /// review, 2026-09-23, L4-6).
   @override
   @internal
   bool canRunMutation(Mutation<Object?, Object?, Object?> mutation) {
