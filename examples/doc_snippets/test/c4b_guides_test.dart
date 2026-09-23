@@ -47,4 +47,49 @@ void main() {
     await subscription.cancel();
     await link.close();
   });
+
+  test('reachability: rechecks faster than the probe still give answers',
+      () async {
+    final link = StreamController<bool>();
+    Future<bool> slowProbe() =>
+        Future.delayed(const Duration(milliseconds: 30), () => true);
+    final seen = <bool>[];
+    final subscription = reachability(link.stream, slowProbe,
+            recheck: const Duration(milliseconds: 5))
+        .listen(seen.add);
+
+    link.add(true);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(seen, [true]);
+
+    await subscription.cancel();
+    await link.close();
+  });
+
+  test('reachability: a probe from before a resubscribe is not delivered',
+      () async {
+    final link = StreamController<bool>.broadcast();
+    final answers = <Completer<bool>>[];
+    Future<bool> probe() {
+      final answer = Completer<bool>();
+      answers.add(answer);
+      return answer.future;
+    }
+
+    final stream = reachability(link.stream, probe);
+    final first = stream.listen((_) {});
+    link.add(true);
+    await pumpEventQueue();
+    expect(answers, hasLength(1));
+    await first.cancel();
+
+    final seen = <bool>[];
+    final second = stream.listen(seen.add);
+    answers.single.complete(true);
+    await pumpEventQueue();
+    expect(seen, isEmpty, reason: 'nothing says the link is still up');
+
+    await second.cancel();
+    await link.close();
+  });
 }

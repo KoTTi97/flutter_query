@@ -115,27 +115,44 @@ Stream<bool> reachability(
   StreamSubscription<bool>? linkChanges;
   Timer? timer;
   var linkUp = false;
-  var checks = 0;
+  // Moves when the link changes or the last listener leaves: an answer to a
+  // probe started before that is stale.
+  var epoch = 0;
+  var probing = false;
   late final StreamController<bool> out;
 
   Future<void> check() async {
-    final asked = ++checks;
-    final reachable = linkUp && await probe();
-    // A later check — the link dropping, say — overtakes this one's answer.
-    if (asked == checks && !out.isClosed) out.add(reachable);
+    if (!linkUp) {
+      out.add(false);
+      return;
+    }
+    if (probing) return; // one probe at a time; a recheck waits for it
+    probing = true;
+    final asked = epoch;
+    final bool reachable;
+    try {
+      reachable = await probe();
+    } finally {
+      probing = false;
+    }
+    if (asked == epoch) {
+      out.add(reachable);
+    } else if (out.hasListener) {
+      await check(); // the link changed meanwhile: ask again
+    }
   }
 
   out = StreamController<bool>.broadcast(
     onListen: () {
       linkChanges = link.listen((up) {
         linkUp = up;
+        epoch++;
         check().ignore();
       });
-      timer = Timer.periodic(recheck, (_) {
-        if (linkUp) check().ignore();
-      });
+      timer = Timer.periodic(recheck, (_) => check().ignore());
     },
     onCancel: () {
+      epoch++;
       timer?.cancel();
       linkChanges?.cancel().ignore();
     },
