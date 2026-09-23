@@ -41,8 +41,14 @@ jobs:
         run: |
           tag_version="${GITHUB_REF_NAME#*-v}"
           tag_package="${GITHUB_REF_NAME%-v*}"
-          name=$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml)
-          version=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml)
+          # The top-level scalar, without an inline comment or YAML quotes.
+          field() {
+            sed -n "s/^$1:[[:space:]]*//p" pubspec.yaml \
+              | sed -e 's/[[:space:]]#.*$//' -e 's/[[:space:]]*$//' \
+                    -e "s/^'\\(.*\\)'\$/\\1/" -e 's/^"\(.*\)"$/\1/'
+          }
+          name=$(field name)
+          version=$(field version)
           if [ "$name" != "$tag_package" ] || [ "$version" != "$tag_version" ]; then
             echo "tag $GITHUB_REF_NAME does not match pubspec $name $version" >&2
             exit 1
