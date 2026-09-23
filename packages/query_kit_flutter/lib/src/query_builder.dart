@@ -30,13 +30,14 @@ export 'read_entry.dart' show BuildWhen;
 /// field types: [options] is a `QueryObserverOptions` on one and a
 /// `MutationOptions` on another, and a reader of either sees the narrow type.
 mixin _BuilderWidget<T> on StatefulWidget {
-  /// The options this widget re-applies on every build, compared by `==` to
-  /// decide whether there is anything to re-apply.
+  /// The options this widget re-applies on every build — unconditionally,
+  /// the same object included.
   ///
-  /// Options built inline carry inline closures, so that comparison is
-  /// `identical` in practice and the answer is "yes" every build. That costs
-  /// one defaulting pass and nothing else: the observer compares the
-  /// *defaulted* options by value
+  /// Options kept in a field are the same object on every build, and yet an
+  /// `Enabled.when` in them may read outside state that changed: re-applying
+  /// them is what re-evaluates it (#84; release review 2026-09-23, BIND-3).
+  /// That costs one defaulting pass and nothing else: the observer compares
+  /// the *defaulted* options by value
   /// (https://github.com/KoTTi97/flutter_query/issues/10) and only a real
   /// difference reaches the query.
   Object get options;
@@ -119,9 +120,11 @@ class QueryBuilder<TData> extends StatefulWidget
   final BuildWhen<QueryResult<TData>>? buildWhen;
 
   /// The client to observe on, when it is not the nearest
-  /// [QueryClientProvider]'s. A different client on a later build recreates
-  /// the controller, because everything it observed belonged to the old one;
-  /// changed [options] on the same client are applied in place.
+  /// [QueryClientProvider]'s. A different client on a later build — this
+  /// field's or the provider's — recreates the controller, because
+  /// everything it observed belonged to the old one; what counts is the
+  /// client resolved, so naming the provider's own client here changes
+  /// nothing. Changed [options] on the same client are applied in place.
   @override
   final QueryClient? client;
 
@@ -419,13 +422,28 @@ abstract class _ControllerBuilderState<W extends _BuilderWidget<T>, T,
   @override
   void didUpdateWidget(W oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.client != widget.client) {
-      _disposeController();
-    } else if (_entry != null && oldWidget.options != widget.options) {
-      // A changed key switches the observed query in place; the observer is
-      // never recreated (https://github.com/KoTTi97/flutter_query/issues/22).
-      applyOptions();
+    if (_entry == null) {
+      return;
     }
+    // The client this widget resolves to *now*, not the field: `null` and
+    // the provider's own client are the same client (BIND-5), and a provider
+    // that swapped its client in this very frame has not told
+    // `didChangeDependencies` yet — it runs after this — so comparing the
+    // fields would hand the new options to an observer on the old client,
+    // which fetched there (B2-1; release review 2026-09-23).
+    if (_controllerClient != _client) {
+      _disposeController();
+      return;
+    }
+    // Every build, as upstream's `useBaseQuery` re-applies options on every
+    // render and the keyless reads do: options kept in a field are the
+    // *same* object on every build, and skipping them skipped re-evaluating
+    // an `Enabled.when` over outside state (#84; BIND-3). The observer
+    // compares the defaulted options by value, so an unchanged set costs one
+    // defaulting pass. A changed key switches the observed query in place;
+    // the observer is never recreated
+    // (https://github.com/KoTTi97/flutter_query/issues/22).
+    applyOptions();
   }
 
   void _disposeController() {

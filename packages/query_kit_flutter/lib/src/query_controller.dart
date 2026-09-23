@@ -163,9 +163,15 @@ class QueryController<TQueryData, TData> extends ChangeNotifier
   /// Deliberately does not notify: the observer notifies by itself when the
   /// *result* changes, and notifying here would rebuild the widget that just
   /// called this from its own `build`.
+  ///
+  /// The observer first: when it refuses the options — a throwing
+  /// `InitialData.compute` for a query that exists without data, which
+  /// leaves it on the old key — nothing is kept here either, so [value]
+  /// keeps reporting the key the observer is really on (release review
+  /// 2026-09-23, B2-3).
   void setOptions(QueryObserverOptionsBase<TQueryData, TData> options) {
-    _options = options;
     _observer.setOptions(options);
+    _options = options;
   }
 
   /// Refetches, completing with the result the refetch produced.
@@ -262,13 +268,14 @@ class InfiniteQueryController<TPageData, TPageParam, TData>
       );
 
   /// Replaces the options, paging half included. See
-  /// [QueryController.setOptions] on why this does not notify.
+  /// [QueryController.setOptions] on why this does not notify, and why
+  /// nothing is kept when the observer refuses.
   void setInfiniteOptions(
     InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) {
+    infiniteObserver.setInfiniteOptions(options);
     _infiniteOptions = options;
     _options = null;
-    infiniteObserver.setInfiniteOptions(options);
   }
 
   /// Accepts any options that carry the paging behaviour — what
@@ -398,14 +405,21 @@ class MutationController<TData, TVariables, TOnMutateResult>
 
   /// Completes with the data, or throws.
   ///
+  /// The per-call [callbacks] run after the options' own, as upstream's do,
+  /// for as long as this controller is not disposed — whether or not anything
+  /// listens to it: a controller held by a view model and called
+  /// imperatively gets them too. A run still going when the controller is
+  /// disposed skips the per-call callbacks that had not run yet; its
+  /// options' callbacks run regardless.
+  ///
   /// Called after [dispose] — a tap handler that awaited a dialog and whose
   /// widget is gone by the time it gets here — the mutation still runs, with
   /// its options' callbacks, and is collected after its `gcTime` like any
   /// mutation nobody watches. Nothing lands in [value], and the per-call
-  /// [callbacks] are dropped, as they are for any run whose controller has no
-  /// listener. Upstream re-attaches the forgotten observer, so the mutation
-  /// stays in the cache for good; a disposed controller here does not come
-  /// back (ninth review, 2026-09-10, C18). Hold the controller above the
+  /// [callbacks] are dropped. Upstream re-attaches the forgotten observer, so
+  /// the mutation stays in the cache for good; a disposed controller here
+  /// does not come back (ninth review, 2026-09-10, C18). Hold the controller
+  /// above the
   /// widget when the result is wanted after the widget is gone.
   Future<TData> mutateAsync(
     TVariables variables, {
@@ -416,7 +430,23 @@ class MutationController<TData, TVariables, TOnMutateResult>
           .build<TData, TVariables, TOnMutateResult>(client, _observer.options)
           .execute(variables);
     }
-    return _observer.mutateAsync(variables, callbacks: callbacks);
+    // The core runs per-call callbacks only while the observer has a
+    // listener — a component that has gone must not be called back — and
+    // upstream's `useMutation` is subscribed for as long as its component is
+    // mounted, so there the two coincide. A controller's "mounted" is "not
+    // disposed", listened to or not: one called imperatively from a view
+    // model dropped its per-call callbacks without a word (release review
+    // 2026-09-23, B2-2). So the run holds a listener of its own until it
+    // settles — the callbacks run inside the settling action, before the
+    // future completes — and [dispose], which drops every listener, is
+    // still what skips them. It delivers nothing: the controller's own
+    // subscription is what notifies. Held per run rather than for the
+    // controller's life, so an unlistened controller still lets go of a
+    // settled mutation and its `gcTime` starts (C50).
+    final release = _observer.subscribe((_) {});
+    return _observer
+        .mutateAsync(variables, callbacks: callbacks)
+        .whenComplete(release);
   }
 
   /// Back to idle, detaching from the mutation being observed.

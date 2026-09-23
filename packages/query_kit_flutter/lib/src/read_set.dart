@@ -42,6 +42,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:query_kit/query_kit.dart';
 
 import 'query_controller.dart';
@@ -61,6 +62,18 @@ typedef _Entry = ReadEntry<Object?>;
 /// record what it asked for, and [sweep] after the frame releases what the
 /// generation stopped asking for. The owner supplies the generation counter
 /// and bumps it when it sweeps, so several readers of one scope share a frame.
+///
+/// **Only the reader's own build opens a generation.** A read can also come
+/// from a callback that runs *later* with the reader's context — a nested
+/// `ValueListenableBuilder`, `LayoutBuilder` or `AnimatedBuilder` using the
+/// outer `context` or `watchQuery`, or a `ListView.builder`'s `itemBuilder`,
+/// whose `context` is the sliver's element shared by every item. Such a
+/// callback re-runs without the reader's `build`, and a generation opened by
+/// it alone released everything `build` had read (release review
+/// 2026-09-23, BIND-1/BIND-2). So a read made outside the reader's own build
+/// is *additive*: it joins whatever the reader holds and releases nothing,
+/// and what such a callback stops reading is released at the reader's own
+/// next build or unmount. [beginBuild] tells the two apart.
 class ReadSet {
   /// [rebuild] is how this reader is told its controllers moved; [who] names
   /// it in the two debug messages ("This State", "This widget").
@@ -91,16 +104,44 @@ class ReadSet {
   /// pass, so the first [beginBuild] always opens one.
   int _generation = -1;
 
-  /// Opens [generation] if it is not open already: what earlier builds held
-  /// becomes provisional, and whatever this build does not read again is
-  /// released by [sweep].
+  /// Identities read during the frame [_seenIn] names, own build or not —
+  /// what the two same-build checks ask about. Kept apart from [_current],
+  /// which an additive read does not reset.
+  Set<Object> _seen = <Object>{};
+  int _seenIn = -1;
+
+  /// The widget the reader's element had when a generation was last opened.
+  /// A parent handing it a new one rebuilds it with `Element.dirty` false.
+  Widget? _builtFor;
+
+  /// Opens [generation] if it is not open already *and* [reader] is building
+  /// itself: what earlier builds held becomes provisional, and whatever this
+  /// build does not read again is released by [sweep]. A read from anywhere
+  /// else — a nested builder or an `itemBuilder` running with [reader]'s
+  /// context — is additive and opens nothing (see the class doc).
   ///
-  /// Without this a screen that switches from one key to another would stay
-  /// subscribed to the key it no longer shows.
-  void beginBuild(int generation) {
-    if (_generation == generation) {
+  /// "Building itself" is Flutter's own bookkeeping, the same in every build
+  /// mode: `Element.dirty` stays true for the whole of a `build()` that
+  /// `markNeedsBuild` — `setState`, a dependency change, the first build —
+  /// caused, and is cleared before the children, and so every nested
+  /// builder, are built. The one own build that does not start dirty is a
+  /// parent handing the element a new widget (`update` forces the rebuild),
+  /// and that one is told apart by the widget having changed since the last
+  /// generation opened. A nested callback sees neither.
+  ///
+  /// Without the release a screen that switches from one key to another
+  /// would stay subscribed to the key it no longer shows.
+  void beginBuild(int generation, Element reader) {
+    if (_seenIn != generation) {
+      _seenIn = generation;
+      _seen = <Object>{};
+    }
+    final widget = reader.widget;
+    final ownBuild = reader.dirty || !identical(widget, _builtFor);
+    if (!ownBuild || _generation == generation) {
       return;
     }
+    _builtFor = widget;
     _generation = generation;
     _pending = <Object>{..._pending, ..._current};
     _current = <Object>{};
@@ -118,7 +159,7 @@ class ReadSet {
     final identity = id == null
         ? (options.queryKey, TQueryData, TData)
         : (#query, TQueryData, TData, id);
-    final repeat = _current.contains(identity);
+    final repeat = _seen.contains(identity);
     final entry = _entryFor(
       identity,
       () => QueryController<TQueryData, TData>(client, options),
@@ -147,7 +188,7 @@ class ReadSet {
     final identity = id == null
         ? (options.queryKey, TPageData, TPageParam, TData)
         : (#infinite, TPageData, TPageParam, TData, id);
-    final repeat = _current.contains(identity);
+    final repeat = _seen.contains(identity);
     final entry = _entryFor(
       identity,
       () => InfiniteQueryController<TPageData, TPageParam, TData>(
@@ -191,18 +232,24 @@ class ReadSet {
       TOnMutateResult,
     );
     assert(() {
-      // Two mutations of one shape in one build without `id` would share a
-      // controller, and the second `setOptions` would win: a tap on
-      // "archive" running the delete. Only the type-triple fallback is
-      // ambiguous; an `id` or a `mutationKey` names the mutation.
-      if (id == null &&
-          options.mutationKey == null &&
-          _current.contains(identity)) {
+      // Two mutations of one identity in one build without `id` would share
+      // a controller, and the second `setOptions` would win: a tap on
+      // "archive" running the delete. A `mutationKey` does not rule that
+      // out: upstream's is a *category* — `setMutationDefaults`, the
+      // `isMutating` and `MutationState` filters, prefix matching — and two
+      // different mutations under `['todos']` are ordinary there (release
+      // review 2026-09-23, B1-1). Distinct keys still tell two reads apart;
+      // only an `id` names one.
+      if (id == null && _seen.contains(identity)) {
+        final key = options.mutationKey;
         throw FlutterError(
           '$who read two mutations of the shape '
-          '${(TData, TVariables, TOnMutateResult)} in one build. They would '
-          'share one controller, and whichever was read last would run for '
-          'both. Give each an `id:`.',
+          '${(TData, TVariables, TOnMutateResult)}'
+          '${key == null ? '' : ' and the mutationKey $key'} in one build. '
+          'They would share one controller, and whichever was read last '
+          'would run for both. A mutationKey is a category, not a name: give '
+          'each read an `id:` (or read the mutation once and share the '
+          'controller).',
         );
       }
       return true;
@@ -249,6 +296,7 @@ class ReadSet {
     ValueListenable<Object?> Function() create,
   ) {
     _current.add(identity);
+    _seen.add(identity);
     return _entries.putIfAbsent(identity, () => _Entry(create(), rebuild));
   }
 
@@ -271,5 +319,6 @@ class ReadSet {
     _entries.clear();
     _current = <Object>{};
     _pending = <Object>{};
+    _seen = <Object>{};
   }
 }
