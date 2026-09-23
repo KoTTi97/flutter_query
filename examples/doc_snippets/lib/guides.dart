@@ -30,7 +30,6 @@ Widget taskTitle(QueryResult<Task> task) => switch (task) {
 // guides/query-keys.md
 // ---------------------------------------------------------------------------
 
-// >>> guides/query-keys.md#key-factory
 abstract final class TaskKeys {
   static final QueryKey all = QueryKey(<Object?>['tasks']);
 
@@ -39,13 +38,11 @@ abstract final class TaskKeys {
 
   static QueryKey detail(String id) => all.append(<Object?>['detail', id]);
 }
-// <<<
 
 // ---------------------------------------------------------------------------
 // guides/disabling-queries.md
 // ---------------------------------------------------------------------------
 
-// >>> guides/disabling-queries.md#lazy
 QueryObserverOptions<List<Task>> searchQuery(String needle) =>
     QueryObserverOptions(
       queryKey: TaskKeys.all.append(<Object?>['search', needle]),
@@ -53,7 +50,6 @@ QueryObserverOptions<List<Task>> searchQuery(String needle) =>
       // Nothing typed yet: nothing to ask the server.
       enabled: needle.isEmpty ? Enabled.no : Enabled.yes,
     );
-// <<<
 
 // ---------------------------------------------------------------------------
 // guides/background-fetching-indicators.md

@@ -309,7 +309,6 @@ QuerySelectOptions<Task, String> taskNameQuery(String id) => QuerySelectOptions(
     );
 // <<<
 
-// >>> guides/dependent-queries.md#enabled
 QueryObserverOptions<List<Comment>> commentsQuery(
   String? postId,
 ) =>
@@ -318,7 +317,6 @@ QueryObserverOptions<List<Comment>> commentsQuery(
       queryFn: (context) => api.comments(postId!),
       enabled: postId == null ? Enabled.no : Enabled.yes,
     );
-// <<<
 
 QueryObserverOptions<Task> withoutStructuralSharing(String id) =>
     QueryObserverOptions(
@@ -802,7 +800,6 @@ class TaskWithComments extends StatelessWidget {
 }
 // <<<
 
-// >>> guides/parallel-queries.md#queries-builder
 Widget queriesBuilderSample(List<String> visibleIds) =>
     QueriesBuilder<Task, String>(
       queries: <QuerySelectOptions<Task, String>>[
@@ -819,9 +816,7 @@ Widget queriesBuilderSample(List<String> visibleIds) =>
         ],
       ),
     );
-// <<<
 
-// >>> guides/side-effects.md#listener
 Widget queryListenerSample(QueryController<Task, Task> task) =>
     QueryListener<Task, Task>(
       controller: task,
@@ -831,7 +826,6 @@ Widget queryListenerSample(QueryController<Task, Task> task) =>
       ),
       child: const SizedBox.shrink(),
     );
-// <<<
 
 MutationStateController<int> writesInFlight(QueryClient client) {
   // >>> guides/mutation-state.md#mutation-state

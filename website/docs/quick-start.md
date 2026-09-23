@@ -3,13 +3,26 @@ title: Quick start
 description: A provider at the root, an options function, a widget that reads it — and the mutation that invalidates it.
 ---
 
-{/* demo: basic */}
-
 # Quick start
 
 Four pieces: a client at the root of the app, a function that describes the
 query, a widget that reads it, and a write that tells the cache what it made
-stale.
+stale. Ten minutes, and every later page builds on them.
+
+## 0. Install
+
+```bash
+flutter pub add query_kit_flutter
+```
+
+One import, `package:query_kit_flutter/query_kit_flutter.dart`, brings in the
+binding and the whole core with it. Pure Dart, versions and SDK floors are on
+[installation](installation.md).
+
+The samples below talk to an `api` object — whatever your app already uses to
+reach its backend. All it has to offer is methods that return a `Future` and
+throw when the request fails; [query functions](guides/query-functions.md)
+shows one built on dio and one on `package:http`.
 
 ## 1. A client at the root
 
@@ -144,6 +157,15 @@ need `mutate` as well as the state: `add.value` is the `MutationResult`,
 refetches it while it is on screen. See [mutations](guides/mutations.md) and
 [invalidation from mutations](guides/invalidations-from-mutations.md).
 
+:::note[In React Query]
+The same four steps as TanStack Query's quick start: `QueryClientProvider`
+at the root, `useQuery` (here `context.query`, or one of the other three
+call styles), `useMutation` (here `context.mutation`, which returns a
+controller) and `invalidateQueries` in `onSuccess`. The options are a value
+you name and reuse rather than an object literal at the call site. See
+[differences from TanStack Query](reference/differences-from-tanstack.md).
+:::
+
 ## What you just got
 
 Without writing any of it:
@@ -152,8 +174,9 @@ Without writing any of it:
   the cache deduplicates it.
 - **Stale-while-revalidate.** A second visit renders from cache immediately and
   refetches behind it if the data is older than `staleTime`.
-- **Refetch on focus and on reconnect**, retries with exponential backoff, and
-  garbage collection of entries nobody is watching.
+- **Refetch when the app returns to the foreground** — and on reconnect, once
+  you [plug in connectivity](guides/connectivity.md) — retries with
+  exponential backoff, and garbage collection of entries nobody is watching.
 - **Cancellation** the moment nothing is observing the query any more, when
   the query function hands `context.signal` to its HTTP client.
 
@@ -173,3 +196,19 @@ a provider, a query read two ways and a mutation that invalidates it, with
 no server. `flutter run` in that directory.
 
 For every feature as its own screen, see [the examples](examples/index.md).
+
+## Next steps
+
+- [Important defaults](important-defaults.md) — why the list refetched when
+  you came back to the app, and how to change it.
+- [Queries](guides/queries.md) — every state a result can be in, and the
+  flags for a spinner, a refresh bar and an error banner.
+- [Query keys](guides/query-keys.md) — how to name data so one invalidation
+  reaches exactly what a write changed.
+- [Four ways to read a query](guides/reading-queries-in-widgets.md) — the
+  builder, the mixin and the controller, if `context.query` is not the shape
+  your widget wants.
+- [Mutations](guides/mutations.md) — callbacks, errors and
+  [optimistic updates](guides/optimistic-updates.md).
+- [Testing](guides/testing.md) — the teardown every widget test with a
+  client needs at its end.

@@ -3,9 +3,13 @@ title: Combining queries
 description: combine over a record or a list of results — the pending, error and data rules, optional sources, combineWith, CombineMemo and keys.
 ---
 
-{/* demo: combine */}
-
 # Combining queries
+
+Two reads side by side give you two results, and a screen that needs both
+has to decide what they amount to: a spinner while either loads, an error if
+either failed, and — the part hand-written code gets wrong — what to show
+when one of them fails *after* both were on screen. Written as nested
+`switch`es, that is nine cases per pair, most of them the same.
 
 A record has a type per position, so `combine` is a function over a **record
 of results** — from `context.query`, a builder, the mixin or a controller's
@@ -40,6 +44,58 @@ class TaskWithComments extends StatelessWidget {
 }
 ```
 
+In an app, the combiner is where two lists become the one the screen shows —
+here, the rooms, each with the devices in it:
+
+```dart snippet="guides/combining-queries.md#rooms-overview"
+// lib/ui/rooms_overview.dart
+class RoomsOverview extends StatelessWidget {
+  const RoomsOverview({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final rooms = (
+      context.query(roomsQuery()),
+      context.query(devicesQuery()),
+    ).combine(
+      (rooms, devices) => <({Room room, List<Device> devices})>[
+        for (final room in rooms)
+          (
+            room: room,
+            devices: <Device>[
+              for (final device in devices)
+                if (device.roomId == room.id) device,
+            ],
+          ),
+      ],
+    );
+
+    return switch (rooms) {
+      CombinedPending() => const Center(child: CircularProgressIndicator()),
+      CombinedError(:final error) => Center(
+          child: TextButton(
+            onPressed: rooms.retry,
+            child: Text('$error — try again'),
+          ),
+        ),
+      CombinedData(:final data) => ListView(
+          children: <Widget>[
+            for (final entry in data)
+              ListTile(
+                title: Text(entry.room.name),
+                trailing: Text('${entry.devices.length}'),
+              ),
+          ],
+        ),
+    };
+  }
+}
+```
+
+The two queries stay separate in the cache — the devices list is the same
+entry the devices screen reads, and invalidating it after a rename updates
+both screens — and only the view joins them.
+
 The rules, in order:
 
 1. A source that **failed with nothing to show** makes the whole a
@@ -58,11 +114,14 @@ combiner. A `CombinedResult` is deliberately not a source, so two combinations
 do not nest. Controllers combine the same way under a `ListenableBuilder` over
 `Listenable.merge([a, b])`.
 
-Two combinations that share a source each refetch it: `refetch()` and
-`retry()` cancel a fetch in flight and start their own, as an observer's
-`refetch()` does. To refresh several combinations at once without fetching a
-shared source twice, pass `refetch(cancelRefetch: false)` — the second call
-then joins the fetch the first one started.
+`refetch()` and `retry()` call each source's own `refetch()`, with the same
+`cancelRefetch` (default `true`). So they cancel a fetch in flight and start
+again **only for a source that already has data**; a source still on its
+first load, with nothing cached, joins the fetch that is running instead of
+restarting it. Two combinations that share a source therefore each refetch
+it once it has data. To refresh several combinations at once without
+fetching a shared source twice, pass `refetch(cancelRefetch: false)` — the
+second call then joins the fetch the first one started.
 
 The combiner runs on every call — every build. For a constructor call that is
 nothing; for a join over long lists, keep a `CombineMemo<R>` next to the reads
@@ -124,5 +183,33 @@ re-runs the combiner when it differs.
 
 ## See it running
 
-The `combine` screen shows the rules one source at a time; see
-[examples](../examples/index.md).
+The showcase's *combine* screen joins a post, its comments and a counter.
+Set *The post read* to `is refused` and press *Refetch all*: the post's
+refetch fails, yet `state=data` holds, with `refetchError=` saying why. Press
+*Reset* instead and the post has nothing to show: `state=error`, and a
+*Retry* button. With the knob back on `answers` and everything loaded,
+*Refetch all* raises `builds` but not `combines` — nothing changed, so the
+memo skipped the combiner:
+
+<LiveDemo feature="combine" />
+
+## Traps
+
+- **Combining in a place that does not rebuild.** `combine` observes
+  nothing; it reads the results it is handed. Call it where those results are
+  read — in the `build` that read them, or under a `ListenableBuilder` over
+  the controllers.
+- **Blanking on a failed refresh.** Match `CombinedData(:final
+  refetchError)` rather than treating every error alike: a refetch that
+  failed keeps the data, and a banner is usually all it deserves.
+- **A memo over a closure.** See the rule above: with `memo:`, what the
+  combiner reads beyond its sources goes in `keys:`.
+
+:::note[In React Query]
+This is the `combine` option of `useQueries`, taken out of it: here it works
+over any record of results — from any call style — and over a
+`QueriesController`'s list. A failure with nothing to show wins over a
+source still loading, and `CombineMemo` plays the part of TanStack's
+memoised `combine`. See [differences from TanStack
+Query](../reference/differences-from-tanstack.md).
+:::

@@ -3,17 +3,20 @@ title: Four ways to read a query
 description: context.query, QueryBuilder, QueryMixin and QueryController — four equal call styles, how to pick between them, and when a read is released.
 ---
 
-{/* demo: four-call-styles */}
-
 # Four ways to read a query
 
 `useQuery` has no single counterpart here. The binding offers **four equal
 ways** to read a query, and **the documentation names no default**.
 
 They are layered, not competing — each is a thin shell over the one below —
-and they interoperate inside one screen. The showcase's `four-call-styles`
-screen puts all four on one key and shows that five readers still cost one
-request.
+and they interoperate inside one screen. The showcase's *four call styles*
+screen puts them all on one key. Under its first card, *One entry, five
+readers*, the strip reads `observers=5` and `fetches=1`: press *Refetch* and
+every reader moves
+together on one request. Further down, *6. QueryListener, a side effect* counts
+`listener-calls` as you press *Drop a post*:
+
+<LiveDemo feature="four-call-styles" height={720} />
 
 Two rules hold for all of them:
 
@@ -66,9 +69,10 @@ QueryBuilder<Task>(
 )
 ```
 
-The `StreamBuilder` shape: the most explicit and the most predictable —
-everything is visible in the tree — and the natural fit inside a list or a
-sliver. Several queries on one screen means several nested builders.
+The `StreamBuilder` shape: the read is a widget in the tree, and a change
+rebuilds that widget's subtree. Being a widget, it is also a row of its own
+when an `itemBuilder` returns one. Several queries on one screen means
+several nested builders.
 
 `QuerySelectBuilder<TQueryData, TData>` is the same widget for a query with a
 `select` — a `QuerySelectOptions<TQueryData, TData>`. Builders take
@@ -150,7 +154,7 @@ converged on:
 | Situation | What fits |
 |---|---|
 | A leaf that renders one query | `context.query` — flat, and only that widget rebuilds |
-| Inside a `ListView.builder` or a sliver | `QueryBuilder`, or a small row widget that reads its own query — the tree stays explicit and each row's reads go with it. Not `context.query` through the `itemBuilder`'s own `context`, which is a debug error |
+| Inside a `ListView.builder` or a sliver | a widget per row that reads its own query — a `QueryBuilder`, or a small row widget reading with `context.query` or `watchQuery` in its own `build` — so each row's reads go with it. Not a read through the `itemBuilder`'s own `context` (see [lazily built lists](#how-reads-are-released)) |
 | A `State` that is already stateful (a form, a controller) | `QueryMixin` — the query and its mutations go flat at the top of `build` |
 | Two siblings that need the same result | `QueryController` held by the parent |
 | You want `buildWhen` | a builder, `watchQuery` or `context.query`; a controller filters in its listener instead |
@@ -190,12 +194,49 @@ it does.
   `PageView.builder` or any other lazily built list hands its item builder the
   whole list's context, not the row's, and builds rows piecemeal as they
   scroll in, so no rule for it both keeps the rows on screen subscribed and
-  lets go of the ones scrolled away. A debug build throws a `FlutterError`
-  naming the fix: give each row a widget of its own —
-  `itemBuilder: (_, i) => TaskTile(ids[i])` — and read in `TaskTile.build`.
-  (In a release build such a read is additive: no row on screen loses its
-  subscription, and the rows scrolled away stay subscribed until the list is
-  rebuilt or goes.)
+  lets go of the ones scrolled away. A `context.query` (or any other
+  `context.` read) through that item-builder `context` is refused: a debug
+  build throws a `FlutterError` naming the fix. (In a release build such a
+  read is additive: no row on screen loses its subscription, and the rows
+  scrolled away stay subscribed until the list is rebuilt or goes.) A
+  `watchQuery` inside the `itemBuilder` does not throw — it reads for the
+  `State` around the list, additively, as a nested builder does — so the
+  rows scrolled away stay subscribed until that `State`'s next own `build`
+  that reads, or its disposal. The fix for both is the same: give each row a
+  widget of its own — `itemBuilder: (_, i) => TaskTile(ids[i])` — and read
+  in `TaskTile.build`.
+
+### A widget per row
+
+The fix for a lazily built list, in full. The list builds one widget per id,
+and each row reads its own query in its own `build`:
+
+```dart snippet="guides/reading-queries-in-widgets.md#device-rows"
+ListView.builder(
+  itemCount: ids.length,
+  // Each row is a widget of its own, so each row's read is its own.
+  itemBuilder: (context, index) => DeviceRow(ids[index]),
+)
+```
+
+```dart snippet="guides/reading-queries-in-widgets.md#device-row"
+class DeviceRow extends StatelessWidget {
+  const DeviceRow(this.id, {super.key});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    final device = context.query(deviceQuery(id));
+    return ListTile(title: deviceTitle(device));
+  }
+}
+```
+
+A row scrolled away unmounts and releases its read; one scrolled back in
+reads again, from the cache if the entry is still there. Fifty rows are fifty
+observers of fifty entries — and each entry, fetched once, is what a detail
+screen for that device opens on at once.
 
 [Troubleshooting](../reference/troubleshooting.md) has each of these as a
 symptom, with the fix.
@@ -213,3 +254,10 @@ final done = computed(() => signal.value.dataOrNull?.done ?? false);
 ```
 
 Nothing is needed from this package for that.
+
+:::note[In React Query]
+`useQuery` is one hook; here it is four shapes of the same observer, because
+Flutter has no hooks in the framework. `context.query` and `watchQuery`
+read flat in `build`, the way a hook call does. See [differences from TanStack
+Query](../reference/differences-from-tanstack.md).
+:::
