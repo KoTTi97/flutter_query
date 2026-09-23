@@ -18,7 +18,7 @@ starts once C3 has fixed the sidebar and slugs.
 | # | Chunk | Acceptance | Wave | Status |
 |---|---|---|---|---|
 | A | Audits | three reports in `audits/` | 0 | done |
-| C1 | Name, AI disclosure, READMEs, CHANGELOGs, pubspecs | D1/D2 everywhere listed; package READMEs install-first, no maintainer history (D3); CHANGELOG 1.0.0 is a feature summary; `coverage/` ignored | 1 | open |
+| C1 | Name, AI disclosure, READMEs, CHANGELOGs, pubspecs | D1/D2 everywhere listed; package READMEs install-first, no maintainer history (D3); CHANGELOG 1.0.0 is a feature summary; `coverage/` ignored | 1 | done |
 | C2 | Live-demo infrastructure | in-memory backend in `lib/` of both examples behind a define; embed mode; `tool/build_demos.sh`; `<LiveDemo>`; CI builds demos into the site; Playwright over the embedded demos; Pages workflow prepared (D5, D7) | 1 | open |
 | C8a | Dartdoc, core | no internal history in any `///`; src-level rules moved onto public symbols; categories; examples on entry points; library doc with quick start and D2 notice | 1 | open |
 | C8b | Dartdoc, binding | same for `query_kit_flutter` | 1 | open |
@@ -73,12 +73,28 @@ starts once C3 has fixed the sidebar and slugs.
   suites touched, `dart analyze --fatal-infos`, `dart format`, `npm run build`
   for the site) stand in for the orchestrator template's `pnpm verify`.
 
+## Site slugs promised by the READMEs
+
+C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
+`important-defaults`, `coming-from-react-query`, `guides/pure-dart`,
+`guides/queries`, `guides/query-keys`, `guides/mutations`,
+`guides/optimistic-updates`, `guides/infinite-queries`,
+`guides/reading-queries-in-widgets`, `guides/render-optimizations`,
+`guides/window-focus-refetching`, `guides/connectivity`, `guides/testing`,
+`reference/differences-from-tanstack`, `reference/troubleshooting`.
+
 ## Bug list
 
 | ID | Found in | Bug | Status |
 |---|---|---|---|
+| B1 | C1 review | READMEs claimed the suite is ported "case for case" (414/536) | fixed `68ae3f1` |
+| B2 | C1 review | core README: `QueryCancelToken` handed to dio directly (needs `onCancel` bridge) | fixed `68ae3f1` |
+| B3 | C1 review | core README: pure-Dart client reacts to focus/connectivity by itself | fixed `68ae3f1` |
+| B4 | C1 review | binding README lost the connectivity section its dartdoc points to | fixed `68ae3f1` |
+| B5 | C1 review | five P3 overstatements/jargon in READMEs and binding CHANGELOG | fixed `68ae3f1` |
 
 ## Log
 
 | Date | Chunk | Commit | Note |
 |---|---|---|---|
+| 2026-09-23 | C1 | `37938ca`, `68ae3f1` | name, AI notice, READMEs, CHANGELOGs; binding `example/README.md` dropped so pub.dev's Example tab shows code |
