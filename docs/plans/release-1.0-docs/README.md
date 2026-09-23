@@ -29,7 +29,7 @@ starts once C3 has fixed the sidebar and slugs.
 | C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | open |
 | C7 | API reference pages, differences page, troubleshooting cleanup | | 3 | open |
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | open |
-| C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | open |
+| C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | open |
 
 ## Decisions
@@ -103,9 +103,9 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B13 | C3 review | every titled admonition rendered as plain `:::danger` text (Docusaurus v4 syntax) — AI notice box included | fixed `3b4eb53` |
 | B14 | C3 review | `/docs/` 404; see-through mobile menu; 8 wrong facts in moved/new pages (StaleTime.static vs invalidation, cancelRefetch, NetworkMode is an enum, …) | fixed `3b4eb53` |
 | B15 | C3 review | landing page shows stale test counts / bug count | open → C10 |
-| B16 | C5 | `tool/build_demos.sh` can't read `baseUrl` since C1 made it a constant — CI demo build broken | open → C11 |
-| B17 | C5 | showcase sources shown on the site carry review IDs/issue links, one on screen ("since C49") | open → C11 |
-| B18 | C5 | stale showcase texts: "combine is not ported", missing spec reference, pagination/offline notices overpromise | open → C11 |
+| B16 | C5 | `tool/build_demos.sh` can't read `baseUrl` since C1 made it a constant — CI demo build broken | fixed `617f9da` |
+| B17 | C5 | showcase sources shown on the site carry review IDs/issue links, one on screen ("since C49") | fixed `617f9da` |
+| B18 | C5 | stale showcase texts: "combine is not ported", missing spec reference, pagination/offline notices overpromise | fixed `617f9da` |
 
 ## Log
 
@@ -117,3 +117,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C9 | `cb03ef8`, `ab84027` | +331 core, +12 binding tests; coverage 90.0→99.8 % / 97.4→99.8 %; binding on Chrome; coverage floors + jargon guard (non-blocking) in CI |
 | 2026-09-23 | C2 | `bc0f72f`, `99b99a7` | in-memory backends, embed mode, `tool/build_demos.sh`, `<LiveDemo>`, website-e2e (36 specs), pages.yml (tag/manual only) |
 | 2026-09-23 | C3 | `2c7a472`, `3b4eb53` | TanStack-style IA: 6 getting-started, 42 guides, examples/cookbook index, reference, project; `/docs` redirect; LiveDemo now on quick-start |
+| 2026-09-23 | C11 | `617f9da` | example sources free of internal history, stale screen texts fixed, `build_demos.sh` reads templated baseUrl, jargon guard scans example sources (orchestrator spot-checked; comment/string-only) |
