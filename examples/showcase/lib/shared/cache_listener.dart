@@ -7,9 +7,8 @@
 /// frame's build phase a `setState` is not allowed and the rebuild has to wait
 /// for the frame to end; anywhere else it can go straight in.
 ///
-/// Eleven screens wrote that dance out by hand, byte for byte, and one wrote a
-/// fourth variant of it; the review's C55 counted them. It lives here now, in
-/// two layers: [PhaseSafeRebuild] for a [State] that owns its own
+/// Most screens need that dance, so it is written once, here, in two
+/// layers: [PhaseSafeRebuild] for a [State] that owns its own
 /// subscription, and [CacheListener] for the common case of "rebuild this
 /// subtree whenever the query cache says anything".
 library;

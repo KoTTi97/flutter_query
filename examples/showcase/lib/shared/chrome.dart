@@ -14,7 +14,7 @@
 /// here is a `StatelessWidget` that reads `Theme.of(context)`, holds no state,
 /// takes no callback, and publishes no name to either test layer. A widget
 /// that wants any of those four is not chrome and belongs in one of the other
-/// two modules (#69).
+/// two modules.
 ///
 /// The `ThemeData` itself is *not* here: it has exactly one caller and always
 /// will, so it lives beside the `MaterialApp` it configures in `main.dart`.

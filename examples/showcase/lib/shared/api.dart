@@ -13,8 +13,7 @@
 /// examples import would hide it behind a workspace row and an import. What
 /// keeps each copy honest is not a common ancestor but
 /// `test/backend_contract_test.dart`: one list of cases, run against this
-/// app's fake *and* against its real server
-/// (https://github.com/KoTTi97/flutter_query/issues/52).
+/// app's fake *and* against its real server.
 library;
 
 import 'dart:convert';
@@ -108,8 +107,7 @@ class ShowcaseApi {
 
   /// Bridges a query's cancellation to dio's.
   ///
-  /// This is the interop point the core is designed around
-  /// (https://github.com/KoTTi97/flutter_query/issues/11): reading
+  /// This is the interop point the core is designed around: reading
   /// `context.signal` marks the fetch as cancellable, and `onCancel` hands the
   /// abort to whatever transport is underneath. A `queryFn` that never touches
   /// the token is simply uncancellable, and its result still lands in the cache.
@@ -297,7 +295,7 @@ class ShowcaseApi {
   ///
   /// Returning it is what lets `test/backend_contract_test.dart` see the
   /// answer at all: a body no method reads is a body the fake can get wrong
-  /// for as long as anyone cares to look (#53).
+  /// for as long as anyone cares to look.
   Future<String> resetScenario() => _run(
         () => _dio.post<Map<String, Object?>>('/__scenario/$scenario/reset'),
         (json) => json['id']! as String,

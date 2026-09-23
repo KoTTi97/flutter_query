@@ -2,8 +2,7 @@
 /// query and a mutation under a connection the reader controls.
 ///
 /// The switch *is* the connectivity source here. The library installs no
-/// listener and depends on no connectivity package
-/// (https://github.com/KoTTi97/flutter_query/issues/21), so a client nobody
+/// listener and depends on no connectivity package, so a client nobody
 /// tells otherwise believes it is online — which is what upstream does with
 /// no listener too. A real app hands `QueryClientProvider` an
 /// `OnlineStatus.stream`; this screen calls
@@ -17,8 +16,10 @@
 /// * `online` — neither fetches while offline. The query goes
 ///   `fetchStatus=paused` without sending anything, the mutation is `pending`
 ///   with `isPaused=true`, and both continue when the connection returns.
-/// * `always` — connectivity is ignored: the request goes out and fails like
-///   any other, and retries do not pause.
+/// * `always` — connectivity is ignored: the request goes out, and retries do
+///   not pause. The switch only tells the library it is offline, so here the
+///   backend still answers; over a connection that is really down the
+///   request fails like any other.
 /// * `offlineFirst` — one attempt runs even offline (a service worker or an
 ///   HTTP cache may answer it); a *retry* after it pauses, which is
 ///   `retryer.dart`'s `canFetch` for the start and `_canContinue` for the
@@ -386,8 +387,11 @@ class _OfflineScreenState extends State<OfflineScreen>
               ),
               SizedBox(height: 8),
               Notice(
-                'always — connectivity is ignored: the request goes out '
-                'offline and fails like any other, and retries never pause.',
+                'always — connectivity is ignored: the request goes out even '
+                'offline, and retries never pause. The switch only tells the '
+                'library it is offline, so here the backend still answers; '
+                'over a connection that is really down the request fails '
+                'like any other.',
               ),
               SizedBox(height: 8),
               Notice(

@@ -7,8 +7,7 @@
 /// `watchMutation`, `context.query`, `context.selectQuery`,
 /// `context.infiniteQuery` and `context.mutation`. The builders are
 /// demonstrated on `select-and-sharing`; the eight are demonstrated here,
-/// which is the whole reason this screen exists (C39,
-/// https://github.com/KoTTi97/flutter_query/issues/68). This screen shows
+/// which is the whole reason this screen exists. This screen shows
 /// what that page describes and explains nothing a second way.
 ///
 /// **Sixteen readers, in eight pairs.** Every member is read twice over the
@@ -39,8 +38,8 @@
 /// - **A mutation run is three builds plain and two filtered.** `idle`,
 ///   `pending` and `success` are three results; only the last of them carries
 ///   data, so the `data` predicate drops the pending one. A mutation has no
-///   `select`, so the predicate is the *only* filter one of these readers has
-///   (https://github.com/KoTTi97/flutter_query/issues/67).
+///   `select`, so the predicate is the *only* filter one of these readers
+///   has.
 /// - **The knob moves every counter by one.** A predicate filters
 ///   *notifications*, not rebuilds from above: a new value for the knob is a
 ///   new widget for all sixteen readers, and nothing about `buildWhen` can

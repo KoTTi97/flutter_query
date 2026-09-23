@@ -2,7 +2,7 @@
 ///
 /// It is how a test reads the cache from the screen. The strip is a
 /// [SemanticsGroup] named `debug <label>` — one name for both layers, the house
-/// convention (C56): a widget test asks `groupNamed('debug <label>')` and the
+/// convention: a widget test asks `groupNamed('debug <label>')` and the
 /// end-to-end suite `getByRole('group', { name: 'debug <label>' })`, and each
 /// fact is an exact text inside it. No stopwatch needed to know whether a fetch
 /// happened, whether the entry is stale, or how many observers hold it.

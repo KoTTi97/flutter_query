@@ -5,6 +5,7 @@
 #
 #   tool/build_demos.sh              # both apps
 #   tool/build_demos.sh showcase     # one of them
+#   tool/build_demos.sh --print-base-url
 #
 # The output is build output: it is gitignored and never committed (plan D5).
 # CI runs this before `npm run build` in the `website` job; locally,
@@ -18,10 +19,52 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 site="$root/website"
 
-base_url="${SITE_BASE_URL:-$(sed -En "s/^[[:space:]]*baseUrl:[[:space:]]*['\"]([^'\"]*)['\"].*/\1/p" "$site/docusaurus.config.ts" | head -n 1)}"
+# Reads the site's baseUrl from its config without running it (running it
+# needs the site's node_modules). The spellings understood, first match wins:
+#
+#   baseUrl: '/x/',                      a literal in the config object
+#   const baseUrl = '/x/'                a top-level constant
+#   const baseUrl = `/${repository}/`    a template over top-level string
+#                                        constants (const repository = 'x')
+#
+# Anything else is an error, not a guess.
+config_base_url() {
+  local config="$site/docusaurus.config.ts"
+  local quote="['\"\`]"
+  local body="[^'\"\`]*"
+  local value name constant
+  value="$(sed -En "s/^[[:space:]]*baseUrl:[[:space:]]*${quote}(${body})${quote}.*/\1/p" "$config" | head -n 1)"
+  if [[ -z "$value" ]]; then
+    value="$(sed -En "s/^[[:space:]]*(export[[:space:]]+)?const[[:space:]]+baseUrl[[:space:]]*=[[:space:]]*${quote}(${body})${quote}.*/\2/p" "$config" | head -n 1)"
+  fi
+  # Each ${name} in a template resolves to a top-level `const name = '...'`.
+  local pattern='\$\{([A-Za-z_][A-Za-z0-9_]*)\}'
+  while [[ "$value" =~ $pattern ]]; do
+    name="${BASH_REMATCH[1]}"
+    constant="$(sed -En "s/^[[:space:]]*(export[[:space:]]+)?const[[:space:]]+${name}[[:space:]]*=[[:space:]]*['\"]([^'\"]*)['\"].*/\2/p" "$config" | head -n 1)"
+    if [[ -z "$constant" ]]; then
+      echo "build_demos: baseUrl uses \${$name}, which is not a string constant in website/docusaurus.config.ts" >&2
+      return 1
+    fi
+    value="${value//"\${$name}"/$constant}"
+  done
+  printf '%s\n' "$value"
+}
+
+if [[ -n "${SITE_BASE_URL:-}" ]]; then
+  base_url="$SITE_BASE_URL"
+else
+  base_url="$(config_base_url)"
+fi
 if [[ -z "$base_url" || "$base_url" != /*/ ]]; then
-  echo "build_demos: could not read baseUrl from website/docusaurus.config.ts (got '$base_url')" >&2
+  echo "build_demos: could not read baseUrl from website/docusaurus.config.ts (got '$base_url'); set SITE_BASE_URL" >&2
   exit 1
+fi
+
+# `--print-base-url` prints the base URL the builds would use, and stops.
+if [[ "${1:-}" == "--print-base-url" ]]; then
+  echo "$base_url"
+  exit 0
 fi
 
 apps=("$@")

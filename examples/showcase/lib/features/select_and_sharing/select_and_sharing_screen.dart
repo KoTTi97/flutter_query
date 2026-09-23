@@ -24,8 +24,7 @@
 ///   is the one that stands still. It is the only reader *on this screen*
 ///   that passes a predicate, not the only one that could: all four builders
 ///   and all eight keyless reads take the same `buildWhen`, and the
-///   `build-when` screen is where each of the eight is shown doing it
-///   (https://github.com/KoTTi97/flutter_query/issues/68).
+///   `build-when` screen is where each of the eight is shown doing it.
 /// - `ListenableBuilder` over a `QueryController` rebuilds on every
 ///   notification, with no equality guard at all: the same two rebuilds per
 ///   refetch as the context and mixin readers, and a first load of two
@@ -33,10 +32,7 @@
 ///   in the first result it builds from.
 /// - `structuralSharing` governs the cache write *and* what `select`
 ///   produces, as upstream's `replaceData` does (see `StructuralSharing` in
-///   the core, decided on https://github.com/KoTTi97/flutter_query/issues/12,
-///   corrected by the fidelity review of 2026-09-12 — until then the core ran
-///   every selection through `replaceEqualDeep` regardless, and the switch
-///   was invisible to all four `select` readers). With the switch off, a
+///   the core). With the switch off, a
 ///   selection is reported exactly as the selector built it, so a reader
 ///   moves when its own selected value is not `==` to the last one: the
 ///   controller's list of texts is a new instance every time and moves, while
@@ -44,14 +40,9 @@
 ///   without `select`, is the control: with sharing off
 ///   the list in the cache is a new instance on every refetch, and upstream
 ///   hands an observer without `select` the cache's data as it is — and so
-///   does the port's, now: when this screen was first measured (2026-09-09)
-///   the observer ran the cache's data through `replaceEqualDeep` against
-///   the last result even without a `select`, a pass upstream's
-///   `createResult` does not have, which hid the `(_, next) => next` opt-out
-///   from every reader. That was a library bug; it is fixed in the core
-///   (the no-select branch of `createResult` passes cached data through) and
-///   recorded in the core's PORTING_NOTES under "Found by the showcase". The
-///   widget test that found it is green and runs with the rest.
+///   does this library: an observer without a `select` passes the cached
+///   data through untouched, so with sharing off the fifth reader moves on
+///   every refetch.
 ///
 /// Proofs (widget tests in `test/features/select_and_sharing_test.dart`,
 /// end-to-end in `e2e/tests/select_and_sharing.spec.ts`): every reader shows
@@ -107,13 +98,13 @@ List<String> todoTexts(List<Todo> todos) =>
 /// the cache held — upstream's `structuralSharing: false`. The core's
 /// `noStructuralSharing()` rather than a `(_, next) => next` of the screen's
 /// own: a hook of one's own governs the cache write only, and only the
-/// recognised opt-out turns sharing off for what `select` produces too
-/// (pre-release review, 2026-09-12, F4).
+/// recognised opt-out turns sharing off for what `select` produces too.
 final StructuralSharing<List<Todo>> keepNext = noStructuralSharing();
 
 /// The one query every reader shares. They differ only in what they select
 /// and in whether the cache write shares structure. A select is its own
-/// options shape (ADR-0001), so the raw reader has [rawTodosQuery].
+/// options shape (`QuerySelectOptions`), so the raw reader has
+/// [rawTodosQuery].
 QuerySelectOptions<List<Todo>, T> todosQuery<T>(
   ShowcaseApi api, {
   required T Function(List<Todo> todos) select,

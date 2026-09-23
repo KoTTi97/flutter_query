@@ -3,8 +3,7 @@
 /// Hand-written, with value equality and no code generation: the demo is also
 /// the answer to "what does this library ask of my data types?", and the answer
 /// is `==` and `hashCode`. That is what lets the cache tell a changed task
-/// from an identical one and skip a rebuild
-/// (https://github.com/KoTTi97/flutter_query/issues/12).
+/// from an identical one and skip a rebuild.
 library;
 
 import 'package:flutter/foundation.dart';

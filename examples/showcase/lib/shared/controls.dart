@@ -1,18 +1,17 @@
 /// The controls a feature screen drives itself with.
 ///
-/// Every one of these was copied between feature directories until the
-/// review's C55 counted the copies: the toolbar four times, the action button
-/// six, the knob four, the monospace style five, the clock five. What differed
-/// between copies is a parameter here; what differed in kind — the knob that
+/// Each of these is used by several feature screens: the toolbar, the action
+/// button, the knob, the monospace style. What would differ between copies
+/// is a parameter here; what differed in kind — the knob that
 /// is one cell of a `Wrap` rather than a row of a stretched `Column` — is
 /// composed from [knobButton] instead of flagged.
 ///
 /// The second of the showcase's three widget modules, split from the other two
-/// by what a test does with them (#69): every widget here is one a test
+/// by what a test does with them: every widget here is one a test
 /// **presses**, addressed by its role and its name. What a test *reads* is
 /// `fact_group.dart`, and what it does neither to is `chrome.dart`. The clock
-/// that used to sit here went with the facts it prints into: a timestamp is a
-/// fact's value, not a control.
+/// lives with the facts it prints into: a timestamp is a fact's value, not a
+/// control.
 library;
 
 import 'package:flutter/material.dart';

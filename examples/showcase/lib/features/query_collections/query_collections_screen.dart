@@ -1,7 +1,9 @@
 /// Query collections: a list of queries whose length and order change at
 /// runtime. Port-specific — it is `QueriesObserver`, the homogeneous stand-in
-/// for upstream's `useQueries` (the heterogeneous tuple and its `combine` step
-/// are not ported; see PORTING_NOTES' divergence table).
+/// for upstream's `useQueries`. Queries of different types are read one by
+/// one and folded with `combine` over a record of their results (the
+/// `combine` screen); a collection like this one folds with `combine` over
+/// its `List<QueryResult>`.
 ///
 /// `parallel-queries` is the fixed case: three controllers written side by
 /// side. This screen is the case that needs a collection — the set of posts
@@ -25,7 +27,8 @@
 /// end-to-end in `e2e/tests/query_collections.spec.ts`): opening fetches every
 /// id once; `Reverse` reorders the results without a single new request;
 /// adding an id fetches only the new one; removing one releases its observer;
-/// a duplicate id shares the cache entry (`observers=2`, still one fetch);
+/// a duplicate id shares the cache entry (`observers=2`) and, finding it
+/// stale, refetches it once for both observers (`fetches=2`, not three);
 /// the missing id fails alone while its neighbours keep their data; and the
 /// summary reader, switched on, counts every member ready with a second
 /// observer on each entry, follows an added id with one fetch shared by both
@@ -86,7 +89,8 @@ class _QueryCollectionsScreenState extends State<QueryCollectionsScreen> {
       () => _ids = _ids.isEmpty ? _ids : _ids.sublist(0, _ids.length - 1));
 
   /// A second occurrence of an id already on screen: one cache entry, two
-  /// observers, and still only the one fetch that entry already had.
+  /// observers. The newcomer finds the entry stale (`staleTime` is zero) and
+  /// refetches it — one fetch shared by both observers, not one each.
   void _duplicateFirst() =>
       setState(() => _ids = _ids.isEmpty ? _ids : <int>[..._ids, _ids.first]);
 
