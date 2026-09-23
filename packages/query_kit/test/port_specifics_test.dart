@@ -967,9 +967,13 @@ void fourthReview() {
       () => client.query<num>(QueryOptions(queryKey: key, queryFn: (_) => 2)),
       throwsA(isA<QueryDataTypeError>()),
     );
+    // Writes are judged by the value since SURF-1, and updaters since L5-1
+    // (release review, 2026-09-23): a `num` updater may write an `int` into
+    // this query, and a value the query cannot hold is refused before any
+    // write — the loud error, never a raw `TypeError`.
     expect(
       () => client.updateQueriesData<num>(
-        (previous) => (previous ?? 0) + 1,
+        (previous) => (previous ?? 0) + 0.5,
         filters: QueryFilters(queryKey: key),
       ),
       throwsA(isA<QueryDataTypeError>()),

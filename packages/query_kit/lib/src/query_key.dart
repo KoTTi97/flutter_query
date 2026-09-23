@@ -34,6 +34,30 @@ import 'hashing.dart';
 /// Parts compare with `==`, and `1 == 1.0` holds in Dart on every platform,
 /// so `QueryKey([1])` and `QueryKey([1.0])` are the same key — not a web
 /// quirk (ninth review, 2026-09-10, C23).
+///
+/// Two [DateTime] parts compare by instant: a UTC and a local `DateTime` of
+/// the same moment are one key, as they are upstream, whose JSON hash writes
+/// both as the same ISO string. Dart's own `DateTime.==` also compares the
+/// time zone flag. The parts keep what was passed; the entry keeps the key it
+/// was created with. Only as parts — a `DateTime` used as a *map key* in a
+/// part is looked up with its own `==` (release review, 2026-09-23).
+///
+/// **What the debug assertion cannot see.** It looks at `hashCode`, so it
+/// passes two kinds of part that never match a second, equal-looking key:
+///
+/// * A record is a leaf, compared with the record's own `==`, and that
+///   compares each field with *its* `==` — a `List`, `Set` or `Map` field by
+///   identity. `QueryKey([(id, [1, 2])])` is therefore never equal to another
+///   key built the same way: every lookup misses and every build creates a
+///   new entry. Dart cannot walk a record's fields generically, so this is
+///   not checked. Keep collections out of records in keys — put them as parts
+///   of their own, or in a map part: `QueryKey([id, {'channels': [1, 2]}])`.
+/// * A class that overrides `hashCode` but not `==`.
+///
+/// A map part's keys must have value equality too, and are held to the same
+/// test as a part, with one addition: a collection as a map key is refused,
+/// because a map part is compared by looking its keys up, and a collection
+/// key hashes by identity.
 @immutable
 final class QueryKey {
   /// A key of [parts], each list, set and map in them deep-copied into an
@@ -43,9 +67,11 @@ final class QueryKey {
       : parts = List<Object?>.unmodifiable(parts.map<Object?>(_freeze)) {
     assert(
       _debugCheckParts(this.parts),
-      'A QueryKey part uses identity equality, so this key can never match an '
-      'equal key: $this. Give the type value equality (freezed, Equatable, or '
-      'a hand-written ==/hashCode), or put a primitive in the key instead.',
+      'A QueryKey part uses identity equality, or a map in it has a collection '
+      'as a key, so this key can never match an equal key: $this. Give the '
+      'type value equality (freezed, Equatable, or a hand-written '
+      '==/hashCode), put a primitive in the key instead, or key the map by a '
+      'value rather than a collection.',
     );
   }
 
@@ -159,6 +185,11 @@ bool _partsEqual(Object? a, Object? b) {
     }
     return true;
   }
+  // By instant, as upstream's JSON hash compares an ISO string; `==` also
+  // compares the zone flag. `DateTime.hashCode` already ignores the flag.
+  if (a is DateTime && b is DateTime) {
+    return a.isAtSameMomentAs(b);
+  }
   return a == b;
 }
 
@@ -228,16 +259,6 @@ String _describe(Object? part) {
   return '$part';
 }
 
-bool _debugCheckScalar(Object? part) =>
-    part == null ||
-    part is num ||
-    part is String ||
-    part is bool ||
-    part is DateTime ||
-    part is Duration ||
-    part is Enum ||
-    part is Type;
-
 bool _debugCheckParts(Object? part) {
   if (part == null || part is num || part is String || part is bool) {
     return true;
@@ -251,12 +272,23 @@ bool _debugCheckParts(Object? part) {
   if (part is Map) {
     // A map is compared entry by entry through `b[key]`, which is a hash
     // lookup: a key that is itself a collection would never be found again.
-    // Upstream cannot hit this — JSON object keys are strings.
+    // Upstream cannot hit this — JSON object keys are strings. Any other map
+    // key is held to the test a part is: a record or a value class keys a
+    // map as well as a string does (release review, 2026-09-23, L5-3).
     return part.entries.every(
-      (entry) => _debugCheckScalar(entry.key) && _debugCheckParts(entry.value),
+      (entry) =>
+          entry.key is! List &&
+          entry.key is! Set &&
+          entry.key is! Map &&
+          _debugCheckParts(entry.key) &&
+          _debugCheckParts(entry.value),
     );
   }
-  if (_debugCheckScalar(part)) {
+  if (part is DateTime ||
+      part is Duration ||
+      part is Enum ||
+      part is Type ||
+      part is Record) {
     return true;
   }
   // Anything left that hashes by identity can never match an equal-but-distinct

@@ -471,6 +471,12 @@ class Query<TQueryData> extends Removable {
     return data;
   }
 
+  /// Whether [value] is a [TQueryData] — the test [trySetData] makes, without
+  /// the write, for a caller that checks several entries before writing any
+  /// (release review, 2026-09-23, L5-1).
+  @internal
+  bool canHold(Object? value) => value is TQueryData;
+
   /// [setData] for a caller that holds a value but not this query's exact
   /// type: writes [newData] when it fits [TQueryData] and says whether it did.
   ///

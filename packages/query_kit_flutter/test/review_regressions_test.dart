@@ -2170,6 +2170,42 @@ void main() {
       }
     }, createClient: newClient);
   });
+
+  // Release review, 2026-09-23 — the core's notes, "Release review
+  // 2026-09-23 — client, keys and mutations".
+  queryWidgetTest(
+      'L4-1 a typed MutationStateController stays typed across setOptions',
+      (tester, client) async {
+    final gate = Completer<void>();
+    final states = MutationStateController.typed(client,
+        filters: const MutationFilters(status: MutationStatus.pending),
+        select: (Mutation<Object?, String, Object?> m) => m.state.variables!);
+    states.addListener(() {});
+    final strings = MutationController<void, String, void>(
+      client,
+      MutationOptions<void, String, void>(mutationFn: (_) => gate.future),
+    );
+    final flags = MutationController<void, bool, void>(
+      client,
+      MutationOptions<void, bool, void>(mutationFn: (_) => gate.future),
+    );
+    try {
+      strings.mutate('x');
+      flags.mutate(true);
+      await tester.pump();
+      expect(states.value, <String>['x']);
+      states.setOptions(filters: const MutationFilters());
+      flags.mutate(false);
+      await tester.pump();
+      expect(states.value, <String>['x']);
+      gate.complete();
+      await tester.pumpAndSettle();
+    } finally {
+      strings.dispose();
+      flags.dispose();
+      states.dispose();
+    }
+  }, createClient: newClient);
 }
 
 /// What [_C59ClientReader] last read, and how often the scope told it its

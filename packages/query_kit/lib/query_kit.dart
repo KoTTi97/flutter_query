@@ -47,5 +47,4 @@ export 'src/query_observer.dart';
 export 'src/query_options.dart' hide isNoStructuralSharing;
 export 'src/query_result.dart';
 export 'src/query_state.dart';
-export 'src/retryer.dart' show canFetch;
 export 'src/structural_sharing.dart' hide sharingBucketOf;

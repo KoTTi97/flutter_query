@@ -23,7 +23,13 @@ enum MutationStatus {
   idle,
 
   /// Running: `onMutate` and the mutation function are in flight, or the run
-  /// is paused offline. `variables` is set.
+  /// is paused — offline, unfocused, or queued behind its scope. `variables`
+  /// is set. It lasts until the run has finished, callbacks included: a
+  /// mutation is still `pending` while the cache's and its options'
+  /// `onSuccess`/`onError` and `onSettled` run, and until the future
+  /// `onSettled` returns has completed — as upstream, which dispatches
+  /// `success`/`error` after those callbacks. The per-call callbacks passed
+  /// to `mutate` run after it.
   pending,
 
   /// The last run resolved; `data` holds what the mutation function returned.
@@ -76,6 +82,11 @@ abstract interface class MutationCacheRef {
   /// Whether [mutation] may start or resume right now — `false` while another
   /// mutation in the same scope is pending. The retryer asks before every
   /// attempt.
+  ///
+  /// Not a pure question: a `true` answer makes [mutation] the scope's owner
+  /// until [onMutationSettled]. Only a run that is going to settle may ask —
+  /// the retryer, and the mutation's pending dispatches, whose run's
+  /// `finally` releases it (release review, 2026-09-23, L4-6).
   bool canRunMutation(Mutation<Object?, Object?, Object?> mutation);
 
   /// Told when [mutation]'s run has settled either way, so the cache can
@@ -134,8 +145,9 @@ sealed class MutationAction {
 
 /// A run started. Replaces the whole state: status `pending`, the run's
 /// [variables], a fresh `submittedAt`, and [isPaused] when the run cannot
-/// start yet. Dispatched a second time once `onMutate` has produced a
-/// result. Upstream's `pending` action.
+/// start yet. Dispatched a second time once `onMutate` has run, when it
+/// produced a result or the run's pause changed meanwhile. Upstream's
+/// `pending` action.
 final class MutationPendingAction extends MutationAction {
   /// Creates the action for a run of [variables].
   const MutationPendingAction({
@@ -583,7 +595,9 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// the scope's turn is released by the focus listener or the scope-mate's
   /// settling, so awaiting it is safe — and upstream's ordering, a mutation
   /// before the refetch that should reflect it, depends on the scope case
-  /// being awaited (ninth review, 2026-09-10, C4).
+  /// being awaited (ninth review, 2026-09-10, C4). Safe only while the
+  /// scope-mate can settle, so `resumePaused` asks this of whoever holds the
+  /// scope as well (release review, 2026-09-23, L4-4).
   @internal
   bool get canResume => _retryer != null
       ? canContinue(_retryer!.networkMode, client.onlineManager)
@@ -630,7 +644,14 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// update is rolled back by the same code that rolls back any other
   /// failure, and the scope moves on. A mutation that is paused, waiting for
   /// its scope or still in `onMutate` fails the same way without its function
-  /// ever running. With no run in flight this does nothing.
+  /// ever running — a mutation restored `pending` from persistence included,
+  /// which has no run yet: it fails on the spot rather than waiting for the
+  /// next `resumePausedMutations` to send it (release review, 2026-09-23,
+  /// L4-3). With no run in flight this does nothing.
+  ///
+  /// Once the mutation function has returned, cancelling does nothing
+  /// either: the write went through, and the mutation stays `pending` while
+  /// its success callbacks run, then succeeds.
   ///
   /// Port-only; upstream cannot cancel a mutation
   /// (https://github.com/KoTTi97/flutter_query/issues/83). It is a failure
@@ -643,12 +664,27 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
   /// for.
   void cancel() {
     final retryer = _retryer;
-    if (retryer == null || retryer.isResolved) {
+    if (retryer == null) {
+      // A restored `pending` mutation has no run to cancel: give it one that
+      // is cancelled before it can start, so it fails through the same error
+      // path — callbacks, error state, the scope handed on — as a paused run
+      // does. Only one that could be continued; see [continueMutation].
+      if (_state.status == MutationStatus.pending &&
+          (_state.hasVariables || null is TVariables)) {
+        _cancelOnStart = true;
+        execute(_state.variables as TVariables).ignore();
+      }
+      return;
+    }
+    if (retryer.isResolved) {
       return;
     }
     _signal?.cancel();
     retryer.cancel();
   }
+
+  // Set by [cancel] on a restored mutation, consumed by the run it starts.
+  bool _cancelOnStart = false;
 
   /// Whether a run is in flight — `execute` has been called and its
   /// `finally` has not yet run. A restored `pending` mutation that has not
@@ -766,9 +802,19 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
     if (_removed) {
       retryer.cancelRetry(immediately: true);
     }
+    if (_cancelOnStart) {
+      _cancelOnStart = false;
+      signal.cancel();
+      retryer.cancel();
+    }
 
     final isRestart = _state.status == MutationStatus.pending;
-    TOnMutateResult? onMutateResult = _state.onMutateResult;
+    // Carried over only by a restart, which continues the run that produced
+    // it. A fresh run starts from `null`, as the pending action below resets
+    // the state's: read before that reset, a second run of this instance
+    // whose `onMutate` threw handed the *first* run's rollback handle to its
+    // error callbacks (release review, 2026-09-23, L4-5).
+    TOnMutateResult? onMutateResult = isRestart ? _state.onMutateResult : null;
 
     try {
       if (isRestart) {
@@ -803,12 +849,21 @@ class Mutation<TData, TVariables, TOnMutateResult> extends Removable {
           onMutateResult = mutating;
         }
 
-        if (onMutateResult != _state.onMutateResult) {
+        // Dispatched when the result changed or the pause did: a run that
+        // started queued behind its scope (or offline) and whose reason went
+        // away during an async `onMutate` is about to run, and nothing else
+        // would clear the flag — `start` finds it can run and makes no
+        // `continue` dispatch (release review, 2026-09-23, L4-2). Asking
+        // `canStart` claims the scope when it answers yes; `start` asks next
+        // and gets the same answer.
+        final isPaused = !retryer.canStart();
+        if (onMutateResult != _state.onMutateResult ||
+            isPaused != _state.isPaused) {
           _dispatch(
             MutationPendingAction(
               variables: variables,
               onMutateResult: onMutateResult,
-              isPaused: !retryer.canStart(),
+              isPaused: isPaused,
             ),
           );
         }

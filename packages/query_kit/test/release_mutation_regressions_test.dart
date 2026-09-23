@@ -333,4 +333,219 @@ void main() {
     b.destroy();
     client.clear();
   });
+
+  // Release review, 2026-09-23 — PORTING_NOTES' "Release review 2026-09-23 —
+  // client, keys and mutations".
+
+  testFakeAsync(
+      'L4-1 a typed MutationStateObserver stays typed across setOptions',
+      (time) async {
+    final client = testClient();
+    final gate = Completer<void>();
+    final a = MutationObserver<void, String, void>(
+        client, MutationOptions.simple(mutationFn: (String s) => gate.future));
+    final b = MutationObserver<void, bool, void>(
+        client, MutationOptions.simple(mutationFn: (bool s) => gate.future));
+    final selection = MutationStateObserver.typed(client,
+        filters: const MutationFilters(status: MutationStatus.pending),
+        select: (Mutation<Object?, String, Object?> m) => m.state.variables!);
+    final unsubscribe = selection.subscribe((_) {});
+    a.mutate('x');
+    b.mutate(true);
+    await time.flushMicrotasks();
+    expect(selection.currentResult, ['x']);
+    selection.setOptions(filters: const MutationFilters());
+    expect(selection.currentResult, ['x']);
+    // An untyped select sees only the declared type as well.
+    selection.setOptions(select: (m) => '${m.state.variables}!');
+    expect(selection.currentResult, ['x!']);
+    b.mutate(false);
+    await time.flushMicrotasks();
+    expect(selection.currentResult, ['x!']);
+    gate.complete();
+    await time.flushMicrotasks();
+    unsubscribe();
+    selection.destroy();
+    a.destroy();
+    b.destroy();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'L4-2 isPaused clears when the scope frees up during an async onMutate',
+      (time) async {
+    final client = testClient();
+    const scope = MutationScope('s');
+    final gateA = Completer<int>();
+    final gateB = Completer<int>();
+    var bRunning = false;
+    final a = MutationObserver<int, int, void>(
+        client, MutationOptions(scope: scope, mutationFn: (v) => gateA.future));
+    final b = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+            scope: scope,
+            onMutate: (v) async {
+              await Future<void>.delayed(ms(10));
+            },
+            mutationFn: (v) {
+              bRunning = true;
+              return gateB.future;
+            }));
+    a.subscribe((_) {});
+    b.subscribe((_) {});
+    a.mutate(1);
+    b.mutate(2);
+    await time.flushMicrotasks();
+    expect(b.currentResult.isPaused, isTrue);
+    gateA.complete(1);
+    await time.advance(ms(10));
+    expect(bRunning, isTrue);
+    expect(b.currentResult.isPaused, isFalse);
+    gateB.complete(2);
+    await time.flushMicrotasks();
+    a.destroy();
+    b.destroy();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'L4-3 cancel fails a restored paused mutation, and resume skips it',
+      (time) async {
+    final client = testClient();
+    final ran = <int>[];
+    final errors = <Object>[];
+    final m = client.mutationCache.build<int, int, void>(
+        client,
+        client.defaultMutationOptions(MutationOptions<int, int, void>(
+          mutationFn: (v) {
+            ran.add(v);
+            return v;
+          },
+          onError: (e, s, v, c) => errors.add(e),
+        )),
+        state: const MutationState<int, int, void>(
+            status: MutationStatus.pending,
+            variables: 5,
+            hasVariables: true,
+            isPaused: true));
+    m.cancel();
+    await time.flushMicrotasks();
+    expect(m.state.status, MutationStatus.error);
+    expect(m.state.error, isA<CancelledError>());
+    expect(errors, [isA<CancelledError>()]);
+    await client.resumePausedMutations();
+    expect(ran, isEmpty);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'L4-3 a cancelled restored scope head releases the restored mutation '
+      'behind it', (time) async {
+    final client = testClient();
+    final ran = <int>[];
+    Mutation<int, int, void> restore(int v) =>
+        client.mutationCache.build<int, int, void>(
+            client,
+            client.defaultMutationOptions(MutationOptions<int, int, void>(
+              scope: const MutationScope('s'),
+              mutationFn: (v) {
+                ran.add(v);
+                return v;
+              },
+            )),
+            state: MutationState<int, int, void>(
+                status: MutationStatus.pending,
+                variables: v,
+                hasVariables: true,
+                isPaused: true));
+    final head = restore(1);
+    final tail = restore(2);
+    head.cancel();
+    await time.flushMicrotasks();
+    expect(head.state.status, MutationStatus.error);
+    expect(ran, [2]);
+    expect(tail.state.status, MutationStatus.success);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'L4-4 resumePausedMutations does not wait offline on a scope held by a '
+      'network-paused mutation', (time) async {
+    final client = testClient();
+    var fail = true;
+    final a = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+            scope: const MutationScope('s'),
+            retry: RetryPolicy.times(3),
+            retryDelay: RetryDelay.fixed(ms(10)),
+            mutationFn: (v) async {
+              if (fail) throw StateError('offline');
+              return v;
+            }));
+    final b = MutationObserver<int, int, void>(
+        client,
+        MutationOptions(
+            scope: const MutationScope('s'),
+            networkMode: NetworkMode.always,
+            mutationFn: (v) => v));
+    a.mutate(1);
+    b.mutate(2);
+    await time.flushMicrotasks();
+    client.onlineManager.setOnline(false);
+    await time.advance(ms(10));
+    expect(a.currentResult.isPaused, isTrue);
+    expect(b.currentResult.isPaused, isTrue);
+    var resumed = false;
+    unawaited(client.resumePausedMutations().then((_) => resumed = true));
+    await time.advance(const Duration(seconds: 5));
+    expect(resumed, isTrue);
+    // Back online, the scope drains in order.
+    fail = false;
+    client.onlineManager.setOnline(true);
+    await client.resumePausedMutations();
+    await time.flushMicrotasks();
+    expect(a.currentResult.dataOrNull, 1);
+    expect(b.currentResult.dataOrNull, 2);
+    a.destroy();
+    b.destroy();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'L4-5 a second run whose onMutate throws does not see the first run\'s '
+      'onMutateResult', (time) async {
+    final client = testClient();
+    var throwIt = false;
+    final seen = <String?>[];
+    final m = client.mutationCache.build<int, int, String>(
+        client,
+        client.defaultMutationOptions(MutationOptions<int, int, String>(
+            onMutate: (v) {
+              if (throwIt) throw StateError('x');
+              return 'ctx$v';
+            },
+            mutationFn: (v) => v,
+            onError: (e, s, v, ctx) => seen.add(ctx),
+            onSettled: (d, e, s, v, ctx) => seen.add('settled:$ctx'))));
+    await m.execute(1);
+    seen.clear();
+    throwIt = true;
+    await m.execute(2).then((_) {}, onError: (Object _) {});
+    expect(seen, [null, 'settled:null']);
+    client.clear();
+  });
+
+  test(
+      'REL-12 mutationFn and mutationFnWithContext together fail at the '
+      'literal', () {
+    expect(
+      () => MutationOptions<int, int, void>(
+        mutationFn: (v) => v,
+        mutationFnWithContext: (v, context) => v,
+      ),
+      throwsA(isA<AssertionError>()),
+    );
+  });
 }

@@ -56,10 +56,14 @@ sealed class MutationResult<TData, TVariables> {
   /// `null` once an attempt succeeds or a new run starts.
   final Object? failureReason;
 
-  /// Whether the run is waiting for the network — upstream's `isPaused`.
-  /// Under [NetworkMode.online] a mutation submitted offline sits here until
-  /// the device is back, when a mounted client resumes it through
-  /// `resumePausedMutations`.
+  /// Whether the run is parked rather than running — upstream's `isPaused`.
+  /// Three things park it: the network (under [NetworkMode.online] a
+  /// mutation submitted offline sits here until the device is back, when a
+  /// mounted client resumes it through `resumePausedMutations`), focus (a
+  /// retry waits for the app to return to the foreground), and its
+  /// `MutationScope` — a mutation queued behind another in its scope is
+  /// `pending` with `isPaused` until its turn (release review, 2026-09-23,
+  /// L4-6).
   final bool isPaused;
 
   /// When the current run was submitted — upstream's `submittedAt`. `null`

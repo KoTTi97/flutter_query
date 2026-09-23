@@ -1,6 +1,8 @@
 /// Port of `query-core/src/onlineManager.ts` at upstream `50680b98c`.
 library;
 
+import 'dart:async';
+
 import 'package:meta/meta.dart';
 
 import 'subscribable.dart';
@@ -18,6 +20,10 @@ typedef OnlineSetup = void Function() Function(
 /// reachability, is the usual source
 /// (https://github.com/KoTTi97/flutter_query/issues/5).
 class OnlineManager extends Subscribable<void Function(bool online)> {
+  /// Creates a manager that reports online until [setOnline] or an adapter
+  /// installed with [setEventListener] says otherwise.
+  OnlineManager();
+
   bool _online = true;
   void Function()? _cleanup;
   OnlineSetup? _setup;
@@ -27,13 +33,24 @@ class OnlineManager extends Subscribable<void Function(bool online)> {
   /// retryer consults it before starting and before resuming a paused fetch.
   bool isOnline() => _online;
 
+  /// Reinstalls the event source the last listener's departure tore down.
+  ///
+  /// A setup that throws here is reported to the zone rather than thrown out
+  /// of `subscribe`: the listener is registered by then, and a throw would
+  /// lose the handle that removes it — a client's mount listener that could
+  /// never be unsubscribed, and one more after every remount (release review,
+  /// 2026-09-23). The next subscription tries the setup again.
   @override
   @protected
   void onSubscribe() {
     if (_cleanup == null) {
       final setup = _setup;
       if (setup != null) {
-        setEventListener(setup);
+        try {
+          setEventListener(setup);
+        } catch (error, stackTrace) {
+          Zone.current.handleUncaughtError(error, stackTrace);
+        }
       }
     }
   }
@@ -50,7 +67,11 @@ class OnlineManager extends Subscribable<void Function(bool online)> {
   /// Replaces the source of connectivity events.
   void setEventListener(OnlineSetup setup) {
     _setup = setup;
-    _cleanup?.call();
+    final previous = _cleanup;
+    // Cleared before the setup runs: a setup that throws must not leave the
+    // spent cleanup behind to be called a second time.
+    _cleanup = null;
+    previous?.call();
     _cleanup = setup(setOnline);
   }
 
