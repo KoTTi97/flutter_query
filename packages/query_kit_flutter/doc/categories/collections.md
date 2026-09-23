@@ -1,0 +1,1 @@
+Many queries or mutations at once. `QueriesBuilder` and `QueriesController` follow a list of queries that may change length or order; `IsFetchingController` counts the queries fetching, for a global loading indicator; `MutationStateController` selects from every mutation in the cache, for a "saving…" badge or a pending row.

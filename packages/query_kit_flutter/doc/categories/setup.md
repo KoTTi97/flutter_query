@@ -1,0 +1,1 @@
+Put a `QueryClientProvider` above everything that reads a query. `QueryClientProvider.create` makes and owns the client; the unnamed constructor takes one you made yourself. Below it, every call style finds the client on its own, and `QueryClientProvider.of`, `maybeOf` and `read` hand it to code that needs it directly.

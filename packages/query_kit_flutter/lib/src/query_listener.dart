@@ -1,4 +1,6 @@
-/// Side effects over existing controllers, without rebuilding their children.
+/// Side effects over existing controllers, without rebuilding their
+/// children. See [QueryListener], [InfiniteQueryListener] and
+/// [MutationListener].
 library;
 
 import 'dart:async';
@@ -9,20 +11,59 @@ import 'package:query_kit/query_kit.dart';
 
 import 'query_controller.dart';
 
-/// Whether a result transition should invoke a side effect.
+/// Whether a transition from [previous] to [next] should run a listener's
+/// side effect.
+///
+/// ```dart
+/// // Only when the query has just failed:
+/// listenWhen: (previous, next) =>
+///     previous is! QueryError && next is QueryError,
+/// ```
+///
+/// {@category Side effects}
 typedef ListenWhen<T> = bool Function(T previous, T next);
 
-/// Listens to query transitions without owning the supplied controller.
+/// Runs a side effect — a snackbar, a navigation, a log line — when a
+/// query's result changes, without rebuilding [child].
+///
+/// Listens to a [QueryController] you own; the widget never disposes it.
+///
+/// ```dart
+/// QueryListener(
+///   controller: tasks,
+///   listenWhen: (previous, next) =>
+///       previous is! QueryError && next is QueryError,
+///   listener: (context, result) => ScaffoldMessenger.of(context).showSnackBar(
+///     const SnackBar(content: Text('Could not refresh the tasks')),
+///   ),
+///   child: const TaskList(),
+/// )
+/// ```
+///
+/// When [listener] runs:
+///
+/// * **Not on mount.** Only a later change of the controller's value is a
+///   transition.
+/// * **Outside the build phase**, in a microtask after the notification, so
+///   it may show a dialog, navigate or call `setState`. Each transition is
+///   delivered with the value it carried, even when a later one has arrived
+///   by the time the microtask runs.
+/// * **Once per notification.** Two cache writes inside one
+///   `notifyManager.batch` notify once, so they are one transition, to the
+///   second value — not two.
+/// * **[listenWhen] sees every transition**, and a rejected one still moves
+///   the "previous" the next one is compared against.
+///
+/// An error thrown by [listener] is reported through `FlutterError`, not
+/// thrown into the tree. A different controller on a later build is
+/// listened to from then on; transitions of the old one still queued are
+/// dropped.
+///
+/// {@category Side effects}
 class QueryListener<TQueryData, TData>
     extends _ResultListener<QueryResult<TData>> {
-  /// Does not invoke [listener] on mount. Each later notification of the
-  /// controller whose value differs from the last one seen is a transition,
-  /// and [listenWhen] sees each of them — a rejected transition still moves
-  /// the "previous" the next one is compared against. What a notification
-  /// carries is the controller's *latest* value, as with any
-  /// `ValueListenable`: two cache writes inside one `notifyManager.batch`
-  /// are one transition to the second value, not two (ninth review,
-  /// 2026-09-10, C19).
+  /// Listens to [controller] without owning it, and runs [listener] for
+  /// each accepted transition — see the class doc for the timing.
   const QueryListener({
     super.key,
     required QueryController<TQueryData, TData> controller,
@@ -32,10 +73,31 @@ class QueryListener<TQueryData, TData>
   }) : super(controller: controller);
 }
 
-/// Listens to infinite-query transitions on an existing paging controller.
+/// Runs a side effect when an infinite query's result changes, without
+/// rebuilding [child].
+///
+/// The same contract as [QueryListener], over an [InfiniteQueryController]
+/// you own:
+///
+/// ```dart
+/// InfiniteQueryListener(
+///   controller: feed,
+///   listenWhen: (previous, next) => next is QueryError,
+///   listener: (context, result) => ScaffoldMessenger.of(context).showSnackBar(
+///     const SnackBar(content: Text('Could not load more posts')),
+///   ),
+///   child: const FeedList(),
+/// )
+/// ```
+///
+/// A transition is a change of the result; a paging flag that changes on
+/// its own (`isFetchingNextPage`, say) is not one.
+///
+/// {@category Side effects}
 class InfiniteQueryListener<TPageData, TPageParam, TData>
     extends _ResultListener<QueryResult<TData>> {
-  /// Observes [controller] without disposing it or rebuilding [child].
+  /// Listens to [controller] without owning it, and runs [listener] for
+  /// each accepted transition — see [QueryListener] for the timing.
   const InfiniteQueryListener({
     super.key,
     required InfiniteQueryController<TPageData, TPageParam, TData> controller,
@@ -45,10 +107,36 @@ class InfiniteQueryListener<TPageData, TPageParam, TData>
   }) : super(controller: controller);
 }
 
-/// Listens to the same mutation controller that the UI executes.
+/// Runs a side effect when a mutation's result changes, without rebuilding
+/// [child].
+///
+/// Listens to a [MutationController] you own — usually the same one the UI
+/// calls `mutate` on. The same contract as [QueryListener]:
+///
+/// ```dart
+/// MutationListener(
+///   controller: rename,
+///   listener: (context, result) {
+///     if (result case MutationError(:final error)) {
+///       ScaffoldMessenger.of(context).showSnackBar(
+///         SnackBar(content: Text('Could not rename: $error')),
+///       );
+///     }
+///   },
+///   child: RenameForm(rename: rename),
+/// )
+/// ```
+///
+/// For a side effect of one particular call, the per-call callbacks of
+/// `MutationController.mutate` are the alternative; this widget hears every
+/// run of the controller.
+///
+/// {@category Side effects}
 class MutationListener<TData, TVariables, TOnMutateResult>
     extends _ResultListener<MutationResult<TData, TVariables>> {
-  /// Observes [controller] without owning it. No initial callback is emitted.
+  /// Listens to [controller] without owning it, and runs [listener] for
+  /// each accepted transition — see [QueryListener] for the timing. Nothing
+  /// runs on mount.
   const MutationListener({
     super.key,
     required MutationController<TData, TVariables, TOnMutateResult> controller,
@@ -67,16 +155,20 @@ abstract class _ResultListener<T> extends StatefulWidget {
     required this.child,
   });
 
-  /// The borrowed controller, disposed by its owner.
+  /// The controller to listen to. Borrowed: whoever created it disposes it,
+  /// and a different one on a later build is listened to from then on.
   final ValueListenable<T> controller;
 
-  /// Runs outside the build phase for each accepted transition.
+  /// The side effect, run outside the build phase for each accepted
+  /// transition with the value that transition carried. Not run on mount.
+  /// An error it throws is reported through `FlutterError`.
   final void Function(BuildContext context, T result) listener;
 
-  /// Filters transitions; omission accepts every changed result.
+  /// Which transitions run [listener]; `null` accepts every change. A
+  /// rejected transition still becomes the `previous` of the next one.
   final ListenWhen<T>? listenWhen;
 
-  /// Returned unchanged; controller events never rebuild this child.
+  /// The subtree, returned unchanged: a transition never rebuilds it.
   final Widget child;
 
   @override

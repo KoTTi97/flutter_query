@@ -12,7 +12,7 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 /// Stands in for an HTTP client.
 class Api {
-  final List<String> _tasks = ['Küche', 'Flur', 'Garage'];
+  final List<String> _tasks = ['Kitchen', 'Hallway', 'Garage'];
 
   Future<List<String>> list() async {
     await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -62,7 +62,8 @@ class TasksScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Style 1: read in build. The widget rebuilds when the result changes.
+    // One of the four equal call styles: read in build. The widget rebuilds
+    // when the result changes.
     final tasks = context.query(tasksQuery());
     // The client, taken here in `build` rather than inside the callback
     // below. A mutation outlives the widget that started it — disposing its
@@ -84,9 +85,10 @@ class TasksScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tasken'),
+        title: const Text('Tasks'),
         actions: <Widget>[
-          // Style 2: a builder, for a leaf that only wants one flag.
+          // Another, equally valid: a builder, for a leaf that only wants one
+          // flag.
           QuerySelectBuilder<List<String>, bool>(
             options: fetchingQuery(),
             builder: (context, result) => result.isFetching

@@ -2,13 +2,9 @@
 /// build read, and whether a notification is worth a frame.
 ///
 /// "Read the value and its `observedStateOf`, rebuild only if it moved, then
-/// ask `buildWhen`" was written three times and copied four — once in each
-/// keyless read's entry class and once per builder widget — until C48
-/// (https://github.com/KoTTi97/flutter_query/issues/57). It is one decision
-/// for a reason: every call style
-/// (https://github.com/KoTTi97/flutter_query/issues/21) owes a reader the
-/// same guarantee, that nothing rebuilds for a notification carrying what the
-/// reader is already showing.
+/// ask `buildWhen`" is one decision shared by every call style, because each
+/// owes a reader the same guarantee: nothing rebuilds for a notification
+/// carrying what the reader is already showing.
 ///
 /// What the owners differ in, and therefore what stays outside:
 ///
@@ -25,7 +21,25 @@ import 'package:flutter/foundation.dart';
 
 import 'query_controller.dart';
 
-/// Whether a reader should rebuild for a change from [previous] to [current].
+/// Whether a reader should rebuild for a change from [previous] to [current]
+/// — the `buildWhen` every call style takes.
+///
+/// It is asked only when the value really changed: a notification carrying
+/// what the reader is already showing never rebuilds, predicate or not. When
+/// it returns `false`, the reader keeps showing [previous] — unless something
+/// else rebuilds it — and the next change is compared against what it
+/// shows.
+///
+/// ```dart
+/// // Rebuild only when the task's name changes:
+/// final task = context.query(
+///   taskQuery(id),
+///   buildWhen: (previous, current) =>
+///       previous.dataOrNull?.name != current.dataOrNull?.name,
+/// );
+/// ```
+///
+/// {@category Reading queries}
 typedef BuildWhen<T> = bool Function(T previous, T current);
 
 /// One controller a reader watches, and what its last build read from it.
@@ -61,7 +75,7 @@ class ReadEntry<T> {
 
   /// What [observedStateOf] said when [_built] was recorded: the result for
   /// every controller but an infinite query's, which keeps its paging flags
-  /// beside the result (third review, 2026-09-10).
+  /// beside the result.
   Object? _builtState;
 
   /// The predicate the last build handed over, asked once the value is known
@@ -86,9 +100,8 @@ class ReadEntry<T> {
   /// A value equal to the one last built is skipped before [BuildWhen] is
   /// even asked: the first build reads the result straight after the
   /// subscribe started the fetch, and the observer's notification about that
-  /// very fetch arrives after the frame — a rebuild with nothing new in it
-  /// (fourth review, 2026-09-09). Results carry value equality, so "nothing
-  /// new" is `==`.
+  /// very fetch arrives after the frame — a rebuild with nothing new in it.
+  /// Results carry value equality, so "nothing new" is `==`.
   bool _shouldRebuild() {
     if (!_recorded) {
       return true;
@@ -100,8 +113,7 @@ class ReadEntry<T> {
     if (current == _built) {
       // Only the half that lives beside the result moved — the paging flags
       // of an infinite query. There is nothing for [BuildWhen] to compare,
-      // and the reader is showing the stale half right now (third review,
-      // 2026-09-10).
+      // and the reader is showing the stale half right now.
       return true;
     }
     final buildWhen = _buildWhen;

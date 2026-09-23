@@ -1,5 +1,4 @@
-/// The subscribe-while-listened dance every controller does, in one place
-/// (C50, https://github.com/KoTTi97/flutter_query/issues/59).
+/// The subscribe-while-listened dance every controller does, in one place.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -9,21 +8,18 @@ import 'notify_gate.dart';
 /// A controller is subscribed to its observer exactly while something is
 /// listening to *it*, and tells its listeners only what they have not seen.
 ///
-/// The four controllers wrote that twice over — `QueryController` and
-/// `MutationController` byte-for-byte apart from a type argument, the other
-/// two shorter and, in `MutationStateController`'s case, missing two of the
-/// guards. What is hidden here is everything a fourth copy would get wrong:
+/// Every controller shares this, so each gets every guard. What is hidden
+/// here is everything a separate copy would get wrong:
 ///
 /// * **One subscription, even when a listener arrives inside the first
 ///   notification.** [listenerAdded] can notify synchronously, a listener
 ///   called there may add another, and that nested call would still see no
 ///   handle and subscribe a second time — one of the two handles then
-///   overwritten and lost, leaving an observer attached for good (third
-///   review, 2026-09-10).
+///   overwritten and lost, leaving an observer attached for good.
 /// * **The handle is only kept while someone still wants it.** A listener may
 ///   leave inside its first notification, or the controller may be disposed
 ///   from it; the subscription goes with them, or the observer stays attached
-///   with nobody to tell (F09).
+///   with nobody to tell.
 /// * **The gate is seeded before subscribing**, so the notification the
 ///   subscription itself provokes is measured against the value the reader's
 ///   build actually showed ([NotifyGate]).
@@ -128,8 +124,7 @@ class ControllerLifetime<S> {
     // counted by `ChangeNotifier` until the notification ends, so
     // `listenerRemoved` saw a listener and kept the subscription: it leaked,
     // and the gate — never advanced while nobody listens, never re-seeded
-    // while subscribed — swallowed the next listener's first real change
-    // (final review, 2026-09-18).
+    // while subscribed — swallowed the next listener's first real change.
     if (!_disposed && !_hasListeners()) {
       _unsubscribe?.call();
       _unsubscribe = null;

@@ -1,4 +1,4 @@
-/// Widget adapter for dynamic, homogeneous query lists.
+/// Widget adapter for dynamic, homogeneous query lists. See [QueriesBuilder].
 library;
 
 import 'package:flutter/foundation.dart';
@@ -8,25 +8,54 @@ import 'package:query_kit/query_kit.dart';
 import 'queries_controller.dart';
 import 'query_client_provider.dart';
 
-/// Builds from independent query results in the same order as [queries].
+/// Builds from a list of queries that may change length or order, handing
+/// the builder their results in the same order as [queries].
 ///
-/// **No `buildWhen`, and the rebuild decision is the controller's.** The four
-/// call styles all take a predicate over the one result they read (C49,
-/// https://github.com/KoTTi97/flutter_query/issues/55); this widget is not one
-/// of them and has no keyless twin — there is no `watchQueries` and no
-/// `context.queries` — so there is no inequality here to close. There is also
-/// no one result to filter on: a predicate over a whole `List<QueryResult>`
-/// would fire for any query in the collection and say nothing about which, and
-/// a reader who wants per-query filtering already has it by reading each query
-/// with its own [QueryBuilder] or `watchQuery`, each with its own `buildWhen`.
-/// What this widget *does* owe a reader is the other half — nothing rebuilds
-/// for a notification carrying what it is already showing — and that is made
-/// once, element-wise, in [QueriesController]. This state adds one check of
-/// its own, against what its last build showed: a changed list is read by
-/// the build that applied it, and the notification that change provokes
-/// arrives after that build (release review 2026-09-23, B2-4).
+/// ```dart
+/// QueriesBuilder<Task, String>(
+///   queries: <QuerySelectOptions<Task, String>>[
+///     for (final id in visibleIds)
+///       QuerySelectOptions<Task, String>(
+///         queryKey: taskKey(id),
+///         queryFn: (context) => api.getTask(id, signal: context.signal),
+///         select: (task) => task.name,
+///       ),
+///   ],
+///   builder: (context, results) => Column(
+///     children: [
+///       for (final result in results) Text(result.dataOrNull ?? '…'),
+///     ],
+///   ),
+/// )
+/// ```
+///
+/// * **Observers are reused by key and occurrence**, so reordering the list
+///   starts no requests. Duplicate keys share one cache entry while keeping
+///   their own options.
+/// * **Each query fails and settles on its own**; one error does not disturb
+///   its neighbours. To fold the list into one value, see `combine` on a
+///   `List<QueryResult>`.
+/// * **Homogeneous**: one data type per collection, because a Dart `List`
+///   has one element type. For queries of different types, read each one
+///   and combine their results.
+/// * **The list is re-applied whenever the parent rebuilds this widget**, as
+///   the single-query builders re-apply their options; an unchanged list
+///   moves nothing.
+///
+/// **No `buildWhen`.** There is no single result to filter on: a predicate
+/// over the whole list would fire for any query in it and say nothing about
+/// which. Read each query with its own [QueryBuilder] (or any other call
+/// style) to filter per query. What this widget does guarantee is that it
+/// never rebuilds for a notification carrying what it is already showing,
+/// compared element by element.
+///
+/// The widget owns its [QueriesController]; use that directly for the same
+/// collection outside a widget.
+///
+/// {@category Collections}
 class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
-  /// Owns a collection controller, bound to [client] or the nearest provider.
+  /// Observes [queries] on [client], or else on the nearest
+  /// [QueryClientProvider]'s client, and builds with [builder].
   const QueriesBuilder({
     super.key,
     required this.queries,
@@ -34,14 +63,18 @@ class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
     this.client,
   });
 
-  /// Queries to observe. Duplicate keys retain independent observer options.
+  /// The queries to observe, in the order their results are handed to
+  /// [builder]. Re-applied whenever the parent rebuilds this widget;
+  /// duplicate keys keep independent observer options.
   final List<QueryObserverOptionsBase<TQueryData, TData>> queries;
 
-  /// Builds initially and whenever a result or the list changes.
+  /// Builds from the results, one per entry of [queries] in the same order —
+  /// first, and again whenever a result or the list changes.
   final Widget Function(BuildContext context, List<QueryResult<TData>> results)
       builder;
 
-  /// Explicit client; omission uses the nearest [QueryClientProvider].
+  /// The client to observe on. `null` — the usual case — uses the nearest
+  /// [QueryClientProvider]'s.
   final QueryClient? client;
 
   @override
@@ -50,19 +83,12 @@ class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
 }
 
 /// The lifetime the other four builders keep in `didUpdateWidget` and
-/// `didChangeDependencies`, kept here too (C59,
-/// https://github.com/KoTTi97/flutter_query/issues/66): a controller created
+/// `didChangeDependencies`, kept here too: a controller created
 /// on the first build, thrown away when the client it belongs to changes —
 /// whether it was passed in or came from the provider above — and given the
-/// new list in place otherwise.
-///
-/// It reconciled inside `build` until then, behind an `_updating` flag that
-/// swallowed a notification arriving mid-build. Both are gone: what the flag
-/// stood in for is a rebuild request made during this widget's own build,
-/// which Flutter already handles — the build reads the controller's value
-/// after the reconciliation, so it shows the new state anyway — and moving
-/// the work out means a rebuild caused by a notification no longer re-applies
-/// the same list to the observer.
+/// new list in place otherwise. Reconciling outside `build` means a rebuild
+/// caused by a notification does not re-apply the same list to the
+/// observer.
 ///
 /// It is *not* the builders' shared state class (`query_builder.dart`'s
 /// `_ControllerBuilderState`) for a reason
@@ -70,8 +96,8 @@ class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
 /// controller through a `ReadEntry`, whose rebuild decision is `==` on the
 /// value, and this controller's value is a `List` — identity, not value,
 /// equality, so every notification would look like news. The collection's
-/// decision is element-wise and is made once, in [QueriesController]
-/// (https://github.com/KoTTi97/flutter_query/issues/58). Two lifetimes that
+/// decision is element-wise and is made once, in [QueriesController]. Two
+/// lifetimes that
 /// look alike, one rebuild decision each; sharing the shape would mean
 /// re-deciding the rebuild.
 class _QueriesBuilderState<TQueryData, TData>
@@ -98,8 +124,8 @@ class _QueriesBuilderState<TQueryData, TData>
   /// same pairs the controller's gate compares. A list change re-applied in
   /// [didUpdateWidget] is read by the build that follows it, and the
   /// notification the change provoked arrives after that build; the gate
-  /// cannot know the build already showed it, so this state does (release
-  /// review 2026-09-23, B2-4). The gate itself is left alone: another
+  /// cannot know the build already showed it, so this state does. The gate
+  /// itself is left alone: another
   /// listener of the controller has not seen the change.
   List<(QueryResult<TData>, QueryRefetch<TData>)>? _shown;
 
@@ -134,10 +160,10 @@ class _QueriesBuilderState<TQueryData, TData>
     if (controller == null) {
       return;
     }
-    // The client resolved now, not the field — see the single-query
-    // builders' `didUpdateWidget` (release review 2026-09-23, BIND-5, B2-1):
-    // `null` and the provider's own client are one client, and a provider
-    // swap in this frame reaches `didChangeDependencies` only after this.
+    // The client resolved now, not the field — see the single-query builders'
+    // `didUpdateWidget`: `null` and the provider's own client are one client,
+    // and a provider swap in this frame reaches `didChangeDependencies` only
+    // after this.
     if (_controllerClient != _client) {
       _disposeController();
       return;

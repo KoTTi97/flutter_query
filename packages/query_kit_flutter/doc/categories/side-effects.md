@@ -1,0 +1,1 @@
+Run a snackbar, a navigation or a log line when a result changes, without rebuilding anything: `QueryListener`, `InfiniteQueryListener` and `MutationListener` listen to a controller you own, and `ListenWhen` picks the transitions that count.
