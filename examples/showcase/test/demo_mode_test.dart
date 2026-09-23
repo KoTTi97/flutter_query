@@ -58,8 +58,21 @@ void main() {
     );
   });
 
+  test('?theme= picks the colour scheme, and nothing else changes it', () {
+    expect(
+        themeModeFrom(const <String, String>{'theme': 'dark'}), ThemeMode.dark);
+    expect(themeModeFrom(const <String, String>{'theme': 'light'}),
+        ThemeMode.light);
+    // No parameter, or one the app does not know: the light theme it always
+    // had, which `main` falls back to.
+    expect(themeModeFrom(const <String, String>{}), isNull);
+    expect(themeModeFrom(const <String, String>{'theme': 'Dark'}), isNull);
+    expect(themeModeFrom(const <String, String>{'embed': '1'}), isNull);
+  });
+
   group('embedded over the in-memory backend', () {
-    Future<QueryClient> open(WidgetTester tester, String route) async {
+    Future<QueryClient> open(WidgetTester tester, String route,
+        {ThemeMode themeMode = ThemeMode.light}) async {
       final client = QueryClient(notifyManager: NotifyManager.shared);
       await tester.pumpWidget(ShowcaseApp(
         api: inMemoryApi(FakeBackend.seed()),
@@ -67,6 +80,7 @@ void main() {
         initialRoute: route,
         embed: true,
         inMemory: true,
+        themeMode: themeMode,
       ));
       return client;
     }
@@ -98,6 +112,19 @@ void main() {
         expect(navigator.canPop(), isFalse,
             reason: 'the catalogue must not sit beneath an embedded feature');
         expect(find.text(showcaseTitle), findsNothing);
+      } finally {
+        await tearDown(tester, client);
+      }
+    });
+
+    testWidgets('dark when the site is dark', (tester) async {
+      final client = await open(tester, '/simple', themeMode: ThemeMode.dark);
+      try {
+        await tester.pump();
+        expect(Theme.of(tester.element(find.text('Simple'))).brightness,
+            Brightness.dark);
+        await tester.pump(demoLatency);
+        await tester.pumpAndSettle();
       } finally {
         await tearDown(tester, client);
       }

@@ -5,10 +5,15 @@
 /// entry's gc timer.
 library;
 
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 import 'package:showcase/features/playground/playground_screen.dart';
+import 'package:showcase/main.dart';
+import 'package:showcase/shared/api.dart';
 import 'package:showcase/shared/models.dart';
 
 import '../harness.dart';
@@ -277,4 +282,77 @@ void main() {
     expect(h.backend.latency, Duration.zero);
     expect(h.backend.errorRate, 0);
   });
+
+  showcaseTest('leaving the screen puts back the latency it found, not zero',
+      (tester, h) async {
+    // The rest of the app runs at the backend's own latency; the playground
+    // turning its knob to 0 must not leave every other screen instant.
+    h.backend.latency = const Duration(milliseconds: 120);
+    tester.view.physicalSize = const Size(900, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await h.open(tester, '/playground');
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(h.backend.latency, Duration.zero);
+    expect(reader('backend', 'latency=0ms'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(h.backend.latency, const Duration(milliseconds: 120));
+    expect(h.backend.errorRate, 0);
+  });
+
+  showcaseTest('leaving before the backend answered the read restores it too',
+      (tester, h) async {
+    // Over a network the read of the knobs takes a while; a screen left in
+    // that window has nothing for `dispose` to put back, so the read's
+    // answer must do it — not a late push of this screen's zeros.
+    h.backend.latency = const Duration(milliseconds: 120);
+    tester.view.physicalSize = const Size(900, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ShowcaseApp(
+      api: ShowcaseApi(
+        dio: Dio(BaseOptions(baseUrl: 'http://backend.test/api'))
+          ..httpClientAdapter = _SlowControl(h.backend),
+        scenario: h.scenario,
+      ),
+      client: h.client,
+      initialRoute: '/playground',
+    ));
+    await tester.pump();
+    expect(find.byType(PlaygroundScreen), findsOneWidget);
+    await tester.pageBack();
+    await tester.pump();
+    // The page's exit transition ends, and the screen is disposed, well
+    // before the read answers.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(PlaygroundScreen), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(h.backend.latency, const Duration(milliseconds: 120));
+    expect(h.backend.errorRate, 0);
+  });
+}
+
+/// The backend's control routes answered after a network's worth of time,
+/// longer than a page's exit transition, as a slow network can; the
+/// in-memory backend answers them at once.
+class _SlowControl implements HttpClientAdapter {
+  _SlowControl(this.inner);
+
+  final HttpClientAdapter inner;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    if (options.path.contains('/__scenario/')) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    return inner.fetch(options, requestStream, cancelFuture);
+  }
+
+  @override
+  void close({bool force = false}) => inner.close(force: force);
 }

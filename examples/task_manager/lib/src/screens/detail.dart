@@ -63,7 +63,7 @@ class _TaskDetailState extends State<TaskDetail> with QueryMixin {
       appBar: AppBar(
         leading: BackButton(onPressed: AppScope.of(context).closeTask),
         title: const Text('All tasks'),
-        shape: const Border(bottom: BorderSide(color: AppColors.border)),
+        shape: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       body: ContentWidth(
         child: switch (task) {
@@ -163,7 +163,7 @@ class _Hero extends StatelessWidget {
               ),
             ),
             if (task.reminderPending)
-              const StatusPill(
+              StatusPill(
                 label: 'confirming',
                 color: AppColors.warning,
                 background: AppColors.warningSoft,
@@ -197,7 +197,7 @@ class _RenameCard extends StatelessWidget {
           children: <Widget>[
             const Text('Name', style: titleText),
             const SizedBox(height: 3),
-            const Text(
+            Text(
               'Shown at once and rolled back if the server refuses. The '
               'name "fail" is always refused.',
               style: mutedText,
@@ -216,12 +216,12 @@ class _RenameCard extends StatelessWidget {
                 FilledButton(
                   onPressed: pending ? null : onSubmit,
                   child: pending
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 16,
                           width: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: AppColors.onAccent,
                           ),
                         )
                       : const Text('Rename'),
@@ -269,7 +269,7 @@ class _ReminderCard extends StatelessWidget {
               ),
             ),
             if (task.reminderPending)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(right: 8),
                 child: SizedBox(
                   height: 15,
@@ -413,7 +413,7 @@ class _DetailError extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const Icon(Icons.cloud_off, size: 26, color: AppColors.danger),
+                Icon(Icons.cloud_off, size: 26, color: AppColors.danger),
                 const SizedBox(height: 12),
                 Text(message, textAlign: TextAlign.center, style: titleText),
               ],

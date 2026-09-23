@@ -1,6 +1,6 @@
 // Fails when a doc page names a live demo that does not exist.
 //
-// Every `<LiveDemo feature="…">` in docs/ must name a showcase route; the
+// Every `<LiveDemo feature="…">` in docs/ and src/pages/ must name a showcase route; the
 // list is src/components/LiveDemo/showcase-features.json, which the
 // showcase's own test/demo_mode_test.dart keeps equal to lib/routes.dart. A
 // renamed feature therefore fails `npm run build`, instead of leaving a page
@@ -22,7 +22,7 @@ function* pages(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name)
     if (entry.isDirectory()) yield* pages(path)
-    else if (/\.mdx?$/.test(entry.name)) yield path
+    else if (/\.(mdx?|tsx)$/.test(entry.name)) yield path
   }
 }
 
@@ -30,7 +30,7 @@ const attribute = (tag, name) => tag.match(new RegExp(`\\b${name}=["']([^"']*)["
 
 const problems = []
 let count = 0
-for (const page of pages(join(site, 'docs'))) {
+for (const page of [...pages(join(site, 'docs')), ...pages(join(site, 'src/pages'))]) {
   // A fenced block that shows the tag is not a use of it; blanked rather than
   // removed, so the line numbers stay true.
   const text = readFileSync(page, 'utf8').replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1/gm, (block) =>
@@ -56,4 +56,4 @@ if (problems.length > 0) {
   console.error(`The ids are in src/components/LiveDemo/showcase-features.json (${features.size} features).`)
   process.exit(1)
 }
-console.log(`check-live-demos: ${count} <LiveDemo> across docs/, every one a real demo`)
+console.log(`check-live-demos: ${count} <LiveDemo> across docs/ and src/pages/, every one a real demo`)

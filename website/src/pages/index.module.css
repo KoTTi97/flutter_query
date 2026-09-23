@@ -11,8 +11,8 @@
   max-width: 1140px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
-  gap: 3.5rem;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 3rem;
   align-items: center;
 }
 
@@ -27,6 +27,12 @@
   letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--qk-muted);
+}
+
+/* The product's name keeps its own spelling inside the capitals. */
+.name {
+  text-transform: none;
+  letter-spacing: 0.02em;
 }
 
 .eyebrow::before {
@@ -88,6 +94,12 @@
   margin-bottom: 0;
 }
 
+/* Small enough that the sample's longest line fits the column on a desk;
+   on a phone it keeps its own horizontal scroll. */
+.heroCode pre code {
+  font-size: 0.8rem;
+}
+
 .section {
   max-width: 1140px;
   margin: 4.5rem auto 0;
@@ -112,86 +124,6 @@
   flex: 1;
   height: 1px;
   background: var(--qk-rule);
-}
-
-/* --- The figures -------------------------------------------------------- */
-
-.figures {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 0;
-  border-top: 1px solid var(--qk-rule-strong);
-  border-bottom: 1px solid var(--qk-rule-strong);
-}
-
-.figure {
-  padding: 1.6rem 1.5rem 1.7rem;
-  border-left: 1px solid var(--qk-rule);
-}
-
-.figure:first-child {
-  padding-left: 0;
-  border-left: none;
-}
-
-.figureValue {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 2.35rem;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.035em;
-  font-variant-numeric: tabular-nums;
-  color: var(--qk-ink);
-}
-
-.figureLabel {
-  margin: 0.7rem 0 0;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: var(--qk-muted);
-  max-width: 15rem;
-}
-
-/* --- The four points ---------------------------------------------------- */
-
-.points {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 3.5rem;
-  row-gap: 2.75rem;
-}
-
-.point {
-  position: relative;
-  padding-top: 1.4rem;
-  border-top: 1px solid var(--qk-rule);
-}
-
-.pointIndex {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--qk-accent);
-}
-
-.pointTitle {
-  font-size: 1.15rem;
-  font-weight: 600;
-  letter-spacing: -0.018em;
-  margin: 0.5rem 0 0.55rem;
-}
-
-.pointBody {
-  color: var(--qk-muted);
-  font-size: 0.96rem;
-  line-height: 1.68;
-  margin: 0 0 0.85rem;
-  max-width: 34rem;
-}
-
-.pointBody code {
-  color: var(--qk-ink);
 }
 
 /* --- The colophon ------------------------------------------------------- */
@@ -223,9 +155,219 @@
   margin-bottom: 5.5rem;
 }
 
+/* --- The disclosure -----------------------------------------------------
+   In the hero, not the footer: the first thing under the fold line on a
+   phone and beside the sample's foot on a desk. A rule and a label, no box
+   colour — it is a statement, not a warning. */
+
+.disclosure {
+  max-width: 1140px;
+  margin: 3rem auto 0;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid var(--qk-rule-strong);
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 2.5rem;
+  row-gap: 0.6rem;
+}
+
+.disclosureLabel {
+  margin: 0;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--qk-accent);
+  padding-top: 0.2rem;
+}
+
+.disclosureText {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.62;
+  color: var(--qk-ink);
+}
+
+.disclosureText + .disclosureText {
+  color: var(--qk-muted);
+}
+
+/* --- The problem, and the fidelity note ---------------------------------
+   A lede on the left, set large, and the argument in a reading measure on
+   the right. */
+
+.problem {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  column-gap: 3.5rem;
+  row-gap: 1rem;
+  align-items: start;
+}
+
+.lede {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.024em;
+  text-wrap: balance;
+  color: var(--qk-ink);
+}
+
+.prose {
+  color: var(--qk-muted);
+  font-size: 1rem;
+  line-height: 1.72;
+  max-width: 38rem;
+}
+
+.prose code {
+  color: var(--qk-ink);
+}
+
+.prose > p:last-child {
+  margin-bottom: 0;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.75rem;
+}
+
+/* --- The demo ----------------------------------------------------------- */
+
+.demo {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  column-gap: 3.5rem;
+  align-items: start;
+}
+
+.demoIntro .prose {
+  margin: 1rem 0 0;
+}
+
+.demo em {
+  font-style: normal;
+  font-weight: 550;
+  color: var(--qk-ink);
+}
+
+/* LiveDemo's own figure margin is for a page of prose; here the grid spaces
+   it. */
+.demo figure {
+  margin: 0;
+}
+
+/* --- The feature list ---------------------------------------------------
+   A definition list on a three-column grid, each term a link. Hairlines on
+   top only, so the grid reads as rows of a table rather than a wall of
+   cards. */
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 2.5rem;
+  margin: 0;
+}
+
+.feature {
+  padding: 1.15rem 0 1.4rem;
+  border-top: 1px solid var(--qk-rule);
+}
+
+.featureTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+.featureTitle a {
+  color: var(--qk-ink);
+}
+
+.featureTitle a:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.featureBody {
+  margin: 0;
+  color: var(--qk-muted);
+  font-size: 0.92rem;
+  line-height: 1.62;
+}
+
+.featureBody code {
+  color: var(--qk-ink);
+}
+
+/* --- Where next --------------------------------------------------------- */
+
+.next {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--qk-rule-strong);
+  border-bottom: 1px solid var(--qk-rule-strong);
+  padding: 0;
+}
+
+.section.next {
+  padding: 0;
+  margin-left: max(1.5rem, calc((100% - 1140px) / 2 + 1.5rem));
+  margin-right: max(1.5rem, calc((100% - 1140px) / 2 + 1.5rem));
+  max-width: none;
+}
+
+.nextLink {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1.4rem 1.5rem 1.5rem;
+  border-left: 1px solid var(--qk-rule);
+  color: var(--qk-ink);
+}
+
+.nextLink:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+
+.nextLink:hover {
+  text-decoration: none;
+  color: var(--ifm-color-primary);
+}
+
+.nextKicker {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--qk-muted);
+}
+
+.nextTitle {
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.nextTitle span {
+  display: inline-block;
+  transition: transform 140ms ease;
+}
+
+.nextLink:hover .nextTitle span {
+  transform: translateX(3px);
+}
+
 @media (max-width: 996px) {
   .hero {
-    padding: 3rem 1.25rem 2.75rem;
+    padding: 3rem 1.25rem 2.5rem;
   }
 
   .heroInner {
@@ -233,46 +375,52 @@
     gap: 2.25rem;
   }
 
+  .disclosure {
+    margin-top: 2.25rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .section {
     margin-top: 3.25rem;
     padding: 0 1.25rem;
   }
 
-  .figures {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .figure:nth-child(3) {
-    padding-left: 0;
-    border-left: none;
-  }
-
-  .figure:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--qk-rule);
-  }
-
-  .points {
+  .problem,
+  .demo {
     grid-template-columns: minmax(0, 1fr);
-    row-gap: 2.25rem;
+  }
+
+  .demoIntro {
+    margin-bottom: 1.5rem;
+  }
+
+  .features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 2rem;
+  }
+
+  .section.next {
+    margin-left: 1.25rem;
+    margin-right: 1.25rem;
   }
 }
 
 @media (max-width: 600px) {
-  .figures {
+  .features {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .figure {
-    padding-left: 0;
+  .next {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nextLink,
+  .nextLink:first-child {
+    padding: 1.1rem 0;
     border-left: none;
-    border-bottom: 1px solid var(--qk-rule);
   }
 
-  .figure:last-child {
-    border-bottom: none;
-  }
-
-  .figureLabel {
-    max-width: none;
+  .nextLink + .nextLink {
+    border-top: 1px solid var(--qk-rule);
   }
 }

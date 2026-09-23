@@ -20,9 +20,10 @@
 ///
 /// The backend is then `lib/demo/in_memory_backend.dart` in the same tab, as
 /// slow as the server. On the web, `?semantics=1` switches the semantics tree
-/// on from the first frame, as `--dart-define=E2E=true` does. The app is one
-/// screen with no catalogue behind it, so it embeds whole: the site's
-/// `?embed=1` changes nothing here.
+/// on from the first frame, as `--dart-define=E2E=true` does, and
+/// `?theme=dark` gives it its dark palette, so a demo framed in the site's
+/// dark mode is dark too. The app is one screen with no catalogue behind it,
+/// so it embeds whole: the site's `?embed=1` changes nothing here.
 library;
 
 import 'package:flutter/material.dart';
@@ -46,8 +47,14 @@ const bool _e2e = bool.fromEnvironment('E2E');
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  if (_e2e || Uri.base.queryParameters['semantics'] == '1') {
+  final parameters = Uri.base.queryParameters;
+  if (_e2e || parameters['semantics'] == '1') {
     SemanticsBinding.instance.ensureSemantics();
+  }
+  // Chosen once, before the first frame: nothing switches it while the app
+  // runs, so the palette is read through `AppColors` rather than per widget.
+  if (brightnessFrom(parameters) == Brightness.dark) {
+    AppColors.palette = AppPalette.dark;
   }
   runApp(TaskManagerApp(api: inMemoryBackend ? inMemoryTaskApi() : TaskApi()));
 }

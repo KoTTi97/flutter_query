@@ -26,7 +26,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final client = QueryClientProvider.of(context);
     return AppBar(
-      shape: const Border(bottom: BorderSide(color: AppColors.border)),
+      shape: Border(bottom: BorderSide(color: AppColors.border)),
       title: Row(
         children: <Widget>[
           Container(
@@ -36,7 +36,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               color: AppColors.accentSoft,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.checklist_rounded,
               size: 15,
               color: AppColors.accent,
@@ -64,7 +64,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                         : AppColors.ground,
                     dot: true,
                   ),
-                QueryError() => const StatusPill(
+                QueryError() => StatusPill(
                     label: 'Server offline',
                     color: AppColors.danger,
                     background: AppColors.dangerSoft,
