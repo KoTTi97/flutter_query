@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:query_kit/query_kit.dart';
 // Internal plumbing the package does not export: the retryer, and the
 // structural-sharing bucket the suite pins.
+import 'package:query_kit/src/hashing.dart' show spreadHash;
 import 'package:query_kit/src/retryer.dart';
 import 'package:query_kit/src/structural_sharing.dart' show sharingBucketOf;
 import 'package:test/test.dart';
@@ -238,8 +239,10 @@ void main() {
 
   group('structural sharing hashes the leaves it compares', () {
     test('typed data hashes as itself; equal InfiniteData alike', () {
+      // A Uint8List is a List too; walked as one, it would hash as [1, 2].
       final bytes = Uint8List.fromList([1, 2]);
-      expect(sharingBucketOf(bytes, 0), sharingBucketOf(bytes, 0));
+      expect(sharingBucketOf(bytes, 0), spreadHash(spreadHash(bytes.hashCode)));
+      expect(sharingBucketOf(bytes, 0), isNot(sharingBucketOf([1, 2], 0)));
       expect(sharingBucketOf(InfiniteData(pages: [1], pageParams: [0]), 0),
           sharingBucketOf(InfiniteData(pages: [1], pageParams: [0]), 0));
     });

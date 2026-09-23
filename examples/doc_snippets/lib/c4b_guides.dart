@@ -461,11 +461,14 @@ Stream<bool> reachability(
   StreamSubscription<bool>? linkChanges;
   Timer? timer;
   var linkUp = false;
+  var checks = 0;
   late final StreamController<bool> out;
 
   Future<void> check() async {
+    final asked = ++checks;
     final reachable = linkUp && await probe();
-    if (!out.isClosed) out.add(reachable);
+    // A later check — the link dropping, say — overtakes this one's answer.
+    if (asked == checks && !out.isClosed) out.add(reachable);
   }
 
   out = StreamController<bool>.broadcast(

@@ -113,7 +113,7 @@ const config: Config = {
     // stylesheet — and so no dark-mode rule — can override.
     announcementBar: {
       id: 'unaffiliated-and-ai-coded',
-      content: `query_kit is an <b>entirely AI-coded</b> project, written by AI coding agents (Anthropic's Claude), and a community <b>port of TanStack Query</b> — <b>not affiliated with or endorsed by TanStack</b>. <a href="${baseUrl}docs/project/credits">What that means</a>.`,
+      content: `${aiNotice} It is a community port of TanStack Query, <b>not affiliated with or endorsed by TanStack</b>. <a href="${baseUrl}docs/project/credits">What that means</a>.`,
       isCloseable: false,
     },
     navbar: {

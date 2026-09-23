@@ -177,9 +177,10 @@ the one still in flight.
 | `revert` | `true` | each query goes back to the state it held before the fetch, `fetchStatus` `idle` |
 | `silent` | `false` | `true` means "a new fetch is taking over": nothing is recorded as an error |
 
-With the defaults, a reader keeps the data it had, and whoever awaited the
-fetch — `client.query`, a `refetch()` — gets that data back, or a
-`CancelledError` when there was none. A silently cancelled fetch that nothing
+With the defaults, a reader keeps the data it had. A `client.query` that was
+waiting for the fetch gets that data back, or a `CancelledError` when there
+was none; a `refetch()` never throws — it completes with the reader's result,
+which after the revert is the state from before the fetch. A silently cancelled fetch that nothing
 replaces is put back to `idle` rather than left `fetching`.
 
 The returned future completes when every matching cancel has settled, and
