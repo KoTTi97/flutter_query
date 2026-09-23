@@ -28,7 +28,8 @@ Try it: in the screen below, turn *Online* off, press *Refetch* and then
 *Add todo*. Under `online` neither sends anything: the query shows
 `fetchStatus=paused`, the mutation `isPaused=true`. Turn *Online* back on and
 both go out by themselves. Switch *Network mode* to `always` and repeat — the
-requests go out and fail.
+requests go out with *Online* off, and this demo's backend answers them: the
+switch changes only what the client believes, not the network.
 
 <LiveDemo feature="offline" height={640} />
 
@@ -119,7 +120,9 @@ until the client is online, as under `online`.
 In the default `online` mode, a mutation started offline is not sent and not
 failed. It is `pending` with `isPaused: true` — the UI can show the write as
 queued — and it runs when the client is online again. Several writes made
-offline are sent in the order they were made.
+offline are all started again at once, in the order they were made; to send
+each only after the one before it has settled, give them a shared
+[scope](mutation-scopes.md).
 
 `client.resumePausedMutations()` is the manual door. A mounted client calls
 it by itself when it comes back online, so it is rarely needed. It decides

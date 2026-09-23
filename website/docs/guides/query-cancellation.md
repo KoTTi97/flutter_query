@@ -159,7 +159,8 @@ loading its first data joins the running fetch instead.
 key: a new term is a new query, the old one loses its last reader, and a
 function that read the signal is cancelled.
 
-Try it: in the screen below, press *Start slow fetch* and then *Cancel*
+Try it: the screen below starts its slow fetch as it opens, so wait the
+three seconds until *Start slow fetch* is enabled, then press it and *Cancel*
 within three seconds. `cancels=` goes up — the token reached the HTTP
 client — and `fetchStatus=` is back to `idle`. Turn on *Ignore the signal*
 and repeat: the query is cancelled all the same and `cancels=` stays put,
@@ -184,7 +185,9 @@ replaces is put back to `idle` rather than left `fetching`.
 The returned future completes when every matching cancel has settled, and
 never fails.
 
-A cancelled fetch is never retried, and it is not an error on the result.
+A cancelled fetch is never retried. With `revert` (the default) it leaves no
+error on the result; `revert: false` without `silent` records the
+`CancelledError` as the query's error.
 
 ## Disconnecting a device
 

@@ -147,7 +147,7 @@ When the retries run out, the result is a `QueryError`. On a first load its
 `isLoadingError` is true; on a refresh, `isRefetchError` is, and
 `staleData` still holds what the screen was showing.
 
-Try it: in the screen below, pick *Policy* `2 times`, set *Fail the next* to
+Try it: in the screen below, pick *Retry* `2 times`, set *Fail the next* to
 `2`, press *Arm* and then refetch. `failureCount=` climbs to 1 and 2 while
 `failureReason=` names the refusal, and the third attempt succeeds. With
 `10` failures armed, the same policy ends in an error after three requests.
@@ -165,10 +165,11 @@ nobody is looking.
 
 ## Mounting on an error
 
-When a query's retries run out and a new reader mounts later — the user
-navigates back to the screen — the reader starts a fresh fetch with a fresh
-set of retries. `retryOnMount: false` leaves the error standing instead,
-until something else asks.
+When a query with no data runs out of retries and a new reader mounts later
+— the user navigates back to the screen — the reader starts a fresh fetch
+with a fresh set of retries. `retryOnMount: false` leaves the error standing
+instead, until something else asks. A query that failed a *refresh* still has
+data, and the ordinary `refetchOnMount` rule decides for it.
 
 ## Never retried
 

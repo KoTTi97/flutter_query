@@ -262,7 +262,7 @@ controller. Without a widget, `client.isFetching(filters: …)` is the same
 count, read once.
 
 Try it: open the screen below, turn on *Slow post 3* and press
-*Refetch all*. The `fetching=` count at the bottom drops as the fast posts
+*Refetch all*. The `fetching=` count next to the button drops as the fast posts
 land and stays at one while post 3 is still on its way, and each post's own
 row says `refreshing` while its data stays on screen.
 

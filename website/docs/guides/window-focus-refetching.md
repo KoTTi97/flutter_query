@@ -30,9 +30,10 @@ With the default `staleTime` of zero, every return refetches every screen's
 data. A `staleTime` is the usual way to make that rarer — data younger than it
 is fresh and skipped. See [important defaults](../important-defaults.md).
 
-Try it: in the screen below, set entry A's *On focus* to `ifStale`, turn
-*App focused* off and on again, and watch `serial=` grow by one; set it to
-`never` and the same round trip leaves it alone.
+Try it: in the screen below, set *Stale time* to `0` — the screen starts
+at thirty seconds, so its data is fresh and a return leaves it alone. Turn
+*App focused* off and on again and watch entry A's `serial=` grow; set A's
+*On focus* to `never` and the same round trip leaves it alone.
 
 <LiveDemo feature="focus-refetch" height={640} />
 

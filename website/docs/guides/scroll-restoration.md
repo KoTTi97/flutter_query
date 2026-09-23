@@ -106,7 +106,10 @@ The cache keeps a query without readers for its `gcTime` — five minutes by
 default — before collecting it; see
 [garbage collection](caching.md#garbage-collection). Come back within that
 and the rows are there on the first frame. Come back later and the list
-loads from scratch, and the saved offset has nothing to restore into.
+loads from scratch: the spinner shows first, and the saved offset is applied
+when the keyed list is built with the new rows — a jump the user sees. An
+infinite query is back to its first page then, so an offset further down is
+clamped to what that page holds.
 
 For a list the user returns to after longer breaks, raise the `gcTime` on
 that query. An [infinite query](infinite-queries.md) keeps every page it had
@@ -119,13 +122,16 @@ When the operating system ends a backgrounded app and the user returns to
 it, Flutter's state restoration can bring the scroll position back: a
 `restorationScopeId` on the app, a `restorationId` on the scrollable. The
 data does not come back with it — the cache lives in memory — so the list
-loads, and the restored offset applies once the rows are there. A long list
-may briefly show the top first. There is no persistence of the cache in 1.0.
+loads, and the scrollable takes its restored offset when it is built — so,
+as with a `PageStorageKey`, build it only once the rows are there. An
+infinite query starts again from its first page. There is no persistence of
+the cache in 1.0.
 
-Try it: in the screen below, press *Load more* a couple of times and
-scroll down, then press *Go to about*. The list is unmounted — its query has
-no reader — and *Back to list* rebuilds it with every page on the first
-frame and no new request.
+Try it: in the screen below, press *Load more* a couple of times, then press
+*Go to about*. The list is unmounted — its query has no reader — and *Back
+to list* rebuilds it with every page on the first frame and no new request.
+This demo's list has no `PageStorageKey`, so it comes back at the top: the
+rows are the cache's half, the position is the part this page adds.
 
 <LiveDemo feature="load-more" />
 

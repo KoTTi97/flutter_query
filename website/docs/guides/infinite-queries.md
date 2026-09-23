@@ -95,18 +95,24 @@ receiving notifications — a page landing changes the content dimensions and
 sends one — so "am I near the end?" alone asks for the next page again and
 again, and how many pages you get depends on how fast the machine is.
 
-Remember where the last request was made and require the view to have moved:
+Remember how long the list was when the last page was asked for, and ask
+again only once it has grown. The scroll position is the wrong thing to
+remember: one gesture keeps moving, so its next notification looks like a
+new arrival at the end. The data is wrong too: a page can land and a
+notification arrive before its rows are laid out, still reading as the end.
+`maxScrollExtent` changes only when the new rows are laid out — the moment
+the list really became longer:
 
 ```dart snippet="guides/infinite-queries.md#asked-at guides/infinite-queries.md#on-scroll"
-double? _askedAt;
+double? _askedAtExtent;
 
 void onScroll() {
   final position = scrollController.position;
   if (position.extentAfter < 400 &&
-      position.pixels != _askedAt &&
+      position.maxScrollExtent != _askedAtExtent &&
       feed.hasNextPage &&
       !feed.isFetchingNextPage) {
-    _askedAt = position.pixels;
+    _askedAtExtent = position.maxScrollExtent;
     feed.fetchNextPage().ignore();
   }
 }
@@ -136,8 +142,8 @@ InfiniteQueryObserverOptions<ActivityPage, int> activityQuery(String id) =>
 The screen puts the pieces together — the scroll trigger from above, a
 footer that says what the end of the list is doing, and pull-to-refresh.
 Here it is with a controller; `context.infiniteQuery`, `watchInfiniteQuery`
-and `InfiniteQueryBuilder` hand back the same controller surface, and the
-body of `build` is the same with any of them:
+and `InfiniteQueryBuilder` hand back the same controller surface, so the
+list, the footer and the scroll trigger read the same with any of them:
 
 ```dart snippet="guides/infinite-queries.md#activity-log"
 class _ActivityLogState extends State<ActivityLog> {
@@ -147,7 +153,7 @@ class _ActivityLogState extends State<ActivityLog> {
     activityQuery(widget.deviceId),
   );
   final ScrollController _scroll = ScrollController();
-  double? _askedAt;
+  double? _askedAtExtent;
 
   @override
   void initState() {
@@ -158,10 +164,10 @@ class _ActivityLogState extends State<ActivityLog> {
   void _onScroll() {
     final position = _scroll.position;
     if (position.extentAfter < 400 &&
-        position.pixels != _askedAt &&
+        position.maxScrollExtent != _askedAtExtent &&
         _log.hasNextPage &&
         !_log.isFetchingNextPage) {
-      _askedAt = position.pixels;
+      _askedAtExtent = position.maxScrollExtent;
       _log.fetchNextPage().ignore();
     }
   }

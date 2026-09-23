@@ -253,10 +253,12 @@ widget's state. Three details make it work:
   default `staleTime` of zero it would be shown at once — and refetched
   straight away. See [prefetching](prefetching.md#where-to-prefetch).
 
-Try it: in the screen below, press *Next page*. The rows stay on screen
-while `isPlaceholderData=true`, then the new page replaces them — and the
-second *Next page* is instant, because the page after the one on screen was
-prefetched. *Previous page* is instant too, from the cache.
+Try it: in the screen below, press *Next page* a few times. Each page is
+there at once, because the one after the page on screen was prefetched as
+soon as that page landed; press twice in quick succession, before the
+prefetch answers, and the rows stay on screen with `isPlaceholderData=true`
+until the new page replaces them. *Previous page* is instant too, from the
+cache.
 
 <LiveDemo feature="pagination" />
 

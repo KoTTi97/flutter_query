@@ -81,7 +81,7 @@ QueryObserverOptions<Task> taskSeededFromList(QueryClient client, String id) =>
 ```
 
 Giving the list's `dataUpdatedAt` as the seed's age means the detail is as
-stale as the list it came from, and refetches on the same schedule. The
+old as the list it came from, and goes stale at the same moment. The
 lazy form is asked only when a seed is actually written — not on every
 rebuild.
 
@@ -134,13 +134,14 @@ it is not refetched — which is why its age matters:
 | Seed dated | `staleTime` | On mount |
 |---|---|---|
 | now (no date given) | zero | shown, refetched at once |
-| now (no date given) | one minute | shown, no request for a minute |
-| the list's `dataUpdatedAt`, 40 s ago | one minute | shown, refetched when the list would be |
+| now (no date given) | one minute | shown, no request; stale a minute later |
+| the list's `dataUpdatedAt`, 40 s ago | one minute | shown, no request; stale 20 s later, with the list |
 | bundled, weeks ago | one day | shown, refetched at once |
 
-Try it: in the screen below, open a post from card **A**. Its title shows at
-once from the list, and the strip's `fetches=` stays `0` — the seed is
-younger than the thirty-second `staleTime`. Turn on *Treat initial data as
+Try it: in the screen below, open a post from card **A** within thirty
+seconds of the list loading. Its title shows at once from the list, and the
+strip's `fetches=` stays `0` — the seed is as old as the list, younger than
+the thirty-second `staleTime`. Turn on *Treat initial data as
 old* and open another: the title still shows at once, and one fetch follows.
 Card **D** does the same with the lazy date: `fresh` fetches nothing,
 `backdated` refetches straight away, and `computeCalls=` stays at `1` through

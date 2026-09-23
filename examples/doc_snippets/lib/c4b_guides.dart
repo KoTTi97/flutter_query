@@ -869,7 +869,7 @@ class _ActivityLogState extends State<ActivityLog> {
     activityQuery(widget.deviceId),
   );
   final ScrollController _scroll = ScrollController();
-  double? _askedAt;
+  double? _askedAtExtent;
 
   @override
   void initState() {
@@ -880,10 +880,10 @@ class _ActivityLogState extends State<ActivityLog> {
   void _onScroll() {
     final position = _scroll.position;
     if (position.extentAfter < 400 &&
-        position.pixels != _askedAt &&
+        position.maxScrollExtent != _askedAtExtent &&
         _log.hasNextPage &&
         !_log.isFetchingNextPage) {
-      _askedAt = position.pixels;
+      _askedAtExtent = position.maxScrollExtent;
       _log.fetchNextPage().ignore();
     }
   }
