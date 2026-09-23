@@ -95,7 +95,7 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('TanStack Query Showcase'), findsOneWidget);
+    expect(find.text('query_kit showcase'), findsOneWidget);
 
     expect(h.client.getQueryDefaults(apiKey('/posts'))?.queryFn, isNull);
     expect(h.client.getMutationDefaults(createTodoKey)?.mutationFn, isNull);

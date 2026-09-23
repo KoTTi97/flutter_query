@@ -11,12 +11,25 @@
 /// flutter run -d chrome                       # or macos, or an emulator
 /// flutter run --dart-define=BACKEND=http://192.168.1.5:5174/api
 /// ```
+///
+/// **Without a server**, as the documentation site embeds it:
+///
+/// ```bash
+/// flutter run -d chrome --dart-define=QK_BACKEND=inmemory
+/// ```
+///
+/// The backend is then `lib/demo/in_memory_backend.dart` in the same tab, as
+/// slow as the server. On the web, `?semantics=1` switches the semantics tree
+/// on from the first frame, as `--dart-define=E2E=true` does. The app is one
+/// screen with no catalogue behind it, so it embeds whole: the site's
+/// `?embed=1` changes nothing here.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'demo/demo_mode.dart';
 import 'src/api.dart';
 import 'src/app_state.dart';
 import 'src/queries.dart';
@@ -32,11 +45,11 @@ import 'src/widgets/header.dart';
 const bool _e2e = bool.fromEnvironment('E2E');
 
 void main() {
-  if (_e2e) {
-    WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
+  if (_e2e || Uri.base.queryParameters['semantics'] == '1') {
     SemanticsBinding.instance.ensureSemantics();
   }
-  runApp(TaskManagerApp(api: TaskApi()));
+  runApp(TaskManagerApp(api: inMemoryBackend ? inMemoryTaskApi() : TaskApi()));
 }
 
 class TaskManagerApp extends StatefulWidget {

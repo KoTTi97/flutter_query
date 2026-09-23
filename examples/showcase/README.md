@@ -29,6 +29,38 @@ flutter run --dart-define=BACKEND=http://192.168.1.5:5175/api   # a real device
 
 The home screen lists the catalogue; each row opens a feature at `/#/<id>`.
 
+### Without a server
+
+The documentation site embeds this app as its live demos, and those run with
+no backend at all: a build with `--dart-define=QK_BACKEND=inmemory` answers
+every request from `lib/demo/in_memory_backend.dart` inside the app — the same
+class the widget tests use, seeded from the same `server/seed.json` (bundled as
+an asset) and as slow as the server's default, 300 ms.
+
+```bash
+cd examples/showcase && flutter run -d chrome --dart-define=QK_BACKEND=inmemory
+```
+
+Two query parameters, before the `#/route`, change how it presents itself on
+the web:
+
+| Parameter | Effect |
+|---|---|
+| `?embed=1` | one feature alone: the route in the hash and nothing beneath it — no back button, no way into the catalogue; an id that is no feature shows "Unknown demo" |
+| `?semantics=1` | the semantics tree on from the first frame, as `--dart-define=E2E=true` does, for screen readers and for the site's Playwright suite |
+
+So the site frames `/flutter_query/demo/showcase/?embed=1&semantics=1#/optimistic-updates`.
+`tool/build_demos.sh` (or `npm run demos` in `website/`) builds this app and
+the task manager that way into `website/static/demo/`, which is gitignored;
+the site's `<LiveDemo feature="…">` component loads one on a click. The
+screen ids the site may name are `website/src/components/LiveDemo/showcase-features.json`,
+which `test/demo_mode_test.dart` keeps equal to `lib/routes.dart` — after
+adding or renaming a feature, regenerate it:
+
+```bash
+UPDATE_SITE_FEATURES=1 flutter test test/demo_mode_test.dart
+```
+
 ## The catalogue
 
 Each feature lives in `lib/features/<id>/`, imports only the package and
@@ -152,9 +184,10 @@ Three layers, nothing else:
 cd examples/showcase && flutter test
 ```
 
-**Widget tests** run the real app against `test/fake_backend.dart`, a dio
-`HttpClientAdapter` that mirrors the server route for route, loads the same
-`server/seed.json`, and scripts the same faults. `test/harness.dart` has
+**Widget tests** run the real app against `test/fake_backend.dart` — the
+app's own `lib/demo/in_memory_backend.dart`, a dio `HttpClientAdapter` that
+mirrors the server route for route, loaded with the same `server/seed.json`
+from disk and scripting the same faults. `test/harness.dart` has
 `showcaseTest`: a fresh backend and client per test, the app opened on one
 route, and the teardown a `QueryClient` needs (tear the tree down, let the
 frame after it run, `client.clear()`, then one more pump and clear for what a
@@ -168,7 +201,8 @@ while a `refetchInterval` runs.
 **The contract test** (`test/backend_contract_test.dart`) runs one list of
 cases against the fake and, with `SHOWCASE_SERVER=http://localhost:5175/api`
 set and the server running, against the server. It is what makes the fake
-trustworthy; CI runs both.
+trustworthy — and since the fake is the in-memory backend the site's demos
+ship, it proves those too; CI runs both.
 
 **End-to-end tests** (`e2e/`) drive the real web build in Chromium against the
 real backend:

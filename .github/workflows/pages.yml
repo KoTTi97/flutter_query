@@ -1,0 +1,68 @@
+# Deploys the documentation site, live demos included, to GitHub Pages at
+# https://kotti97.github.io/flutter_query/ — on a core release tag, or by hand
+# from the Actions tab.
+#
+# Prepared, not switched on: until the repository's Pages source is set to
+# "GitHub Actions" (Settings → Pages), the deploy step has nowhere to go and
+# the run fails there, having published nothing. Turning it on is the
+# maintainer's call (docs/plans/release-1.0-docs, D7). The build is the `ci`
+# workflow's `website` job, step for step, so what CI tested is what ships.
+name: pages
+
+on:
+  push:
+    tags:
+      - 'query_kit-v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+
+# Nothing by default; each job asks for what it needs — the build only reads
+# the repository, and only the deploy may write to Pages.
+permissions: {}
+
+# One deployment at a time; a newer one waits rather than cancelling a
+# deployment halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.8
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: flutter pub get
+      - name: live demos
+        run: tool/build_demos.sh
+      - run: npm ci
+        working-directory: website
+      - name: build
+        run: npm run build
+        working-directory: website
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: website/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

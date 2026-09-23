@@ -12,6 +12,41 @@ npm run build      # what CI runs
 npm run serve      # serve the built output
 ```
 
+## Live demos
+
+A doc page embeds one of the example apps, running in the browser against its
+in-memory backend, with
+
+```mdx
+<LiveDemo feature="optimistic-updates" />
+<LiveDemo app="task_manager" height={720} />
+```
+
+— registered for every page in `src/theme/MDXComponents.tsx`, no import. It
+shows a placeholder and creates the iframe only on a click (about 3 MB), with
+"Open full screen" and "View source" links. `feature` is a showcase route id;
+the list is `src/components/LiveDemo/showcase-features.json`, which the
+showcase's `test/demo_mode_test.dart` keeps equal to its `lib/routes.dart`, and
+`npm run build` fails on an id that is not in it
+(`scripts/check-live-demos.mjs`).
+
+The demos themselves are Flutter web builds, and they are not committed:
+
+```bash
+npm run demos      # tool/build_demos.sh: both apps into static/demo/ (needs Flutter)
+```
+
+Run it before `npm start` or `npm run build` to see them. Without it the site
+still builds, and a demo's placeholder says the build is missing. The base
+href comes from `baseUrl` in `docusaurus.config.ts`. CI builds the demos
+before the site, and the `website-e2e` job runs `e2e/` — Playwright over the
+built site: the demo on a page, and every showcase feature at its embed URL.
+
+```bash
+npm run demos && npm run build
+cd e2e && npm ci && npx playwright install chromium && npx playwright test
+```
+
 `onBrokenLinks` and `onBrokenMarkdownLinks` are both `throw`, so a link that
 points at a page that does not exist fails `npm run build`. That is the point
 of building it in CI.
@@ -102,6 +137,7 @@ different matter and blocks.
 
 ## When it is time to deploy
 
+<<<<<<< HEAD
 `npm run build` produces a static `build/` directory; anything that serves
 files will do. For GitHub Pages, `url` and `baseUrl` in the config already
 point at `https://kotti97.github.io/flutter_query/` — the path is the
@@ -109,3 +145,11 @@ repository's name, written once as a constant at the top of
 `docusaurus.config.ts`, so a rename is one edit there — and Docusaurus ships a
 `deploy` script. Adding the workflow is a deliberate step, not a side effect
 of merging this.
+=======
+`npm run demos && npm run build` produces a static `build/` directory;
+anything that serves files will do. For GitHub Pages, `url` and `baseUrl` in
+the config already point at `https://kotti97.github.io/flutter_query/`, and
+`.github/workflows/pages.yml` builds and deploys it on a `query_kit-v*` tag or
+by hand. It does nothing until Pages is switched on for the repository
+(source: GitHub Actions) — that switch is the maintainer's.
+>>>>>>> worktree-agent-a7192d9ddb72020b9

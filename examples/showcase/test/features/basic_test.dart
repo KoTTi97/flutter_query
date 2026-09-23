@@ -129,7 +129,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    expect(find.text('TanStack Query Showcase'), findsOneWidget);
+    expect(find.text('query_kit showcase'), findsOneWidget);
     for (final query in h.client.queryCache.queries) {
       expect(query.observersCount, 0, reason: '${query.queryKey}');
     }

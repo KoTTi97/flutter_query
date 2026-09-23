@@ -253,7 +253,7 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('TanStack Query Showcase'), findsOneWidget);
+    expect(find.text('query_kit showcase'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     // Everything the screen made carries a five-second gc time, so a screen

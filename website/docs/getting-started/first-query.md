@@ -174,6 +174,13 @@ Which of those fire, and when, is [options](../guides/options.md).
 
 ## A runnable version
 
+The showcase's `simple` screen is this page's query, running in your browser:
+one read, its loading and success states, and a refetch that keeps the data on
+screen while it runs. The backend is in memory, with the same 300 ms latency
+as the real one.
+
+<LiveDemo feature="simple" height={560} />
+
 `packages/query_kit_flutter/example/` is a one-file tour of the same ground —
 a provider, a query read two ways and a mutation that invalidates it, with
 no server. `flutter run` in that directory.

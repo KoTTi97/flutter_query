@@ -119,7 +119,7 @@ test('leaving the screen releases every observer', async ({ page, open }) => {
   }
 
   await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await expect(page.getByText('TanStack Query Showcase')).toBeVisible()
+  await expect(page.getByText('query_kit showcase')).toBeVisible()
 
   // The entries outlive the screen. Back on it, each is held by the new
   // observer alone — a leaked one would make it 2 — and the stale data

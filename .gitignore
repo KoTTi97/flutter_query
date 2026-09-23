@@ -23,6 +23,14 @@ pubspec_overrides.yaml
 # the documentation site's generated cache (its `build/` is covered above)
 /website/.docusaurus/
 
+# the site's live demos: web builds of the examples, written by
+# tool/build_demos.sh (`npm run demos`) and never committed
+/website/static/demo/
+
+# the site's end-to-end suite's output
+/website/e2e/test-results/
+/website/e2e/playwright-report/
+
 # scratch worktrees the agent tooling creates
 /.claude/worktrees/
 
