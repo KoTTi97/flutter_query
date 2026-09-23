@@ -1,6 +1,7 @@
 /// Widget adapter for dynamic, homogeneous query lists.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:query_kit/query_kit.dart';
 
@@ -20,8 +21,10 @@ import 'query_client_provider.dart';
 /// with its own [QueryBuilder] or `watchQuery`, each with its own `buildWhen`.
 /// What this widget *does* owe a reader is the other half — nothing rebuilds
 /// for a notification carrying what it is already showing — and that is made
-/// once, element-wise, in [QueriesController], so this state stays a plain
-/// `setState` on every notification it is told about.
+/// once, element-wise, in [QueriesController]. This state adds one check of
+/// its own, against what its last build showed: a changed list is read by
+/// the build that applied it, and the notification that change provokes
+/// arrives after that build (release review 2026-09-23, B2-4).
 class QueriesBuilder<TQueryData, TData> extends StatefulWidget {
   /// Owns a collection controller, bound to [client] or the nearest provider.
   const QueriesBuilder({
@@ -91,8 +94,27 @@ class _QueriesBuilderState<TQueryData, TData>
           ..addListener(_onResult);
   }
 
+  /// What the last build showed, with each result's refetch target — the
+  /// same pairs the controller's gate compares. A list change re-applied in
+  /// [didUpdateWidget] is read by the build that follows it, and the
+  /// notification the change provoked arrives after that build; the gate
+  /// cannot know the build already showed it, so this state does (release
+  /// review 2026-09-23, B2-4). The gate itself is left alone: another
+  /// listener of the controller has not seen the change.
+  List<(QueryResult<TData>, QueryRefetch<TData>)>? _shown;
+
+  static List<(QueryResult<T>, QueryRefetch<T>)> _pairs<T>(
+    List<QueryResult<T>> results,
+  ) =>
+      [for (final result in results) (result, result.refetch)];
+
   void _onResult() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final shown = _shown;
+    if (shown != null && listEquals(shown, _pairs(_collection.value))) {
+      return;
+    }
+    setState(() {});
   }
 
   @override
@@ -108,27 +130,39 @@ class _QueriesBuilderState<TQueryData, TData>
   @override
   void didUpdateWidget(QueriesBuilder<TQueryData, TData> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.client != widget.client) {
-      _disposeController();
-    } else if (_controller != null) {
-      // Unconditionally, where the single-query builders compare their
-      // options first: a `List` compares by identity, so a caller who fills
-      // the same list object again would silently stop being heard. The
-      // observer reuses what it can by key occurrence and re-applying an
-      // unchanged list moves nothing.
-      _controller!.setQueries(widget.queries);
+    final controller = _controller;
+    if (controller == null) {
+      return;
     }
+    // The client resolved now, not the field — see the single-query
+    // builders' `didUpdateWidget` (release review 2026-09-23, BIND-5, B2-1):
+    // `null` and the provider's own client are one client, and a provider
+    // swap in this frame reaches `didChangeDependencies` only after this.
+    if (_controllerClient != _client) {
+      _disposeController();
+      return;
+    }
+    // Unconditionally, as the single-query builders re-apply their options:
+    // a `List` compares by identity, so a caller who fills the same list
+    // object again would silently stop being heard. The observer reuses what
+    // it can by key occurrence and re-applying an unchanged list moves
+    // nothing.
+    controller.setQueries(widget.queries);
   }
 
   @override
-  Widget build(BuildContext context) =>
-      widget.builder(context, _collection.value);
+  Widget build(BuildContext context) {
+    final results = _collection.value;
+    _shown = _pairs(results);
+    return widget.builder(context, results);
+  }
 
   void _disposeController() {
     _controller?.removeListener(_onResult);
     _controller?.dispose();
     _controller = null;
     _controllerClient = null;
+    _shown = null;
   }
 
   @override

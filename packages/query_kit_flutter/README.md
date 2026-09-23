@@ -166,8 +166,11 @@ Mutations likewise: `context.mutation(...)`, `watchMutation(...)`,
 `MutationBuilder`, `MutationController`. A mutation is owned by the widget that
 asks for it and disposed with it. In the context and mixin styles a mutation is
 identified by `id`, else by its `mutationKey`, each together with its three
-type arguments; without either, by the types alone. Like a query, it is released
-after the frame once a build stops reading it.
+type arguments; without either, by the types alone. A `mutationKey` is a
+category, as upstream's is, not a name: two mutations read in one build with
+the same key and types would share a controller, so that is a debug assertion
+— give each an `id`. Like a query, it is released after the frame once a build
+stops reading it.
 
 The third type argument is what `onMutate` returns — the rollback handle of an
 optimistic update. A mutation without one uses `MutationOptions.simple`, which
@@ -267,8 +270,11 @@ total: data.total)`.
 > whole results instead and rebuilds where upstream sometimes would not.
 > `buildWhen` is the explicit form of the same thing.
 
-`buildWhen`, on every builder (`QueryBuilder`, `QuerySelectBuilder`,
-`InfiniteQueryBuilder`, `MutationBuilder`), skips the rest:
+`buildWhen` skips the rest. Every builder takes it (`QueryBuilder`,
+`QuerySelectBuilder`, `InfiniteQueryBuilder`, `MutationBuilder`), and so does
+every keyless read (`context.query`, `context.selectQuery`,
+`context.infiniteQuery`, `context.mutation`, `watchQuery`, `watchSelectQuery`,
+`watchInfiniteQuery`, `watchMutation`):
 
 ```dart
 QueryBuilder<Task>(
@@ -283,8 +289,10 @@ results. `previous` is the result the builder last *built*, not the last one
 it saw — a result `buildWhen` skipped is not remembered, so the next
 comparison is against what is actually on screen. That is the documented
 semantics of the field, and it is the opposite of `bloc`'s `buildWhen`, where
-`previous` is the last state emitted whether or not it was built. The other
-three styles have no equivalent: with them, `select` is the tool.
+`previous` is the last state emitted whether or not it was built. A keyless
+read's predicate decides for the whole widget: any one read letting a change
+through rebuilds it. A controller read through a `ValueListenableBuilder` has
+no predicate; it only drops notifications that carry an unchanged result.
 
 ## Setting up
 

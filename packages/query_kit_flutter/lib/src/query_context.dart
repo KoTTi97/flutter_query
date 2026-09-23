@@ -32,6 +32,19 @@
 /// conditional read in its own small widget, and the condition becomes that
 /// widget's presence in the tree.
 ///
+/// **Whose build.** The reads belong to the element `context` names, and
+/// "build" means *its* build. A callback that runs later with that context —
+/// the outer `context` inside a nested `ValueListenableBuilder` or
+/// `LayoutBuilder`, or the `context` a `ListView.builder` hands its
+/// `itemBuilder`, which is the list's sliver, shared by every item — makes
+/// *additive* reads: they release nothing the element's own build read, and
+/// a key such a callback stops reading (an item scrolled away) stays
+/// subscribed until that element's own next build or unmount (release
+/// review 2026-09-23, BIND-1/BIND-2). For a list, give each item a widget of
+/// its own — `itemBuilder: (_, i) => TaskTile(ids[i])` with the
+/// `context.query` inside `TaskTile.build` — and each item's reads live and
+/// go with it.
+///
 /// **Only in `build`.** The read is reconciled against what the widget read
 /// in its last build; a `context.query` from a tap handler creates an observer
 /// that is only matched up on the next build. Read in `build`, act on the
@@ -146,7 +159,10 @@ extension QueryContext on BuildContext {
   /// when the widget stops reading it — the way a query is — or unmounts. One
   /// is identified by [id], else by the options' `mutationKey`, each together
   /// with its three types; without either, by the types alone — so pass [id]
-  /// when one widget runs two mutations of the same shape.
+  /// when one widget runs two mutations of the same shape. A `mutationKey`
+  /// is a category, as upstream's is, not a name: two mutations under one key
+  /// with the same types would share a controller, so reading them in one
+  /// build without [id] is a debug assertion.
   ///
   /// [buildWhen] narrows *when* this widget rebuilds, the same predicate
   /// [MutationBuilder.buildWhen] takes: given the result the last build
@@ -273,7 +289,7 @@ class QueryScopeElement extends InheritedElement {
     // It is reading, so it is here: whatever `removeDependent` said before
     // this frame ended is void.
     _detached.remove(reader);
-    reads.beginBuild(_epoch);
+    reads.beginBuild(_epoch, reader);
     _scheduleSweep();
     return reads;
   }

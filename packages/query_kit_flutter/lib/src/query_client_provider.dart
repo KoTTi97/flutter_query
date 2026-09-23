@@ -90,8 +90,11 @@ class QueryClientProvider extends StatefulWidget {
   /// network is reachable".
   ///
   /// `null` brings nothing and the client keeps its own default, which is
-  /// online. [OnlineStatus.initial] is applied whenever a client is given
-  /// this status: at mount, to a client that arrives on a later build, and on
+  /// online — and that is where it goes back to when a status is taken away
+  /// on a later build, or when the provider leaves the tree: nothing is left
+  /// to revise an offline verdict then (release review 2026-09-23, BIND-4).
+  /// [OnlineStatus.initial] is applied whenever a client is given this
+  /// status: at mount, to a client that arrives on a later build, and on
   /// any later build that changes the status — with one exception, one stream
   /// swapped for another, where the client already has a verdict from a live
   /// source and rewinding it to `initial` would flicker for anyone building
@@ -249,9 +252,22 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     // build then decides the next transition without re-wiring anything
     // (ninth review, 2026-09-10, C17).
     _lifecycle = AppLifecycleListener(
-      onStateChange: (state) =>
-          client.focusManager.setFocused(_currentIsShown(state)),
+      onStateChange: (state) => _setFocused(client, _currentIsShown(state)),
     );
+  }
+
+  /// Tells [client] whether the app is shown — unless the client already
+  /// believes exactly that. The one case where the two differ is the first
+  /// report after a mount that found no lifecycle state yet: the client's
+  /// focus is then unset, which already reads as focused, and `setFocused`
+  /// would count unset → `true` as a focus change and refetch every stale
+  /// active query right after the mount fetched them. Upstream has the same
+  /// edge and never takes it, because no `visibilitychange` fires on load
+  /// (release review 2026-09-23, S3).
+  static void _setFocused(QueryClient client, bool shown) {
+    if (client.focusManager.isFocused() != shown) {
+      client.focusManager.setFocused(shown);
+    }
   }
 
   /// The mapping the latest build gave, or the built-in one.
@@ -265,7 +281,7 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   void _applyCurrentLifecycleState(QueryClient client) {
     final current = WidgetsBinding.instance.lifecycleState;
     if (current != null) {
-      client.focusManager.setFocused(_currentIsShown(current));
+      _setFocused(client, _currentIsShown(current));
     }
   }
 
@@ -281,25 +297,90 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// been listened to`), and [OnlineStatusStream.changes] promises nothing
   /// about broadcast (fourth review, 2026-09-09).
   void _follow(OnlineStatus? onlineStatus) {
-    _onlineSubscription?.cancel();
+    _cancelOnline();
     // What the old stream last said dies with it. Carrying it to a client
     // that arrives later would pin that client offline with nothing left to
     // put it back online (third review, 2026-09-10).
     _lastOnline = null;
-    _onlineSubscription = onlineStatus?.changes?.listen(
-      _onOnline,
-      // A stream error is the stream's problem, not the app's: reported the
-      // way Flutter reports a build error, not thrown into the zone.
-      onError: (Object error, StackTrace stackTrace) =>
-          FlutterError.reportError(
+    final changes = onlineStatus?.changes;
+    if (changes == null) {
+      return;
+    }
+    try {
+      _onlineSubscription = changes.listen(
+        _onOnline,
+        // A stream error is the stream's problem, not the app's: reported
+        // the way Flutter reports a build error, not thrown into the zone.
+        onError: (Object error, StackTrace stackTrace) =>
+            _report(error, stackTrace, 'while listening to onlineStatus'),
+      );
+    } on StateError catch (error, stackTrace) {
+      // A single-subscription stream some provider already listened to —
+      // this one before a remount, a sibling, or this one before a detour
+      // through another status. Said in words a reader can act on (release
+      // review 2026-09-23, B1-3).
+      Error.throwWithStackTrace(
+        FlutterError.fromParts([
+          ErrorSummary(
+            'QueryClientProvider could not listen to its onlineStatus.',
+          ),
+          ErrorDescription(
+            'The stream has already been listened to ($error). A '
+            'single-subscription stream can be followed by one provider, '
+            'once: remounting a provider with the same OnlineStatus.stream, '
+            'giving it to two providers, or switching away from it and back '
+            'each listen again.',
+          ),
+          ErrorHint(
+            'Pass a broadcast stream: call asBroadcastStream() once where '
+            'the status is created, or use a source that already is one.',
+          ),
+        ]),
+        stackTrace,
+      );
+    }
+  }
+
+  /// Cancels the subscription [_follow] made. `cancel()` returns a future
+  /// that fails when the stream's `onCancel` does; nobody awaits it, so its
+  /// error is reported like a stream error instead of reaching the zone
+  /// unhandled (release review 2026-09-23, B1-2).
+  void _cancelOnline() {
+    final cancelled = _onlineSubscription?.cancel();
+    _onlineSubscription = null;
+    cancelled
+        ?.then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) => _report(
+            error,
+            stackTrace,
+            'while cancelling the onlineStatus subscription',
+          ),
+        )
+        .ignore();
+  }
+
+  static void _report(Object error, StackTrace stackTrace, String context) =>
+      FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
           stack: stackTrace,
           library: 'query_kit_flutter',
-          context: ErrorDescription('while listening to onlineStatus'),
+          context: ErrorDescription(context),
         ),
-      ),
-    );
+      );
+
+  /// Puts [client] back to the default a client with no status has —
+  /// online — once this provider stops speaking for its connectivity: the
+  /// status taken away on a later build, or the provider gone. Whatever the
+  /// status last said would otherwise stay, and an offline verdict with no
+  /// source left to revise it pins paused queries and mutations for good
+  /// (release review 2026-09-23, BIND-4). A client that leaves this provider
+  /// for another client is left as it was.
+  static void _releaseOnline(QueryClient client) {
+    if (!client.onlineManager.isOnline()) {
+      client.onlineManager.setOnline(true);
+    }
   }
 
   /// Tells [client] what the current [QueryClientProvider.onlineStatus] says,
@@ -470,14 +551,21 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       // Changing only `initial` does not replace the source or its latest
       // event. A single-subscription stream cannot be listened to again.
       if (!sameStream) _follow(widget.onlineStatus);
+      if (!clientChanged &&
+          oldWidget.onlineStatus != null &&
+          widget.onlineStatus == null) {
+        _releaseOnline(widget.client);
+      }
     }
   }
 
   @override
   void dispose() {
     _stopObservingLifecycle();
-    _onlineSubscription?.cancel();
-    _onlineSubscription = null;
+    _cancelOnline();
+    if (widget.onlineStatus != null) {
+      _releaseOnline(widget.client);
+    }
     _unmountClient(widget.client);
     super.dispose();
   }

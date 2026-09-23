@@ -523,15 +523,24 @@ void main() {
     testWidgets('disposing an unlistened MutationController detaches it',
         (tester) async {
       final client = newClient();
+      // Mid-run since the release review of 2026-09-23 (B2-2): a run holds
+      // the observer attached until it settles, so per-call callbacks reach
+      // a controller nobody listens to, and lets go once it has. A settled
+      // run on an unlistened controller is therefore detached already; the
+      // one dispose still has to detach is a run in flight.
+      final settle = Completer<int>();
       final mutation = MutationController<int, int, void>(
         client,
-        MutationOptions(mutationFn: (v) => v),
+        MutationOptions(mutationFn: (_) => settle.future),
       );
       try {
-        await mutation.mutateAsync(1);
+        final run = mutation.mutateAsync(1);
+        await tester.pump();
         expect(client.mutationCache.mutations.single.observers, hasLength(1));
         mutation.dispose();
         expect(client.mutationCache.mutations.single.observers, isEmpty);
+        settle.complete(1);
+        await run;
       } finally {
         client.clear();
         await tester.pump();
@@ -646,25 +655,30 @@ void main() {
         client,
         MutationOptions(mutationFn: (_) => settle.future),
       );
-      // Let the mutation settle while the observer is detached: the next
-      // subscribe re-attaches, finds a result that moved, and notifies on the
-      // spot.
-      void noop() {}
-      controller.addListener(noop);
-      final run = controller.mutateAsync(1);
-      await tester.pump();
-      controller.removeListener(noop);
-      settle.complete(7);
-      await run;
-
+      // The first notification is the run going pending, delivered on the
+      // spot. Until the release review of 2026-09-23 (B2-2) the fixture let a
+      // run settle while the observer was detached, so that the next
+      // subscribe notified from inside `subscribe`; a run now holds its
+      // observer attached until it settles, so no mutation settles detached
+      // and that path is unreachable for a mutation controller. The
+      // re-entrancy guard is `ControllerLifetime`'s and is pinned for it by
+      // the query case above; this one pins that a listener added inside a
+      // notification is still one subscription, which the run's own hold
+      // must not mask once it lets go.
       void nested() {}
       late VoidCallback listener;
-      listener = () => controller.addListener(nested);
-      try {
-        controller.addListener(listener);
+      listener = () {
         controller
           ..removeListener(listener)
-          ..removeListener(nested);
+          ..addListener(nested);
+      };
+      try {
+        controller.addListener(listener);
+        final run = controller.mutateAsync(1);
+        await tester.pump();
+        controller.removeListener(nested);
+        settle.complete(7);
+        await run;
         expect(client.mutationCache.mutations.single.observers, isEmpty);
       } finally {
         controller.dispose();
@@ -683,18 +697,15 @@ void main() {
         client,
         MutationOptions(mutationFn: (_) => settle.future),
       );
-      void noop() {}
-      controller.addListener(noop);
-      final run = controller.mutateAsync(1);
-      await tester.pump();
-      controller.removeListener(noop);
-      settle.complete(7);
-      await run;
-
+      // Reached through a run since B2-2 — see the case above.
       late VoidCallback listener;
       listener = () => controller.removeListener(listener);
       try {
         controller.addListener(listener);
+        final run = controller.mutateAsync(1);
+        await tester.pump();
+        settle.complete(7);
+        await run;
         expect(client.mutationCache.mutations.single.observers, isEmpty);
       } finally {
         controller.dispose();
@@ -2170,6 +2181,8 @@ void main() {
       }
     }, createClient: newClient);
   });
+
+  _releaseReview20260923();
 }
 
 /// What [_C59ClientReader] last read, and how often the scope told it its
@@ -2856,4 +2869,497 @@ class _C47MixinTwoMutationsState extends State<_C47MixinTwoMutations>
     );
     return Text('${archive.value.dataOrNull}/${delete.value.dataOrNull}');
   }
+}
+
+// ---------------------------------------------------------------------------
+// Release review 2026-09-23 — binding.
+// ---------------------------------------------------------------------------
+
+QueryObserverOptions<String> _rr(String name) => QueryObserverOptions(
+      queryKey: QueryKey(<Object?>[name]),
+      staleTime: StaleTime.infinite,
+      queryFn: (_) async => '$name-0',
+    );
+
+/// Reads `outer` in its own build and `inner<tab>` inside a nested builder
+/// that re-runs on its own — through the mixin or through the outer
+/// `context`.
+class _RrNested extends StatefulWidget {
+  const _RrNested(this.tab, {required this.mixin});
+  final ValueNotifier<int> tab;
+  final bool mixin;
+  @override
+  State<_RrNested> createState() => _RrNestedState();
+}
+
+class _RrNestedState extends State<_RrNested> with QueryMixin {
+  QueryResult<String> _read(BuildContext context, String name) =>
+      widget.mixin ? watchQuery(_rr(name)) : context.query(_rr(name));
+
+  @override
+  Widget build(BuildContext context) {
+    final outer = _read(context, 'outer');
+    return Column(children: [
+      Text('outer=${outer.dataOrNull}'),
+      ValueListenableBuilder<int>(
+        valueListenable: widget.tab,
+        // The outer `context`, not the builder's: the read belongs to this
+        // State's element.
+        builder: (_, tab, __) =>
+            Text('inner=${_read(context, 'inner$tab').dataOrNull}'),
+      ),
+    ]);
+  }
+}
+
+class _RrStableOptions extends StatefulWidget {
+  const _RrStableOptions(this.paused, this.fetches, this.style);
+  final ValueNotifier<bool> paused;
+  final List<int> fetches;
+  final String style;
+  @override
+  State<_RrStableOptions> createState() => _RrStableOptionsState();
+}
+
+class _RrStableOptionsState extends State<_RrStableOptions> {
+  // Built once, the way a screen keeps its query definition in a field.
+  late final QueryObserverOptions<int> plain = QueryObserverOptions(
+    queryKey: QueryKey(const <Object?>['rr-stable']),
+    enabled: Enabled.when((_) => !widget.paused.value),
+    queryFn: (_) async => ++widget.fetches[0],
+  );
+  late final QuerySelectOptions<int, String> selected = QuerySelectOptions(
+    queryKey: QueryKey(const <Object?>['rr-stable']),
+    enabled: Enabled.when((_) => !widget.paused.value),
+    queryFn: (_) async => ++widget.fetches[0],
+    select: (n) => '$n',
+  );
+  late final InfiniteQueryObserverOptions<int, int> infinite =
+      InfiniteQueryObserverOptions<int, int>(
+    queryKey: QueryKey(const <Object?>['rr-stable-infinite']),
+    enabled: Enabled.when((_) => !widget.paused.value),
+    initialPageParam: 0,
+    pageFn: (_) async => ++widget.fetches[0],
+    getNextPageParam: (_, __, ___, ____) => null,
+  );
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+        valueListenable: widget.paused,
+        builder: (context, _, __) => switch (widget.style) {
+          'QueryBuilder' => QueryBuilder<int>(
+              options: plain,
+              builder: (context, r) => Text('n=${r.dataOrNull}'),
+            ),
+          'QuerySelectBuilder' => QuerySelectBuilder<int, String>(
+              options: selected,
+              builder: (context, r) => Text('n=${r.dataOrNull}'),
+            ),
+          'InfiniteQueryBuilder' => InfiniteQueryBuilder(
+              options: infinite,
+              builder: (context, q) => Text('n=${q.value.dataOrNull}'),
+            ),
+          _ => Builder(
+              builder: (context) =>
+                  Text('n=${context.query(plain).dataOrNull}'),
+            ),
+        },
+      );
+}
+
+class _RrKeyedMutations extends StatefulWidget {
+  const _RrKeyedMutations({required this.mixin});
+  final bool mixin;
+  @override
+  State<_RrKeyedMutations> createState() => _RrKeyedMutationsState();
+}
+
+class _RrKeyedMutationsState extends State<_RrKeyedMutations> with QueryMixin {
+  MutationController<String, String, void> _read(
+    BuildContext context,
+    MutationOptions<String, String, void> options,
+  ) =>
+      widget.mixin ? watchMutation(options) : context.mutation(options);
+
+  @override
+  Widget build(BuildContext context) {
+    // One category key for two different mutations: ordinary upstream.
+    final todos = QueryKey(const <Object?>['todos']);
+    _read(context,
+        MutationOptions(mutationKey: todos, mutationFn: (v) async => 'add:$v'));
+    _read(
+        context,
+        MutationOptions(
+            mutationKey: todos, mutationFn: (v) async => 'remove:$v'));
+    return const Text('built');
+  }
+}
+
+void _releaseReview20260923() {
+  group('Release review 2026-09-23', () {
+    for (final mixin in [true, false]) {
+      final style = mixin ? 'watchQuery' : 'context.query';
+      queryWidgetTest(
+          'BIND-1: a $style read in build survives a nested builder '
+          're-running alone', (tester, client) async {
+        final tab = ValueNotifier<int>(0);
+        addTearDown(tab.dispose);
+        await tester.pumpWidget(app(client, _RrNested(tab, mixin: mixin)));
+        await tester.pump();
+        expect(find.text('outer=outer-0'), findsOneWidget);
+        expect(find.text('inner=inner0-0'), findsOneWidget);
+
+        // Seeded and fresh: the switch fetches nothing, so no notification
+        // rebuilds the whole State behind the nested builder's back.
+        client.setQueryData<String>(QueryKey(const <Object?>['inner1']), 'i1');
+        tab.value = 1;
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('inner=i1'), findsOneWidget);
+        final inner0 =
+            client.queryCache.get<String>(QueryKey(const <Object?>['inner0']))!;
+        // Documented: a nested builder's read is additive, so the key it
+        // stopped reading stays until the element's own next build.
+        expect(inner0.observersCount, 1);
+
+        client.setQueryData<String>(QueryKey(const <Object?>['outer']), 'o1');
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('outer=o1'), findsOneWidget);
+        // That own build was the next one: now it goes.
+        expect(inner0.observersCount, 0);
+        expect(find.text('inner=i1'), findsOneWidget);
+      });
+    }
+
+    queryWidgetTest(
+        'BIND-2: context.query in a ListView.builder itemBuilder keeps a '
+        'visible item after a scroll', (tester, client) async {
+      for (var i = 0; i < 50; i++) {
+        client.setQueryData<String>(QueryKey(<Object?>['item$i']), 'item$i-0');
+      }
+      await tester.pumpWidget(app(
+        client,
+        ListView.builder(
+          itemExtent: 100,
+          itemCount: 50,
+          itemBuilder: (context, i) =>
+              Text('item$i=${context.query(_rr('item$i')).dataOrNull}'),
+        ),
+      ));
+      await tester.pump();
+      await tester.drag(find.byType(ListView), const Offset(0, -150));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('item3=item3-0'), findsOneWidget);
+
+      client.setQueryData<String>(QueryKey(const <Object?>['item3']), 'new');
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('item3=new'), findsOneWidget);
+    });
+
+    queryWidgetTest(
+        'BIND-1/2: a key switched by a parent update is still released',
+        (tester, client) async {
+      Widget reader(String name) => Builder(
+          builder: (context) => Text('${context.query(_rr(name)).dataOrNull}'));
+      await tester.pumpWidget(app(client, reader('a')));
+      await tester.pump();
+      await tester.pumpWidget(app(client, reader('b')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('b-0'), findsOneWidget);
+      expect(
+          client.queryCache
+              .get<String>(QueryKey(const <Object?>['a']))!
+              .observersCount,
+          0);
+    });
+
+    for (final style in [
+      'QueryBuilder',
+      'QuerySelectBuilder',
+      'InfiniteQueryBuilder',
+      'context.query',
+    ]) {
+      queryWidgetTest(
+          'BIND-3: $style with options kept in a field re-evaluates '
+          'Enabled.when on rebuild', (tester, client) async {
+        final paused = ValueNotifier<bool>(true);
+        addTearDown(paused.dispose);
+        final fetches = [0];
+        await tester
+            .pumpWidget(app(client, _RrStableOptions(paused, fetches, style)));
+        await tester.pump();
+        expect(fetches[0], 0);
+
+        paused.value = false;
+        await tester.pump();
+        await tester.pump();
+        expect(fetches[0], 1, reason: 'resumed by the rebuild');
+      });
+    }
+
+    queryWidgetTest(
+        'BIND-4: taking the onlineStatus away puts the client back online',
+        (tester, client) async {
+      final changes = StreamController<bool>.broadcast();
+      addTearDown(changes.close);
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: OnlineStatus.stream(changes.stream, initial: true)));
+      changes.add(false);
+      await tester.pump();
+      expect(client.onlineManager.isOnline(), isFalse);
+
+      await tester.pumpWidget(app(client, const SizedBox()));
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    queryWidgetTest(
+        'BIND-4: a provider that goes away puts its client back online',
+        (tester, client) async {
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: const OnlineStatus.fixed(false)));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    queryWidgetTest(
+        'BIND-5: naming the provider\'s own client keeps a MutationBuilder\'s '
+        'controller mid-run', (tester, client) async {
+      final done = Completer<int>();
+      MutationController<int, int, void>? seen;
+      Widget tree(QueryClient? explicit) => app(
+            client,
+            MutationBuilder<int, int, void>(
+              client: explicit,
+              options: MutationOptions(mutationFn: (_) => done.future),
+              builder: (context, m) {
+                seen = m;
+                return Text('pending=${m.value.isPending} '
+                    'data=${m.value.dataOrNull}');
+              },
+            ),
+          );
+      await tester.pumpWidget(tree(null));
+      seen!.mutate(1);
+      await tester.pump();
+      expect(find.text('pending=true data=null'), findsOneWidget);
+
+      await tester.pumpWidget(tree(client));
+      await tester.pump();
+      expect(find.text('pending=true data=null'), findsOneWidget);
+      done.complete(1);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('pending=false data=1'), findsOneWidget);
+    });
+
+    queryWidgetTest(
+        'BIND-5: naming the provider\'s own client keeps a QueriesBuilder\'s '
+        'observers', (tester, client) async {
+      Widget tree(QueryClient? explicit) => app(
+            client,
+            QueriesBuilder<String, String>(
+              client: explicit,
+              queries: [_rr('q')],
+              builder: (context, r) => Text('${r.single.dataOrNull}'),
+            ),
+          );
+      await tester.pumpWidget(tree(null));
+      await tester.pump();
+      final query =
+          client.queryCache.get<String>(QueryKey(const <Object?>['q']))!;
+      final observer = query.observers.single;
+      await tester.pumpWidget(tree(client));
+      await tester.pump();
+      expect(query.observers.single, same(observer));
+    });
+
+    queryWidgetTest(
+        'B2-1: a provider client swap and a key change in one frame fetch '
+        'on the new client only', (tester, client) async {
+      final other = tester.adopt(QueryClient());
+      final calls = <String>[];
+      QueryObserverOptions<String> opts(String u) => QueryObserverOptions(
+          queryKey: QueryKey(<Object?>['me', u]),
+          queryFn: (_) async {
+            calls.add(u);
+            return u;
+          });
+      for (final queries in [false, true]) {
+        calls.clear();
+        Widget view(QueryClient c, String u) => app(
+            c,
+            queries
+                ? QueriesBuilder<String, String>(
+                    queries: [opts(u)],
+                    builder: (_, r) => Text(r.single.dataOrNull ?? '-'))
+                : QueryBuilder<String>(
+                    options: opts(u),
+                    builder: (_, r) => Text(r.dataOrNull ?? '-')));
+        await tester.pumpWidget(view(client, 'alice$queries'));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(view(other, 'bob$queries'));
+        await tester.pumpAndSettle();
+        expect(calls, ['alice$queries', 'bob$queries'],
+            reason: 'queries: $queries');
+        expect(
+            client
+                .getQueryData<String>(QueryKey(<Object?>['me', 'bob$queries'])),
+            isNull,
+            reason: 'queries: $queries');
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+
+    test('B2-2: per-call callbacks run on a live controller nobody listens to',
+        () async {
+      final client = QueryClient();
+      final events = <String>[];
+      final m = MutationController<int, int, void>(
+          client,
+          MutationOptions(
+              mutationFn: (v) async => v,
+              onSuccess: (_, __, ___) => events.add('options')));
+      await m.mutateAsync(1,
+          callbacks:
+              MutateCallbacks(onSuccess: (_, __, ___) => events.add('call')));
+      await Future<void>.delayed(Duration.zero);
+      expect(events, ['options', 'call']);
+      m.dispose();
+      client.clear();
+    });
+
+    queryWidgetTest(
+        'B2-2: a listened MutationController still notifies once per change',
+        (tester, client) async {
+      final done = Completer<int>();
+      final m = MutationController<int, int, void>(
+          client, MutationOptions(mutationFn: (_) => done.future));
+      final seen = <bool>[];
+      void listener() => seen.add(m.value.isPending);
+      m.addListener(listener);
+      m.mutate(1);
+      await tester.pump();
+      done.complete(1);
+      await tester.pump();
+      await tester.pump();
+      expect(seen, [true, false]);
+      m.removeListener(listener);
+      m.dispose();
+    });
+
+    test('B2-3: options the observer refused are not kept', () {
+      final client = QueryClient();
+      final a = QueryKey(const <Object?>['a']);
+      final b = QueryKey(const <Object?>['b']);
+      client.setQueryData<int>(a, 1);
+      client.queryCache.build(
+          client, client.defaultQueryOptions(QueryOptions<int>(queryKey: b)));
+      final c = QueryController.create<int>(
+          client, QueryObserverOptions(queryKey: a, enabled: Enabled.no));
+      expect(
+          () => c.setOptions(QueryObserverOptions<int>(
+              queryKey: b,
+              enabled: Enabled.no,
+              initialData:
+                  InitialData.compute(() => throw StateError('seed')))),
+          throwsStateError);
+      expect(c.observer.options.queryKey, a);
+      expect(c.value.dataOrNull, 1);
+      c.dispose();
+      client.clear();
+    });
+
+    queryWidgetTest('B2-4: QueriesBuilder builds once for one list change',
+        (tester, client) async {
+      for (final name in ['a', 'b', 'c']) {
+        client.setQueryData<String>(QueryKey(<Object?>[name]), name);
+      }
+      var builds = 0;
+      Widget tree(List<String> names) => app(
+          client,
+          QueriesBuilder<String, String>(
+              queries: [for (final n in names) _rr(n)],
+              builder: (_, r) {
+                builds++;
+                return Text(r.map((e) => e.dataOrNull).join());
+              }));
+      await tester.pumpWidget(tree(['a', 'b', 'c']));
+      await tester.pumpAndSettle();
+      builds = 0;
+      await tester.pumpWidget(tree(['a', 'b']));
+      await tester.pumpAndSettle();
+      expect(find.text('ab'), findsOneWidget);
+      expect(builds, 1);
+    });
+
+    for (final mixin in [true, false]) {
+      queryWidgetTest(
+          'B1-1: two ${mixin ? 'watchMutation' : 'context.mutation'} reads '
+          'sharing a mutationKey assert instead of sharing a controller',
+          (tester, client) async {
+        await tester.pumpWidget(app(client, _RrKeyedMutations(mixin: mixin)));
+        final error = tester.takeException();
+        expect(error, isA<FlutterError>());
+        expect('$error', contains('id:'));
+      });
+    }
+
+    queryWidgetTest(
+        'B1-2: a failing cancel of the onlineStatus subscription is reported, '
+        'not thrown into the zone', (tester, client) async {
+      // Single-subscription: a broadcast controller drops what its onCancel
+      // returns and never hands it to `cancel()` (so the review's broadcast
+      // repro failed in dart:async, whatever the provider did).
+      final online = StreamController<bool>(
+          onCancel: () => Future<void>.error(StateError('cancel failed')));
+      await tester.pumpWidget(app(client, const SizedBox(),
+          onlineStatus: OnlineStatus.stream(online.stream, initial: true)));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(tester.takeException(), isA<StateError>());
+    });
+
+    queryWidgetTest(
+        'B1-3: a single-subscription stream listened to twice says what to do',
+        (tester, client) async {
+      final online = StreamController<bool>();
+      addTearDown(online.close);
+      final status = OnlineStatus.stream(online.stream, initial: true);
+      await tester
+          .pumpWidget(app(client, const SizedBox(), onlineStatus: status));
+      await tester.pumpWidget(const SizedBox());
+      await tester
+          .pumpWidget(app(client, const SizedBox(), onlineStatus: status));
+      final error = tester.takeException();
+      expect(error, isA<FlutterError>());
+      expect('$error', contains('broadcast'));
+    });
+
+    queryWidgetTest(
+        'S3: the first resumed after an unknown lifecycle state is no focus '
+        'change', (tester, client) async {
+      expect(tester.binding.lifecycleState, isNull);
+      var fetches = 0;
+      await tester.pumpWidget(app(
+        client,
+        Builder(
+          builder: (context) => Text('${context.query(QueryObserverOptions<int>(
+                queryKey: QueryKey(const <Object?>['s3']),
+                queryFn: (_) async => ++fetches,
+              )).dataOrNull}'),
+        ),
+        observeAppLifecycle: true,
+      ));
+      await tester.pumpAndSettle();
+      expect(fetches, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(fetches, 1);
+    });
+  });
 }

@@ -7,8 +7,8 @@
 /// inside an `if` is fine.
 ///
 /// What that identity does *not* cover: two reads of one key with different
-/// selectors of the same output type, or two mutations of the same shape. Pass
-/// `id` to tell those apart.
+/// selectors of the same output type, or two mutations of the same shape —
+/// the same `mutationKey` included. Pass `id` to tell those apart.
 ///
 /// **Release.** A key read in the previous build but not in this one is
 /// released after the frame, the way `context.query` releases it — a mutation
@@ -16,6 +16,15 @@
 /// signal, so its last observers stay until it is disposed; keep a
 /// conditional read in its own widget, and the condition becomes that
 /// widget's presence in the tree.
+///
+/// "Build" means this `State`'s own `build`. A `watchQuery` inside a nested
+/// builder callback — a `ValueListenableBuilder`, `LayoutBuilder` or
+/// `AnimatedBuilder` in `build` — also reads for this `State`, but that
+/// callback re-runs on its own, so its reads are *additive*: they release
+/// nothing `build` read, and a key the callback stops reading stays
+/// subscribed until this `State`'s own next build or disposal (release
+/// review 2026-09-23, BIND-1). Where that matters, give the nested part a
+/// widget of its own.
 library;
 
 import 'package:flutter/scheduler.dart';
@@ -137,8 +146,11 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   ///
   /// One is identified by [id], else by the options' `mutationKey`, each
   /// together with its three types; without either, by the types alone — so
-  /// pass [id] when one widget runs two mutations of the same shape. Released
-  /// after the frame once a build stops reading it, the way a query is.
+  /// pass [id] when one widget runs two mutations of the same shape. A
+  /// `mutationKey` is a category, as upstream's is, not a name: two mutations
+  /// under one key with the same types would share a controller, so reading
+  /// them in one build without [id] is a debug assertion. Released after the
+  /// frame once a build stops reading it, the way a query is.
   ///
   /// [buildWhen] narrows *when* this `State` rebuilds, the same predicate
   /// [MutationBuilder.buildWhen] takes: given the result the last build
@@ -167,7 +179,7 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
     // Before anything is recorded: a client switch releases what the old one
     // owned, and leaves the set empty for this build to repopulate.
     _reconcileClient();
-    _reads.beginBuild(_generation);
+    _reads.beginBuild(_generation, context as Element);
     if (!_sweepScheduled) {
       _sweepScheduled = true;
       SchedulerBinding.instance.addPostFrameCallback((_) => _sweep());

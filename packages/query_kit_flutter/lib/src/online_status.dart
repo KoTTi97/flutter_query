@@ -82,8 +82,13 @@ final class OnlineStatusStream extends OnlineStatus {
   /// Follows [changes] from [initial].
   const OnlineStatusStream(this.changes, {required this.initial});
 
-  /// Every later change. Any `Stream<bool>` will do, single-subscription
-  /// included: the provider subscribes once per stream object.
+  /// Every later change. A broadcast stream always works. A
+  /// single-subscription one works as long as exactly one provider listens
+  /// to it exactly once: a provider keeps its one subscription across
+  /// rebuilds and client switches, but a provider remounted with the same
+  /// status, two providers given it, or one switched away from it and back
+  /// each listen again — and a second `listen` fails with a `FlutterError`
+  /// that says so. When in doubt, pass `stream.asBroadcastStream()`.
   @override
   final Stream<bool> changes;
 
