@@ -358,6 +358,25 @@ h4 {
   border-bottom: 1px solid var(--qk-rule-strong);
 }
 
+/* A signature in a cell — `Future<QueryResult<TData>> fetchNextPage(…)` —
+   has long unbreakable runs, and the reference tables have several such
+   cells per row. On a desktop column, let code in a cell break inside a
+   token rather than push the table into a scroll; the break only happens
+   where the row would not fit otherwise. The first column is the name a
+   reader scans for, so it stays whole, and a middle column (a type, a
+   default) keeps room for a short type on one line. Phones keep the
+   in-table scroll: there a column one character wide is worse than
+   scrolling. */
+@media (min-width: 997px) {
+  .markdown table td:not(:first-child) code {
+    overflow-wrap: anywhere;
+  }
+
+  .markdown table td:not(:first-child):not(:last-child) {
+    min-width: 10rem;
+  }
+}
+
 /* --- Code --------------------------------------------------------------- */
 
 .theme-code-block {

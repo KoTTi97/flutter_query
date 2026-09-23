@@ -3,12 +3,11 @@ title: Feature matrix
 description: What is here, and what is deliberately not in 1.0.
 ---
 
-{/* depth: todo */}
-
 # Feature matrix
 
 Every feature of TanStack Query's core, and where to find it — or why it is
-not here.
+not here. The names in the right-hand column are on the [API
+reference](api.md) pages, with their types and defaults.
 
 ## Here
 
@@ -16,7 +15,7 @@ not here.
 |---|---|
 | Queries, staleness, background refetching | `StaleTime`, `RefetchOn`, `RefetchInterval` |
 | Request deduplication across observers | one fetch for N readers of one key |
-| Retries with backoff | `RetryPolicy`, `RetryDelay`, `failureCount`, `failureReason` |
+| Retries with backoff | `RetryPolicy`, `RetryDelay`, and `failureCount` / `failureReason` on the result |
 | Cancellation | `QueryCancelToken`, `client.cancelQueries` |
 | Garbage collection | `GcTime` |
 | Mutations, optimistic updates, rollback | `onMutate` → `onError`/`onSettled` |
@@ -27,7 +26,7 @@ not here.
 | `select` from a shared options factory | `withSelect(select)` keeps every other field |
 | A list of queries | `QueriesObserver` / `QueriesBuilder` |
 | Combining results of different types | `(a, b).combine(…)` over a record, `combine` over a `List`, `combineWith`, `optional()`, `CombineMemo` |
-| How many queries are fetching (`useIsFetching`) | `client.isFetching()` / `IsFetchingController` |
+| How many queries are fetching, how many mutations are running (`useIsFetching`, `useIsMutating`) | `client.isFetching()` / `IsFetchingController`, `client.isMutating()` |
 | Cancelling a mutation, a context for its function | `Mutation.cancel()`, `MutationController.cancel()`, `mutationFnWithContext` |
 | Giving up after N failures | `consecutiveErrorCount` on `QueryState` and `QueryResult` |
 | Structural sharing into your own classes | `StructurallyShareable` |
