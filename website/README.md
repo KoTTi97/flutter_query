@@ -130,21 +130,24 @@ re-checked on 2026-09-12. What was checked:
 - `npm audit fix` changes nothing (`up to date`): every fixed version is
   outside the range Docusaurus 3.10.2 pins. The remedy is a Docusaurus major
   bump, which is a site-wide migration and a deliberate step of its own — not
-  something to slip into a release commit for a site that is built in CI and
-  deployed nowhere.
+  something to slip into a release commit.
 
-So: re-check this when the site is actually deployed, and treat a Docusaurus
-major as the ticket that closes it. An advisory that reaches the *built*
+The site is deployed now (2026-09-23), and none of this reaches it: what
+Pages serves is `build/`, which contains none of these packages. Treat a
+Docusaurus major as the ticket that closes it. An advisory that reaches the *built*
 output, or one in a package the published Dart packages depend on, is a
 different matter and blocks.
 
-## When it is time to deploy
+## Deployment
 
+The site is live at <https://dualmeta-gmbh.github.io/query_kit/>.
 `npm run demos && npm run build` produces a static `build/` directory;
 anything that serves files will do. For GitHub Pages, `url` and `baseUrl` in
 the config already point at `https://dualmeta-gmbh.github.io/query_kit/` — the
 path is the repository's name, written once as a constant at the top of
 `docusaurus.config.ts`, so a rename is one edit there — and
 `.github/workflows/pages.yml` builds and deploys it on a `query_kit-v*` tag or
-by hand. Pages is switched on for the repository (source: GitHub Actions),
-so the first such run publishes the site.
+by hand. Pages is switched on for the repository (source: GitHub Actions), and the
+`github-pages` environment allows `main` and `query_kit-v*` tags; the
+repository settings behind that are in
+[`docs/releasing.md`](../docs/releasing.md#documentation-site).

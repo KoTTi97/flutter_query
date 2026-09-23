@@ -16,6 +16,12 @@ resumable — a version already on pub.dev is skipped, not retried.
 The rest of this file is what it does and why, which is what you need when a
 step has to be done by hand.
 
+**1.0.0 is released (2026-09-23).** Both packages are on pub.dev under the
+verified publisher dualmeta.io, tagged `query_kit-v1.0.0` and
+`query_kit_flutter-v1.0.0` at `f6b163d`, automated publishing is on for both,
+and the documentation site is live. The wizard was for that bootstrap; later
+releases take the path in [Later releases](#later-releases).
+
 ## Order
 
 1. **`query_kit` first.** The binding depends on it by version, and
@@ -106,6 +112,58 @@ cd packages/query_kit_flutter && flutter pub publish
 
 (`dart pub publish` works too when `dart` is the Flutter SDK's, which is what
 the wizard assumes.)
+
+## Later releases
+
+From 1.0.1 on, nothing is done in a browser:
+
+1. Bump `version` in both pubspecs (and the binding's `query_kit:` constraint
+   when it needs the new core), and add a heading to both CHANGELOGs.
+   Semantic versioning holds: a breaking change is a major.
+2. Merge to `main` and wait for `ci` to go green there.
+3. Push `query_kit-v<version>`. `publish.yml` publishes the core, and
+   `pages.yml` redeploys the site.
+4. Once `https://pub.dev/api/packages/query_kit` lists the new version, push
+   `query_kit_flutter-v<version>`. The binding cannot resolve a core that
+   pub.dev does not serve yet.
+
+Only one of the two packages changed? Tag that one alone. The site is
+redeployed on core tags only; run `pages` by hand after a binding-only
+release whose docs changed.
+
+The wizard's pre-flight is still worth running before the tags: start
+`./scripts/release.sh`, let stage 1 finish, and stop with Ctrl-C at its "All
+clear … Press Enter" — nothing is published before stage 4, and a new version
+must not go through stage 4, which publishes by hand.
+
+## Documentation site
+
+The site under `website/` is deployed to GitHub Pages at
+<https://dualmeta-gmbh.github.io/query_kit/>, live demos included, by
+[`.github/workflows/pages.yml`](../.github/workflows/pages.yml). What has to be
+true for that, all of it set on 2026-09-23:
+
+- **Settings → Pages → Source: GitHub Actions.**
+- **Settings → Environments → `github-pages` → deployment branches and
+  tags:** the branch `main` *and* the tag pattern `query_kit-v*`. GitHub
+  creates the environment allowing `main` only, and a run started by a tag is
+  then rejected at the deploy step with "not allowed to deploy to
+  github-pages due to environment protection rules" — the first release hit
+  exactly that. From the command line:
+
+  ```bash
+  gh api -X POST repos/dualmeta-gmbh/query_kit/environments/github-pages/deployment-branch-policies -f name='query_kit-v*' -f type=tag
+  ```
+
+- **When it runs:** on every `query_kit-v*` tag, and by hand (Actions →
+  `pages` → Run workflow, on `main`). Its build is the `ci` workflow's
+  `website` job step for step, demos from `tool/build_demos.sh` included, so
+  what CI tested is what ships. A failed deploy is retried with *Re-run
+  failed jobs*; the built artifact is kept.
+- **The URL is the repository's name.** `url`, `baseUrl` and
+  `organizationName` come from constants at the top of
+  `website/docusaurus.config.ts`; a rename or transfer is one edit there, and
+  GitHub redirects the old repository URL but not the old Pages URL.
 
 ## What the archives hold
 

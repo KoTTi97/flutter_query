@@ -124,7 +124,7 @@ browser**, binding **287**.
 
 | Phase | State |
 |---|---|
-| **`packages/query_kit/`** — the pure-Dart core | **1.0.0, release review done (2026-09-23), not published** — 826 VM / 822 browser tests since; the rest of this cell is the 2026-09-12 state. **Pre-release deep-dive review done (2026-09-12).** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
+| **`packages/query_kit/`** — the pure-Dart core | **1.0.0, published on pub.dev (2026-09-23, publisher dualmeta.io, tag `query_kit-v1.0.0` at `f6b163d`)** — 826 VM / 822 browser tests since; the rest of this cell is the 2026-09-12 state. **Pre-release deep-dive review done (2026-09-12).** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
 | **`packages/query_kit_flutter/`** — the Flutter binding | **1.0.0, done, nine times reviewed, restructured by map #49, release-reviewed 2026-09-23.** 287 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46; deduplicated 2026-09-12, map #49).** 30 screens (`combine` and `mutation-cancel` joined on 2026-09-20), 247 widget tests against a dio fake of the backend and 177 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 25 cases against fake and server, and `catalogue_test.dart`, which holds the **five** per-feature artefact sets level. It found two library bugs no ported test could reach |
 | **`examples/task_manager/`** — the acceptance demo, one whole app | **done.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, **15 contract cases** run against its fake and its real server (map #49 — twelve of the fourteen were red against the fake), and 10 Playwright end-to-end tests in a real browser against that server; iOS and web generated |
@@ -195,7 +195,10 @@ end-to-end suite (the real web build in Chromium against the real express
 backend — read the example's README before touching one; they read Flutter's
 semantics tree, not the canvas, and nothing in them asserts on a clock). The
 showcase leg also runs `backend_contract_test.dart` against the real server.
-Nothing is published yet; the order, tags and the pub.dev-side switch are in
+**1.0.0 of both packages is published** (2026-09-23), and the site is live
+at <https://dualmeta-gmbh.github.io/query_kit/>. A breaking change is now a
+major. How a later release goes — bump, merge, tag; `publish.yml` and
+`pages.yml` do the rest — and the repository settings the deploy needs are in
 [`docs/releasing.md`](docs/releasing.md).
 
 **The showcase's rules** are in [`examples/showcase/README.md`](examples/showcase/README.md):
@@ -335,7 +338,7 @@ by `/domain-modeling` when the first term or decision is resolved. See
 | `packages/query_kit_flutter/` | The Flutter binding. | yes |
 | `examples/showcase/` | Every feature as a screen, its dummy backend (`server/`), its widget and end-to-end tests. | yes |
 | `examples/task_manager/` | The acceptance demo — one small to-do app — its dummy backend (`server/`) and the acceptance suite. | yes |
-| `website/` | The documentation site (Docusaurus). Built in CI, deployed nowhere. | yes — its `build/` and `.docusaurus/` are ignored |
+| `website/` | The documentation site (Docusaurus). Built in CI; deployed to GitHub Pages by `pages.yml` on a `query_kit-v*` tag. | yes — its `build/` and `.docusaurus/` are ignored |
 | `examples/doc_snippets/` | Every Dart sample on the site, as code the analyzer sees. Not an app; its job is to fail when a sample stops compiling. | yes |
 | `tool/` | `rename_packages.dart`: the one pass that renames both packages everywhere. The names are settled (`query_kit`, `query_kit_flutter`); this is what set them. | yes |
 | `docs/agents/` | Tracker and domain-doc conventions the wayfinder sessions follow. | yes |

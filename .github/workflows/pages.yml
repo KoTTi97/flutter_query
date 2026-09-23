@@ -2,10 +2,10 @@
 # https://dualmeta-gmbh.github.io/query_kit/ — on a core release tag, or by hand
 # from the Actions tab.
 #
-# Prepared, not switched on: until the repository's Pages source is set to
-# "GitHub Actions" (Settings → Pages), the deploy step has nowhere to go and
-# the run fails there, having published nothing. Turning it on is the
-# maintainer's call (docs/plans/release-1.0-docs, D7). The build is the `ci`
+# Needs two repository settings, both on since 2026-09-23: the Pages source
+# "GitHub Actions", and a `github-pages` environment that allows the tag
+# pattern `query_kit-v*` besides `main` — without it a tag's deploy is rejected
+# by environment protection (docs/releasing.md, "Documentation site"). The build is the `ci`
 # workflow's `website` job, step for step, so what CI tested is what ships.
 name: pages
 
