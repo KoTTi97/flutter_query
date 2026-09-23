@@ -4,6 +4,10 @@ A to-do app on `query_kit_flutter`, against the deliberately slow express
 backend in [`server/`](server): optimistic writes, rollback, a poll that stops
 when the server confirms, and one cache entry read by two screens.
 
+> query_kit is an entirely AI-coded project: all code, tests and
+> documentation were written by AI coding agents (Anthropic's Claude). A human
+> maintainer set the goals and reviews releases, but did not write the code.
+
 > **The small app, not the catalogue.** [`examples/showcase/`](../showcase) has
 > one screen per feature — 30 of them — and is where to look up how a
 > particular thing is done. This is the other kind of example: *one ordinary

@@ -1,5 +1,14 @@
 # Security policy
 
+> query_kit is an entirely AI-coded project: all code, tests and
+> documentation were written by AI coding agents (Anthropic's Claude). A human
+> maintainer set the goals and reviews releases, but did not write the code.
+> Please bear that in mind when you assess a report: no human wrote the code
+> you are looking at.
+
+This policy covers query_kit's two packages, `query_kit` and
+`query_kit_flutter`.
+
 ## Supported versions
 
 | Version | Supported |

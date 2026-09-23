@@ -4,6 +4,10 @@ Every feature of `query_kit_flutter` as its own screen, against a dummy
 backend built for the purpose, each screen with widget tests and a Playwright
 end-to-end suite. The app is the catalogue; the tests are the proof.
 
+> query_kit is an entirely AI-coded project: all code, tests and
+> documentation were written by AI coding agents (Anthropic's Claude). A human
+> maintainer set the goals and reviews releases, but did not write the code.
+
 ## Running it
 
 The backend first (Node 23.6 or later — it runs the TypeScript directly):

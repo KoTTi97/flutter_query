@@ -1,15 +1,15 @@
 name: query_kit_flutter
 description: >-
-  Flutter binding for query_kit: provider, controllers, builders,
-  State mixin, context.query. An independent community port, not affiliated
-  with or endorsed by TanStack.
+  Flutter binding for query_kit: a provider, controllers, builder widgets, a
+  State mixin and context.query. An AI-coded community port, not affiliated
+  with TanStack.
 version: 1.0.0
 repository: https://github.com/KoTTi97/flutter_query
 issue_tracker: https://github.com/KoTTi97/flutter_query/issues
 topics:
   - cache
   - state-management
-  - query
+  - data-fetching
   - tanstack-query
   - async
 

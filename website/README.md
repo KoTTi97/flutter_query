@@ -1,4 +1,4 @@
-# The documentation site
+# The query_kit documentation site
 
 [Docusaurus 3](https://docusaurus.io). The prose lives in `docs/`, the landing
 page in `src/pages/`. Nothing here is deployed — the site is built in CI so a
@@ -55,7 +55,9 @@ of building it in CI.
   | `snippet="prose-only: <reason>"` | no twin, and the reason is recorded rather than remembered. Every current one is a third-party package (`dio`, `connectivity_plus`, `signals_flutter`) that neither published package may depend on |
 
   It stands at **39 exact, 6 excerpts, 5 prose-only** across 50 fences and 13
-  pages, against 48 marked regions. Writing the check is what found that the
+  pages, against 48 marked regions (counted before the release-1.0 docs pass;
+  the two package READMEs are held to the same rule, as pages named by their
+  repository path). Writing the check is what found that the
   old claim — *"a sample and its twin are kept identical"* — was never true of
   about a third of them, and should not have been: a page introducing
   `QueryBuilder` shows `builder: (context, result) => switch (result) { /* … */ }`
@@ -102,6 +104,8 @@ different matter and blocks.
 
 `npm run build` produces a static `build/` directory; anything that serves
 files will do. For GitHub Pages, `url` and `baseUrl` in the config already
-point at `https://kotti97.github.io/flutter_query/`, and Docusaurus ships a
+point at `https://kotti97.github.io/flutter_query/` — the path is the
+repository's name, written once as a constant at the top of
+`docusaurus.config.ts`, so a rename is one edit there — and Docusaurus ships a
 `deploy` script. Adding the workflow is a deliberate step, not a side effect
 of merging this.

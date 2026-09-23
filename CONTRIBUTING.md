@@ -1,15 +1,19 @@
 # Contributing
 
+> query_kit is an entirely AI-coded project: all code, tests and
+> documentation were written by AI coding agents (Anthropic's Claude). A human
+> maintainer set the goals and reviews releases, but did not write the code.
+
 Issues and pull requests are welcome.
 
 Two things to know before you start. **This is a port of [TanStack
 Query](https://tanstack.com/query)**, published with thanks under upstream's
 MIT licence and *not affiliated with, endorsed by, or connected to* Tanner
 Linsley, the TanStack team or the TanStack organisation — so anything that is
-wrong here is wrong here, and does not belong in their tracker. And **this
-repository was written by AI agents**, with a human in the loop only rarely;
-the rules below are what stands in for a human reviewer, which is why they are
-stricter than they would otherwise need to be.
+wrong here is wrong here, and does not belong in their tracker. And **no
+human wrote this code** (above): the rules below are what stands in for a
+human author, which is why they are stricter than they would otherwise need
+to be.
 
 The repository has one unusual rule and a few ordinary ones; the unusual one is
 first because everything else follows from it.
@@ -56,6 +60,10 @@ and a PORTING_NOTES entry if it touches ported behaviour.
 flutter pub get
 ```
 
+The binding's example sits outside the workspace (it ships with the
+package), so after a fresh clone run `flutter pub get` in
+`packages/query_kit_flutter/example` once before the analyzer.
+
 ```bash
 cd packages/query_kit && dart test
 ```
@@ -73,7 +81,11 @@ cd examples/task_manager && flutter test
 ```
 
 ```bash
-dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib tool
+cd examples/doc_snippets && flutter test
+```
+
+```bash
+dart analyze --fatal-infos packages examples tool && dart format --set-exit-if-changed packages examples/showcase/lib examples/showcase/test examples/doc_snippets/lib examples/doc_snippets/test tool
 ```
 
 CI runs the same gates plus `dart doc`, both publish dry-runs, a web build of
@@ -105,9 +117,10 @@ semantics.
   holds for anything built on top.
 - **The documentation names no default call style.** The four ways to read a
   query are presented as equal alternatives.
-- **A Dart sample on the website appears in `examples/doc_snippets/` too**,
-  under a comment naming its page, so the analyzer sees it. A sample nothing
-  compiles is a sample that rots.
+- **A Dart sample on the website or in a package README appears in
+  `examples/doc_snippets/` too**, in a region the fence names, so the
+  analyzer sees it and `site_fences_test.dart` checks the two still match. A
+  sample nothing compiles is a sample that rots.
 - Comments explain *why*, not what.
 
 ## Where the plan lives

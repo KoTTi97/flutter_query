@@ -5,15 +5,28 @@ import { themes as prismThemes } from 'prism-react-renderer'
 // Nothing is deployed yet. The url/baseUrl below are the GitHub Pages
 // coordinates the repository would use, so that `onBrokenLinks: 'throw'` has
 // something real to check against rather than a placeholder.
+//
+// The path is the repository's name. It is written once, here, and the
+// Pages project name and every hard-coded link that `baseUrl` does not reach
+// (the announcement bar is raw HTML) are built from it, so renaming the
+// repository is one edit here (plus its GitHub URLs).
+const repository = 'flutter_query'
+const baseUrl = `/${repository}/`
+
+// The project's AI disclosure, in the one wording used everywhere a reader
+// can land first.
+const aiNotice =
+  "query_kit is an entirely AI-coded project: all code, tests and documentation were written by AI coding agents (Anthropic's Claude). A human maintainer set the goals and reviews releases, but did not write the code."
+
 const config: Config = {
   title: 'query_kit',
   tagline: 'TanStack Query for Dart and Flutter, ported test for test',
   favicon: 'img/favicon.svg',
 
   url: 'https://kotti97.github.io',
-  baseUrl: '/flutter_query/',
+  baseUrl,
   organizationName: 'KoTTi97',
-  projectName: 'flutter_query',
+  projectName: repository,
   trailingSlash: false,
 
   // A link to a page that does not exist fails the build. That is the point
@@ -69,9 +82,8 @@ const config: Config = {
     // because `backgroundColor` here lands as an inline style that no
     // stylesheet — and so no dark-mode rule — can override.
     announcementBar: {
-      id: 'unaffiliated-and-ai-written',
-      content:
-        'A community <b>port of TanStack Query</b>, published with thanks — <b>not affiliated with or endorsed by TanStack</b>, and <b>written by AI</b>. <a href="/flutter_query/docs/project/credits">What that means</a>.',
+      id: 'unaffiliated-and-ai-coded',
+      content: `query_kit is an <b>entirely AI-coded</b> project, written by AI coding agents (Anthropic's Claude), and a community <b>port of TanStack Query</b> — <b>not affiliated with or endorsed by TanStack</b>. <a href="${baseUrl}docs/project/credits">What that means</a>.`,
       isCloseable: false,
     },
     navbar: {
@@ -120,8 +132,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright:
-        'A port of TanStack Query, published with thanks under its MIT licence. Not affiliated with, endorsed by, or connected to Tanner Linsley, the TanStack team or the TanStack organisation. Written by AI.',
+      copyright: `${aiNotice} A port of TanStack Query, published with thanks under its MIT licence. Not affiliated with, endorsed by, or connected to Tanner Linsley, the TanStack team or the TanStack organisation.`,
     },
     prism: {
       theme: prismThemes.github,

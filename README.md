@@ -1,19 +1,61 @@
-# flutter_query
+# query_kit
 
-A Dart/Flutter port of [TanStack Query](https://github.com/TanStack/query)'s
-`query-core`, with a Flutter binding on top.
+TanStack Query for Dart and Flutter: cached server state with background
+refetching, retries, cancellation, mutations and infinite queries — a port of
+TanStack Query's `query-core`, proven by porting upstream's own test suite.
 
-> **The package names are settled: `query_kit` and `query_kit_flutter`.** A
-> name on pub.dev is permanent, so it was left to be the last decision rather
-> than the first — and it was made on 2026-09-10. The reasoning, and what
-> publishing looks like, are in [`docs/releasing.md`](docs/releasing.md).
+> **query_kit is an entirely AI-coded project: all code, tests and
+> documentation were written by AI coding agents (Anthropic's Claude). A human
+> maintainer set the goals and reviews releases, but did not write the
+> code.** What stands in for a human author is adversarial checking:
+> upstream's test suite ported case for case, repeated review rounds run by
+> independent AI agents, and a rule that no reported finding is acted on
+> before it has been reproduced. Judge it on that basis; the evidence is in
+> this repository.
 
-The bet is fidelity: rather than reimplementing the *idea* of TanStack Query,
-this ports the behavioral core and then ports upstream's test suite against it,
-so the subtle things — request dedup across observers, revert-on-cancel, stale
-timing, garbage collection, optimistic rollback — behave the way people who know
-the library expect. Several existing Dart packages cover the idea; none has done
-the fidelity work.
+## Packages
+
+| Package | What it is |
+|---|---|
+| [`query_kit`](packages/query_kit) | The pure-Dart core: queries, mutations, infinite queries, observers, the client and its caches. No Flutter dependency. |
+| [`query_kit_flutter`](packages/query_kit_flutter) | The Flutter binding: `QueryClientProvider`, controllers, builder widgets, a `State` mixin and `context.query(...)`. Four equal call styles, no dependency beyond Flutter. Re-exports the core. |
+
+## Install
+
+In a Flutter app:
+
+```bash
+flutter pub add query_kit_flutter
+```
+
+In pure Dart (a server, a command-line tool):
+
+```bash
+dart pub add query_kit
+```
+
+The core needs Dart 3.6 or later, the binding Flutter 3.27 or later. Each
+package README has a quick start.
+
+## Documentation
+
+The documentation site — getting started, a guide per concept, examples, the
+JavaScript-to-Dart name map and troubleshooting — is built from
+[`website/`](website). It will be published at
+<https://kotti97.github.io/flutter_query/>; until then, run it locally:
+
+```bash
+cd website && npm ci && npm start
+```
+
+Coming from React Query? The
+[name map](website/docs/reference/coming-from-react-query.md) takes the
+JavaScript names to the Dart ones — `useQuery` to the four call styles,
+`fetchQuery` to `QueryClient.query`, `staleTime: Infinity` to
+`StaleTime.infinite`, and the rest.
+
+Not in 1.0: persistence and hydration, `streamedQuery`, server-side
+rendering and devtools.
 
 ## Where this comes from, and what it is not
 
@@ -35,47 +77,33 @@ it. **Please do not take problems with this package to them** — bugs, question
 and complaints belong in
 [this repository's issues](https://github.com/KoTTi97/flutter_query/issues).
 
-**And: this is an AI-written project.** Effectively all of the code, the tests
-and the documentation here were written by AI agents, working from a plan the
-agents also wrote. A human set the destination and ruled on a small number of
-questions — the binding's API shape, and that neither published package may
-require a third-party dependency — and then deliberately stayed out of the
-loop; the standing rule in [CLAUDE.md](CLAUDE.md) is that every decision ticket
-is settled by the agent, with the options and the reasoning recorded so the
-call can be reopened from the record alone. What stands in for human review is
-adversarial: upstream's test suite, nine external deep-dive reviews, and a
-rule that no reported finding is acted on until it has been reproduced.
+## Repository
 
-Judge it on that basis. The evidence is all in the repository.
+For contributors. [CONTRIBUTING.md](CONTRIBUTING.md) leads with the rule that
+is unusual here — a failing ported test means the port is wrong until shown
+otherwise — and then the gate. Security reports go through
+[SECURITY.md](SECURITY.md), never a public issue.
 
-## What is here
-
-| | |
+| Path | What it is |
 |---|---|
-| [`packages/query_kit/`](packages/query_kit) | The pure-Dart core: queries, mutations, infinite queries, observers, client and caches. No Flutter dependency. Every applicable upstream suite ported case-for-case; the audit is [PORTING_NOTES.md](packages/query_kit/test/PORTING_NOTES.md). |
-| [`packages/query_kit_flutter/`](packages/query_kit_flutter) | The Flutter binding: `QueryClientProvider`, listenable controllers, builder widgets, a `State` mixin and `context.query(...)`. Four equal call styles, no dependency beyond Flutter. |
-| [`examples/showcase/`](examples/showcase) | Every feature of the library as its own screen — 28 of them, on a dummy backend built for it, each with widget tests and Playwright end-to-end tests in a real browser. The catalogue is its README. |
-| [`examples/task_manager/`](examples/task_manager) | One whole small app rather than a catalogue: a to-do manager against a deliberately slow backend with scripted failures, and an acceptance test per row of its feature checklist. |
-| [`website/`](website) | The documentation site — Docusaurus, built in CI, deployed nowhere yet. `npm ci && npm start`. |
-| [`examples/doc_snippets/`](examples/doc_snippets) | Every Dart sample on that site, as code the analyzer sees, so a sample that stops compiling fails the build. |
-| [`tool/`](tool) | `rename_packages.dart`: the one pass that renames both packages everywhere. The names are settled now; this is what set them. |
+| [`packages/query_kit/`](packages/query_kit) | The core. Its fidelity audit — every ported upstream case, every omission and every divergence, with its reason — is [PORTING_NOTES.md](packages/query_kit/test/PORTING_NOTES.md). |
+| [`packages/query_kit_flutter/`](packages/query_kit_flutter) | The binding, and its one-file example. |
+| [`examples/showcase/`](examples/showcase) | Every feature as its own screen, on a dummy backend built for it, each with widget tests and Playwright end-to-end tests in a real browser. |
+| [`examples/task_manager/`](examples/task_manager) | One whole small app: a to-do manager against a deliberately slow backend with scripted failures. |
+| [`examples/doc_snippets/`](examples/doc_snippets) | Every Dart sample on the site and in the package READMEs, as code the analyzer sees, so a sample that stops compiling fails the build. |
+| [`website/`](website) | The documentation site (Docusaurus), built in CI. |
+| [`docs/`](docs) | Decisions (`adr/`), research, release instructions and history. |
+| [`tool/`](tool) | `rename_packages.dart`, the pass that set the package names. |
 
-Upstream is pinned at `50680b98c`; the `query/` checkout it needs is a nested,
-gitignored clone (see [CLAUDE.md](CLAUDE.md) for the clone command).
+Working on the port needs the upstream checkout, a nested, gitignored clone
+pinned to the revision the ported tests were taken from (see
+[CONTRIBUTING.md](CONTRIBUTING.md)).
 
-## Documentation
-
-The site under [`website/`](website) is the long form: getting started, a guide
-per topic, the JavaScript-to-Dart name map, the feature matrix and how the
-fidelity claim is checked. It is not deployed anywhere yet — run it locally:
+Running the tests:
 
 ```bash
-cd website && npm ci && npm start
+flutter pub get
 ```
-
-The two package READMEs are the short form, and are what pub.dev shows.
-
-## Quick start
 
 ```bash
 cd packages/query_kit && dart test
@@ -89,70 +117,21 @@ cd packages/query_kit_flutter && flutter test
 cd examples/showcase && flutter test
 ```
 
-The showcase's README says how to run it against its backend and how to run
-its end-to-end suite; the task manager's README does the same for its own.
+```bash
+cd examples/task_manager && flutter test
+```
 
-## Requirements and platforms
+```bash
+cd examples/doc_snippets && flutter test
+```
 
-The core is pure Dart (SDK `^3.6.0`). The binding and the examples need
-**Flutter 3.27 or later**; CI runs the tests on that floor and on current
-stable. The examples have been run on the web and (the task manager) on the
-iOS simulator; other platforms are untested. The backends the examples talk to
-are Node (23.6 or later, for TypeScript type stripping).
-
-## Coming from TanStack Query (JS)
-
-[The name map](website/docs/reference/coming-from-react-query.md) takes the
-JavaScript names to the Dart ones — `useQuery` to the four equal call styles,
-`fetchQuery` to `QueryClient.query`, `staleTime: Infinity` to
-`StaleTime.infinite`, and the rest — and names the showcase screen that
-demonstrates each.
-
-## Deliberately not in 1.0
-
-Each row is recorded, with its reason, in
-[PORTING_NOTES.md](packages/query_kit/test/PORTING_NOTES.md).
-
-| Upstream | Here |
-|---|---|
-| Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 1.0; `Query.setState` is the door a persister would use |
-| `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders |
-| `throwOnError` | errors live in the sealed result (`QueryError`) |
-| `queryKeyHashFn` | `QueryKey` is a value type |
-| `structuralSharing` via `replaceEqualDeep` | deep value equality for lists, maps and sets, `==` for everything else (typed models need `==`/`hashCode`), plus an optional `structuralSharing` hook |
-| `useQueries`' heterogeneous tuple and its `combine` step | `QueriesObserver` is homogeneous. Different data types are combined with `combine` on a **record of results** — `(a, b).combine((a, b) => …)` gives a `CombinedResult` (pending / error / data with `refetchError`), with an optional `CombineMemo` |
-| `streamedQuery` | not ported |
-| `experimental_prefetchInRender`, Suspense, `fetchOptimistic` | React-only, not ported |
-| `select` on `fetchQuery` | map the future |
-| `initialDataUpdatedAt` as a function | `initialDataUpdatedAtCompute: () => DateTime?`, evaluated only when the data is actually seeded |
-| SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
-| `MutationFunctionContext` | `mutationFn` takes its variables only; `mutationFnWithContext: (variables, context)` is the two-argument form. Its context adds the typed `onMutateResult` and a `signal` to upstream's `client`, `meta`, `mutationKey` — and `cancel()` on a mutation, which upstream does not have, cancels it |
-| Callbacks in `setMutationDefaults` | not ported |
-| Devtools | none |
-
-## How it was planned
-
-As a wayfinder map on [GitHub issue #1](https://github.com/KoTTi97/flutter_query/issues/1):
-the destination, the standing rules, and one decision ticket per fork in the
-road, each closed with the options, the answer and why. The research behind
-those tickets is under [`docs/research/`](docs/research/), and the one decision
-the maintainer kept for himself — the binding's API shape — is written up in
-[`docs/decisions/binding-api-shape.md`](docs/decisions/binding-api-shape.md).
-The release itself was a second map,
-[issue #33](https://github.com/KoTTi97/flutter_query/issues/33): the ninth
-review's findings, fixed or decided one ticket at a time, two of them as
-ADRs under [`docs/adr/`](docs/adr/).
-
-The rule that shaped everything: **closeness to upstream is a tiebreaker, not a
-goal.** Where a Dart or Flutter idiom is better, the port diverges and writes
-down why; the table of divergences is at the end of PORTING_NOTES.md.
-
-## Contributing
-
-[CONTRIBUTING.md](CONTRIBUTING.md) leads with the rule that is actually unusual
-here — a failing ported test means the port is wrong until shown otherwise —
-and then the gate. Security reports go through
-[SECURITY.md](SECURITY.md), never a public issue.
+The examples' READMEs say how to run them against their backends and how to
+run their end-to-end suites. The project was planned as wayfinder maps on
+GitHub issues, starting with
+[issue #1](https://github.com/KoTTi97/flutter_query/issues/1); the one rule
+that shaped everything is that closeness to upstream is a tiebreaker, not a
+goal — where a Dart or Flutter idiom is better, the port diverges and writes
+down why.
 
 ## Licence
 

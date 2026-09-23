@@ -1,73 +1,18 @@
-/// `packages/query_kit_flutter/README.md`'s samples that the site does not
-/// already show — the binding's pub.dev landing page, frozen into every
-/// published archive (REL-8, release review 2026-09-23). The README's other
-/// fences name the site's twins in `doc_snippets.dart` directly.
+/// `packages/query_kit_flutter/README.md`'s samples — the binding's pub.dev
+/// landing page, frozen into every published archive, so it has to compile on
+/// the day it ships.
 ///
-/// A list rather than one function per sample where the page shows a bare
-/// widget *expression*, as `lifecycleProviders` does: a list element is the
-/// one place a bare expression is also valid Dart.
+/// The README's quick start owns its samples rather than naming the site's
+/// twins: the site's pages move and are rewritten, and a landing page that
+/// ships in an archive should not break when they do. The one exception is
+/// the widget-test teardown, which the README shows exactly as the testing
+/// guide does and which has to *run* (`test/teardown_snippet_test.dart`).
 library;
 
 import 'package:flutter/material.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
-import 'doc_snippets.dart';
-
-/// The mutation without an optimistic step.
-MutationController<void, String, void> readmeSimpleMutation(
-  BuildContext context,
-  QueryClient client,
-) {
-  // >>> packages/query_kit_flutter/README.md#mutation-simple
-  final add = context.mutation(MutationOptions.simple(
-    mutationFn: api.addTask,
-    onSuccess: (_, __, ___) => client.invalidateQueries(
-      filters: QueryFilters(queryKey: tasksKey),
-    ),
-  ));
-  // <<<
-  return add;
-}
-
-/// The widgets the README shows as expressions.
-List<Widget> readmeWidgets(
-  QueryController<Task, Task> task,
-  List<String> visibleIds,
-) =>
-    <Widget>[
-      // >>> packages/query_kit_flutter/README.md#listener
-      QueryListener<Task, Task>(
-        controller: task,
-        listenWhen: (previous, next) =>
-            previous.errorOrNull != next.errorOrNull,
-        listener: (context, result) => ScaffoldMessenger.of(context)
-            .showSnackBar(
-                const SnackBar(content: Text('Could not load the task'))),
-        child: const TasksScreen(),
-      ),
-      // <<<
-      // >>> packages/query_kit_flutter/README.md#queries-builder
-      QueriesBuilder<Task, String>(
-        queries: [
-          for (final id in visibleIds)
-            QuerySelectOptions<Task, String>(
-              queryKey: QueryKey(<Object?>['tasks', id]),
-              queryFn: (context) => api.getTask(id, signal: context.signal),
-              select: (task) => task.name,
-            ),
-        ],
-        builder: (context, results) => Column(children: [
-          for (final result in results) Text(result.dataOrNull ?? '…'),
-        ]),
-      ),
-      // <<<
-      // >>> packages/query_kit_flutter/README.md#provider-create
-      QueryClientProvider.create(
-        create: QueryClient.new,
-        child: const MyApp(),
-      ),
-      // <<<
-    ];
+import 'doc_snippets.dart' show MyApp, Task, api;
 
 /// One client, above everything that reads it.
 void readmeSetup() {
@@ -80,5 +25,101 @@ void readmeSetup() {
       child: const MyApp(),
     ),
   );
+  // <<<
+}
+
+// >>> packages/query_kit_flutter/README.md#query-options
+QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
+      queryKey: QueryKey(<Object?>['tasks']),
+      queryFn: (context) => api.listTasks(signal: context.signal),
+      staleTime: const StaleTime.duration(Duration(seconds: 30)),
+    );
+// <<<
+
+// >>> packages/query_kit_flutter/README.md#first-query
+class TasksScreen extends StatelessWidget {
+  const TasksScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks = context.query(tasksQuery());
+
+    return switch (tasks) {
+      QueryPending() => const Center(child: CircularProgressIndicator()),
+      QueryError(:final error) => Center(child: Text('$error')),
+      QuerySuccess(:final data) => ListView(
+          children: [for (final task in data) Text(task.name)],
+        ),
+    };
+  }
+}
+// <<<
+
+/// The same query in the other three call styles.
+Widget readmeBuilder() =>
+    // >>> packages/query_kit_flutter/README.md#builder
+    QueryBuilder<List<Task>>(
+      options: tasksQuery(),
+      builder: (context, result) => switch (result) {
+        QueryPending() => const Center(child: CircularProgressIndicator()),
+        QueryError(:final error) => Center(child: Text('$error')),
+        QuerySuccess(:final data) => ListView(
+            children: [for (final task in data) Text(task.name)],
+          ),
+      },
+    );
+// <<<
+
+class TasksPage extends StatefulWidget {
+  const TasksPage({super.key});
+
+  @override
+  State<TasksPage> createState() => _TasksPageState();
+}
+
+// >>> packages/query_kit_flutter/README.md#mixin
+class _TasksPageState extends State<TasksPage> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final tasks = watchQuery(tasksQuery());
+
+    return Text('${tasks.dataOrNull?.length ?? 0} tasks');
+  }
+}
+// <<<
+
+void readmeController(QueryClient client) {
+  // >>> packages/query_kit_flutter/README.md#controller
+  final tasks = QueryController.create(client, tasksQuery());
+  // … tasks.value, tasks.addListener, tasks.refetch() …
+  tasks.dispose();
+  // <<<
+}
+
+class AddTaskButton extends StatelessWidget {
+  const AddTaskButton({super.key});
+
+  // >>> packages/query_kit_flutter/README.md#first-mutation
+  @override
+  Widget build(BuildContext context) {
+    // Take the client in build, not in the callback: a mutation can outlive
+    // the widget that started it.
+    final client = QueryClientProvider.of(context);
+
+    final add = context.mutation(
+      MutationOptions.simple(
+        mutationFn: api.addTask,
+        // Mark the list stale; everyone reading it refetches.
+        onSuccess: (_, __, ___) => client.invalidateQueries(
+          filters: QueryFilters(queryKey: QueryKey(<Object?>['tasks'])),
+        ),
+      ),
+    );
+
+    return FilledButton(
+      onPressed: add.value.isPending ? null : () => add.mutate('New task'),
+      child: Text(add.value.isPending ? 'Adding…' : 'Add'),
+    );
+  }
   // <<<
 }

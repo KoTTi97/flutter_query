@@ -1,9 +1,9 @@
-/// `packages/query_kit/README.md`'s sample — the pub.dev landing page of the
+/// `packages/query_kit/README.md`'s samples — the pub.dev landing page of the
 /// core, which is frozen into every published archive and so has to compile
-/// on the day it ships (REL-8, release review 2026-09-23).
+/// on the day it ships.
 ///
 /// Its own file, and like `pure_dart.dart` without Flutter, because the page
-/// is the core's. The sample prints, which is what a console program does.
+/// is the core's. The samples print, which is what a console program does.
 // ignore_for_file: avoid_print
 library;
 
@@ -11,11 +11,15 @@ import 'package:query_kit/query_kit.dart';
 
 import 'doc_snippets.dart' show Task, api;
 
-/// The README's first query: both halves, as one sample.
-Future<void Function()> readmeFirstQuery(String id) async {
-  // >>> packages/query_kit/README.md#first-query
+/// The README's quick start, top to bottom: setup, a first query read two
+/// ways, a first mutation, and the cleanup that lets the process exit.
+Future<void> readmeQuickStart(String id) async {
+  // >>> packages/query_kit/README.md#setup
   final client = QueryClient();
+  client.mount(); // react to focus and connectivity changes
+  // <<<
 
+  // >>> packages/query_kit/README.md#first-query
   // Imperative: fetch and cache, completing with the data.
   final tasks = await client.query<List<Task>>(
     QueryOptions<List<Task>>(
@@ -45,5 +49,25 @@ Future<void Function()> readmeFirstQuery(String id) async {
   });
   // <<<
   print(tasks.length);
-  return unsubscribe;
+
+  // >>> packages/query_kit/README.md#first-mutation
+  final addTask = MutationObserver(
+    client,
+    MutationOptions.simple(
+      mutationFn: api.addTask,
+      // Mark the list stale and refetch it for whoever is watching.
+      onSuccess: (_, __, ___) => client.invalidateQueries(
+        filters: QueryFilters(queryKey: QueryKey(<Object?>['tasks'])),
+      ),
+    ),
+  );
+
+  await addTask.mutateAsync('Write the release notes');
+  // <<<
+
+  // >>> packages/query_kit/README.md#cleanup
+  unsubscribe();
+  client.unmount();
+  client.clear(); // empties the cache and cancels its timers
+  // <<<
 }

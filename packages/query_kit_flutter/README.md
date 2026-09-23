@@ -1,35 +1,22 @@
 # query_kit_flutter
 
-The Flutter binding for [`query_kit`](https://pub.dev/packages/query_kit) — a
-`QueryClientProvider`, listenable controllers, builder widgets, a `State` mixin
-and `context.query(...)`.
+TanStack Query for Flutter: cached server state with background refetching,
+retries, mutations and infinite queries, read from your widgets in whichever
+of four equal styles suits the screen. **No dependency beyond Flutter** — not
+`flutter_hooks`, not a signals package, not `connectivity_plus`.
 
-**No dependency beyond Flutter itself.** Not `flutter_hooks`, not a signals
-package, not `connectivity_plus`. You should not have to adopt somebody's state
-management to use a cache.
-
-> ### Where this comes from, and what it is not
+> **AI-coded.** query_kit is an entirely AI-coded project: all code, tests
+> and documentation were written by AI coding agents (Anthropic's Claude). A
+> human maintainer set the goals and reviews releases, but did not write the
+> code.
 >
-> **A port of [TanStack Query](https://tanstack.com/query)**, not a library
-> inspired by it in passing: the behaviour is upstream's, and upstream's own
-> test suite is ported case for case and run against this code.
->
-> **Thank you to Tanner Linsley and everyone who has built and maintained
-> TanStack Query.** This exists for one reason — we used it, we loved it, and
-> we wanted the same thing in Flutter. Every good idea here is theirs. Ported
-> under their MIT licence, kept in `LICENSE-TANSTACK`.
->
-> **It is not theirs.** Not affiliated with, endorsed by, reviewed by, or
-> connected in any way to Tanner Linsley, the TanStack team, or the TanStack
-> organisation. **Please do not take problems with this package to them** —
-> they belong in
-> [this repository's issues](https://github.com/KoTTi97/flutter_query/issues).
->
-> **This is an AI-written project.** Effectively all of the code, tests and
-> documentation were written by AI agents, with a human in the loop only
-> rarely. What stands in for human review is adversarial: upstream's suite,
-> nine external deep-dive reviews, and a rule that no reported finding is
-> acted on before it has been reproduced. Judge it on that.
+> **A port, not affiliated.** The behaviour is
+> [TanStack Query](https://tanstack.com/query)'s, and upstream's own test
+> suite is ported case for case and run against the core — with thanks to
+> Tanner Linsley and the TanStack team. This package is not affiliated with,
+> endorsed by or connected to them; please take problems to
+> [this repository's issues](https://github.com/KoTTi97/flutter_query/issues),
+> not to TanStack.
 
 ## Install
 
@@ -37,8 +24,8 @@ management to use a cache.
 flutter pub add query_kit_flutter
 ```
 
-That brings [`query_kit`](https://pub.dev/packages/query_kit) with it, and one
-import is enough — the binding re-exports the core:
+That brings [`query_kit`](https://pub.dev/packages/query_kit), the core, with
+it, and one import is enough — the binding re-exports the core:
 
 ```dart snippet="prose-only: the one import line, which every other sample already shows in context"
 import 'package:query_kit_flutter/query_kit_flutter.dart';
@@ -46,309 +33,11 @@ import 'package:query_kit_flutter/query_kit_flutter.dart';
 
 Requires Flutter 3.27 or later.
 
-## Four equal ways to read a query
+## Quick start
 
-They are layered, not competing: each is a thin shell over the one below, and
-they interoperate inside one screen. **There is no recommended default** — pick
-per situation.
+### 1. Provide a client
 
-### `context.query(...)`
-
-```dart snippet="guides/reading-a-query.md#context-query"
-class TaskScreen extends StatelessWidget {
-  const TaskScreen(this.id, {super.key});
-
-  final String id;
-
-  @override
-  Widget build(BuildContext context) {
-    final task = context.query(taskQuery(id));
-    return switch (task) {
-      QueryPending() => const CircularProgressIndicator(),
-      QuerySuccess(:final data) => TaskCard(data),
-      QueryError(:final error, :final staleData) =>
-        ErrorBanner(error, staleData),
-    };
-  }
-}
-```
-
-Flat, works in a `StatelessWidget`, and **rebuilds only the widgets that read
-that query** — a change to one query does not touch the rest of the screen. The
-most machinery behind the curtain. Each reading widget gets observers of its
-own (what is shared is the query in the cache, which the core deduplicates), and
-they are released when the widget stops reading the key or unmounts. A widget
-that stops calling `context.query` *altogether* gives no signal Flutter can
-see, so its last observers stay until it unmounts — put a conditional read in
-its own small widget. Read in `build`, not in a handler: the read is reconciled
-against the previous build. A read through the outer `context` inside a
-nested builder callback — a `ValueListenableBuilder`, a `LayoutBuilder` — is
-added to the enclosing widget's reads and does not release them; a key such a
-callback stops reading goes at that widget's next own build that reads (a
-`build` that reads nothing itself never starts over — read in `build`). A
-`LayoutBuilder`'s *own* `context` starts over when its builder runs because
-its constraints changed, its parent rebuilt it or one of its reads notified:
-the wide layout's key goes after a resize. A rebuild caused by an
-`InheritedWidget` the builder depends on gives no such signal, so a key picked
-from an inherited value stays until the next of those; a key that depends on
-anything the builder reads belongs in a widget of its own below it. A read
-rebuilds the element whose `context` it went through — a dialog reading
-through its page's `context` is not rebuilt by a change and loses the key at
-the page's next build, so give a dialog a reader of its own.
-**In a list, do not read through the `context` an `itemBuilder` is
-given** — it is the whole list's, not the row's, and a debug build throws a
-`FlutterError` naming the fix. Give each row a widget of its own,
-`itemBuilder: (_, i) => TaskTile(ids[i])`, and read in `TaskTile.build`; its
-reads then come and go with the row.
-`context.selectQuery` is the form with a `select`; it takes a
-`QuerySelectOptions`. `context.query` always reads the
-provider's client and takes no `client:` — a `BuildContext` names exactly one
-provider; for a client that is not the provider's, use the builders (`client:`)
-or the controllers, or override `queryClient` on a `QueryMixin` State.
-
-### `QueryBuilder`
-
-```dart snippet="excerpt: guides/reading-a-query.md#builder"
-QueryBuilder<Task>(
-  options: taskQuery(id),
-  builder: (context, result) => switch (result) { … },
-)
-```
-
-The `StreamBuilder` shape. The most explicit and the most predictable —
-everything is visible in the tree — and the natural fit inside a list or a
-sliver. Several queries on one screen means several nested builders.
-`QuerySelectBuilder<TQueryData, TData>` is the same widget for a query with a
-`select` — a `QuerySelectOptions<TQueryData, TData>`.
-
-### `QueryMixin`
-
-```dart snippet="excerpt: guides/reading-a-query.md#mixin"
-class _TaskScreenState extends State<TaskScreen> with QueryMixin {
-  @override
-  Widget build(BuildContext context) {
-    final task = watchQuery(taskQuery(widget.id));
-    final rename = watchMutation(renameTask(widget.id));
-    …
-  }
-}
-```
-
-Flat like `context.query`, owned by the `State`. Entries are identified by their
-`QueryKey` and types, not by call order, so `watchQuery` inside an `if` is fine —
-there is no equivalent of the rules of hooks. A key read in the previous build
-but not in this one is released after the frame, as with `context.query`. Two
-reads of one key with different selectors of the same output type, or two
-mutations of the same shape, are told apart by an `id:` argument — and reading
-two of them *without* one is caught by an assertion in debug builds. An `id:`
-is then the read's identity: a read that carries one keeps its observer when
-its key changes, the way upstream's one-observer-per-call-site does, so
-`PlaceholderData.compute((previous, _) => previous)` shows the previous key's
-data while the next loads. Without an `id:`, a new key is a new observer and
-the placeholder has nothing previous to show.
-
-### `QueryController`
-
-```dart snippet="guides/reading-a-query.md#controller"
-final task = QueryController.create(client, taskQuery(id));
-// … task.value, task.addListener, task.refetch() …
-task.dispose();
-```
-
-`QueryController<TQueryData, TData>(client, options)` is the general form:
-it takes either options shape, and with a `QuerySelectOptions` it is the
-select form.
-
-A `ValueListenable<QueryResult<T>>`. Nothing hidden, testable without widgets,
-and the foundation the other three stand on. Its `value` before the first
-listener is the optimistic result — `fetching` for a query that will fetch on
-subscribe — the same thing a widget sees on its first build. Because it is a plain listenable,
-it also drops into `ValueListenableBuilder`, `ListenableBuilder`,
-`Listenable.merge`, `provider`, `riverpod` and `bloc` unchanged.
-
-### The type argument
-
-Options come in two shapes, and every entry point above takes one of them
-(ADR-0001). `QueryObserverOptions<TData>` has no `select`; its one type
-argument is the query's data type, and it comes from `queryFn`'s return type
-or is written out — `QueryObserverOptions<Task>(…)`, `QueryBuilder<Task>(…)`,
-`QueryController.create<Task>(…)`. `QuerySelectOptions<TQueryData, TData>`
-has a **required** `select`, which anchors the second argument; it is what
-`QuerySelectBuilder`, `context.selectQuery`, `watchSelectQuery` and the
-general `QueryController(client, options)` take. A `select` that keeps the
-type is still a select and goes through those.
-
-The one literal neither shape can type is a key-only one with neither a
-`queryFn` nor a type argument. The controllers refuse it in debug builds with
-a message naming the cure, and the analyzer reports it at the literal once
-your `analysis_options.yaml` says so — recommended:
-
-```yaml
-analyzer:
-  language:
-    strict-inference: true
-```
-
-## Infinite queries and mutations
-
-The same four shapes. Paging lives on the controller, which is what every style
-hands back for an infinite query:
-
-```dart snippet="guides/infinite-queries.md#read"
-final feed = context.infiniteQuery(feedQuery());
-// or watchInfiniteQuery(...), InfiniteQueryBuilder(...), InfiniteQueryController
-
-final posts = feed.value.dataOrNull?.flatten<Post>() ?? const <Post>[];
-if (feed.hasNextPage && !feed.isFetchingNextPage) {
-  feed.fetchNextPage().ignore();
-}
-```
-
-Mutations likewise: `context.mutation(...)`, `watchMutation(...)`,
-`MutationBuilder`, `MutationController`. A mutation is owned by the widget that
-asks for it and disposed with it. In the context and mixin styles a mutation is
-identified by `id`, else by its `mutationKey`, each together with its three
-type arguments; without either, by the types alone. A `mutationKey` is a
-category, as upstream's is, not a name: two mutations read in one build with
-the same key and types would share a controller, so two such reads with
-*different* mutation functions or callbacks, or a different `scope`, `retry`,
-`retryDelay`, `networkMode` or `gcTime`, are a debug assertion — give each
-an `id`. Those five compare by value, except `RetryPolicy.when` and
-`RetryDelay.dynamic`, which carry a closure and compare by variant only;
-`meta` is not compared, and the last read's wins. The same functions read
-twice — one stored options object, tear-offs — are one mutation and do not
-assert; a function literal is new on every build, so keep it in a field or
-read the mutation once. Like a query, it is released
-after the frame once a build stops reading it.
-
-The third type argument is what `onMutate` returns — the rollback handle of an
-optimistic update. A mutation without one uses `MutationOptions.simple`, which
-fixes it to `void` and lets the other two infer from `mutationFn` — here a
-`Future<void> Function(String)`:
-
-```dart snippet="packages/query_kit_flutter/README.md#mutation-simple"
-final add = context.mutation(MutationOptions.simple(
-  mutationFn: api.addTask,
-  onSuccess: (_, __, ___) => client.invalidateQueries(
-    filters: QueryFilters(queryKey: tasksKey),
-  ),
-));
-```
-
-## Side effects, and lists of queries
-
-Two widgets sit beside the four styles rather than among them, because neither
-is a way of *reading* a query.
-
-`QueryListener`, `InfiniteQueryListener` and `MutationListener` run a callback
-on a controller they **borrow** — the owner still disposes it — and never
-rebuild their `child`. Nothing fires on mount, only later transitions, and
-callbacks are delivered off the build phase, so navigating or showing a
-snackbar from one is safe:
-
-```dart snippet="packages/query_kit_flutter/README.md#listener"
-QueryListener<Task, Task>(
-  controller: task,
-  listenWhen: (previous, next) =>
-      previous.errorOrNull != next.errorOrNull,
-  listener: (context, result) => ScaffoldMessenger.of(context)
-      .showSnackBar(
-          const SnackBar(content: Text('Could not load the task'))),
-  child: const TasksScreen(),
-)
-```
-
-A rejected `listenWhen` still advances the comparison state, so the next
-callback sees the transition it actually followed.
-
-`QueriesBuilder` observes a list of queries that may change length or order.
-Observers are reused by key and occurrence, so reordering starts no requests,
-and duplicate keys share one cache entry while keeping their own options:
-
-```dart snippet="packages/query_kit_flutter/README.md#queries-builder"
-QueriesBuilder<Task, String>(
-  queries: [
-    for (final id in visibleIds)
-      QuerySelectOptions<Task, String>(
-        queryKey: QueryKey(<Object?>['tasks', id]),
-        queryFn: (context) => api.getTask(id, signal: context.signal),
-        select: (task) => task.name,
-      ),
-  ],
-  builder: (context, results) => Column(children: [
-    for (final result in results) Text(result.dataOrNull ?? '…'),
-  ]),
-)
-```
-
-Each query fails and settles on its own; one error does not disturb its
-neighbours. `MutationStateController` is the matching read over the mutation
-cache — every mutation matching a filter, through a `select` — for a "saving…"
-badge that no single widget owns. `IsFetchingController` is the query side's:
-a `ValueListenable<int>` of how many queries matching a filter are fetching,
-upstream's `useIsFetching`, for a global loading indicator.
-
-## What rebuilds, and when
-
-The rule is upstream's: **a widget rebuilds whenever its result changes**, and
-a background refetch that brings back equal data is still a change, because
-`dataUpdatedAt` moved. Two tools narrow that down.
-
-`select` narrows the **data** a widget sees. A fetch that brings back data
-whose selection is equal keeps the previous selected value — same instance,
-so `data` is unchanged and anything compared on it sees no change. What it
-does not narrow is the rest of the result — a widget is handed a
-`QueryResult`, and `fetchStatus`, `failureCount` and `dataUpdatedAt` are part
-of it, and of its `==`. A background refetch that returns identical data
-still moves `dataUpdatedAt`, and that is a changed result, so the widget
-*does* rebuild, with an unchanged `data`. `select` is the tool for *what a
-widget reads*; `buildWhen` below is the tool for *when it rebuilds*, and only
-the second one can ignore a metadata change.
-
-Equal by value, for the part `select` does control: a `select` returning a
-fresh list every call is fine (lists are shared element by element), and so is
-a fresh instance of a class with `==`/`hashCode`. A fresh instance of a class
-*without* value equality is a different value every time, so every fetch
-reaches the widget as a change. Give such a model `==`, or select a list or a
-scalar. Dart records already have value equality, which makes them the easy
-pick for a `select` output: `select: (data) => (done: data.done,
-total: data.total)`.
-
-> Upstream narrows this further than the port does. React Query tracks which
-> fields of the result a component actually touched during a render
-> (`trackedProps`) and re-renders only when one of those changed. That trick
-> needs a proxy around the result and a render pass it can observe; a Flutter
-> widget reads its result in `build` with no such seam, so this port compares
-> whole results instead and rebuilds where upstream sometimes would not.
-> `buildWhen` is the explicit form of the same thing.
-
-`buildWhen` skips the rest. Every builder takes it (`QueryBuilder`,
-`QuerySelectBuilder`, `InfiniteQueryBuilder`, `MutationBuilder`), and so does
-every keyless read (`context.query`, `context.selectQuery`,
-`context.infiniteQuery`, `context.mutation`, `watchQuery`, `watchSelectQuery`,
-`watchInfiniteQuery`, `watchMutation`):
-
-```dart snippet="excerpt: guides/rebuilds.md#build-when-builder"
-QueryBuilder<Task>(
-  options: taskQuery(id),
-  buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
-  builder: (context, result) => …,
-)
-```
-
-It is upstream's `notifyOnChangeProps`, expressed as a function of the two
-results. `previous` is the result the builder last *built*, not the last one
-it saw — a result `buildWhen` skipped is not remembered, so the next
-comparison is against what is actually on screen. That is the documented
-semantics of the field, and it is the opposite of `bloc`'s `buildWhen`, where
-`previous` is the last state emitted whether or not it was built. A keyless
-read's predicate decides for the whole widget: any one read letting a change
-through rebuilds it. A controller read through a `ValueListenableBuilder` has
-no predicate; it only drops notifications that carry an unchanged result.
-
-## Setting up
-
-One `QueryClient`, above everything that reads it:
+One `QueryClient`, created once and placed above everything that reads it:
 
 ```dart snippet="packages/query_kit_flutter/README.md#setup"
 final client = QueryClient();
@@ -361,110 +50,141 @@ runApp(
 );
 ```
 
-`QueryClientProvider.of(context)` finds the client and subscribes the widget to
-a provider change, `read` finds it without subscribing (for handlers), and
-`maybeOf` returns `null` instead of throwing where a widget can do without one.
-The provider does not dispose the client: a `QueryClient` outlives the tree, so
-`client.clear()` is yours to call — at the end of a widget test, on a sign-out,
-before a hot restart swaps the app. **`mount()`/`unmount()` are not.** The
-provider mounts the client it is given and unmounts it again when it goes, and
-that count is what keeps focus and reconnect refetches wired; an extra
-`unmount()` of your own unbalances it and the client stops listening to either.
-Call `unmount()` only to balance a `mount()` you made yourself.
+The provider wires the app lifecycle to the client, so queries refetch when
+the app comes back to the foreground. It does not dispose the client; use
+`QueryClientProvider.create(create: QueryClient.new, child: …)` if the
+provider should own it.
 
-`QueryClientProvider.create` is the other half of that trade: it builds the
-client itself and `clear()`s it once the tree comes down, which is what an app
-with a single root client usually wants. A rebuild with a different callback
-keeps the client; give the widget a new `key` to replace it.
+### 2. Describe a query and read it
 
-```dart snippet="packages/query_kit_flutter/README.md#provider-create"
-QueryClientProvider.create(
-  create: QueryClient.new,
-  child: const MyApp(),
+A query is a key plus a function that fetches. Describe it once:
+
+```dart snippet="packages/query_kit_flutter/README.md#query-options"
+QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
+      queryKey: QueryKey(<Object?>['tasks']),
+      queryFn: (context) => api.listTasks(signal: context.signal),
+      staleTime: const StaleTime.duration(Duration(seconds: 30)),
+    );
+```
+
+and read it from a widget:
+
+```dart snippet="packages/query_kit_flutter/README.md#first-query"
+class TasksScreen extends StatelessWidget {
+  const TasksScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks = context.query(tasksQuery());
+
+    return switch (tasks) {
+      QueryPending() => const Center(child: CircularProgressIndicator()),
+      QueryError(:final error) => Center(child: Text('$error')),
+      QuerySuccess(:final data) => ListView(
+          children: [for (final task in data) Text(task.name)],
+        ),
+    };
+  }
+}
+```
+
+The result is a **sealed** type, so the `switch` is exhaustive and the data
+needs no `!`. Every widget reading `tasksQuery()` shares one cache entry and
+one request.
+
+`context.query` is one of **four equal ways** to read a query. None is the
+recommended default; they interoperate on one screen, so pick per situation:
+
+```dart snippet="excerpt: packages/query_kit_flutter/README.md#builder"
+// A builder widget, the StreamBuilder shape.
+QueryBuilder<List<Task>>(
+  options: tasksQuery(),
+  builder: (context, result) => switch (result) { … },
 )
 ```
 
-That does three things while it is mounted:
-
-- **App lifecycle → focus.** Every lifecycle state the app reports is mapped
-  onto the client's focus state — `resumed` is focused, `hidden`, `paused` and
-  `detached` are not — so `refetchOnWindowFocus` works. `inactive` depends on
-  the platform, because the state means two different things: on iOS, Android
-  and Fuchsia it is a transient interruption (the notification shade, the app
-  switcher, an incoming call) and counts as focused, since treating those as
-  "unfocused" would refetch the world on the way back; on macOS, Windows and
-  Linux it is precisely the window losing focus — the event
-  `refetchOnWindowFocus` is named after — and counts as unfocused. Pass
-  `isAppShown` to decide it yourself, or `observeAppLifecycle: false` to turn
-  the source off — which is what you do when you install a focus source of
-  your own with `client.focusManager.setEventListener(...)`, since the two
-  are alternatives and the last writer through `setFocused` wins.
-- **A build-aware scheduler.** Results are delivered right away outside a
-  build — a tap handler or a resolved future is where Flutter expects a
-  `setState`, and one `pump` in a test shows the new result — and after the
-  build when they arrive inside one, so a query resolving during a build can
-  never call `setState` into it. That covers the frame's build phase and the
-  app's very first build, which `runApp` runs outside any frame.
-- **Connectivity, only if you bring it.** See below.
-
-## Connectivity
-
-Nothing is installed by default; the client assumes it is online, which is what
-upstream does with no listener, and a fetch that cannot reach the network simply
-fails and retries. If you want link-state awareness, pass an `OnlineStatus` —
-one value with two modes, `OnlineStatus.fixed(online)` for a client with no
-source of its own and `OnlineStatus.stream(changes, initial: …)` for one that
-follows a stream. Six lines with `connectivity_plus`, which stays *your*
-dependency:
-
-```dart snippet="prose-only: needs connectivity_plus, which neither published package may depend on"
-// Built once — a stream built in `build` would be a new one on every rebuild,
-// and the provider would resubscribe each time.
-final connectivity = Connectivity()
-    .onConnectivityChanged
-    .map((results) => !results.contains(ConnectivityResult.none));
-
-QueryClientProvider(
-  client: client,
-  onlineStatus: OnlineStatus.stream(connectivity, initial: online),
-  child: const MyApp(),
-)
+```dart snippet="excerpt: packages/query_kit_flutter/README.md#mixin"
+// A mixin on a State.
+class _TasksPageState extends State<TasksPage> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final tasks = watchQuery(tasksQuery());
+    …
+  }
+}
 ```
 
-`initial` is required because a `Stream` has no current value: a provider that
-only listens believes the default — online — however long the first event
-takes, and an app launched in airplane mode then fetches once against a network
-that is not there. `Connectivity().checkConnectivity()` answers it at startup.
-A broadcast stream always works. A single-subscription one works only while
-exactly one provider listens to it, once — no remount, no second provider —
-and a second listen throws a `FlutterError` that says so; wrap it with
-`asBroadcastStream()` to be safe. A swapped client inherits the last value
-the stream reported, and taking `onlineStatus` away (or disposing the
-provider) puts the client back online once no other provider has a status
-for it — a replacement provider keeps its own verdict. Worth knowing: `connectivity_plus` reports a *link*, not
-reachability. A phone on hotel wifi with a captive portal reports "connected".
-
-## Signals, hooks and other reactive packages
-
-Not dependencies here, and not planned as such. Because a controller is a
-`ValueListenable`, a signals package reads it with whatever it offers for
-listenables — `signals_flutter` has `valueListenableToSignal`, for one:
-
-```dart snippet="prose-only: needs signals_flutter, which neither published package may depend on"
-final task = QueryController.create(client, taskQuery(id));
-final signal = valueListenableToSignal(task);        // signals_flutter
-final done = computed(() => signal.value.dataOrNull?.done ?? false);
+```dart snippet="packages/query_kit_flutter/README.md#controller"
+final tasks = QueryController.create(client, tasksQuery());
+// … tasks.value, tasks.addListener, tasks.refetch() …
+tasks.dispose();
 ```
 
-Nothing is needed from this package for that.
+A `QueryController` is a `ValueListenable<QueryResult<T>>`, so it also works
+with `ValueListenableBuilder`, `provider`, `riverpod`, `bloc` or a signals
+package, unchanged.
 
-## Writing widget tests
+### 3. A first mutation
 
-A `QueryClient` outlives the widget tree by design — it owns the cache and its
-`gcTime` timers. Flutter's test binding asserts that no timer is pending when
-the tree comes down, and it checks that **before** any `tearDown` runs, so the
-cleanup has to happen inside the test body. The end of a query widget test
-is therefore always the same steps:
+A mutation changes something on the server; invalidating the list afterwards
+refetches it for every widget that reads it:
+
+```dart snippet="packages/query_kit_flutter/README.md#first-mutation"
+@override
+Widget build(BuildContext context) {
+  // Take the client in build, not in the callback: a mutation can outlive
+  // the widget that started it.
+  final client = QueryClientProvider.of(context);
+
+  final add = context.mutation(
+    MutationOptions.simple(
+      mutationFn: api.addTask,
+      // Mark the list stale; everyone reading it refetches.
+      onSuccess: (_, __, ___) => client.invalidateQueries(
+        filters: QueryFilters(queryKey: QueryKey(<Object?>['tasks'])),
+      ),
+    ),
+  );
+
+  return FilledButton(
+    onPressed: add.value.isPending ? null : () => add.mutate('New task'),
+    child: Text(add.value.isPending ? 'Adding…' : 'Add'),
+  );
+}
+```
+
+Mutations come in the same four styles: `context.mutation`, `watchMutation`,
+`MutationBuilder` and `MutationController`.
+
+## Features
+
+- **Four equal call styles** for queries, infinite queries and mutations:
+  `context.query`, `QueryBuilder`, `QueryMixin` and `QueryController`.
+- **Precise rebuilds.** A widget rebuilds when its result changes; `select`
+  narrows the data it sees and `buildWhen` decides when it rebuilds.
+- **Everything from the core**: caching with `staleTime` and `gcTime`,
+  request deduplication, retries with backoff, cancellation, optimistic
+  updates with rollback, `MutationScope`, infinite queries with `maxPages`,
+  initial and placeholder data, structural sharing.
+- **App lifecycle as focus**: coming back to the foreground refetches stale
+  queries, with the `inactive` state read per platform.
+- **Connectivity you bring**: pass an `OnlineStatus` built from
+  `connectivity_plus` or anything else; nothing is installed by default.
+- **Side effects off the build phase**: `QueryListener`, `InfiniteQueryListener`
+  and `MutationListener` for snackbars and navigation.
+- **Lists and combinations**: `QueriesBuilder` / `QueriesController` for a
+  dynamic list of queries, and `(a, b).combine(…)` for results of different
+  types.
+- **App-wide indicators**: `IsFetchingController` for a global loading bar,
+  `MutationStateController` for a "saving…" badge.
+- **Testable without magic**: controllers work without widgets, and widget
+  tests need only a short, documented teardown.
+
+## Widget tests
+
+A `QueryClient` outlives the widget tree and owns timers, and Flutter's test
+binding checks for pending timers *before* `tearDown` runs. So a widget test
+ends by taking the tree down and clearing the client:
 
 ```dart snippet="guides/testing.md#teardown"
 testWidgets('the list loads', (tester) async {
@@ -488,22 +208,30 @@ testWidgets('the list loads', (tester) async {
 });
 ```
 
-The last two steps matter when a test leaves a mutation paused offline:
-`clear()` fails it, its `onError` runs a moment later, and an optimistic
-rollback's `setQueryData` re-creates the query it names — gc timer included.
+The [testing guide](https://kotti97.github.io/flutter_query/docs/guides/testing)
+wraps these steps once per suite.
 
-Nothing here is exported: `flutter_test` is a dev dependency of this package,
-not a regular one, so nothing a test needs sits in your app's dependency
-graph. Write the steps once per suite as a `queryWidgetTest` wrapper — the
-[testing guide](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/guides/testing.md)
-has the fifteen lines, and both example apps wrap the same shape.
+## Learn more
 
-## When something surprises you
+- [Overview](https://kotti97.github.io/flutter_query/docs/overview),
+  [quick start](https://kotti97.github.io/flutter_query/docs/quick-start) and
+  [important defaults](https://kotti97.github.io/flutter_query/docs/important-defaults)
+- [Four ways to read a query](https://kotti97.github.io/flutter_query/docs/guides/reading-queries-in-widgets)
+  and [what rebuilds, and when](https://kotti97.github.io/flutter_query/docs/guides/render-optimizations)
+- [Mutations](https://kotti97.github.io/flutter_query/docs/guides/mutations),
+  [optimistic updates](https://kotti97.github.io/flutter_query/docs/guides/optimistic-updates)
+  and [infinite queries](https://kotti97.github.io/flutter_query/docs/guides/infinite-queries)
+- [App focus](https://kotti97.github.io/flutter_query/docs/guides/window-focus-refetching)
+  and [connectivity](https://kotti97.github.io/flutter_query/docs/guides/connectivity)
+- [Testing](https://kotti97.github.io/flutter_query/docs/guides/testing)
+- [Coming from React Query](https://kotti97.github.io/flutter_query/docs/coming-from-react-query)
+  and [troubleshooting](https://kotti97.github.io/flutter_query/docs/reference/troubleshooting)
+- [API reference](https://pub.dev/documentation/query_kit_flutter/latest/)
+- A runnable one-file tour: [`example/lib/main.dart`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit_flutter/example/lib/main.dart)
 
-The traps people have actually fallen into — a read that never refetches, a
-rebuild that never stops, a key that never matches — and their cures are in
-[troubleshooting](https://github.com/KoTTi97/flutter_query/blob/main/website/docs/reference/troubleshooting.md).
+## License and credits
 
-## Licence
-
-MIT. Upstream's MIT notice is kept in `LICENSE-TANSTACK`.
+MIT. query_kit is a port of [TanStack Query](https://tanstack.com/query) by
+Tanner Linsley and contributors, whose MIT notice is kept in
+`LICENSE-TANSTACK`. Bugs and questions go to
+[the issue tracker](https://github.com/KoTTi97/flutter_query/issues).

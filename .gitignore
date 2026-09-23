@@ -4,6 +4,8 @@ node_modules
 
 .dart_tool/
 build/
+# test coverage output (`flutter test --coverage`, `dart test --coverage`), at any depth
+coverage/
 .packages
 pubspec_overrides.yaml
 # The binding's example is outside the workspace (it ships, and a published
