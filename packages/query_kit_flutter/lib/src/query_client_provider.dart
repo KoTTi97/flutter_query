@@ -226,14 +226,26 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     _mountClient(widget.client);
     // Initial focus can resume restored mutations synchronously. It must
     // already see the connectivity snapshot supplied by the provider.
-    if (widget.onlineStatus != null) {
-      _speakForOnline(widget.client);
-    }
     _applyOnlineStatus(widget.client);
     if (widget.observeAppLifecycle) {
       _observeLifecycle(widget.client);
     }
-    _follow(widget.onlineStatus);
+    try {
+      _follow(widget.onlineStatus);
+    } catch (_) {
+      // B1-3's error for a stream already listened to. A `State` whose
+      // `initState` throws is never disposed, so what it took is given back
+      // here — and it is counted as speaking for the client only once it
+      // listens: counted first, its count outlived it, and the last real
+      // provider to leave never put the client back online (release review
+      // 2026-09-23, third pass, V3-4).
+      _stopObservingLifecycle();
+      _unmountClient(widget.client);
+      rethrow;
+    }
+    if (widget.onlineStatus != null) {
+      _speakForOnline(widget.client);
+    }
   }
 
   void _mountClient(QueryClient client) {

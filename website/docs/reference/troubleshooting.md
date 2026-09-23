@@ -226,9 +226,10 @@ or a two-dimensional scroll view's.
 not the row. The list builds its rows piecemeal, as they scroll in, and a
 read through its context cannot say which row it belongs to: released per
 frame, a row still on screen loses its subscription when others scroll in;
-kept, every row ever built stays subscribed. Neither is right, so a debug
-build refuses the read. A release build follows the per-frame rule, which is
-bounded but can drop a visible row's subscription.
+kept, every row ever built stays subscribed until the list is rebuilt.
+Neither is right, so a debug build refuses the read. A release build keeps
+them: no row on screen loses its subscription, and the rows scrolled away
+stay subscribed until the list is rebuilt by its parent or unmounts.
 
 **Fix.** Give each row a widget of its own and read in its `build` —
 `itemBuilder: (_, i) => TaskTile(ids[i])` with the `context.query` inside
@@ -237,19 +238,41 @@ bounded but can drop a visible row's subscription.
 ## A list item's query is never released
 
 **Symptom.** `watchQuery` in a `QueryMixin` `State`, or `context.query`
-through the *outer* `context`, inside an `itemBuilder`. Items scroll away or
-the list shrinks, and their queries stay observed.
+through the *outer* `context` — or through an enclosing `LayoutBuilder`'s
+`context` — inside an `itemBuilder`. Items scroll away or the list shrinks,
+and their queries stay observed.
 
 **Mechanism.** A read made through the reader's context in a nested builder
 callback — an `itemBuilder`, a `ValueListenableBuilder`, a `LayoutBuilder`
 given the outer `context` — is **added** to the enclosing widget's reads; it
 does not release what that widget's own `build` read. A key such a callback
 stops reading is released only on that widget's next own build or when it
-goes. (A `LayoutBuilder`'s *own* `context` is not this case: its builder is
-its build, and a key it stops reading goes after the frame.)
+goes. A read through a `LayoutBuilder`'s *own* `context` is additive as well
+— its builder runs during layout, and a nested builder using that context
+cannot be told from it — so what it stops reading goes when its parent
+rebuilds it or it unmounts. The trade is deliberate: an earlier rule that
+released per run dropped the subscriptions of data still on screen.
 
 **Fix.** The same: a row widget — a `TaskTile(id)` — that reads its own
 query, so its reads come and go with it.
+
+## A `LayoutBuilder` keeps the wide layout's query after a resize
+
+**Symptom.** A `LayoutBuilder` (or `OrientationBuilder`) reads one key when
+wide and another when narrow, through its own `context`. After a resize the
+narrow key is read, and the wide one stays observed.
+
+**Mechanism.** The builder runs during layout, and a nested builder reading
+through that `context` looks exactly like it, so no run can safely release
+what another run read: every read through it is additive. What it stops
+reading is released when the `LayoutBuilder`'s parent rebuilds it — the frame
+after that starts afresh — or when it unmounts. It is bounded by the keys it
+has read, and nothing on screen ever loses its subscription.
+
+**Fix.** When the key depends on the constraints, read it in a widget of its
+own below the `LayoutBuilder` — `c.maxWidth > 600 ? const WideTasks() :
+const NarrowTasks()`, each reading in its own `build` — and the key goes with
+the widget.
 
 ## "QueryClientProvider could not listen to its onlineStatus"
 

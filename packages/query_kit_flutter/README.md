@@ -85,8 +85,12 @@ against the previous build. A read through the outer `context` inside a
 nested builder callback — a `ValueListenableBuilder`, a `LayoutBuilder` — is
 added to the enclosing widget's reads and does not release them; a key such a
 callback stops reading goes on that widget's next own build. A
-`LayoutBuilder`'s *own* `context` releases per frame: its builder is its
-build. **In a list, do not read through the `context` an `itemBuilder` is
+`LayoutBuilder`'s *own* `context` is additive too — its builder runs during
+layout and cannot be told apart from a nested builder using that context — so
+nothing it shows loses its subscription, and a key it stopped reading after a
+resize stays until its parent rebuilds it or it unmounts. When the key depends
+on the constraints, read it in a widget of its own below the `LayoutBuilder`.
+**In a list, do not read through the `context` an `itemBuilder` is
 given** — it is the whole list's, not the row's, and a debug build throws a
 `FlutterError` naming the fix. Give each row a widget of its own,
 `itemBuilder: (_, i) => TaskTile(ids[i])`, and read in `TaskTile.build`; its
@@ -202,9 +206,9 @@ identified by `id`, else by its `mutationKey`, each together with its three
 type arguments; without either, by the types alone. A `mutationKey` is a
 category, as upstream's is, not a name: two mutations read in one build with
 the same key and types would share a controller, so two such reads with
-*different* mutation functions are a debug assertion — give each an `id`. The
-same function read twice — one stored options object, a tear-off — is one
-mutation and does not assert; a function literal is new on every build, so
+*different* mutation functions or callbacks are a debug assertion — give each
+an `id`. The same functions read twice — one stored options object, tear-offs
+— are one mutation and do not assert; a function literal is new on every build, so
 keep it in a field or read the mutation once. Like a query, it is released
 after the frame once a build stops reading it.
 

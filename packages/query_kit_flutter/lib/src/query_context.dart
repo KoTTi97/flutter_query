@@ -33,23 +33,34 @@
 /// widget's presence in the tree.
 ///
 /// **Whose build.** The reads belong to the element `context` names, and
-/// "build" means *its* build. A callback that runs later with that context —
-/// the outer `context` inside a nested `ValueListenableBuilder`,
-/// `AnimatedBuilder` or `LayoutBuilder` — makes *additive* reads: they
-/// release nothing the element's own build read, and a key such a callback
-/// stops reading stays subscribed until that element's own next build or
-/// unmount (release review 2026-09-23, BIND-1). A `LayoutBuilder`'s or
-/// `OrientationBuilder`'s *own* `context` is different: its builder is its
-/// build, so a key it stops reading — the wide layout's, after a resize — is
-/// released after that frame.
+/// "build" means *its* build — a `StatelessWidget`'s or a `State`'s. A
+/// callback that runs later with that context — the outer `context` inside
+/// a nested `ValueListenableBuilder`, `AnimatedBuilder` or `LayoutBuilder` —
+/// makes *additive* reads: they release nothing the element's own build
+/// read, and a key such a callback stops reading stays subscribed until that
+/// element's own next build or unmount (release review 2026-09-23, BIND-1).
+///
+/// A `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` has no build
+/// of that kind to tell apart: its builder runs during layout, and a nested
+/// builder using that context looks exactly like it. So every read through
+/// it is additive too (third pass, V3-1/V3-2): nothing it shows ever loses
+/// its subscription, and a key it stopped reading — the wide layout's,
+/// after a resize — stays subscribed until the `LayoutBuilder`'s parent
+/// rebuilds it (the frame after that is a fresh start) or it unmounts. That
+/// is bounded by the keys it has read, not zero. When the key depends on the
+/// constraints, read it in a widget of its own below the `LayoutBuilder`,
+/// and the key goes with the widget.
 ///
 /// **Not through a list's item-builder context.** The `context` a
 /// `ListView.builder`, `GridView.builder`, `PageView.builder` or another
 /// lazily built list hands its `itemBuilder` is the whole list's, not the
 /// row's: it builds rows piecemeal as they scroll in, and cannot tell which
-/// row a read belongs to. Reading through it is an error in debug builds
-/// (in release, a row still on screen can lose its subscription when others
-/// scroll in). Give each row a widget of its own —
+/// row a read belongs to. Reading through it is an error in debug builds (in
+/// release, the reads are additive: no row on screen loses its
+/// subscription, and the rows scrolled away stay subscribed until the list
+/// is rebuilt or unmounts). An item builder reading through an *enclosing*
+/// `LayoutBuilder`'s context is the same trade by the rule above, without
+/// the debug error. Give each row a widget of its own —
 /// `itemBuilder: (_, i) => TaskTile(ids[i])` with the `context.query` inside
 /// `TaskTile.build` — and each row's reads live and go with it.
 ///
@@ -85,7 +96,11 @@ extension QueryContext on BuildContext {
   /// The observer is this widget's, released once the widget stops reading the
   /// key — including when it simply reads a *different* key on a later build —
   /// or unmounts. With an [id] the observer follows a changed key instead;
-  /// [id] also tells apart two reads of one key in the same widget.
+  /// [id] also tells apart two reads of one key in the same widget. "Build"
+  /// is the widget's own: a read through a nested builder's outer `context`
+  /// or through a `LayoutBuilder`'s `context` is additive, and what it stops
+  /// reading goes at the next own build, the parent's next rebuild or
+  /// unmount (see the library doc).
   ///
   /// Always on the provider's client; see the library doc on why there is no
   /// `client:` here. Options built inline are re-applied on every build, as
@@ -170,13 +185,16 @@ extension QueryContext on BuildContext {
   /// when one widget runs two mutations of the same shape. A `mutationKey`
   /// is a category, as upstream's is, not a name: two mutations under one key
   /// with the same types would share a controller, so two reads of one
-  /// identity in one build with *different* mutation functions, without
-  /// [id], are a debug assertion. The same function read twice — one stored
-  /// options object, a tear-off, a top-level function — is one mutation, and
-  /// so is a nested builder re-reading what `build` read; a function literal
-  /// is a new function each time it is built, so keep it in a field or read
-  /// once. Through a lazily built list's item-builder context, any read is a
-  /// debug error (see the library doc).
+  /// identity in one build with *different* mutation functions or callbacks
+  /// (`onMutate`, `onSuccess`, `onError`, `onSettled`), without [id], are a
+  /// debug assertion. The same functions read twice — one stored options
+  /// object, tear-offs, top-level functions — are one mutation, and so is a
+  /// nested builder re-reading what `build` read; a function literal is a
+  /// new function each time it is built, so keep it in a field or read once.
+  /// Only a `StatelessWidget`'s or `State`'s own build is checked: reads
+  /// through a `LayoutBuilder`'s context are never compared. Through a lazily
+  /// built list's item-builder context, any read is a debug error (see the
+  /// library doc).
   ///
   /// [buildWhen] narrows *when* this widget rebuilds, the same predicate
   /// [MutationBuilder.buildWhen] takes: given the result the last build

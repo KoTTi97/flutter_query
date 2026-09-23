@@ -62,7 +62,9 @@ fetching, upstream's `useIsFetching`.
   Taking `onlineStatus` away, or disposing the provider, puts its client back
   online once no other provider has a status for that client: a replacement
   provider on the same client — a new key, a move to another parent — keeps
-  its own verdict. A failing `cancel()` of the subscription is reported
+  its own verdict. A provider whose mount failed — the single-subscription
+  stream listened to twice — counts for nobody and leaves the client
+  unmounted. A failing `cancel()` of the subscription is reported
   through `FlutterError.reportError`.
 - The first `resumed` after app start is not a focus change, so mounted
   queries do not refetch at startup.
@@ -88,9 +90,14 @@ fetching, upstream's `useIsFetching`.
   `LayoutBuilder` — is additive to the enclosing reader: it does not release
   what the reader's own `build` read, and a key such a callback stops reading
   is released on the reader's next own build or disposal. A
-  `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` is a reader of
-  its own whose builder is its build, so a key it stops reading — the wide
-  layout's, after a resize — is released after that frame.
+  `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` is additive
+  too: its builder runs during layout, and a nested builder using that
+  context cannot be told apart from it, so no run of it releases what
+  another run read. Nothing it shows loses its subscription; a key it stops
+  reading — the wide layout's, after a resize — stays subscribed until its
+  parent rebuilds it or it unmounts, bounded by the keys it has read. When
+  the key depends on the constraints, read it in a widget below the
+  `LayoutBuilder`.
 - `context.query`, `context.selectQuery`, `context.infiniteQuery` and
   `context.mutation` called with the `context` a lazily built list hands its
   item builder — `ListView.builder`, `GridView.builder`, `PageView.builder`,
@@ -98,10 +105,11 @@ fetching, upstream's `useIsFetching`.
   two-dimensional scroll views — throw a `FlutterError` in debug builds.
   That context is the whole list's, and no release rule for it is both
   bounded and correct. Give each row a widget of its own and read in its
-  `build`: `itemBuilder: (_, i) => TaskTile(ids[i])`. Release builds follow
-  the per-frame rule there, which is bounded, but a row still on screen can
-  lose its subscription when others scroll in. `watchQuery`, or the outer
-  `context`, inside an item builder is the additive case above: rows
+  `build`: `itemBuilder: (_, i) => TaskTile(ids[i])`. Release builds treat
+  those reads as additive: no row on screen loses its subscription, and the
+  rows scrolled away stay subscribed until the list is rebuilt or unmounts.
+  `watchQuery`, the outer `context` or an enclosing `LayoutBuilder`'s
+  `context` inside an item builder is the additive case above: rows
   scrolled away stay subscribed until the reader builds again.
 - A listener delivers each notification whose value differs from the last
   one it saw; a batch of writes is one transition to the last value.
@@ -116,11 +124,13 @@ fetching, upstream's `useIsFetching`.
   dropped. Run mutations through the controller.
 - A `mutationKey` is a category, not a name: two mutation reads of one shape
   under one key in the reader's own `build`, without an `id`, with different
-  mutation functions, are a debug assertion — give each an `id`. They used to
+  mutation functions or callbacks (`onMutate`, `onSuccess`, `onError`,
+  `onSettled`), are a debug assertion — give each an `id`. They used to
   share one controller silently, so whichever was read last ran for both.
-  The same function read twice — one stored options object, a tear-off, a
-  top-level function — is one mutation and does not assert, and neither does
-  a nested builder re-reading what `build` read. A function literal is a new
+  The same functions read twice — one stored options object, tear-offs,
+  top-level functions — are one mutation and do not assert, and neither does
+  a nested builder re-reading what `build` read, or any read through a
+  `LayoutBuilder`'s context. A function literal is a new
   function every time it is built, so a getter that builds one per read
   still asserts: keep it in a field, or read the mutation once.
 - `QueryController.setOptions` and `InfiniteQueryController.setInfiniteOptions`

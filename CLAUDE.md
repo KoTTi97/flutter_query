@@ -91,14 +91,28 @@ a `ListView.builder` item context holding every row ever built (now a debug
 overwritten by the old one's dispose (now only the last provider resets) —
 and two P3: the keyed-mutation assertion narrowed to different functions in
 the reader's own build, and `MutationController.observer`'s bypass
-documented. Core **823 VM / 819 browser**, binding **184**.
+documented. A third pass (V3-1–7) found the binding's element-bound release
+edge moved a third time — reads through a `LayoutBuilder`'s context, from a
+nested builder or an item builder, released data still on screen — and
+replaced the per-case rules with one: only a `StatelessWidget`'s or `State`'s
+provable own build (dirty, or a new widget from its parent) opens a
+generation; every other read, every read through a `LayoutBuilder` or a
+list's sliver included, is additive and goes at the next generation that does
+not read it, at the parent's next rebuild, or at unmount. Nothing on screen
+loses its subscription; a key a `LayoutBuilder` stopped reading stays until it
+is rebuilt (the docs: read constraint-dependent keys below it). A table over
+ten reader shapes × four frames (`reader_shapes_test.dart`) holds it. Also: the
+keyed-mutation assertion compares callbacks too and skips non-own-build reads,
+a provider whose `initState` threw no longer counts as a connectivity speaker,
+and a restored scope head cancelled and removed hands on again (core).
+Core **826 VM / 822 browser**, binding **231**.
 
 ## Where the work stands (2026-09-23)
 
 | Phase | State |
 |---|---|
-| **`packages/query_kit/`** — the pure-Dart core | **1.0.0, release review done (2026-09-23), not published** — 823 VM / 819 browser tests since; the rest of this cell is the 2026-09-12 state. **Pre-release deep-dive review done (2026-09-12).** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
-| **`packages/query_kit_flutter/`** — the Flutter binding | **1.0.0, done, nine times reviewed, restructured by map #49, release-reviewed 2026-09-23.** 184 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
+| **`packages/query_kit/`** — the pure-Dart core | **1.0.0, release review done (2026-09-23), not published** — 826 VM / 822 browser tests since; the rest of this cell is the 2026-09-12 state. **Pre-release deep-dive review done (2026-09-12).** Eight independent lenses, every P1/P2 reproduced and verified by a second fresh agent, then fresh passes over each round of fixes — which found defects the fixes themselves introduced (six in round 1, three in round 2, one in round 3), all fixed, and one older hashing defect those passes surfaced. 742 VM tests / 738 compiled-JavaScript tests, green on the Dart 3.6.2 floor; 414 of 536 upstream cases ported; original ported assertions unchanged. See PORTING_NOTES' "Pre-release deep-dive review" and "Final review" sections; test counts alone are not a release verdict. |
+| **`packages/query_kit_flutter/`** — the Flutter binding | **1.0.0, done, nine times reviewed, restructured by map #49, release-reviewed 2026-09-23.** 231 tests behind one harness (`test/harness.dart`); four call styles for queries, infinite queries and mutations — **equal, and proven so** (C49): every one of them takes a `buildWhen` and none rebuilds for a notification that carries nothing. No dependency beyond Flutter — `flutter_test` is a dev dependency, and the widget-test teardown a user writes is a documented snippet (ADR-0002) |
 | **`examples/showcase/`** — every feature as a screen | **done (2026-09-09, #25; catalogue gaps closed 2026-09-11, #46; deduplicated 2026-09-12, map #49).** 30 screens (`combine` and `mutation-cancel` joined on 2026-09-20), 247 widget tests against a dio fake of the backend and 177 Playwright end-to-end tests against the real one; a scenario-isolated dummy backend under `server/`; a contract test running the same 25 cases against fake and server, and `catalogue_test.dart`, which holds the **five** per-feature artefact sets level. It found two library bugs no ported test could reach |
 | **`examples/task_manager/`** — the acceptance demo, one whole app | **done.** A small to-do app: 16 widget tests, one per row of the MVP checklist plus two regressions found by review, **15 contract cases** run against its fake and its real server (map #49 — twelve of the fourteen were red against the fake), and 10 Playwright end-to-end tests in a real browser against that server; iOS and web generated |
 

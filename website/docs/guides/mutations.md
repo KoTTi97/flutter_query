@@ -224,16 +224,20 @@ one, else by its `mutationKey`, each together with its three type arguments;
 without either, by the types alone. A `mutationKey` is a category, as
 upstream's is, not a name: two mutations of the same shape under one key read
 in one `build` without an `id:` would share one controller, and whichever was
-read last would run for both. When their mutation functions differ, a debug
-build catches it with an assertion. Give each an `id:`.
+read last would run for both — its function and its callbacks alike. When
+their mutation functions or callbacks (`onMutate`, `onSuccess`, `onError`,
+`onSettled`) differ, a debug build catches it with an assertion: "delete,
+then pop" and "delete, then show a snackbar" are two mutations. Give each an
+`id:`.
 
-The same function read twice is one mutation and does not assert: a getter
-over one stored options object, options built around a tear-off or a
-top-level function, or a nested builder re-reading what `build` read. A
-function literal is a new function every time it is evaluated, so a getter
-that builds one per read looks exactly like two mutations and still asserts
-— keep the options (or the function) in a field, or read the mutation once
-and share the controller.
+The same functions read twice are one mutation and do not assert: a getter
+over one stored options object, options built around tear-offs or top-level
+functions, or a nested builder re-reading what `build` read. A function
+literal is a new function every time it is evaluated, so a getter that builds
+one per read looks exactly like two mutations and still asserts — keep the
+options (or the functions) in a field, or read the mutation once and share
+the controller. Only a `StatelessWidget`'s or `State`'s own `build` is
+checked; reads through a `LayoutBuilder`'s context never are.
 
 Like a query, a mutation is released after the frame once a build stops reading
 it.

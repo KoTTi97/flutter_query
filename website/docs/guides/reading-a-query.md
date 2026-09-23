@@ -44,9 +44,18 @@ Things to know:
   `ValueListenableBuilder`, an `AnimatedBuilder`, a `LayoutBuilder` — is added
   to the enclosing widget's reads and does not release what its own `build`
   read. A key such a callback stops reading is released on that widget's next
-  own build or when it goes. A `LayoutBuilder`'s or `OrientationBuilder`'s
-  *own* `context` is different: its builder is its build, so the wide
-  layout's key goes after the frame that switched to the narrow one.
+  own build or when it goes.
+- A read through a `LayoutBuilder`'s or `OrientationBuilder`'s **own
+  `context`** is additive too. Its builder runs during layout, and a nested
+  builder using that context looks exactly like it, so no run of it can
+  safely release what another run read. Nothing it shows ever loses its
+  subscription; the cost is that a key it stopped reading — the wide
+  layout's, after a resize — stays subscribed until the `LayoutBuilder`'s
+  parent rebuilds it or it goes. That is bounded by the keys it has read.
+  **When the key depends on the constraints, read it in a widget of its own
+  below the `LayoutBuilder`**: `LayoutBuilder(builder: (_, c) => c.maxWidth >
+  600 ? const WideTasks() : const NarrowTasks())`, each reading in its own
+  `build`, and the key goes with the widget.
 - **Lists: do not read through the `context` an `itemBuilder` is given.** A
   `ListView.builder`, `GridView.builder`, `PageView.builder` or any other
   lazily built list hands its item builder the whole list's context, not the
@@ -55,8 +64,10 @@ Things to know:
   A debug build throws a `FlutterError` naming the fix: give each row a widget
   of its own — `itemBuilder: (_, i) => TaskTile(ids[i])` — and read in
   `TaskTile.build`, so each row's reads come and go with it. (In a release
-  build such a read is bounded, but a row still on screen can lose its
-  subscription when others scroll in.)
+  build such a read is additive: no row on screen loses its subscription,
+  and the rows scrolled away stay subscribed until the list is rebuilt or
+  goes.) An item builder reading through an *enclosing* `LayoutBuilder`'s
+  context is the same trade, without the debug error.
 - Each reading widget gets observers of its own. What is shared is the query in
   the cache, which the core deduplicates.
 - A widget that stops calling `context.query` *altogether* gives no signal

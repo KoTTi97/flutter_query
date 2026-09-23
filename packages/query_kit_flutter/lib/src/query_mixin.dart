@@ -23,10 +23,14 @@
 /// callback re-runs on its own, so its reads are *additive*: they release
 /// nothing `build` read, and a key the callback stops reading stays
 /// subscribed until this `State`'s own next build or disposal (release
-/// review 2026-09-23, BIND-1). A `ListView.builder`'s `itemBuilder` is such
-/// a callback too: rows scrolled away stay subscribed until this `State`
-/// builds again. Where that matters — a long list above all — give the
-/// nested part, or each row, a widget of its own.
+/// review 2026-09-23, BIND-1). Nothing shown ever loses its subscription
+/// this way; the cost is bounded by the keys the callbacks have read. A
+/// `LayoutBuilder` whose builder switches keys with its constraints, or a
+/// `ListView.builder`'s `itemBuilder`, is such a callback too: the key of
+/// the layout left, or the rows scrolled away, stay subscribed until this
+/// `State` builds again. Where that matters — a long list above all, or a
+/// key that depends on constraints — give the nested part, or each row, a
+/// widget of its own.
 library;
 
 import 'package:flutter/scheduler.dart';
@@ -152,9 +156,10 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// `mutationKey` is a category, as upstream's is, not a name: two mutations
   /// under one key with the same types would share a controller, so two
   /// reads of one identity in one build with *different* mutation
-  /// functions, without [id], are a debug assertion. The same function read
-  /// twice — one stored options object, a tear-off, a top-level function —
-  /// is one mutation, and so is a nested builder re-reading what `build`
+  /// functions or callbacks (`onMutate`, `onSuccess`, `onError`,
+  /// `onSettled`), without [id], are a debug assertion. The same functions
+  /// read twice — one stored options object, tear-offs, top-level functions
+  /// — are one mutation, and so is a nested builder re-reading what `build`
   /// read; a function literal is a new function each time it is built, so
   /// keep it in a field or read once. Released after the frame once a build
   /// stops reading it, the way a query is.
