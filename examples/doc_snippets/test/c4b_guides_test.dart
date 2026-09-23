@@ -66,30 +66,49 @@ void main() {
     await link.close();
   });
 
-  test('reachability: a probe from before a resubscribe is not delivered',
+  test('reachability: a probe that hangs or throws counts as unreachable',
       () async {
-    final link = StreamController<bool>.broadcast();
-    final answers = <Completer<bool>>[];
-    Future<bool> probe() {
-      final answer = Completer<bool>();
-      answers.add(answer);
-      return answer.future;
+    final link = StreamController<bool>();
+    var calls = 0;
+    Future<bool> badProbe() {
+      calls++;
+      return calls == 1
+          ? Completer<bool>().future // never answers
+          : Future<bool>.error(StateError('no route'));
     }
 
-    final stream = reachability(link.stream, probe);
-    final first = stream.listen((_) {});
-    link.add(true);
-    await pumpEventQueue();
-    expect(answers, hasLength(1));
-    await first.cancel();
-
     final seen = <bool>[];
-    final second = stream.listen(seen.add);
-    answers.single.complete(true);
-    await pumpEventQueue();
-    expect(seen, isEmpty, reason: 'nothing says the link is still up');
+    final subscription = reachability(link.stream, badProbe,
+            recheck: const Duration(milliseconds: 5),
+            timeout: const Duration(milliseconds: 20))
+        .listen(seen.add);
 
-    await second.cancel();
+    link.add(true);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(seen, [false]);
+    expect(calls, greaterThan(1),
+        reason: 'a hung probe does not block rechecks');
+
+    await subscription.cancel();
+    await link.close();
+  });
+
+  test('reachability: nothing is probed after the listener leaves', () async {
+    final link = StreamController<bool>();
+    var calls = 0;
+    final subscription = reachability(link.stream, () async {
+      calls++;
+      return true;
+    }, recheck: const Duration(milliseconds: 5))
+        .listen((_) {});
+
+    link.add(true);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    await subscription.cancel();
+    final before = calls;
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(calls, before);
+
     await link.close();
   });
 }

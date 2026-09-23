@@ -106,22 +106,37 @@ answers.
 ```dart snippet="guides/connectivity.md#reachability"
 /// `true` while the link is up *and* [probe] reaches the backend. Probes again
 /// every [recheck] while the link is up: a captive portal or a server outage
-/// ends without the link changing.
+/// ends without the link changing. A probe that throws or takes longer than
+/// [timeout] counts as unreachable.
+///
+/// A single-subscription stream: hand it to one provider's
+/// `OnlineStatus.stream`.
 Stream<bool> reachability(
   Stream<bool> link,
   Future<bool> Function() probe, {
   Duration recheck = const Duration(seconds: 20),
+  Duration timeout = const Duration(seconds: 5),
 }) {
   StreamSubscription<bool>? linkChanges;
   Timer? timer;
   var linkUp = false;
-  // Moves when the link changes or the last listener leaves: an answer to a
-  // probe started before that is stale.
+  var cancelled = false;
+  // Moves on every link change: an answer to a probe started before it is
+  // stale.
   var epoch = 0;
   var probing = false;
   late final StreamController<bool> out;
 
+  Future<bool> ask() async {
+    try {
+      return await probe().timeout(timeout, onTimeout: () => false);
+    } on Object {
+      return false;
+    }
+  }
+
   Future<void> check() async {
+    if (cancelled) return;
     if (!linkUp) {
       out.add(false);
       return;
@@ -129,20 +144,16 @@ Stream<bool> reachability(
     if (probing) return; // one probe at a time; a recheck waits for it
     probing = true;
     final asked = epoch;
-    final bool reachable;
-    try {
-      reachable = await probe();
-    } finally {
-      probing = false;
-    }
+    final reachable = await ask();
+    probing = false;
     if (asked == epoch) {
-      out.add(reachable);
-    } else if (out.hasListener) {
+      if (!cancelled) out.add(reachable);
+    } else {
       await check(); // the link changed meanwhile: ask again
     }
   }
 
-  out = StreamController<bool>.broadcast(
+  out = StreamController<bool>(
     onListen: () {
       linkChanges = link.listen((up) {
         linkUp = up;
@@ -152,9 +163,9 @@ Stream<bool> reachability(
       timer = Timer.periodic(recheck, (_) => check().ignore());
     },
     onCancel: () {
-      epoch++;
+      cancelled = true;
       timer?.cancel();
-      linkChanges?.cancel().ignore();
+      return linkChanges?.cancel();
     },
   );
   return out.stream.distinct();
