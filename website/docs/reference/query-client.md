@@ -59,7 +59,7 @@ clients — two tests — never share focus, connectivity or batching state.
 
 | Method | Returns | What it does |
 |---|---|---|
-| [`query<T>(options, {revalidateIfStale = false})`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/query.html) | `Future<T>` | Takes a `QueryOptions<T>`. Returns cached data if it is fresh under the options' `staleTime`; otherwise fetches (or joins the fetch in flight), caches and completes with the data. A failed fetch fails the future. **No retries unless `retry` is set** on the options or in the defaults. With `revalidateIfStale`, cached data is returned at once while a stale query refreshes in the background, and the future fails only when nothing is cached. The options become the query's options. |
+| [`query<T>(options, {revalidateIfStale = false})`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/query.html) | `Future<T>` | Takes a `QueryOptions<T>`. Returns cached data if it is fresh under the options' `staleTime`; otherwise fetches (or joins the fetch in flight), caches and completes with the data. A failed fetch fails the future. **No retries unless `retry` is set** on the options or in the defaults. With `revalidateIfStale`, cached data is returned at once while a stale query refreshes in the background, and the future fails only when nothing is cached. When the call creates the entry or starts a fetch, the options become the query's options (with `retry` unset, the query keeps its own); served from the cache or joining a fetch in flight, they are not applied. |
 | [`infiniteQuery<P, Q>(options, {revalidateIfStale = false})`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/infiniteQuery.html) | `Future<InfiniteData<P, Q>>` | The same for an `InfiniteQueryOptions<P, Q>`: the first page, or `options.pages` pages. |
 | [`observe<TQueryData, TData>(options)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/observe.html) | `QueryObserver<TQueryData, TData>` | Creates an observer on this client — the same as `QueryObserver(client, options)`. It does nothing until subscribed; the caller owns it. TanStack: `new QueryObserver(client, options)`. |
 | [`observeInfinite<P, Q, TData>(options)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/observeInfinite.html) | `InfiniteQueryObserver<P, Q, TData>` | The infinite twin of `observe`. TanStack: `new InfiniteQueryObserver(client, options)`. |
@@ -119,7 +119,7 @@ holds data, and joins it on one that does not; `false` always joins. See
 | [`getDefaultOptions()`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/getDefaultOptions.html) | `DefaultOptions` | The client-wide defaults in force. |
 | [`setDefaultOptions(options)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/setDefaultOptions.html) | `void` | Replaces them. Takes effect wherever options are resolved next; options a query already holds are not changed. |
 | [`setQueryDefaults(key, defaults)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/setQueryDefaults.html) | `void` | Defaults for every query whose key starts with `key`. The same key again replaces them. |
-| [`getQueryDefaults(key)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/getQueryDefaults.html) | `QueryDefaults?` | Every registration matching `key`, merged in registration order, the later winning per field; `null` when none matches. The client-wide defaults are not included. |
+| [`getQueryDefaults(key)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/getQueryDefaults.html) | `QueryDefaults?` | Every registration matching `key`, merged in the order the keys were first registered (registering a key again replaces its defaults but keeps its place), the later winning per field; `null` when none matches. The client-wide defaults are not included. |
 | [`setMutationDefaults(key, defaults)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/setMutationDefaults.html) | `void` | The mutation twin. Carries no callbacks. |
 | [`getMutationDefaults(key)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/getMutationDefaults.html) | `MutationDefaults?` | The mutation twin of `getQueryDefaults`. |
 | [`defaultQueryOptions(options)`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryClient/defaultQueryOptions.html) | `DefaultedQueryOptions<T>` | The options with every unset field filled in: what a query actually runs with. Throws `ArgumentError` when both `initialDataUpdatedAt` forms are set. Rarely needed outside a test. |
@@ -141,7 +141,7 @@ because one default serves every type under a key prefix; the result is
 checked against the reader's type and a mismatch throws
 `QueryDataTypeError`. `initialData`, `placeholderData` and `select` belong to
 one query and have no default. All three classes are `const`, compare by
-value (functions by identity), and `QueryDefaults` and `MutationDefaults`
+value (functions by `==`, so a closure equals only itself), and `QueryDefaults` and `MutationDefaults`
 have `mergedWith(other)`, which lays `other`'s set fields over these. See
 [default query function](../guides/default-query-function.md).
 

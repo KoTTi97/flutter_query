@@ -14,18 +14,23 @@ TanStack Query spelling only where it differs from the Dart one.
 
 ## How a field gets its value
 
-**`null` means "not configured"** on every field below. A field left `null`
-takes, in this order:
+**`null` means "not configured"** on every field below. A field that
+`QueryDefaults` or `MutationDefaults` also has takes, when left `null`, in
+this order:
 
 1. the defaults registered for a matching key with
    `client.setQueryDefaults` / `client.setMutationDefaults` (several matching
-   prefixes merge, the later registration winning per field),
+   prefixes merge in the order their keys were first registered, the later
+   one winning per field),
 2. the client-wide `DefaultOptions` passed to `QueryClient(defaultOptions:)`
    or `setDefaultOptions`,
 3. the built-in default in the **Default** column.
 
-So `queryFn`, `mutationFn`, `structuralSharing` and `meta`, which the
-defaults layer can also supply, show only the built-in fallback below.
+So `queryFn`, `mutationFn`, `structuralSharing`, `scope` and `meta`, which
+the defaults layer can also supply, show only the built-in fallback below.
+The other fields — `initialData` and its two timestamps, `select`,
+`placeholderData`, the paging fields, `mutationKey`, `mutationFnWithContext`
+and the mutation callbacks — have no defaults layer: unset is unset.
 
 An option that can be switched off says so with a value — `Enabled.no`,
 `RetryPolicy.never`, `RefetchInterval.off` — never with `null`. The value
@@ -64,14 +69,18 @@ The observer shapes extend the cache shape, so one options function serves
 `client.query` and a widget alike. `QueryObserverOptions.withSelect(select)`
 and `InfiniteQueryObserverOptions.withSelect(select)` turn a plain shape into
 its select shape with every other field carried over. Every class has
-`copyWith`, which leaves a field it is not handed as it was — except
-`MutationOptions`, which has none. The infinite shapes' `copyWith` throws
+`copyWith`, which leaves a field it is not handed as it was (handing one of
+`initialDataUpdatedAt` and `initialDataUpdatedAtCompute` clears the other) —
+except `MutationOptions`, which has none. The infinite shapes' `copyWith` throws
 `ArgumentError` for a `queryFn`, and the observer shapes' for `pages`.
 
 None of these classes has value equality, on purpose: options built inline in
 `build` are handed to the observer on every build, and the observer compares
-the values they *resolve* to. An inline `queryFn` closure is therefore not a
-change by itself.
+the values they *resolve* to. An inline `queryFn` closure is a new function
+on every build, so the resolved options differ and the query cache reports a
+`QueryObserverOptionsUpdated` event; it does not refetch and does not restart
+the stale or polling timers, which follow the query, `enabled` and the
+resolved `staleTime` and `refetchInterval`.
 
 ## Cache fields
 
@@ -107,14 +116,14 @@ refetch and select differently.
 
 | Field | Type | Default | What it does |
 |---|---|---|---|
-| [`select`](https://pub.dev/documentation/query_kit/latest/query_kit/QuerySelectOptions/select.html) | `SelectFn<TQueryData, TData>` — `TData Function(TQueryData)` | required on the select shapes, absent on the plain ones | Projects the cached data into what this reader sees; the reader is told only when the projection changes. See [render optimizations](../guides/render-optimizations.md). |
-| [`placeholderData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/placeholderData.html) | `PlaceholderData<TQueryData>?` | none | Data shown while the query has none of its own. Never cached; the result reports `isPlaceholderData`. See [placeholder data](../guides/placeholder-query-data.md). |
+| [`select`](https://pub.dev/documentation/query_kit/latest/query_kit/QuerySelectOptions/select.html) | `SelectFn<TQueryData, TData>` — `TData Function(TQueryData)` | required on the select shapes, absent on the plain ones | Projects the cached data into what this reader sees. While the projection stays equal, `data` keeps its instance; the rest of the result (`fetchStatus`, `dataUpdatedAt`, …) still changes and still notifies — `buildWhen` narrows rebuilds. A throwing `select` makes the result a `QueryError`. See [render optimizations](../guides/render-optimizations.md). |
+| [`placeholderData`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/placeholderData.html) | `PlaceholderData<TQueryData>?` | none | Data shown while the query is pending with no data of its own (not after an error). Never cached; the result reports `isPlaceholderData`. See [placeholder data](../guides/placeholder-query-data.md). |
 | [`refetchOnMount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/refetchOnMount.html) | `RefetchOn?` | `RefetchOn.ifStale` | Whether this reader subscribing triggers a refetch. |
 | [`refetchOnWindowFocus`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/refetchOnWindowFocus.html) | `RefetchOn?` | `RefetchOn.ifStale` | Whether the app returning to the foreground triggers a refetch. See [app focus refetching](../guides/window-focus-refetching.md). |
 | [`refetchOnReconnect`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/refetchOnReconnect.html) | `RefetchOn?` | `RefetchOn.ifStale`; `RefetchOn.never` under `NetworkMode.always` | Whether the network coming back triggers a refetch. |
-| [`refetchInterval`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/refetchInterval.html) | `RefetchInterval?` | `RefetchInterval.off` | Polls while this reader is subscribed, stale or not, a `StaleTime.static` query included. See [polling](../guides/polling.md). |
+| [`refetchInterval`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/refetchInterval.html) | `RefetchInterval?` | `RefetchInterval.off` | Polls while this reader is subscribed and the query is enabled, stale or not, a `StaleTime.static` query included. See [polling](../guides/polling.md). |
 | [`refetchIntervalInBackground`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/refetchIntervalInBackground.html) | `bool?` | `false` | Whether polling continues while the app is not focused. |
-| [`retryOnMount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/retryOnMount.html) | `bool?` | `true` | Whether a query in an error state is fetched again when a reader subscribes. TanStack also takes a function of the query here. |
+| [`retryOnMount`](https://pub.dev/documentation/query_kit/latest/query_kit/QueryObserverOptionsBase/retryOnMount.html) | `bool?` | `true` | Whether a query in an error state with no data is fetched again when a reader subscribes (one holding data follows `refetchOnMount`). TanStack also takes a function of the query here. |
 
 Not here: `notifyOnChangeProps` (whole results are compared; `buildWhen` on
 every read narrows rebuilds), `throwOnError` (errors are a case of the sealed
@@ -136,11 +145,11 @@ observer fields. The data type is `InfiniteData<TPageData, TPageParam>`:
 | [`getNextPageParam`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteQueryOptions/getNextPageParam.html) | `PageParamFn<TPageData, TPageParam>` — `TPageParam? Function(page, pages, pageParam, pageParams)` | required | The param of the page after the last one; `null` means there is none, so `hasNextPage` is false. |
 | [`getPreviousPageParam`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteQueryOptions/getPreviousPageParam.html) | `PageParamFn<TPageData, TPageParam>?` | none: `hasPreviousPage` is always false | The same, backwards from the first page. |
 | [`maxPages`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteQueryOptions/maxPages.html) | `int?` | none: every page is kept (`0` too) | How many pages to keep. A page fetch past the limit drops one page from the far end. |
-| [`pages`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteQueryOptions/pages.html) | `int?` | none: one page into an empty query, every held page on a refetch | How many pages to fetch up front. Only on `InfiniteQueryOptions`, for `client.infiniteQuery`; the observer shapes refuse it. |
+| [`pages`](https://pub.dev/documentation/query_kit/latest/query_kit/InfiniteQueryOptions/pages.html) | `int?` | none: one page into an empty query, every held page on a refetch | How many pages to fetch up front. Only on `InfiniteQueryOptions`, for `client.infiniteQuery` (or `client.query`); the observer shapes refuse it. A count handed to the client stays on the shared query and shapes later refetches that bring no options of their own (`invalidateQueries`, `refetchQueries`) until an observer's fetch installs its options. |
 
 A refetch of an infinite query — invalidation, focus, polling — requests
-every held page again, first to last, each with the param computed from the
-page before it. `hasNextPage`, `fetchNextPage` and their backward twins live
+the held pages again, first to last, each with the param computed from the
+page before it, and stops early if `getNextPageParam` returns `null`. `hasNextPage`, `fetchNextPage` and their backward twins live
 on the infinite observer and controller, not on the result; see
 [results](results.md).
 
@@ -191,17 +200,18 @@ built inline compares equal to an equal one, so a rebuild with the same value
 is not a change; the computed forms compare equal when their function is the
 same (a tear-off, not an inline closure). Each type also has the method the
 library resolves it with (`resolve`, `shouldRetry`, …); application code
-rarely calls them.
+rarely calls them. Each case is a public class (`StaleTimeDuration`,
+`EnabledWhen`, `RetryTimes`, …), so a `switch` can name them.
 
 | Type | Spellings |
 |---|---|
-| [`StaleTime`](https://pub.dev/documentation/query_kit/latest/query_kit/StaleTime-class.html) | `StaleTime.zero` (default), `StaleTime.duration(d)`, `StaleTime.infinite` (never stale by time, invalidation still works), `StaleTime.static` (never stale, skipped by every refetch trigger and by `refetchQueries` while observed), `StaleTime.dynamic((query) => StaleTime)`. TanStack: `0`, a number of ms, `Infinity`, `'static'`, a function. |
+| [`StaleTime`](https://pub.dev/documentation/query_kit/latest/query_kit/StaleTime-class.html) | `StaleTime.zero` (default), `StaleTime.duration(d)`, `StaleTime.infinite` (never stale by time, invalidation still works), `StaleTime.static` (never stale; skipped by the mount, focus and reconnect refetches and by `refetchQueries` and invalidation while observed; `refetchInterval` still polls it), `StaleTime.dynamic((query) => StaleTime)`. TanStack: `0`, a number of ms, `Infinity`, `'static'`, a function. |
 | [`GcTime`](https://pub.dev/documentation/query_kit/latest/query_kit/GcTime-class.html) | `GcTime.duration(d)`, `GcTime.defaultValue` (five minutes), `GcTime.never`; `GcTime.longest(a, b)` picks the longer of two. TanStack: a number of ms, `Infinity`. |
 | [`Enabled`](https://pub.dev/documentation/query_kit/latest/query_kit/Enabled-class.html) | `Enabled.yes` (default), `Enabled.no`, `Enabled.when((query) => bool)`. TanStack: `true`, `false` (also standing in for `queryFn: skipToken`), a function. |
 | [`RetryPolicy`](https://pub.dev/documentation/query_kit/latest/query_kit/RetryPolicy-class.html) | `RetryPolicy.never`, `RetryPolicy.always`, `RetryPolicy.times(n)` (n retries, n + 1 attempts), `RetryPolicy.when((failureCount, error, stackTrace) => bool)` — `failureCount` is `0` on the first decision. TanStack: `false`, `true`, a number, a function. |
 | [`RetryDelay`](https://pub.dev/documentation/query_kit/latest/query_kit/RetryDelay-class.html) | `RetryDelay.defaultValue`, `RetryDelay.exponential({base = 1 s, maximum = 30 s})` — with no arguments the default, `RetryDelay.fixed(d)`, `RetryDelay.dynamic((failureCount, error) => Duration)`. TanStack: the default function, a number of ms, a function. |
 | [`RefetchOn`](https://pub.dev/documentation/query_kit/latest/query_kit/RefetchOn-class.html) | `RefetchOn.ifStale` (default), `RefetchOn.always`, `RefetchOn.never`, `RefetchOn.when((query) => RefetchOn)`. TanStack: `true`, `'always'`, `false`, a function. |
-| [`RefetchInterval`](https://pub.dev/documentation/query_kit/latest/query_kit/RefetchInterval-class.html) | `RefetchInterval.off` (default), `RefetchInterval.every(d)`, `RefetchInterval.dynamic((query) => Duration?)` — `null` stops polling. TanStack: `false`, a number of ms, a function. |
+| [`RefetchInterval`](https://pub.dev/documentation/query_kit/latest/query_kit/RefetchInterval-class.html) | `RefetchInterval.off` (default), `RefetchInterval.every(d)`, `RefetchInterval.dynamic((query) => Duration?)` — `null`, zero or a negative duration stops polling. TanStack: `false`, a number of ms, a function. |
 | [`NetworkMode`](https://pub.dev/documentation/query_kit/latest/query_kit/NetworkMode.html) (an enum) | `online` (default), `always`, `offlineFirst`. |
 | [`InitialData`](https://pub.dev/documentation/query_kit/latest/query_kit/InitialData-class.html) | `InitialData.value(data)`, `InitialData.compute(() => data?)` — `null` from the callback means no seed. TanStack: a value, a function. |
 | [`PlaceholderData`](https://pub.dev/documentation/query_kit/latest/query_kit/PlaceholderData-class.html) | `PlaceholderData.keepPrevious()`, `PlaceholderData.value(data)`, `PlaceholderData.compute((previousData, previousQuery) => data?)`. TanStack: `keepPreviousData`, a value, a function. |

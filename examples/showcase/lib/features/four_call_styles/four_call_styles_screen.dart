@@ -1,5 +1,5 @@
 /// The binding's own story, with no upstream counterpart: one query — the
-/// post list — read five ways at once, next to one mutation read two ways.
+/// post list — read five ways at once, next to one mutation run three ways.
 ///
 /// The four call styles are **equal alternatives**: there is no default
 /// and no recommendation, so this screen ranks nothing. It shows what each
@@ -761,7 +761,7 @@ class _MutationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SectionCard(
-        title: '7. One mutation, two styles',
+        title: '7. One mutation, three styles',
         trailing: QueryBuilder<int>(
           options: counterQuery(api),
           builder: (context, counter) => Text(
