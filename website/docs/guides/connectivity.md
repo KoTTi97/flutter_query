@@ -106,8 +106,9 @@ answers.
 ```dart snippet="guides/connectivity.md#reachability"
 /// `true` while the link is up *and* [probe] reaches the backend. Probes again
 /// every [recheck] while the link is up: a captive portal or a server outage
-/// ends without the link changing. A probe that throws or takes longer than
-/// [timeout] counts as unreachable.
+/// ends without the link changing, and the last answer stands until the
+/// next one arrives. A probe that throws or takes longer than [timeout]
+/// counts as unreachable.
 ///
 /// A single-subscription stream: hand it to one provider's
 /// `OnlineStatus.stream`.
