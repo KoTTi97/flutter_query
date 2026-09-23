@@ -42,6 +42,8 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart'
+    show Constraints, RenderBox, RenderSliver;
 import 'package:flutter/widgets.dart';
 import 'package:query_kit/query_kit.dart';
 
@@ -56,9 +58,14 @@ import 'repeat_read.dart';
 typedef _Entry = ReadEntry<Object?>;
 
 /// What the debug ambiguity check compares two reads of one mutation
-/// identity by: the mutation function, its context twin, and the four
-/// callbacks.
-typedef _MutationShape = (Object?, Object?, Object?, Object?, Object?, Object?);
+/// identity by: the mutation function, its context twin and the four
+/// callbacks (third pass, V3-6), and the five fields that decide where and
+/// how it runs — `scope`, `retry`, `retryDelay`, `networkMode`, `gcTime`
+/// (fourth pass, V4-3). Not `meta`: see [ReadSet.readMutation].
+typedef _MutationShape = (
+  (Object?, Object?, Object?, Object?, Object?, Object?),
+  (Object?, Object?, Object?, Object?, Object?),
+);
 
 /// Everything one reader — a `State` with `QueryMixin`, or one `Element`
 /// reading through `context.query` — holds between builds.
@@ -76,41 +83,49 @@ typedef _MutationShape = (Object?, Object?, Object?, Object?, Object?, Object?);
 /// `build` had read (release review 2026-09-23, BIND-1). So a read made
 /// outside the reader's own build is *additive*: it joins whatever the
 /// reader holds and releases nothing, and what such a callback stops reading
-/// is released at the reader's own next build or unmount. [beginBuild] tells
-/// the two apart.
+/// is released at the reader's next own build that reads through it, or at
+/// unmount — a build that reads nothing opens no generation (V4-5).
+/// [beginBuild] tells the two apart.
 ///
-/// **One rule for every reader** (third pass, V3-1/V3-2). A read is an own
-/// build only when that is provable: the reader is a `ComponentElement` — a
-/// `StatelessWidget`'s or a `State`'s element — that is dirty, or whose
-/// parent has just handed it a new widget. Every other read is additive,
-/// and that includes *every* read through a reader that is no
-/// `ComponentElement`: a `LayoutBuilder`'s element (an `OrientationBuilder`
-/// hands its builder the `LayoutBuilder`'s context too), a lazily built
-/// list's sliver. Their callbacks run during layout, alone or piecemeal —
-/// a nested builder under a `LayoutBuilder` running with its context looks
-/// exactly like the builder itself, and a list builds only the rows
-/// scrolling in — so a generation opened by any one run released reads
-/// still on screen. Two passes tried a per-run generation for them and
-/// dropped visible data both times (second pass, V-B-1: the `LayoutBuilder`
-/// read that a nested builder's frame released; V3-2: the rows an
-/// `itemBuilder` reading through an enclosing `LayoutBuilder` had built).
+/// **One rule for every reader** (third pass, V3-1/V3-2; fourth pass,
+/// V4-1). A read is an own build only when that is provable, and a reader
+/// has as many proofs as Flutter gives it:
 ///
-/// What an additive read holds goes at the reader's next own build that does
-/// not read it; for a reader with no detectable own build, at the first read
-/// after its parent handed it a new widget (the frame of that read is a
-/// generation, and whatever that frame does not read again is released
-/// after it); and at unmount. Nothing is released by a *partial* re-run.
-/// The price is bounded, not zero: a key a `LayoutBuilder` stopped reading
-/// after a resize stays subscribed until the `LayoutBuilder` is rebuilt by
-/// its parent or unmounts — at most the keys it has ever read. When the key
-/// depends on constraints, read it in a widget below the `LayoutBuilder`.
+/// * a `ComponentElement` — a `StatelessWidget`'s or a `State`'s element —
+///   is in its own build when it is dirty, or when its parent has just
+///   handed it a new widget;
+/// * a layout builder's element — `LayoutBuilder`, `SliverLayoutBuilder`,
+///   `OrientationBuilder`'s — re-runs its builder when its parent hands it a
+///   new widget, when its constraints change, and when it is marked for a
+///   rebuild; the first read after its parent's new widget, after a change
+///   of constraints, or after one of *this set's own* controllers asked it
+///   to rebuild is that builder run;
+/// * any other reader — a lazily built list's sliver — has only its
+///   parent's new widget.
+///
+/// Every other read is additive: a nested builder re-running with the
+/// reader's context, a row scrolling into a list. Two passes tried a per-run
+/// generation for readers that are no `ComponentElement` and dropped visible
+/// data both times (second pass, V-B-1: the `LayoutBuilder` read that a
+/// nested builder's frame released; V3-2: the rows an `itemBuilder` reading
+/// through an enclosing `LayoutBuilder` had built). Constraints and the set's
+/// own notification are proofs a nested builder's frame never carries: it
+/// neither changes the constraints nor is asked to rebuild by this set.
+///
+/// What an additive read holds goes at the reader's next own build, and at
+/// unmount. Nothing is released by a *partial* re-run. The one rebuild left
+/// without a proof is a `LayoutBuilder` rebuilt by an `InheritedWidget` it
+/// depends on: Flutter marks it through `didChangeDependencies`, which no
+/// read can see, so a key picked from an inherited value stays subscribed
+/// until the next resize, notification or parent rebuild — at most the keys
+/// it has read since. A key that depends on something the builder reads
+/// belongs in a widget below it, whose own build is always provable.
 ///
 /// Reading through a lazily built list's own item-builder context stays a
 /// debug-mode error that names the fix, a widget per row
 /// ([debugCheckReader], V-B-2): the list element is one reader for every
 /// row, so additive holds every row ever built until the list is rebuilt.
-/// Release builds treat it by the rule above — additive, bounded by the
-/// keys read.
+/// Release builds treat it by the rule above.
 class ReadSet {
   /// [rebuild] is how this reader is told its controllers moved; [who] names
   /// it in the two debug messages ("This State", "This widget").
@@ -156,9 +171,27 @@ class ReadSet {
   /// The element the last [beginBuild] was for.
   Element? _reader;
 
-  /// The widget the reader's element had when a generation was last opened.
-  /// A parent handing it a new one rebuilds it with `Element.dirty` false.
+  /// The widget the reader's element had at its last own build. A parent
+  /// handing it a new one rebuilds it with `Element.dirty` false.
   Widget? _builtFor;
+
+  /// Whether one of this set's own controllers has asked the reader to
+  /// rebuild since its last own build — the signal a reader that is no
+  /// `ComponentElement` has for "the next run is the builder" (fourth pass,
+  /// V4-1).
+  bool _marked = false;
+
+  /// The constraints a layout builder's reader was last built with. A
+  /// `LayoutBuilder` re-runs its builder when they change, and only then or
+  /// when it is rebuilt (fourth pass, V4-1).
+  Constraints? _builtWith;
+
+  /// What a controller this set holds calls: marks the reader, then asks it
+  /// to rebuild.
+  void _selfRebuild() {
+    _marked = true;
+    rebuild();
+  }
 
   /// Opens [generation] if it is not open already *and* this read is
   /// [reader]'s own build: what earlier builds held becomes provisional, and
@@ -174,11 +207,10 @@ class ReadSet {
   /// rebuild), and that one is told apart by the widget having changed since
   /// the last generation opened. A nested callback sees neither.
   ///
-  /// A [reader] that is no `ComponentElement` — a `LayoutBuilder`, a list's
-  /// sliver — has no build to tell apart from its callbacks, so only the
-  /// second signal counts for it: the first read after its parent handed it
-  /// a new widget opens a generation, and every other read through it is
-  /// additive (third pass, V3-1/V3-2).
+  /// A [reader] that is no `ComponentElement` has no `dirty` to go by. A
+  /// layout builder counts a change of constraints since its last own build
+  /// and a rebuild one of this set's controllers asked for ([_marked]) as
+  /// well; a list's sliver only the new widget (fourth pass, V4-1).
   ///
   /// Without the release a screen that switches from one key to another
   /// would stay subscribed to the key it no longer shows.
@@ -190,15 +222,53 @@ class ReadSet {
     }
     _reader = reader;
     final widget = reader.widget;
+    final constraints = _layoutConstraints(reader);
     final ownBuild = !identical(widget, _builtFor) ||
-        (reader is ComponentElement && reader.dirty);
-    if (!ownBuild || _generation == generation) {
+        (reader is ComponentElement
+            ? reader.dirty
+            : _marked || (constraints != null && constraints != _builtWith));
+    if (!ownBuild) {
       return;
     }
+    // Recorded for every own build, also one in a generation already open:
+    // otherwise a widget handed over in that epoch still looks new at the
+    // next read, and a nested builder's frame alone would open a generation
+    // (fourth pass, V4-4).
     _builtFor = widget;
+    _marked = false;
+    _builtWith = constraints;
+    if (_generation == generation) {
+      return;
+    }
     _generation = generation;
     _pending = <Object>{..._pending, ..._current};
     _current = <Object>{};
+  }
+
+  /// The constraints [reader] lays out under when it is a layout builder —
+  /// `LayoutBuilder`, `SliverLayoutBuilder`, `OrientationBuilder`'s — and null
+  /// for any other reader or before its first layout.
+  static Constraints? _layoutConstraints(Element reader) {
+    if (reader is! RenderObjectElement) {
+      return null;
+    }
+    final renderObject = reader.renderObject;
+    if (renderObject is! RenderConstrainedLayoutBuilder ||
+        !renderObject.attached) {
+      return null;
+    }
+    // `RenderObject.constraints` is protected; its box and sliver overrides
+    // are the public face of the same value.
+    try {
+      return switch (renderObject) {
+        final RenderBox box => box.constraints,
+        final RenderSliver sliver => sliver.constraints,
+        _ => null,
+      };
+    } on StateError {
+      // Not laid out yet: no builder has run with any constraints.
+      return null;
+    }
   }
 
   /// Throws, in debug builds, when [reader] builds its children piecemeal —
@@ -351,16 +421,38 @@ class ReadSet {
       // with the function because the last read's `setOptions` wins for all
       // of them: "delete, then pop" and "delete, then show a snackbar"
       // sharing one controller would run whichever was read last (V3-6).
+      //
+      // The fields that decide *where and how* it runs are compared too
+      // (fourth pass, V4-3): rows reading `MutationScope('task-$id')` under
+      // one key and function would collapse into one controller whose last
+      // scope serialises every row's run; `retry`, `retryDelay`,
+      // `networkMode` and `gcTime` change the run the same way. All five are
+      // value types, so options built inline twice with the same values
+      // compare equal and do not assert. `meta` is not compared: it is
+      // arbitrary data, most often an inline map literal — a new object
+      // every read, with no deep `==` — so comparing it would assert on
+      // reads that are one mutation, while collapsing it only changes what
+      // the callbacks are handed, not which function runs, when or where.
+      // The last read's `meta` wins, as the last read's options do.
       final reader = _reader;
       final ownBuild = reader is ComponentElement && reader.debugDoingBuild;
       if (id == null && ownBuild) {
-        final fns = (
-          options.mutationFn,
-          options.mutationFnWithContext,
-          options.onMutate,
-          options.onSuccess,
-          options.onError,
-          options.onSettled,
+        final _MutationShape fns = (
+          (
+            options.mutationFn,
+            options.mutationFnWithContext,
+            options.onMutate,
+            options.onSuccess,
+            options.onError,
+            options.onSettled,
+          ),
+          (
+            options.scope,
+            options.retry,
+            options.retryDelay,
+            options.networkMode,
+            options.gcTime,
+          ),
         );
         final first = _mutationsRead[identity];
         if (first == null) {
@@ -371,8 +463,9 @@ class ReadSet {
             '$who read two mutations of the shape '
             '${(TData, TVariables, TOnMutateResult)}'
             '${key == null ? '' : ' and the mutationKey $key'} with different '
-            'mutation functions or callbacks in one build. They would share '
-            'one controller, and whichever was read last would run for both. A '
+            'mutation functions, callbacks, scope, retry, network mode or '
+            'gcTime in one build. They would share one controller, and '
+            'whichever was read last would run for both. A '
             'mutationKey is a category, not a name: give each read an `id:`. '
             'If both reads are one mutation, read it once and share the '
             'controller, or keep its options (or its functions) in a field — '
@@ -425,7 +518,7 @@ class ReadSet {
   ) {
     _current.add(identity);
     _seen.add(identity);
-    return _entries.putIfAbsent(identity, () => _Entry(create(), rebuild));
+    return _entries.putIfAbsent(identity, () => _Entry(create(), _selfRebuild));
   }
 
   /// Releases what the last generation stopped reading, mutations included.

@@ -246,33 +246,55 @@ and their queries stay observed.
 callback — an `itemBuilder`, a `ValueListenableBuilder`, a `LayoutBuilder`
 given the outer `context` — is **added** to the enclosing widget's reads; it
 does not release what that widget's own `build` read. A key such a callback
-stops reading is released only on that widget's next own build or when it
-goes. A read through a `LayoutBuilder`'s *own* `context` is additive as well
-— its builder runs during layout, and a nested builder using that context
-cannot be told from it — so what it stops reading goes when its parent
-rebuilds it or it unmounts. The trade is deliberate: an earlier rule that
-released per run dropped the subscriptions of data still on screen.
+stops reading is released only on that widget's next own build that reads,
+or when it goes. For an `itemBuilder` reading through a `LayoutBuilder`'s
+*own* `context`, a scroll is no builder run: what it stops reading goes at
+the `LayoutBuilder`'s next builder run — new constraints, a notification
+from one of its reads, its parent rebuilding it — or when it unmounts. The
+trade is deliberate: an earlier rule that released per run dropped the
+subscriptions of data still on screen.
 
 **Fix.** The same: a row widget — a `TaskTile(id)` — that reads its own
 query, so its reads come and go with it.
 
-## A `LayoutBuilder` keeps the wide layout's query after a resize
+## A `LayoutBuilder` keeps a query picked from an inherited value
 
-**Symptom.** A `LayoutBuilder` (or `OrientationBuilder`) reads one key when
-wide and another when narrow, through its own `context`. After a resize the
-narrow key is read, and the wide one stays observed.
+**Symptom.** A `LayoutBuilder` (or `OrientationBuilder`) picks its key from
+an `InheritedWidget` — a selected tab, a locale, a theme flag — and reads it
+through its own `context`. The selection moves, the new key is read, and the
+old one stays observed.
 
-**Mechanism.** The builder runs during layout, and a nested builder reading
-through that `context` looks exactly like it, so no run can safely release
-what another run read: every read through it is additive. What it stops
-reading is released when the `LayoutBuilder`'s parent rebuilds it — the frame
-after that starts afresh — or when it unmounts. It is bounded by the keys it
-has read, and nothing on screen ever loses its subscription.
+**Mechanism.** A `LayoutBuilder`'s builder runs during layout, and a nested
+builder handed its `context` looks exactly like it, so a read through it
+starts over only when the run is provably the builder's: new constraints (a
+resize releases the wide layout's key), a notification from one of its own
+reads (a key taken from another query), or a new widget from its parent.
+A rebuild caused by an `InheritedWidget` it depends on arrives through
+`didChangeDependencies`, which no read can see, so those reads are additive:
+the old key goes at the next of the three, or when the `LayoutBuilder`
+unmounts. Nothing it shows loses its subscription.
 
-**Fix.** When the key depends on the constraints, read it in a widget of its
-own below the `LayoutBuilder` — `c.maxWidth > 600 ? const WideTasks() :
-const NarrowTasks()`, each reading in its own `build` — and the key goes with
-the widget.
+**Fix.** A key that depends on anything the builder reads belongs in a widget
+of its own below the `LayoutBuilder` — `c.maxWidth > 600 ? const WideTasks()
+: const NarrowTasks()`, each reading in its own `build` — whose own build is
+always provable, and the key goes with the widget.
+
+## A dialog's data stops updating
+
+**Symptom.** A `showDialog` or bottom-sheet builder calls `context.query`
+(or `watchQuery`) with the page's `context`. The dialog shows the value it
+opened with; later changes do not reach it, or it shows a stale value after
+the page rebuilt.
+
+**Mechanism.** A read belongs to the element whose `context` it went through,
+and rebuilds that element: the page, not the dialog, which lives in another
+subtree. And the page's next own build does not read the dialog's key, so it
+is released after that frame while the dialog still shows it. Nothing a
+reader shows *in its own subtree* loses its subscription; a dialog is not in
+the page's.
+
+**Fix.** Give the dialog a reader of its own: read through the `context` the
+dialog builder is given, or in a widget of its own inside the dialog.
 
 ## "QueryClientProvider could not listen to its onlineStatus"
 

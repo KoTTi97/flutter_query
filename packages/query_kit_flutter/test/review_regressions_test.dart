@@ -3159,6 +3159,71 @@ class _RrSameFnOtherCallbacks extends StatelessWidget {
   }
 }
 
+// Release review 2026-09-23, fourth pass.
+
+Set<String> _rrHeld(QueryClient client) => {
+      for (final q in client.queryCache.findAll())
+        if (q.observersCount > 0) q.queryKey.parts.single as String,
+    };
+
+/// An inherited selection a reader depends on (V4-1).
+class _RrSel extends InheritedWidget {
+  const _RrSel({required this.value, required super.child});
+  final int value;
+  static int of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_RrSel>()!.value;
+  @override
+  bool updateShouldNotify(_RrSel old) => old.value != value;
+}
+
+/// Rebuilds [_RrSel] around the same [child] instance: only the dependency
+/// moves, the child is never handed a new widget.
+class _RrSelHolder extends StatefulWidget {
+  const _RrSelHolder({required this.sel, required this.child});
+  final ValueNotifier<int> sel;
+  final Widget child;
+  @override
+  State<_RrSelHolder> createState() => _RrSelHolderState();
+}
+
+class _RrSelHolderState extends State<_RrSelHolder> {
+  @override
+  void initState() {
+    super.initState();
+    widget.sel.addListener(_changed);
+  }
+
+  void _changed() => setState(() {});
+
+  @override
+  void dispose() {
+    widget.sel.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _RrSel(value: widget.sel.value, child: widget.child);
+}
+
+/// Reads `w` in its own build and `inner<tick>` in a nested builder (V4-4).
+class _RrOwnAndNested extends StatelessWidget {
+  // Not const: every parent build hands a new instance, as an inline widget
+  // does.
+  // ignore: prefer_const_constructors_in_immutables
+  _RrOwnAndNested(this.tick);
+  final ValueNotifier<int> tick;
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        Text('w=${context.query(_rr('w')).dataOrNull}'),
+        ValueListenableBuilder<int>(
+          valueListenable: tick,
+          builder: (_, t, __) =>
+              Text('inner$t=${context.query(_rr('inner$t')).dataOrNull}'),
+        ),
+      ]);
+}
+
 void _releaseReview20260923() {
   group('Release review 2026-09-23', () {
     for (final mixin in [true, false]) {
@@ -3530,37 +3595,26 @@ void _releaseReview20260923() {
 
     // Second pass (verification of the fixes above).
 
-    // Third pass (V3-1/V3-2): a LayoutBuilder's reads are additive, so the
-    // key it stopped reading after a resize now stays until its parent
-    // rebuilds it or it unmounts — the bound the docs state. V-B-1 released
-    // it after the resize frame, and dropped visible data doing so.
-    Widget resizable(ValueNotifier<double> width, Widget child,
-            {double height = 100}) =>
-        ValueListenableBuilder<double>(
-          valueListenable: width,
-          // Passed as `child`: the builder keeps its widget, and only its
-          // constraints change.
-          child: child,
-          builder: (_, w, child) =>
-              Center(child: SizedBox(width: w, height: height, child: child)),
-        );
-
     queryWidgetTest(
-        'V-B-1 (V3-1): a LayoutBuilder keeps the key it stopped reading after '
-        'a resize until its parent rebuilds it, and releases it then',
-        (tester, client) async {
+        'V-B-1: a LayoutBuilder reading through its own context releases the '
+        'key it stopped reading', (tester, client) async {
       final width = ValueNotifier<double>(800);
       addTearDown(width.dispose);
-      Widget tree() => app(
-          client,
-          resizable(
-              width,
-              LayoutBuilder(
-                builder: (context, c) => Text(c.maxWidth > 600
-                    ? 'wide=${context.query(_rr('wide')).dataOrNull}'
-                    : 'narrow=${context.query(_rr('narrow')).dataOrNull}'),
-              )));
-      await tester.pumpWidget(tree());
+      await tester.pumpWidget(app(
+        client,
+        ValueListenableBuilder<double>(
+          valueListenable: width,
+          // Passed as `child`: the LayoutBuilder keeps its widget, and only
+          // its constraints change.
+          child: LayoutBuilder(
+            builder: (context, c) => Text(c.maxWidth > 600
+                ? 'wide=${context.query(_rr('wide')).dataOrNull}'
+                : 'narrow=${context.query(_rr('narrow')).dataOrNull}'),
+          ),
+          builder: (_, w, child) =>
+              Center(child: SizedBox(width: w, height: 100, child: child)),
+        ),
+      ));
       await tester.pump();
       expect(_rrObservers(client, 'wide'), 1);
 
@@ -3569,8 +3623,7 @@ void _releaseReview20260923() {
       await tester.pump();
       expect(find.text('narrow=narrow-0'), findsOneWidget);
       expect(_rrObservers(client, 'narrow'), 1);
-      // Additive: bounded by the keys it has read, not released here.
-      expect(_rrObservers(client, 'wide'), 1);
+      expect(_rrObservers(client, 'wide'), 0);
 
       // Frames that do not re-run the builder keep what it read.
       client.setQueryData<String>(QueryKey(const <Object?>['narrow']), 'n1');
@@ -3578,35 +3631,24 @@ void _releaseReview20260923() {
       await tester.pump();
       expect(find.text('narrow=n1'), findsOneWidget);
       expect(_rrObservers(client, 'narrow'), 1);
-
-      // The parent hands it a new widget: that frame is a generation.
-      await tester.pumpWidget(tree());
-      await tester.pump();
-      expect(find.text('narrow=n1'), findsOneWidget);
-      expect(_rrObservers(client, 'narrow'), 1);
-      expect(_rrObservers(client, 'wide'), 0);
-
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-      expect(_rrObservers(client, 'narrow'), 0);
     });
 
     queryWidgetTest(
-        'V-B-1 (V3-1): an OrientationBuilder releases the key of the '
-        'orientation it left once it is rebuilt or unmounts',
-        (tester, client) async {
+        'V-B-1: an OrientationBuilder releases the key of the orientation it '
+        'left', (tester, client) async {
       final width = ValueNotifier<double>(800);
       addTearDown(width.dispose);
       await tester.pumpWidget(app(
         client,
-        resizable(
-          width,
-          height: 500,
-          OrientationBuilder(
+        ValueListenableBuilder<double>(
+          valueListenable: width,
+          child: OrientationBuilder(
             builder: (context, o) => Text(o == Orientation.landscape
                 ? 'l=${context.query(_rr('land')).dataOrNull}'
                 : 'p=${context.query(_rr('port')).dataOrNull}'),
           ),
+          builder: (_, w, child) =>
+              Center(child: SizedBox(width: w, height: 500, child: child)),
         ),
       ));
       await tester.pump();
@@ -3615,12 +3657,7 @@ void _releaseReview20260923() {
       await tester.pump();
       await tester.pump();
       expect(find.text('p=port-0'), findsOneWidget);
-      expect(_rrObservers(client, 'land'), 1);
-      expect(_rrObservers(client, 'port'), 1);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
       expect(_rrObservers(client, 'land'), 0);
-      expect(_rrObservers(client, 'port'), 0);
     });
 
     for (final (kind, read) in [
@@ -3946,6 +3983,251 @@ void _releaseReview20260923() {
       await tester.pumpWidget(const SizedBox());
       expect(client.onlineManager.isOnline(), isTrue,
           reason: 'last speaker gone, client still offline');
+    });
+
+    // Fourth pass (verification of the third).
+
+    for (final layout in [true, false]) {
+      queryWidgetTest(
+          'V4-1: a ${layout ? 'LayoutBuilder' : 'Builder'} whose key comes '
+          'from another query releases the key it left',
+          (tester, client) async {
+        client.setQueryData<String>(QueryKey(const <Object?>['sel']), '0');
+        for (var i = 0; i < 6; i++) {
+          client.setQueryData<String>(QueryKey(<Object?>['item$i']), 'v$i');
+        }
+        Widget reader(BuildContext context) {
+          final key = 'item${context.query(_rr('sel')).dataOrNull}';
+          return Text('$key=${context.query(_rr(key)).dataOrNull}');
+        }
+
+        await tester.pumpWidget(app(
+            client,
+            layout
+                ? LayoutBuilder(builder: (context, _) => reader(context))
+                : Builder(builder: reader)));
+        await tester.pump();
+        for (var i = 1; i < 6; i++) {
+          client.setQueryData<String>(QueryKey(const <Object?>['sel']), '$i');
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('item$i=v$i'), findsOneWidget);
+        }
+        expect(_rrHeld(client), {'sel', 'item5'});
+      });
+    }
+
+    queryWidgetTest(
+        'V4-1: a LayoutBuilder stops polling the key of the layout it left',
+        (tester, client) async {
+      final fetches = <String, int>{};
+      QueryObserverOptions<String> polling(String key) => QueryObserverOptions(
+            queryKey: QueryKey(<Object?>[key]),
+            refetchInterval: const RefetchInterval.every(Duration(seconds: 1)),
+            queryFn: (_) async {
+              fetches[key] = (fetches[key] ?? 0) + 1;
+              return key;
+            },
+          );
+      final width = ValueNotifier<double>(800);
+      addTearDown(width.dispose);
+      await tester.pumpWidget(app(
+        client,
+        ValueListenableBuilder<double>(
+          valueListenable: width,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final key = c.maxWidth > 600 ? 'wide' : 'narrow';
+              return Text('$key=${context.query(polling(key)).dataOrNull}');
+            },
+          ),
+          builder: (_, w, child) =>
+              Center(child: SizedBox(width: w, height: 100, child: child)),
+        ),
+      ));
+      await tester.pump();
+      width.value = 300;
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('narrow=narrow'), findsOneWidget);
+      final before = fetches['wide'] ?? 0;
+      for (var s = 0; s < 5; s++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(fetches['wide'] ?? 0, before);
+      expect(fetches['narrow'], greaterThan(1));
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    for (final layout in [true, false]) {
+      queryWidgetTest(
+          'V4-1: a ${layout ? 'LayoutBuilder' : 'Builder'} whose key comes '
+          'from an InheritedWidget: ${layout ? 'additive, as documented' : 'released'}',
+          (tester, client) async {
+        for (var i = 0; i < 6; i++) {
+          client.setQueryData<String>(QueryKey(<Object?>['item$i']), 'v$i');
+        }
+        final sel = ValueNotifier<int>(0);
+        addTearDown(sel.dispose);
+        Widget reader(BuildContext context) {
+          final key = 'item${_RrSel.of(context)}';
+          return Text('$key=${context.query(_rr(key)).dataOrNull}');
+        }
+
+        await tester.pumpWidget(app(
+            client,
+            _RrSelHolder(
+                sel: sel,
+                child: layout
+                    ? LayoutBuilder(builder: (context, _) => reader(context))
+                    : Builder(builder: reader))));
+        await tester.pump();
+        for (var i = 1; i < 6; i++) {
+          sel.value = i;
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('item$i=v$i'), findsOneWidget);
+        }
+        // Flutter gives no hook for a LayoutBuilder rebuilt by a dependency:
+        // its builder's run cannot be told from a nested builder's, so the
+        // reads stay additive until it unmounts or its parent rebuilds it.
+        expect(_rrHeld(client),
+            layout ? {for (var i = 0; i < 6; i++) 'item$i'} : {'item5'});
+        await tester.pumpWidget(app(client, const SizedBox()));
+        await tester.pump();
+        expect(_rrHeld(client), isEmpty);
+      });
+    }
+
+    queryWidgetTest(
+        'V4-2: a provider whose initState threw with initial: false leaves '
+        'the client online', (tester, client) async {
+      final online = StreamController<bool>();
+      addTearDown(online.close);
+      final status = OnlineStatus.stream(online.stream, initial: false);
+      await tester
+          .pumpWidget(app(client, const SizedBox(), onlineStatus: status));
+      await tester.pumpWidget(const SizedBox());
+      expect(client.onlineManager.isOnline(), isTrue);
+      await tester
+          .pumpWidget(app(client, const SizedBox(), onlineStatus: status));
+      expect(tester.takeException(), isA<FlutterError>());
+      expect(client.onlineManager.isOnline(), isTrue);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(app(client, const SizedBox()));
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    queryWidgetTest(
+        'V4-2: a failing provider leaves another speaker\'s verdict alone',
+        (tester, client) async {
+      final online = StreamController<bool>();
+      addTearDown(online.close);
+      online.stream.listen((_) {});
+      await tester.pumpWidget(QueryClientProvider(
+        client: client,
+        observeAppLifecycle: false,
+        onlineStatus: const OnlineStatus.fixed(false),
+        child: QueryClientProvider(
+          client: client,
+          observeAppLifecycle: false,
+          onlineStatus: OnlineStatus.stream(online.stream, initial: true),
+          child: const SizedBox(),
+        ),
+      ));
+      expect(tester.takeException(), isA<FlutterError>());
+      // The failing one applied `initial: true` before it threw; the verdict
+      // that stands is not its to restore.
+      await tester.pumpWidget(QueryClientProvider(
+        client: client,
+        observeAppLifecycle: false,
+        onlineStatus: const OnlineStatus.fixed(false),
+        child: const SizedBox(),
+      ));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    queryWidgetTest(
+        'V4-3: rows read inline with one key and function but their own '
+        'scope assert', (tester, client) async {
+      await tester.pumpWidget(app(
+          client,
+          Builder(
+              builder: (context) => Column(children: [
+                    for (final id in [1, 2])
+                      Text(
+                          '${context.mutation(MutationOptions<String, int, Object?>(
+                                mutationKey:
+                                    QueryKey(const <Object?>['delete']),
+                                mutationFn: _rrSave,
+                                scope: MutationScope('task-$id'),
+                              )).value.status}'),
+                  ]))));
+      final error = tester.takeException();
+      expect(error, isA<FlutterError>());
+      expect('$error', contains('id:'));
+    });
+
+    queryWidgetTest(
+        'V4-3: the same scope, retry and network mode read twice are one '
+        'mutation', (tester, client) async {
+      late MutationController<String, int, Object?> a, b;
+      MutationOptions<String, int, Object?> options() => MutationOptions(
+            mutationKey: QueryKey(const <Object?>['delete']),
+            mutationFn: _rrSave,
+            scope: const MutationScope('tasks'),
+            retry: RetryPolicy.times(2),
+            networkMode: NetworkMode.always,
+            gcTime: const GcTime.duration(Duration(minutes: 1)),
+          );
+      await tester.pumpWidget(app(client, Builder(builder: (context) {
+        a = context.mutation(options());
+        b = context.mutation(options());
+        return const SizedBox();
+      })));
+      expect(tester.takeException(), isNull);
+      expect(identical(a, b), isTrue);
+    });
+
+    queryWidgetTest(
+        'V4-4: a reader handed a new widget in the epoch its generation '
+        'opened keeps its own reads through a nested-only frame',
+        (tester, client) async {
+      for (final k in ['w', 'inner0', 'inner1']) {
+        client.setQueryData<String>(QueryKey(<Object?>[k]), '${k}0');
+      }
+      final tick = ValueNotifier<int>(0);
+      final parent = ValueNotifier<int>(0);
+      addTearDown(tick.dispose);
+      addTearDown(parent.dispose);
+      var show = false;
+      late StateSetter setHost;
+      await tester
+          .pumpWidget(app(client, StatefulBuilder(builder: (context, set) {
+        setHost = set;
+        if (!show) return const SizedBox();
+        return ValueListenableBuilder<int>(
+            valueListenable: parent,
+            builder: (_, __, ___) => _RrOwnAndNested(tick));
+      })));
+      await tester.pump();
+      // What runApp's attach does: a build outside any frame, sharing its
+      // epoch with the first frame, in which the parent rebuilds.
+      setHost(() => show = true);
+      tester.binding.buildOwner!.buildScope(tester.binding.rootElement!);
+      parent.value++;
+      await tester.pump();
+      await tester.pump();
+      tick.value = 1;
+      await tester.pump();
+      await tester.pump();
+      expect(_rrHeld(client), contains('w'));
+      client.setQueryData<String>(QueryKey(const <Object?>['w']), 'w1');
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('w=w1'), findsOneWidget);
     });
   });
 }

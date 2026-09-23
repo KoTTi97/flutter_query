@@ -227,8 +227,11 @@ in one `build` without an `id:` would share one controller, and whichever was
 read last would run for both — its function and its callbacks alike. When
 their mutation functions or callbacks (`onMutate`, `onSuccess`, `onError`,
 `onSettled`) differ, a debug build catches it with an assertion: "delete,
-then pop" and "delete, then show a snackbar" are two mutations. Give each an
-`id:`.
+then pop" and "delete, then show a snackbar" are two mutations. So does a
+different `scope`, `retry`, `retryDelay`, `networkMode` or `gcTime`: rows
+reading `MutationScope('task-$id')` inline under one key would otherwise
+share one queue. Give each an `id:`. `meta` is not compared — it is most
+often a map literal, new on every build — and the last read's wins.
 
 The same functions read twice are one mutation and do not assert: a getter
 over one stored options object, options built around tear-offs or top-level

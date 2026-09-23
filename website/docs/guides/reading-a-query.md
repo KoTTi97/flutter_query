@@ -44,18 +44,25 @@ Things to know:
   `ValueListenableBuilder`, an `AnimatedBuilder`, a `LayoutBuilder` — is added
   to the enclosing widget's reads and does not release what its own `build`
   read. A key such a callback stops reading is released on that widget's next
-  own build or when it goes.
+  own build that reads, or when it goes — so read in `build` itself: a
+  `build` that leaves every read to a nested builder never starts over.
 - A read through a `LayoutBuilder`'s or `OrientationBuilder`'s **own
-  `context`** is additive too. Its builder runs during layout, and a nested
-  builder using that context looks exactly like it, so no run of it can
-  safely release what another run read. Nothing it shows ever loses its
-  subscription; the cost is that a key it stopped reading — the wide
-  layout's, after a resize — stays subscribed until the `LayoutBuilder`'s
-  parent rebuilds it or it goes. That is bounded by the keys it has read.
-  **When the key depends on the constraints, read it in a widget of its own
-  below the `LayoutBuilder`**: `LayoutBuilder(builder: (_, c) => c.maxWidth >
-  600 ? const WideTasks() : const NarrowTasks())`, each reading in its own
-  `build`, and the key goes with the widget.
+  `context`** starts over when its builder provably runs: new constraints
+  (the wide layout's key goes after a resize), a notification from one of
+  its own reads, or a new widget from its parent. A nested builder handed
+  that context looks exactly like the builder, so its reads are additive.
+  One rebuild carries no signal — an `InheritedWidget` the builder depends on
+  changing — and a key picked from an inherited value stays subscribed until
+  the next of those. **A key that depends on anything the builder reads
+  belongs in a widget of its own below the `LayoutBuilder`**:
+  `LayoutBuilder(builder: (_, c) => c.maxWidth > 600 ? const WideTasks() :
+  const NarrowTasks())`, each reading in its own `build`, and the key goes
+  with the widget.
+- **A read rebuilds the element whose `context` it went through.** A dialog
+  or bottom sheet reading through the page's `context` is not rebuilt by a
+  change, and its key goes at the page's next build. Nothing a reader shows
+  *in its own subtree* loses its subscription; give a dialog a reader of its
+  own.
 - **Lists: do not read through the `context` an `itemBuilder` is given.** A
   `ListView.builder`, `GridView.builder`, `PageView.builder` or any other
   lazily built list hands its item builder the whole list's context, not the
@@ -67,7 +74,8 @@ Things to know:
   build such a read is additive: no row on screen loses its subscription,
   and the rows scrolled away stay subscribed until the list is rebuilt or
   goes.) An item builder reading through an *enclosing* `LayoutBuilder`'s
-  context is the same trade, without the debug error.
+  context is additive the same way, without the debug error: rows scrolled
+  away go at the `LayoutBuilder`'s next builder run.
 - Each reading widget gets observers of its own. What is shared is the query in
   the cache, which the core deduplicates.
 - A widget that stops calling `context.query` *altogether* gives no signal

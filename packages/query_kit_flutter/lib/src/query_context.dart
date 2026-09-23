@@ -37,19 +37,35 @@
 /// callback that runs later with that context — the outer `context` inside
 /// a nested `ValueListenableBuilder`, `AnimatedBuilder` or `LayoutBuilder` —
 /// makes *additive* reads: they release nothing the element's own build
-/// read, and a key such a callback stops reading stays subscribed until that
-/// element's own next build or unmount (release review 2026-09-23, BIND-1).
+/// read, and a key such a callback stops reading stays subscribed until an
+/// own build of that element that reads through this context, or its
+/// unmount (release review 2026-09-23, BIND-1). A `build` that reads nothing
+/// itself and leaves every read to a nested builder never starts over: what
+/// the nested builder has ever read stays until the parent rebuilds the
+/// widget or it unmounts (fourth pass, V4-5). Read in `build`, or give the
+/// nested part a widget of its own.
 ///
-/// A `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` has no build
-/// of that kind to tell apart: its builder runs during layout, and a nested
-/// builder using that context looks exactly like it. So every read through
-/// it is additive too (third pass, V3-1/V3-2): nothing it shows ever loses
-/// its subscription, and a key it stopped reading — the wide layout's,
-/// after a resize — stays subscribed until the `LayoutBuilder`'s parent
-/// rebuilds it (the frame after that is a fresh start) or it unmounts. That
-/// is bounded by the keys it has read, not zero. When the key depends on the
-/// constraints, read it in a widget of its own below the `LayoutBuilder`,
-/// and the key goes with the widget.
+/// A `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` is read
+/// from its builder, which runs during layout, and from any nested builder
+/// handed that context. Its builder run is told apart by what makes it run
+/// (fourth pass, V4-1): a new widget from its parent, new constraints — the
+/// wide layout's key goes after a resize — or a notification from one of
+/// its own reads, as when the key comes from another query. Every other
+/// read through it is additive (third pass, V3-1/V3-2). One rebuild has no
+/// such signal: a `LayoutBuilder` rebuilt because an `InheritedWidget` it
+/// depends on changed. A key picked from an inherited value there stays
+/// subscribed until the next resize, notification or parent rebuild. A key
+/// that depends on anything the builder reads belongs in a widget of its
+/// own below the `LayoutBuilder`, and goes with that widget.
+///
+/// **Only this element, only its subtree.** A read rebuilds the element
+/// `context` names and lives as long as that element's own builds keep
+/// reading it. Reading through a page's `context` from another subtree — a
+/// `showDialog` or bottom-sheet builder, an overlay — is such a read too: a
+/// change rebuilds the page, not the dialog, and the page's next own build
+/// releases it while the dialog may still show it. Nothing a reader shows
+/// *in its own subtree* loses its subscription; a dialog reads through a
+/// context of its own — its builder's, or a widget of its own inside it.
 ///
 /// **Not through a list's item-builder context.** The `context` a
 /// `ListView.builder`, `GridView.builder`, `PageView.builder` or another
@@ -98,9 +114,10 @@ extension QueryContext on BuildContext {
   /// or unmounts. With an [id] the observer follows a changed key instead;
   /// [id] also tells apart two reads of one key in the same widget. "Build"
   /// is the widget's own: a read through a nested builder's outer `context`
-  /// or through a `LayoutBuilder`'s `context` is additive, and what it stops
-  /// reading goes at the next own build, the parent's next rebuild or
-  /// unmount (see the library doc).
+  /// is additive, and what it stops reading goes at the next own build that
+  /// reads through this context, or at unmount. A `LayoutBuilder`'s builder
+  /// run is its own build when its constraints changed, its parent rebuilt
+  /// it or one of its reads notified (see the library doc).
   ///
   /// Always on the provider's client; see the library doc on why there is no
   /// `client:` here. Options built inline are re-applied on every build, as
@@ -186,8 +203,11 @@ extension QueryContext on BuildContext {
   /// is a category, as upstream's is, not a name: two mutations under one key
   /// with the same types would share a controller, so two reads of one
   /// identity in one build with *different* mutation functions or callbacks
-  /// (`onMutate`, `onSuccess`, `onError`, `onSettled`), without [id], are a
-  /// debug assertion. The same functions read twice — one stored options
+  /// (`onMutate`, `onSuccess`, `onError`, `onSettled`), or a different
+  /// `scope`, `retry`, `retryDelay`, `networkMode` or `gcTime`, without
+  /// [id], are a debug assertion — rows reading `MutationScope('task-$id')`
+  /// inline under one key would otherwise share one queue. `meta` is not
+  /// compared: the last read's wins. The same functions read twice — one stored options
   /// object, tear-offs, top-level functions — are one mutation, and so is a
   /// nested builder re-reading what `build` read; a function literal is a
   /// new function each time it is built, so keep it in a field or read once.

@@ -22,15 +22,23 @@
 /// `AnimatedBuilder` in `build` — also reads for this `State`, but that
 /// callback re-runs on its own, so its reads are *additive*: they release
 /// nothing `build` read, and a key the callback stops reading stays
-/// subscribed until this `State`'s own next build or disposal (release
-/// review 2026-09-23, BIND-1). Nothing shown ever loses its subscription
-/// this way; the cost is bounded by the keys the callbacks have read. A
-/// `LayoutBuilder` whose builder switches keys with its constraints, or a
-/// `ListView.builder`'s `itemBuilder`, is such a callback too: the key of
-/// the layout left, or the rows scrolled away, stay subscribed until this
-/// `State` builds again. Where that matters — a long list above all, or a
-/// key that depends on constraints — give the nested part, or each row, a
-/// widget of its own.
+/// subscribed until an own `build` of this `State` that calls `watchQuery`
+/// or `watchMutation`, or its disposal (release review 2026-09-23, BIND-1).
+/// A `build` that reads nothing itself, leaving every read to a nested
+/// builder, never starts over: the callback's keys stay until the parent
+/// rebuilds this `State`'s widget or it is disposed (fourth pass, V4-5). Nothing shown in this `State`'s subtree ever loses
+/// its subscription this way; the cost is bounded by the keys the callbacks
+/// have read since the last own build that read. A `LayoutBuilder` whose
+/// builder switches keys with its constraints, or a `ListView.builder`'s
+/// `itemBuilder`, is such a callback too: the key of the layout left, or the
+/// rows scrolled away, stay subscribed until this `State` builds again.
+/// Where that matters — a long list above all, or a key that depends on
+/// constraints — give the nested part, or each row, a widget of its own.
+///
+/// A read belongs to this `State` and rebuilds it, whoever made it: a
+/// dialog or sheet builder calling `watchQuery` is not rebuilt by a change,
+/// and its keys go at this `State`'s next `build` that reads. Give a dialog
+/// a reader of its own.
 library;
 
 import 'package:flutter/scheduler.dart';

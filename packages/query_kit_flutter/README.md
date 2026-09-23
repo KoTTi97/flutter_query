@@ -84,12 +84,17 @@ its own small widget. Read in `build`, not in a handler: the read is reconciled
 against the previous build. A read through the outer `context` inside a
 nested builder callback — a `ValueListenableBuilder`, a `LayoutBuilder` — is
 added to the enclosing widget's reads and does not release them; a key such a
-callback stops reading goes on that widget's next own build. A
-`LayoutBuilder`'s *own* `context` is additive too — its builder runs during
-layout and cannot be told apart from a nested builder using that context — so
-nothing it shows loses its subscription, and a key it stopped reading after a
-resize stays until its parent rebuilds it or it unmounts. When the key depends
-on the constraints, read it in a widget of its own below the `LayoutBuilder`.
+callback stops reading goes at that widget's next own build that reads (a
+`build` that reads nothing itself never starts over — read in `build`). A
+`LayoutBuilder`'s *own* `context` starts over when its builder runs because
+its constraints changed, its parent rebuilt it or one of its reads notified:
+the wide layout's key goes after a resize. A rebuild caused by an
+`InheritedWidget` the builder depends on gives no such signal, so a key picked
+from an inherited value stays until the next of those; a key that depends on
+anything the builder reads belongs in a widget of its own below it. A read
+rebuilds the element whose `context` it went through — a dialog reading
+through its page's `context` is not rebuilt by a change and loses the key at
+the page's next build, so give a dialog a reader of its own.
 **In a list, do not read through the `context` an `itemBuilder` is
 given** — it is the whole list's, not the row's, and a debug build throws a
 `FlutterError` naming the fix. Give each row a widget of its own,
@@ -206,8 +211,9 @@ identified by `id`, else by its `mutationKey`, each together with its three
 type arguments; without either, by the types alone. A `mutationKey` is a
 category, as upstream's is, not a name: two mutations read in one build with
 the same key and types would share a controller, so two such reads with
-*different* mutation functions or callbacks are a debug assertion — give each
-an `id`. The same functions read twice — one stored options object, tear-offs
+*different* mutation functions or callbacks, or a different `scope`, `retry`,
+`retryDelay`, `networkMode` or `gcTime`, are a debug assertion — give each
+an `id` (`meta` is not compared; the last read's wins). The same functions read twice — one stored options object, tear-offs
 — are one mutation and do not assert; a function literal is new on every build, so
 keep it in a field or read the mutation once. Like a query, it is released
 after the frame once a build stops reading it.

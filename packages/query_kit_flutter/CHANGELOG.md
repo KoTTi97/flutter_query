@@ -63,8 +63,8 @@ fetching, upstream's `useIsFetching`.
   online once no other provider has a status for that client: a replacement
   provider on the same client — a new key, a move to another parent — keeps
   its own verdict. A provider whose mount failed — the single-subscription
-  stream listened to twice — counts for nobody and leaves the client
-  unmounted. A failing `cancel()` of the subscription is reported
+  stream listened to twice — counts for nobody, applies no online verdict
+  (not even its `initial`) and leaves the client unmounted. A failing `cancel()` of the subscription is reported
   through `FlutterError.reportError`.
 - The first `resumed` after app start is not a focus change, so mounted
   queries do not refetch at startup.
@@ -89,15 +89,18 @@ fetching, upstream's `useIsFetching`.
   builder callback — a `ValueListenableBuilder`, an `AnimatedBuilder`, a
   `LayoutBuilder` — is additive to the enclosing reader: it does not release
   what the reader's own `build` read, and a key such a callback stops reading
-  is released on the reader's next own build or disposal. A
-  `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` is additive
-  too: its builder runs during layout, and a nested builder using that
-  context cannot be told apart from it, so no run of it releases what
-  another run read. Nothing it shows loses its subscription; a key it stops
-  reading — the wide layout's, after a resize — stays subscribed until its
-  parent rebuilds it or it unmounts, bounded by the keys it has read. When
-  the key depends on the constraints, read it in a widget below the
-  `LayoutBuilder`.
+  is released on the reader's next own build that reads, or disposal. A
+  `LayoutBuilder`'s or `OrientationBuilder`'s *own* `context` starts over
+  when its builder runs because its parent rebuilt it, its constraints
+  changed — the wide layout's key goes after a resize — or one of its own
+  reads notified; a nested builder using that context is additive. A
+  rebuild caused by an `InheritedWidget` it depends on carries no signal, so
+  a key picked from an inherited value stays until the next of those: a key
+  that depends on anything the builder reads belongs in a widget below the
+  `LayoutBuilder`. Nothing a reader shows in its own subtree loses its
+  subscription; a dialog or sheet reading through a page's `context` is not
+  rebuilt by a change and loses the key at the page's next build, so give
+  it a reader of its own.
 - `context.query`, `context.selectQuery`, `context.infiniteQuery` and
   `context.mutation` called with the `context` a lazily built list hands its
   item builder — `ListView.builder`, `GridView.builder`, `PageView.builder`,
@@ -125,7 +128,10 @@ fetching, upstream's `useIsFetching`.
 - A `mutationKey` is a category, not a name: two mutation reads of one shape
   under one key in the reader's own `build`, without an `id`, with different
   mutation functions or callbacks (`onMutate`, `onSuccess`, `onError`,
-  `onSettled`), are a debug assertion — give each an `id`. They used to
+  `onSettled`), or a different `scope`, `retry`, `retryDelay`, `networkMode`
+  or `gcTime` — rows reading `MutationScope('task-$id')` inline would share
+  one queue — are a debug assertion; give each an `id`. `meta` is not
+  compared, and the last read's wins. They used to
   share one controller silently, so whichever was read last ran for both.
   The same functions read twice — one stored options object, tear-offs,
   top-level functions — are one mutation and do not assert, and neither does
