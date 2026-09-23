@@ -206,8 +206,9 @@ has to check for "nothing changed" itself.
 
 - **A `sealed` result family.** A freezed union (`Loaded`, `Empty`) where
   one variant wraps a list implements `StructurallyShareable` on the base
-  type. `shareWith` checks that both are the same variant and otherwise
-  returns `this`.
+  type. The walk asks only when both values have the same runtime type, so
+  `shareWith` always sees two of the same variant, and a change of variant
+  replaces the value whole.
 - **A normalised response.** For `byId` maps, see [Normalised data or one
   key per entity](normalised-vs-per-entity-keys.md).
 - **Turning sharing off.** For very large payloads that always change, see
@@ -218,7 +219,8 @@ has to check for "nothing changed" itself.
 In the select and structural sharing demo, five readers show one cache
 entry, and each counts its *data builds*: the builds where its value was not
 `==` to the one before. Press *Refetch*. Equal data comes back, and no count
-moves. Press *Rename todo 2*, and only the readers that show the texts move.
+moves. Press *Rename todo 2*, and only the reader that holds the list of texts
+moves, with the control reader that has no `select`.
 Then switch *Structural sharing off* and press *Refetch* again. The data is
 equal, but the list is now a new instance, and the readers that hold a list
 count a build for nothing. A wrapper class without `StructurallyShareable`

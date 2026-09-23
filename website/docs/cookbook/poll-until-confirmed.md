@@ -213,6 +213,11 @@ a confirmation, so a second tap cannot race the first.
 - **A callback in `enabled` instead of the interval.** Turning the query off
   when nothing is pending also turns off every refetch on focus, mount and
   reconnect. The interval is the only thing that should change.
+- **Trusting two clocks.** `gaveUp` compares the server's `pendingSince`
+  with the device's clock, and a phone whose clock is off by a minute gives
+  up at once or far too late. When that matters, let the server send the
+  deadline or the seconds left instead of a timestamp, or time out from the
+  moment the app received the accepted answer.
 - **Giving up only on errors.** A device that stays offline does not make the
   server fail. The server keeps answering *pending*, so the error count stays
   at zero. The deadline catches that case.

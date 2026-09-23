@@ -268,10 +268,11 @@ final project = context.watch<QueryController<Project, Project>>().value;
 - **Copying the result into the store.** A `state = controller.value` that
   also saves `data` in a second field creates two truths. The copy does not
   change when a background refetch does. Publish the `QueryResult` itself.
-- **Forgetting `dispose`.** A controller that is still listened to keeps its
-  query observed. The query then never goes stale in the "nobody is watching"
-  sense, and it is never garbage collected. Every recipe above disposes the
-  controller at the same point where its owner is disposed.
+- **Forgetting `dispose`.** A controller that still has a listener keeps its
+  query active: it goes on refetching on focus, on reconnect and on its
+  interval, and the entry is never garbage collected. Every recipe above
+  removes its listener and disposes the controller at the same point where
+  its owner is disposed.
 - **A second client.** A `QueryClient()` created inside a provider that
   rebuilds (a Riverpod provider that `watch`es something that changes, or a
   `create` that runs more than once) starts over with an empty cache. The
@@ -288,18 +289,21 @@ final project = context.watch<QueryController<Project, Project>>().value;
 - **No store at all.** Many screens need none of this.
   [Reading queries in widgets](../guides/reading-queries-in-widgets.md) shows
   the four equal call styles, which read the cache directly.
-- **A derived value only.** When the store needs one field of the result, pass
-  `projectQuery(id).withSelect((p) => p.openTasks)` to
-  `QueryController.create`. The controller then publishes the selected value,
-  and [render optimisations](../guides/render-optimizations.md) explain when
-  it notifies.
+- **A derived value only.** When the store needs one field of the result,
+  create the controller with the unnamed constructor,
+  `QueryController(client, projectQuery(id).withSelect((p) => p.openTasks))`.
+  `QueryController.create` takes options without a `select` only. The
+  controller then publishes the selected value, and [render
+  optimisations](../guides/render-optimizations.md) explain when it
+  notifies.
 
 ## See it run
 
 The four call styles demo reads one cache entry through `context.query`,
 `QueryBuilder`, `QueryMixin` and `QueryController`. The controller is the
-adapter this whole page builds on. Press one style's *Increment* button and
-watch the other readers update from the same entry.
+adapter this whole page builds on. Press *Refetch* at the top, which goes
+through card 4's controller: one request goes out, and all five readers show
+the new data from the same entry.
 
 <LiveDemo feature="four-call-styles" height={720} />
 

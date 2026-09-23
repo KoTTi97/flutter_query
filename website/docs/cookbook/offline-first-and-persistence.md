@@ -319,8 +319,8 @@ Future<void> main() async {
 
 ## See it run
 
-In the offline demo, switch *Online* off and press *Add todo*. The write
-pauses and waits, and the list keeps its data. Switch it back on and the write
+In the offline demo, switch *Online* off, type a todo and press *Add todo*.
+The write pauses and waits, and the list keeps its data. Switch it back on and the write
 goes out, followed by the refetch its success triggers.
 
 <LiveDemo feature="offline" height={760} />

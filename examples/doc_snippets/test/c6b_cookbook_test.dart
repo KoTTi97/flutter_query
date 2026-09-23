@@ -157,6 +157,32 @@ void main() {
     await tearDownClient(tester, client);
   });
 
+  testWidgets('removing first: the next poll tick fetches the device again',
+      (tester) async {
+    final client = buildDeviceClient();
+    final connection = DeviceConnection('kitchen');
+    await tester.pumpWidget(QueryClientProvider(
+      client: client,
+      child: MaterialApp(
+        home: Scaffold(body: DeviceScreen(connection: connection)),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    client.removeQueries(
+      filters: QueryFilters(queryKey: DeviceKeys.device('kitchen')),
+    );
+    expect(client.getQueryState<DeviceStatus>(DeviceKeys.status('kitchen')),
+        isNull);
+    await tester.pump(const Duration(seconds: 3));
+    expect(
+      client.getQueryState<DeviceStatus>(DeviceKeys.status('kitchen'))?.data,
+      const DeviceStatus(temperature: 21.5),
+    );
+
+    await tearDownClient(tester, client);
+  });
+
   test('shareById keeps the contacts that did not change', () {
     const ada = Contact(id: 'c1', name: 'Ada');
     const bob = Contact(id: 'c2', name: 'Bob');

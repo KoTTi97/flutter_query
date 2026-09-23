@@ -1,7 +1,7 @@
 ---
 title: Disconnecting a device
 sidebar_label: Device and IoT disconnect
-description: Stop every query for a device the user disconnected, with no request sent to it afterwards and no entry that comes back.
+description: Stop every query for a device the user disconnected, with no request sent to it afterwards and no old reading left in the cache.
 sidebar_position: 17
 ---
 
@@ -183,9 +183,14 @@ Future<void> disconnect(QueryClient client, DeviceConnection connection) async {
 
 `endOfFrame` waits for the rebuild that `close()` scheduled. When it
 completes, every reader of the device has switched to disabled options, and
-removing the entries leaves nothing that would recreate them. Removing an
-entry also cancels a fetch it still has in flight, silently, so no separate
+nothing fetches or polls the removed entries again. Removing an entry also
+cancels a fetch it still has in flight, silently, so no separate
 `cancelQueries` call is needed.
+
+A reader that is still mounted and builds again after the removal resolves
+its key afresh. It brings back an *empty* entry: no data and no request,
+because its options are disabled. The old reading is gone either way, and
+the empty entry is garbage collected `gcTime` after its last reader leaves.
 
 ## Steps
 
