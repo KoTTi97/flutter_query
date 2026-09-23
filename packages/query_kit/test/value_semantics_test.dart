@@ -492,6 +492,13 @@ void main() {
       expect(copy.fetchFailureStackTrace, same(base.fetchFailureStackTrace));
     });
 
+    // A StackTrace compares by identity, so two failures with the same error
+    // would never be equal if it counted; the traces ride along unexamined.
+    test('the stack traces take no part in ==', () {
+      expect(_queryState(vary: 'errorStackTrace'), _queryState());
+      expect(_queryState(vary: 'fetchFailureStackTrace'), _queryState());
+    });
+
     test('the clear flags clear what they name and nothing else', () {
       final base = _queryState();
       final noData = base.copyWith(clearData: true);
@@ -629,6 +636,40 @@ void main() {
               .hashCode,
           isNot(data.hashCode));
     });
+
+    // CombinedData's == reads five things besides its data; each alone must
+    // break it, or a `buildWhen` misses the change.
+    test('each flag CombinedData compares takes part in == and hashCode', () {
+      final base = combine(_queryResult('success'), _queryResult('success'));
+      final variants = <String, CombinedResult<int>>{
+        'isFetching': combine(_queryResult('success', vary: 'fetchStatus'),
+            _queryResult('success', vary: 'fetchStatus')),
+        'isPaused': combine(
+            _queryResult('success', vary: 'paused'), _queryResult('success')),
+        'isPlaceholderData': combine(
+            _queryResult('success', vary: 'isPlaceholderData'),
+            _queryResult('success', vary: 'isPlaceholderData')),
+        'isStale': combine(_queryResult('success', vary: 'isStale'),
+            _queryResult('success', vary: 'isStale')),
+      };
+      expect(base.isFetching, isTrue);
+      expect((base as CombinedData<int>).isStale, isTrue);
+      expect(base.isPlaceholderData, isTrue);
+      for (final MapEntry(key: name, value: changed) in variants.entries) {
+        expect(changed, isA<CombinedData<int>>(), reason: name);
+        expect(changed == base, isFalse, reason: name);
+        expect(changed.hashCode, isNot(base.hashCode), reason: name);
+      }
+      final refetchError =
+          combine(_queryResult('error'), _queryResult('success'));
+      final otherRefetchError = combine(
+          _queryResult('error', vary: 'error'), _queryResult('success'));
+      expect(refetchError, isA<CombinedData<int>>());
+      expect((refetchError as CombinedData<int>).refetchError, 'boom');
+      expect(refetchError.dataOrNull, otherRefetchError.dataOrNull);
+      expect(refetchError == otherRefetchError, isFalse);
+      expect(refetchError.hashCode, isNot(otherRefetchError.hashCode));
+    });
   });
 
   // Options without value equality: the constructor stores, copyWith keeps,
@@ -761,6 +802,41 @@ void main() {
       (o) => o.copyWith(),
     );
   }
+
+  // `behavior` is the one field no table varies: it is `@internal` in the
+  // constructors and absent from every `copyWith`, so a copy must carry it
+  // over untouched — a lost one would turn an infinite query into a plain
+  // one — and the defaulted options must compare it.
+  test('every plain shape carries behavior through copyWith and withSelect',
+      () {
+    final behavior = _Behavior();
+    final shapes = <QueryOptions<int>>[
+      QueryOptions<int>(queryKey: _keyA, behavior: behavior),
+      QueryObserverOptions<int>(queryKey: _keyA, behavior: behavior),
+      QueryObserverOptions<int>(queryKey: _keyA, behavior: behavior)
+          .withSelect(selectA),
+    ];
+    for (final options in shapes) {
+      final type = options.runtimeType;
+      expect(options.behavior, same(behavior), reason: '$type');
+      expect(options.copyWith().behavior, same(behavior), reason: '$type');
+      expect(options.copyWith(meta: 'm').behavior, same(behavior),
+          reason: '$type');
+    }
+    final client = testClient();
+    expect(
+        client.defaultQueryOptions(shapes.first) ==
+            client.defaultQueryOptions(
+                QueryOptions<int>(queryKey: _keyA, behavior: _Behavior())),
+        isFalse);
+    expect(
+        client
+            .defaultQueryObserverOptions<int, int>(
+                shapes[1] as QueryObserverOptions<int>)
+            .behavior,
+        same(behavior));
+    client.clear();
+  });
 
   test('QuerySelectOptions.copyWith(select: …) replaces the projection', () {
     final copy = selecting.copyWith(select: selectB);
@@ -1485,8 +1561,9 @@ QueryState<int> _queryState({String? vary}) => QueryState<int>(
     );
 
 QueryResult<int> _queryResult(String variant, {String? vary}) {
-  final fetchStatus =
-      pick('fetchStatus', vary, FetchStatus.fetching, FetchStatus.idle);
+  final fetchStatus = vary == 'paused'
+      ? FetchStatus.paused
+      : pick('fetchStatus', vary, FetchStatus.fetching, FetchStatus.idle);
   final dataUpdatedAt = pick('dataUpdatedAt', vary, _dateA, _dateB);
   final errorUpdatedAt = pick('errorUpdatedAt', vary, _dateA, _dateB);
   final failureCount = pick('failureCount', vary, 1, 2);
@@ -1781,6 +1858,11 @@ List<Field<O>> _observerFields<O>({
       field('retryOnMount', (o) => read(o).$7, false,
           (o) => change(o, _ObserverChanges(retryOnMount: true))),
     ];
+
+class _Behavior implements FetchBehavior<int> {
+  @override
+  void onFetch(FetchContext<int> context, Query<int> query) {}
+}
 
 class _ObserverChanges {
   _ObserverChanges({

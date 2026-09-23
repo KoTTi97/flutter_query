@@ -267,10 +267,16 @@ void main() {
       expect(find.text('two'), findsOneWidget);
 
       // A resize hands the sliver new constraints: the rule's other proof.
+      // The builder re-runs without its parent, and the read it makes there
+      // must keep the subscription — the next write still reaches it.
       tester.view.physicalSize = const Size(900, 700);
       addTearDown(tester.view.resetPhysicalSize);
       await tester.pump();
       expect(find.text('two'), findsOneWidget);
+
+      client.setQueryData<String>(_key, 'three');
+      await tester.pump();
+      expect(find.text('three'), findsOneWidget);
     });
 
     queryWidgetTest(

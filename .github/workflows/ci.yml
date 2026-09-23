@@ -45,15 +45,16 @@ jobs:
         run: flutter test --platform chrome --exclude-tags vm-only
         working-directory: packages/query_kit_flutter
       # Each floor is the line coverage the suites reached when it was set,
-      # rounded down (core 99.83 %, binding 99.77 %). The few lines left are
-      # defensive branches no public path reaches; raise a floor, never lower
-      # it to make a change pass.
+      # rounded down to a tenth (core 99.83 %, binding 99.77 %, measured on
+      # this Flutter version). The eight lines left are defensive branches no
+      # public path reaches (PORTING_NOTES, "Release 1.0 test gaps"); raise a
+      # floor, never lower it to make a change pass.
       - name: coverage floors
         run: |
           dart pub global activate coverage
           (cd packages/query_kit && dart pub global run coverage:format_coverage --lcov --in=${{ runner.temp }}/core-coverage --out=${{ runner.temp }}/core.lcov --report-on=lib)
-          dart run tool/check_coverage.dart ${{ runner.temp }}/core.lcov 99 --files
-          dart run tool/check_coverage.dart ${{ runner.temp }}/binding.lcov 99 --files
+          dart run tool/check_coverage.dart ${{ runner.temp }}/core.lcov 99.8 --files
+          dart run tool/check_coverage.dart ${{ runner.temp }}/binding.lcov 99.7 --files
       - name: demo tests
         run: flutter test
         working-directory: examples/task_manager

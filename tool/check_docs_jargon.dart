@@ -13,7 +13,14 @@
 // * every `///` line under `packages/*/lib`, which `dart doc` publishes.
 //
 // A line that must keep its reference says so with `<!-- jargon-ok -->`
-// (Markdown) or `// jargon-ok` (a doc comment) anywhere on it.
+// (Markdown), `{/* jargon-ok */}` (MDX, which has no HTML comments) or
+// `// jargon-ok` (a doc comment) anywhere on it. A changelog's `## ` version
+// headings are exempt: a release date there is what a changelog is for.
+//
+// The patterns are written to be blocking: each names a shape the project's
+// bookkeeping uses and ordinary prose does not — an ordinal pass only in
+// parentheses ("(second pass, …)"), not "on the second pass over the list";
+// a finding ID only with its prefix. The self-test holds both sides.
 import 'dart:io';
 
 /// The patterns, each with the name a hit is reported under.
@@ -23,7 +30,9 @@ final List<(String, RegExp)> patterns = [
     RegExp(
       r'\b(?:review rounds?|release review|'
       r'(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)'
-      r' (?:review|pass))\b',
+      r' review)\b|'
+      r'\((?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|'
+      r'tenth) pass\b',
       caseSensitive: false,
     ),
   ),
@@ -35,12 +44,13 @@ final List<(String, RegExp)> patterns = [
   ('upstream pin', RegExp(r'50680b98c')),
   (
     'finding ID',
-    RegExp(r'\b(?:LIB|MU|AR|QE|BIND|REL)-\d+\b|\bV-[BC]-\d+\b|\bV\d-\d+\b'),
+    RegExp(r'\b(?:LIB|MU|AR|QE|BIND|REL|API|IN)-\d+\b|\bV-[BC]-\d+\b|'
+        r'\b[LBRV]\d-\d+\b'),
   ),
 ];
 
 /// The markers that let one line keep a reference.
-const optOuts = ['<!-- jargon-ok -->', '// jargon-ok'];
+const optOuts = ['<!-- jargon-ok -->', '{/* jargon-ok */}', '// jargon-ok'];
 
 /// The names of the patterns [line] hits; empty when it is clean or opted out.
 List<String> hitsIn(String line) {
@@ -74,6 +84,7 @@ void main(List<String> args) {
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       if (docCommentsOnly && !line.trimLeft().startsWith('///')) continue;
+      if (topOnly && line.startsWith('## ')) continue;
       final names = hitsIn(line);
       if (names.isEmpty) continue;
       final path = file.path.substring(root.path.length + 1);
@@ -121,7 +132,8 @@ void main(List<String> args) {
   hits.forEach(stdout.writeln);
   stderr.writeln(
     '\n${hits.length} line(s) carry internal references. Reword them, or '
-    'mark a line that must keep one with <!-- jargon-ok --> or // jargon-ok.',
+    'mark a line that must keep one with <!-- jargon-ok -->, '
+    '{/* jargon-ok */} (MDX) or // jargon-ok.',
   );
   exit(1);
 }
@@ -131,7 +143,7 @@ int _selfTest() {
   const flagged = {
     'found by the ninth review': 'review round',
     'the release review said so': 'review round',
-    'fixed in the second pass': 'review round',
+    'fixed (second pass, V-B-3)': 'review round',
     'since 2026-09-12': 'date',
     'see C17 for why': 'finding C',
     'worked off by map #49': 'map',
@@ -142,6 +154,12 @@ int _selfTest() {
     'MU-2, AR-1 and QE-4': 'finding ID',
     'V-B-3 held': 'finding ID',
     '(V5-1)': 'finding ID',
+    'release review, 2026-09-23, L3-2': 'finding ID',
+    '(API-02)': 'finding ID',
+    'IN-02 said so': 'finding ID',
+    'the documented limit (AR-01, R3-1)': 'finding ID',
+    '(fourth pass,': 'review round',
+    'a pre-release review said': 'review round',
   };
   const clean = [
     'Call refetch to fetch again.',
@@ -153,7 +171,12 @@ int _selfTest() {
     'see the issues page',
     'LIBRARY-3 and V-3',
     'since 2026-09-12 <!-- jargon-ok -->',
+    'since 2026-09-12 {/* jargon-ok */}',
     '/// C17 // jargon-ok',
+    'on the first pass over the list, and a second pass after it',
+    'review the release notes before a release; review your options',
+    'a Uint8List of length L1, the B-tree, R2-D2',
+    'Take a second look at the review.',
   ];
   final failures = <String>[];
   flagged.forEach((line, name) {
