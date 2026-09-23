@@ -1,5 +1,5 @@
 /// The listener list every subscribable thing in the core keeps, in one
-/// place (C50, https://github.com/KoTTi97/flutter_query/issues/59).
+/// place.
 library;
 
 import 'dart:async';
@@ -22,12 +22,11 @@ import 'dart:async';
 ///   one object is `==` to itself, so two independent subscribers passing
 ///   `cache.onEvent` collapsed into a single entry — and the first of them to
 ///   unsubscribe silenced the other. A list keeps one entry per [add], which
-///   is what the returned handle promises to remove (eighth review,
-///   2026-09-10).
+///   is what the returned handle promises to remove.
 /// * **A handle removes its own registration, once.** Called twice it removes
 ///   nothing more. Unguarded, a second call took another registration of the
 ///   same listener with it and ran the last-listener teardown under a
-///   subscriber still present (ninth review, 2026-09-10, C6) — a bug that had
+///   subscriber still present — a bug that had
 ///   to be fixed three times, in [Subscribable] and then in both observers,
 ///   which is the case for this module.
 /// * **A listener removed while a notification is running is not called.**
@@ -37,7 +36,7 @@ import 'dart:async';
 /// * **A listener's throw is the listener's.** It is reported to the zone and
 ///   the rest still run. Unisolated, a devtools or logging subscriber that
 ///   threw on a `failed` action blew up the retryer's loop and left the fetch
-///   pending forever (fourth review, 2026-09-09).
+///   pending forever.
 ///
 /// What is *not* here is what the first and last listener mean: installing an
 /// event source, attaching an observer, starting a fetch. Those differ in
@@ -91,7 +90,8 @@ class ListenerRegistry<TListener extends Function> {
   }
 
   /// Drops every registration. Earlier handles become no-ops, including their
-  /// removal hooks, and cannot affect a later registration of the same callback.
+  /// removal hooks, and cannot affect a later registration of the same
+  /// callback.
   void clear() {
     for (final entry in _listeners) {
       entry.active = false;

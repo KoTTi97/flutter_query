@@ -1,4 +1,4 @@
-/// Port of `query-core/src/focusManager.ts` at upstream `50680b98c`.
+/// App focus: [AppFocusManager].
 library;
 
 import 'dart:async';
@@ -8,31 +8,54 @@ import 'package:meta/meta.dart';
 
 import 'subscribable.dart';
 
-/// Installs a platform listener; returns its cleanup, if it has one.
+/// An adapter for [AppFocusManager.setEventListener]: installs a platform
+/// listener that reports focus through `setFocused`, and returns a function
+/// that removes the listener again.
+///
+/// `setFocused(true)` / `setFocused(false)` report the new state;
+/// `setFocused(null)` re-announces the current state without changing it.
+///
+/// {@category Managers}
 typedef FocusSetup = void Function() Function(
     void Function(bool? focused) setFocused);
 
-/// Tracks whether the app is in the foreground.
+/// Tracks whether the app is in the foreground, so a mounted [QueryClient]
+/// can refetch stale queries when the user comes back (the
+/// `refetchOnWindowFocus` option) and resume work paused in the background.
 ///
-/// Pure Dart has no notion of focus, so the default is "focused". Nothing is
-/// installed for you: changes arrive through [setFocused] — the Flutter
-/// binding's `QueryClientProvider` maps every `AppLifecycleState` onto it
-/// directly (https://github.com/KoTTi97/flutter_query/issues/19) — or through
+/// Each client owns one, as `QueryClient.focusManager`. Pure Dart has no
+/// notion of focus, so the default is "focused". Nothing is installed for
+/// you: changes arrive through [setFocused] — the Flutter binding's
+/// `QueryClientProvider` maps every `AppLifecycleState` onto it — or through
 /// a [setEventListener] adapter of your own, for a focus source that is not
 /// the app lifecycle.
+///
+/// ```dart
+/// // By hand, e.g. from a desktop window's focus events:
+/// client.focusManager.setFocused(false);
+/// client.focusManager.setFocused(true); // refetches stale observed queries
+///
+/// // Or with an adapter over some event source:
+/// client.focusManager.setEventListener((setFocused) {
+///   final subscription = windowFocus.listen(setFocused);
+///   return subscription.cancel;
+/// });
+/// ```
 ///
 /// **The two are alternatives, not layers.** A [setEventListener] adapter
 /// writes through [setFocused] exactly as the binding's lifecycle listener
 /// does, so with both installed the last writer wins and neither can see the
 /// other's verdict. Installing your own adapter therefore goes with
 /// `QueryClientProvider(observeAppLifecycle: false)`, which is what turns the
-/// lifecycle source off (https://github.com/KoTTi97/flutter_query/issues/60).
-/// This mirrors upstream, where the browser's `visibilitychange` listener is
-/// the built-in default and `setEventListener` is what a React Native app
-/// calls with `AppState`.
+/// lifecycle source off. This mirrors TanStack Query, where the browser's
+/// `visibilitychange` listener is the built-in default and
+/// `setEventListener` is what a React Native app calls with `AppState`.
+///
+/// {@category Managers}
 class AppFocusManager extends Subscribable<void Function(bool focused)> {
-  /// Creates a manager. [refetchMinBackgroundDuration] suppresses new focus
-  /// refetches after shorter absences, without blocking paused work resuming.
+  /// Creates a manager. [refetchMinBackgroundDuration] (default zero)
+  /// suppresses new focus refetches after shorter absences, without blocking
+  /// paused work resuming. Throws [ArgumentError] if it is negative.
   AppFocusManager({this.refetchMinBackgroundDuration = Duration.zero}) {
     if (refetchMinBackgroundDuration.isNegative) {
       throw ArgumentError.value(refetchMinBackgroundDuration,
@@ -64,8 +87,8 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   /// A setup that throws here is reported to the zone rather than thrown out
   /// of `subscribe`: the listener is registered by then, and a throw would
   /// lose the handle that removes it — a client's mount listener that could
-  /// never be unsubscribed, and one more after every remount (release review,
-  /// 2026-09-23). The next subscription tries the setup again.
+  /// never be unsubscribed, and one more after every remount. The next
+  /// subscription tries the setup again.
   @override
   @protected
   void onSubscribe() {
@@ -91,6 +114,12 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   }
 
   /// Replaces the source of focus events.
+  ///
+  /// [setup] is called at once with a `setFocused` callback and returns a
+  /// cleanup function. The previous source's cleanup, if any, runs first.
+  /// When the last listener of this manager unsubscribes (the client
+  /// unmounts), the cleanup runs; when a listener subscribes again, [setup]
+  /// is called again. A throwing [setup] throws out of this call.
   void setEventListener(FocusSetup setup) {
     _setup = setup;
     final previous = _cleanup;
@@ -108,9 +137,15 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   }
 
   /// Sets the focus state by hand. Passing `null` forgets the value set by
-  /// hand, and [isFocused] then answers `true` — pure Dart has no document to
-  /// consult, where upstream reads `document.visibilityState`. It does not
-  /// hand control to the event listener, which only ever calls this.
+  /// hand, and [isFocused] then answers `true` — pure Dart has nothing to
+  /// consult (TanStack Query reads `document.visibilityState` here). An
+  /// installed event listener reports through this same method (or through
+  /// [onFocus], for a report that is not a `bool`), so its next report
+  /// overwrites a value set by hand.
+  ///
+  /// A change notifies the listeners; a mounted client then refetches its
+  /// stale observed queries on the way back to focus, unless the absence
+  /// was shorter than [refetchMinBackgroundDuration].
   void setFocused(bool? focused) {
     final changed = _focused != focused;
     if (changed) {

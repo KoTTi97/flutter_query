@@ -1,0 +1,1 @@
+The errors query_kit throws or reports: `CancelledError` for a cancelled fetch, `QueryDataTypeError` when a cache entry is read or written with the wrong type, and the errors for a missing query or mutation function.

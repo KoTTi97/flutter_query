@@ -1,0 +1,1 @@
+A query is one cache entry: data fetched by a query function under a `QueryKey`. `QueryState` is what the entry holds; the query function receives a `QueryFunctionContext` with a `QueryCancelToken` for cancellation.

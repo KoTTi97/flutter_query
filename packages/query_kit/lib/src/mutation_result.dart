@@ -1,8 +1,5 @@
-/// What a mutation observer reports.
-///
-/// Mirrors the query side's sealed result
-/// (https://github.com/KoTTi97/flutter_query/issues/14) so the two halves of
-/// the library feel like one.
+/// What a mutation observer reports, as a sealed result mirroring the query
+/// side's.
 library;
 
 import 'package:meta/meta.dart';
@@ -10,22 +7,32 @@ import 'package:meta/meta.dart';
 import 'mutation.dart';
 import 'mutation_options.dart';
 
-/// The result of observing one mutation — upstream's
-/// `MutationObserverResult`, as a sealed hierarchy.
+/// The result of observing one mutation: what a `MutationObserver` reports
+/// and what the Flutter binding's mutation helpers hand a widget.
+///
+/// Sealed, with one variant per [MutationStatus]:
+///
+/// * [MutationIdle] — nothing submitted yet, or [reset] since.
+/// * [MutationPending] — a run is in flight, or paused ([isPaused]) waiting
+///   for the network, the foreground, or its `MutationScope`.
+/// * [MutationSuccess] — the last run succeeded; carries its `data`.
+/// * [MutationError] — the last run failed for good; carries its `error`.
 ///
 /// `switch` on it and the data or error is simply there:
 ///
 /// ```dart
-/// switch (result) {
+/// return switch (result) {
 ///   MutationIdle() => SaveButton(onPressed: () => result.mutate(draft)),
 ///   MutationPending() => const SaveButton(onPressed: null),
 ///   MutationSuccess(:final data) => Text('Saved as ${data.id}'),
 ///   MutationError(:final error) => ErrorView(error, retry: result.reset),
-/// }
+/// };
 /// ```
 ///
 /// Every variant carries [mutate], [mutateAsync] and [reset], so a widget can
-/// submit from any of them.
+/// submit from any of them. (TanStack Query: `MutationObserverResult`.)
+///
+/// {@category Mutations}
 @immutable
 sealed class MutationResult<TData, TVariables> {
   /// Built by the observer; each argument is the field of the same name.
@@ -48,46 +55,46 @@ sealed class MutationResult<TData, TVariables> {
   /// to tell a real `null` from none when `TVariables` is nullable.
   final bool hasVariables;
 
-  /// Failed attempts within the current run — upstream's `failureCount`.
-  /// Reset when a new run starts.
+  /// How many attempts of the current run have failed so far. Reset when a
+  /// new run starts.
   final int failureCount;
 
-  /// What the latest failed attempt threw — upstream's `failureReason`.
+  /// What the latest failed attempt threw, kept while retries continue.
   /// `null` once an attempt succeeds or a new run starts.
   final Object? failureReason;
 
-  /// Whether the run is parked rather than running — upstream's `isPaused`.
-  /// Three things park it: the network (under [NetworkMode.online] a
-  /// mutation submitted offline sits here until the device is back, when a
-  /// mounted client resumes it through `resumePausedMutations`), focus (a
-  /// retry waits for the app to return to the foreground), and its
-  /// `MutationScope` — a mutation queued behind another in its scope is
-  /// `pending` with `isPaused` until its turn (release review, 2026-09-23,
-  /// L4-6).
+  /// Whether the run is parked rather than running. Three things park it:
+  /// the network (under `NetworkMode.online` a mutation submitted offline
+  /// sits here until the device is back, when a mounted client resumes it
+  /// through `resumePausedMutations`), focus (a retry waits for the app to
+  /// return to the foreground), and its `MutationScope` — a mutation queued
+  /// behind another in its scope is `pending` with `isPaused` until its
+  /// turn. Show "waiting" rather than "saving" while it is set.
   final bool isPaused;
 
-  /// When the current run was submitted — upstream's `submittedAt`. `null`
-  /// while idle.
+  /// When the current run was submitted. `null` while idle.
   final DateTime? submittedAt;
 
-  /// Fire and forget: errors go to the callbacks and to this result.
+  /// Starts a new run with the given variables and returns at once: errors
+  /// go to the callbacks and to the next result, never to the caller.
   ///
-  /// The plain form, deliberately: upstream's per-call callbacks are not a
-  /// second parameter here. They are `MutationObserver.mutate(variables,
-  /// callbacks)` — `MutationController.mutate(variables, callbacks)` in the
-  /// binding — with a [MutateCallbacks] (ninth review, 2026-09-10, C23).
+  /// It takes only the variables, so it can be passed around as a plain
+  /// callback. To attach per-call [MutateCallbacks], call
+  /// `MutationObserver.mutate(variables, callbacks: ...)` instead — or the
+  /// Flutter binding's `MutationController.mutate`.
   final void Function(TVariables variables) mutate;
 
-  /// Completes with the data, or throws.
+  /// Starts a new run with the given variables and completes with its data,
+  /// or throws its error, once the run's callbacks have run.
   final Future<TData> Function(TVariables variables) mutateAsync;
 
-  /// Detaches from the mutation and goes back to [MutationIdle] — upstream's
-  /// `reset`. The mutation itself keeps running and still fires its
-  /// callbacks; only this observer stops reflecting it.
+  /// Detaches from the mutation and goes back to [MutationIdle] — to clear
+  /// an error message, say. The mutation itself keeps running and still
+  /// fires its callbacks; only this observer stops reflecting it.
   final void Function() reset;
 
-  /// Which variant this is, as an enum — upstream's `status`, for callers
-  /// that store or compare it rather than pattern-match.
+  /// Which variant this is, as a [MutationStatus] — for callers that store
+  /// or compare it rather than pattern-match.
   MutationStatus get status => switch (this) {
         MutationIdle<TData, TVariables>() => MutationStatus.idle,
         MutationPending<TData, TVariables>() => MutationStatus.pending,
@@ -95,16 +102,20 @@ sealed class MutationResult<TData, TVariables> {
         MutationError<TData, TVariables>() => MutationStatus.error,
       };
 
-  /// Whether this is a [MutationIdle] — upstream's `isIdle`.
+  /// Whether this is a [MutationIdle]: nothing has been submitted since the
+  /// observer was created or reset.
   bool get isIdle => this is MutationIdle<TData, TVariables>;
 
-  /// Whether this is a [MutationPending] — upstream's `isPending`.
+  /// Whether this is a [MutationPending]: a run is in flight or paused.
+  /// Handy for disabling a submit button.
   bool get isPending => this is MutationPending<TData, TVariables>;
 
-  /// Whether this is a [MutationSuccess] — upstream's `isSuccess`.
+  /// Whether this is a [MutationSuccess]: the last run succeeded, and
+  /// [dataOrNull] holds what it returned.
   bool get isSuccess => this is MutationSuccess<TData, TVariables>;
 
-  /// Whether this is a [MutationError] — upstream's `isError`.
+  /// Whether this is a [MutationError]: the last run failed for good, and
+  /// [errorOrNull] holds why.
   bool get isError => this is MutationError<TData, TVariables>;
 
   /// The data this result carries, if any. Prefer pattern matching; this
@@ -114,7 +125,8 @@ sealed class MutationResult<TData, TVariables> {
         _ => null,
       };
 
-  /// The error this result carries, if any.
+  /// The error this result carries — set only on a [MutationError], `null`
+  /// on every other variant.
   Object? get errorOrNull => switch (this) {
         MutationError<TData, TVariables>(:final error) => error,
         _ => null,
@@ -167,7 +179,10 @@ sealed class MutationResult<TData, TVariables> {
   }
 }
 
-/// Nothing has been submitted yet.
+/// Nothing has been submitted yet, or the observer was reset since: no
+/// variables, no data, no error. Call `mutate` to start a run.
+///
+/// {@category Mutations}
 final class MutationIdle<TData, TVariables>
     extends MutationResult<TData, TVariables> {
   /// Built by the observer; each argument is the field of the same name.
@@ -184,7 +199,13 @@ final class MutationIdle<TData, TVariables>
   });
 }
 
-/// In flight, or waiting for connectivity.
+/// A run has been submitted and has not settled yet: `onMutate`, the
+/// mutation function or the settling callbacks are running, or the run is
+/// paused ([isPaused]) waiting for the network, the foreground or its
+/// `MutationScope`. `variables` holds what it was called with — what an
+/// optimistic UI shows meanwhile.
+///
+/// {@category Mutations}
 final class MutationPending<TData, TVariables>
     extends MutationResult<TData, TVariables> {
   /// Built by the observer; each argument is the field of the same name.
@@ -201,7 +222,10 @@ final class MutationPending<TData, TVariables>
   });
 }
 
-/// The mutation function returned, and the success callbacks have run.
+/// The mutation function returned, and the success callbacks have run;
+/// [data] holds what it returned.
+///
+/// {@category Mutations}
 final class MutationSuccess<TData, TVariables>
     extends MutationResult<TData, TVariables> {
   /// Built by the observer; each argument is the field of the same name.
@@ -218,11 +242,16 @@ final class MutationSuccess<TData, TVariables>
     required super.reset,
   });
 
-  /// What the mutation function returned.
+  /// What the mutation function returned — typically the server's copy of
+  /// what was written.
   final TData data;
 }
 
-/// The run failed for good: retries, if any, are spent.
+/// The run failed for good: retries, if any, are spent, and the error
+/// callbacks have run. [error] holds why; a cancelled run fails with a
+/// `CancelledError`.
+///
+/// {@category Mutations}
 final class MutationError<TData, TVariables>
     extends MutationResult<TData, TVariables> {
   /// Built by the observer; each argument is the field of the same name.

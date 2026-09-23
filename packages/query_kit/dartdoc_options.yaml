@@ -1,0 +1,48 @@
+dartdoc:
+  categories:
+    "Client":
+      markdown: doc/categories/client.md
+    "Queries":
+      markdown: doc/categories/queries.md
+    "Options":
+      markdown: doc/categories/options.md
+    "Option values":
+      markdown: doc/categories/option-values.md
+    "Results":
+      markdown: doc/categories/results.md
+    "Combining results":
+      markdown: doc/categories/combining-results.md
+    "Mutations":
+      markdown: doc/categories/mutations.md
+    "Infinite queries":
+      markdown: doc/categories/infinite-queries.md
+    "Observers":
+      markdown: doc/categories/observers.md
+    "Caches":
+      markdown: doc/categories/caches.md
+    "Filters":
+      markdown: doc/categories/filters.md
+    "Structural sharing":
+      markdown: doc/categories/structural-sharing.md
+    "Errors":
+      markdown: doc/categories/errors.md
+    "Managers":
+      markdown: doc/categories/managers.md
+    "Advanced":
+      markdown: doc/categories/advanced.md
+  categoryOrder:
+    - "Client"
+    - "Queries"
+    - "Options"
+    - "Option values"
+    - "Results"
+    - "Combining results"
+    - "Mutations"
+    - "Infinite queries"
+    - "Observers"
+    - "Caches"
+    - "Filters"
+    - "Structural sharing"
+    - "Errors"
+    - "Managers"
+    - "Advanced"

@@ -1,7 +1,5 @@
-/// What an observer reports. Ports `QueryObserverResult` from
-/// `query-core/src/types.ts` at upstream `50680b98c`, as a sealed hierarchy
-/// rather than a bag of booleans
-/// (https://github.com/KoTTi97/flutter_query/issues/12).
+/// The sealed result an observer reports for one query: `QueryResult` and
+/// its three variants.
 library;
 
 import 'package:meta/meta.dart';
@@ -11,26 +9,58 @@ import 'query_state.dart';
 /// Refetches the query behind a result.
 ///
 /// Errors surface in the returned result rather than as a thrown exception, so
-/// a widget callback can await it without a try/catch.
+/// a widget callback can await it without a try/catch. See
+/// [QueryResult.refetch] for what `cancelRefetch` does.
+///
+/// {@category Results}
 typedef QueryRefetch<TData> = Future<QueryResult<TData>> Function(
     {bool cancelRefetch});
 
-/// The result of observing one query.
+/// The result of observing one query: what it holds, and what it is doing.
 ///
-/// `switch` on it and the data is simply there — no `result.data!`:
+/// Every observer — a `QueryObserver`, and each widget or controller of the
+/// Flutter binding — hands out one of these, and a new one whenever something
+/// it reports changes. Results are immutable values with `==`, so an
+/// unchanged result compares equal to the previous one.
+///
+/// **What the query holds** is the variant. The class is sealed, with exactly
+/// three subclasses, so a `switch` over it is exhaustive and each arm gets
+/// the fields that exist in that state — no `result.data!`:
+///
+/// * [QueryPending] — nothing has resolved yet: no data, no error.
+/// * [QuerySuccess] — [QuerySuccess.data] is there: fetched, seeded with
+///   `initialData`, written with `setQueryData`, or a placeholder.
+/// * [QueryError] — the last fetch failed for good. [QueryError.error] says
+///   why, and [QueryError.staleData] keeps the data from an earlier success,
+///   if there was one, so a failed refresh does not blank the screen.
+///
+/// **What the query is doing** is separate from the variant: [fetchStatus]
+/// and the flags derived from it — [isFetching], [isPaused], [isLoading],
+/// [isRefetching]. A [QuerySuccess] with [isFetching] true is the ordinary
+/// background refresh: the old data stays on screen while the new data
+/// loads. The retry progress of the fetch in flight is in [failureCount] and
+/// [failureReason], again without changing the variant.
 ///
 /// ```dart
-/// switch (result) {
-///   QueryPending() => const CircularProgressIndicator(),
-///   QuerySuccess(:final data) => TaskList(tasks: data),
-///   QueryError(:final error, :final staleData) => staleData != null
-///       ? TaskList(tasks: staleData, banner: 'Offline')
-///       : ErrorView(error),
-/// }
+/// String describe(QueryResult<List<Task>> result) => switch (result) {
+///       QueryPending() => 'Loading',
+///       QuerySuccess(:final data) when result.isFetching =>
+///         '${data.length} tasks (refreshing)',
+///       QuerySuccess(:final data) => '${data.length} tasks',
+///       QueryError(:final error, :final staleData?) =>
+///         '${staleData.length} tasks (refresh failed: $error)',
+///       QueryError(:final error) => 'Failed: $error',
+///     };
 /// ```
 ///
-/// [fetchStatus] is orthogonal to which variant this is: a [QuerySuccess] that
-/// is refetching in the background is the ordinary stale-while-revalidate case.
+/// For code that stores or compares the state rather than matching on it
+/// there are [status], [isPending], [isSuccess] and [isError], and
+/// [dataOrNull] and [errorOrNull] for a plain nullable read.
+///
+/// TanStack Query reports the same information as one object with a
+/// `status` string and a set of booleans; the sealed variants replace that.
+///
+/// {@category Results}
 @immutable
 sealed class QueryResult<TData> {
   /// Built by the observer; each argument is the field of the same name.
@@ -54,26 +84,29 @@ sealed class QueryResult<TData> {
   /// What the query is doing right now, independent of what it holds.
   final FetchStatus fetchStatus;
 
-  /// When the data was last written — upstream's `dataUpdatedAt`, and what
+  /// When the data was last written, by a fetch or by hand — what
   /// `staleTime` counts from. `null` until something has been.
   final DateTime? dataUpdatedAt;
 
-  /// When the query last ended in an error — upstream's `errorUpdatedAt`.
-  /// `null` until it has.
+  /// When the query last ended in an error. `null` until it has; not cleared
+  /// by a later success, so "last failed at" stays readable.
   final DateTime? errorUpdatedAt;
 
   /// Failures within the *current* fetch. A query retrying in the background
   /// reports progress here while still showing its last good data.
   final int failureCount;
 
-  /// What the latest failed attempt of the current fetch threw — upstream's
-  /// `failureReason`. `null` between fetches and once an attempt succeeds.
+  /// What the latest failed attempt threw. It is kept while retries continue
+  /// and after the fetch finally fails. It is cleared when the next fetch
+  /// starts or an attempt succeeds.
   final Object? failureReason;
 
-  /// The stack trace that came with [failureReason].
+  /// The stack trace of the attempt that threw [failureReason]; `null`
+  /// whenever [failureReason] is.
   final StackTrace? failureStackTrace;
 
-  /// How many times this query has ended in an error over its whole life.
+  /// How many times this query has ended in an error over its whole life. It
+  /// never goes down; see [consecutiveErrorCount] for failures in a row.
   final int errorUpdateCount;
 
   /// Fetches in a row that ended in an error — the query's
@@ -83,62 +116,75 @@ sealed class QueryResult<TData> {
   /// it turns an error into a [QuerySuccess]. So a "gave up after five
   /// failures" is read here, not from the variant: after such a write the
   /// result is a success while polling that stopped on this count stays
-  /// stopped (release review, 2026-09-23, LIB-2).
+  /// stopped.
   final int consecutiveErrorCount;
 
   /// Whether the data is older than this observer's `staleTime`, or has been
-  /// invalidated — upstream's `isStale`. A query with no data is stale; a
-  /// disabled query never is, since nothing would refetch it.
+  /// invalidated. A query with no data is stale; a disabled query never is,
+  /// since nothing would refetch it. Stale data is still shown; it is only
+  /// refetched at the next trigger (a new observer, focus, reconnect).
   final bool isStale;
 
-  /// Whether this observer's options currently allow the query to run.
+  /// Whether this observer's `enabled` option currently allows the query to
+  /// fetch on its own. [refetch] runs even when this is false.
   final bool isEnabled;
 
   /// Whether anything has ever been fetched, successfully or not.
   final bool isFetched;
 
-  /// Whether a fetch has completed since this observer was created.
+  /// Whether a fetch has completed since this observer was created, as
+  /// opposed to data that was already in the cache when it attached.
   final bool isFetchedAfterMount;
 
-  /// Whether the data shown is `placeholderData` rather than cached data.
+  /// Whether [QuerySuccess.data] is the observer's `placeholderData` rather
+  /// than data from the cache. A placeholder is shown while the real fetch
+  /// runs and is never written to the cache.
   final bool isPlaceholderData;
 
-  /// Refetches this query regardless of `enabled` and `staleTime` —
-  /// upstream's `refetch`. With `cancelRefetch: true`, the default, a fetch
-  /// already in flight is cancelled and started over — once the query holds
-  /// data; a first load is joined, not restarted, as upstream's is. With
+  /// Refetches this query regardless of `enabled` and `staleTime`, and
+  /// completes with the result that follows. With `cancelRefetch: true`, the
+  /// default, a fetch already in flight is cancelled and started over — once
+  /// the query holds data; a first load is joined, not restarted. With
   /// `false` the in-flight one is awaited instead.
   final QueryRefetch<TData> refetch;
 
-  /// Which variant this is, as an enum — upstream's `status`, for callers
-  /// that store or compare it rather than pattern-match.
+  /// Which variant this is, as an enum, for callers that store or compare it
+  /// rather than pattern-match.
   QueryStatus get status => switch (this) {
         QueryPending<TData>() => QueryStatus.pending,
         QuerySuccess<TData>() => QueryStatus.success,
         QueryError<TData>() => QueryStatus.error,
       };
 
-  /// Whether this is a [QueryPending] — upstream's `isPending`.
+  /// Whether this is a [QueryPending]: no data and no error. True during
+  /// the first load, during a new fetch of a query without data whose last
+  /// fetch failed, and for a disabled query that has never fetched.
   bool get isPending => this is QueryPending<TData>;
 
-  /// Whether this is a [QuerySuccess] — upstream's `isSuccess`.
+  /// Whether this is a [QuerySuccess]: the query holds data, whether or not
+  /// a refresh is running.
   bool get isSuccess => this is QuerySuccess<TData>;
 
-  /// Whether this is a [QueryError] — upstream's `isError`.
+  /// Whether this is a [QueryError]: the last fetch failed after its
+  /// retries. Earlier data may still be in [QueryError.staleData].
   bool get isError => this is QueryError<TData>;
 
-  /// Whether a fetch is in flight, first load and refetch alike — upstream's
-  /// `isFetching`.
+  /// Whether a fetch is in flight, first load and refetch alike, whatever
+  /// the variant.
   bool get isFetching => fetchStatus == FetchStatus.fetching;
 
-  /// Whether a fetch wants to run but is waiting for the network — upstream's
-  /// `isPaused`.
+  /// Whether a fetch wants to run but is waiting: for the network, as the
+  /// query's `networkMode` asks, or for the app to return to the foreground
+  /// before its next retry.
   bool get isPaused => fetchStatus == FetchStatus.paused;
 
-  /// The first load: pending *and* fetching.
+  /// Whether this is the first load: pending *and* fetching. False for a
+  /// pending query that is not fetching, such as a disabled one — the case
+  /// where a spinner would spin forever.
   bool get isLoading => isPending && isFetching;
 
-  /// A fetch over data that is already there.
+  /// Whether a fetch is running over a result that is not pending — a
+  /// background refresh of data already shown, or a retry after an error.
   bool get isRefetching => isFetching && !isPending;
 
   /// The data this result carries, if any. Prefer pattern matching; this exists
@@ -174,7 +220,8 @@ sealed class QueryResult<TData> {
           other.dataOrNull == dataOrNull &&
           other.errorOrNull == errorOrNull;
 
-  /// The error this result carries, if any.
+  /// The error this result carries: [QueryError.error] for a [QueryError],
+  /// `null` for the other variants.
   Object? get errorOrNull => switch (this) {
         QueryError<TData>(:final error) => error,
         _ => null,
@@ -184,7 +231,14 @@ sealed class QueryResult<TData> {
   int get hashCode => Object.hash(_identity, dataOrNull, errorOrNull);
 }
 
-/// Nothing has resolved yet.
+/// The query has nothing to show: no data and no error.
+///
+/// Usually the first load is running ([isLoading]). A query without data
+/// whose last fetch failed is pending again while it fetches anew, and so
+/// is a query after a reset. A disabled query that has never fetched is
+/// pending too, with [fetchStatus] `idle`.
+///
+/// {@category Results}
 final class QueryPending<TData> extends QueryResult<TData> {
   /// Built by the observer; each argument is the field of the same name.
   const QueryPending({
@@ -208,7 +262,13 @@ final class QueryPending<TData> extends QueryResult<TData> {
   String toString() => 'QueryPending(fetchStatus: $fetchStatus)';
 }
 
-/// The query holds data — fetched, seeded, or a placeholder.
+/// The query holds data — fetched, seeded, written by hand, or a
+/// placeholder — in [data].
+///
+/// A success can be fetching at the same time: that is a background
+/// refresh, and [isRefetching] is true while it runs.
+///
+/// {@category Results}
 final class QuerySuccess<TData> extends QueryResult<TData> {
   /// Built by the observer; each argument is the field of the same name.
   const QuerySuccess({
@@ -238,10 +298,14 @@ final class QuerySuccess<TData> extends QueryResult<TData> {
       'placeholder: $isPlaceholderData)';
 }
 
-/// The last attempt failed.
+/// The last fetch failed after its retries, with [error].
 ///
-/// [staleData] is what upstream's error reducer deliberately keeps: a failed
-/// background refetch over content that is already on screen must not blank it.
+/// Data from an earlier success is kept in [staleData] (with [hasStaleData]
+/// true), because a failed background refresh over content that is already
+/// on screen must not blank it. [isLoadingError] and [isRefetchError] tell
+/// the two cases apart.
+///
+/// {@category Results}
 final class QueryError<TData> extends QueryResult<TData> {
   /// Built by the observer; each argument is the field of the same name.
   const QueryError({
@@ -265,13 +329,16 @@ final class QueryError<TData> extends QueryResult<TData> {
     required super.refetch,
   });
 
-  /// What the last attempt threw — upstream's `error`.
+  /// What the last attempt of the failed fetch threw. A cancelled fetch that
+  /// was not reverted fails with a `CancelledError`.
   final Object error;
 
   /// Where [error] was thrown.
   final StackTrace stackTrace;
 
-  /// The last good data, if there is any.
+  /// The data from the last successful fetch or write, kept through the
+  /// error; `null` when there was none. Use [hasStaleData] to tell that from
+  /// data that is itself `null`.
   final TData? staleData;
 
   /// Whether [staleData] means anything — a query whose data type is nullable

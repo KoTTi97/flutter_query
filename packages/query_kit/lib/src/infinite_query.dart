@@ -1,12 +1,6 @@
-/// Infinite queries: pages, page params, and the fetch behaviour that turns
-/// one fetch into a loop over them. Ports
-/// `query-core/src/infiniteQueryBehavior.ts` at upstream `50680b98c`.
-///
-/// Shape decided on https://github.com/KoTTi97/flutter_query/issues/16: an
-/// infinite query is an ordinary `Query<InfiniteData<TPageData, TPageParam>>`,
-/// so everything the cache does — gc, invalidation, filters, persistence —
-/// works on it unchanged. Only the *fetch* is different, and that difference
-/// lives entirely in [InfiniteQueryBehavior].
+/// Infinite queries: pages, page params, the paging options, and the fetch
+/// behaviour ([InfiniteQueryBehavior]) that turns one fetch into a loop over
+/// pages.
 library;
 
 import 'dart:async';
@@ -20,34 +14,46 @@ import 'query_client.dart';
 import 'query_key.dart';
 import 'query_options.dart';
 
-/// Every page fetched so far, and the param each was fetched with.
+/// The data an infinite query holds: every page fetched so far, and the
+/// param each was fetched with.
+///
+/// An infinite query is an ordinary query whose data is an `InfiniteData`,
+/// so everything the cache does — garbage collection, invalidation, filters,
+/// `getQueryData`/`setQueryData` — works on it unchanged; only the fetch
+/// differs, looping over pages instead of calling one function once.
 ///
 /// The two lists are the same length and in the same order: `pages[i]` was
 /// fetched with `pageParams[i]`, and the constructor refuses anything else.
 ///
-/// Every `InfiniteData` the library writes — a fetch result, a structurally
-/// shared refetch, a [copyWith] — holds two unmodifiable lists, so the value
-/// read back from the cache cannot be grown behind the observers' backs:
-/// `getInfiniteQueryData(key)!.pages.add(…)` throws `UnsupportedError`
-/// (ninth review, 2026-09-10, C20). The constructor wraps nothing: a
-/// `const [...]` literal is already unmodifiable, and a growable list handed
-/// in through `initialData` or `setQueryData` stays the caller's own until
-/// the next fetch replaces it.
+/// Treat the value as immutable. Every `InfiniteData` the library writes — a
+/// fetch result, a structurally shared refetch, a [copyWith] — holds two
+/// unmodifiable lists, so the value read back from the cache cannot be
+/// grown behind the observers' backs: `getInfiniteQueryData(key)!.pages
+/// .add(…)` throws `UnsupportedError`. To change the pages, write a new
+/// value with `setQueryData` (for example built with [copyWith]). The
+/// constructor wraps nothing: a `const [...]` literal is already
+/// unmodifiable, and a growable list handed in through `initialData` or
+/// `setQueryData` stays the caller's own until the next fetch replaces it.
+///
+/// When every page is a list, [flatten] gives all items in order:
+///
+/// ```dart
+/// final data = client.getInfiniteQueryData<List<Post>, int>(
+///   QueryKey(['feed']),
+/// );
+/// final posts = data?.flatten<Post>().toList() ?? const <Post>[];
+/// ```
+///
+/// {@category Infinite queries}
 @immutable
 final class InfiniteData<TPageData, TPageParam> {
   /// Both lists at once; they must be the same length and in the same order.
   ///
   /// Lists of different lengths are refused with an [ArgumentError] naming
-  /// both: the pair is the invariant every paging read depends on, and a
-  /// misaligned pair used to survive the write and fail much later —
-  /// `hasNextPage` threw a `RangeError` out of a plain getter, and with a
-  /// `select` that collapsed the value the same `RangeError` was raised
-  /// inside `Query`'s observer loop and reported to the zone, naming nothing
-  /// that could be traced back to the write (pre-release review, 2026-09-12,
-  /// IN-01). The check costs the constructor its `const`, which is why the
-  /// class is not const-constructible; upstream has no equivalent invariant
-  /// because JavaScript reads the missing param as `undefined` and hands it
-  /// to `getNextPageParam` (`infiniteQueryBehavior.ts:222-240`).
+  /// both, at the write: the pairing is what every paging read depends on,
+  /// and a misaligned pair would otherwise fail much later, far from the
+  /// code that wrote it. The check is why the constructor is not `const`.
+  /// (TanStack Query has no such check.)
   InfiniteData({required this.pages, required this.pageParams}) {
     if (pages.length != pageParams.length) {
       throw ArgumentError.value(
@@ -67,16 +73,18 @@ final class InfiniteData<TPageData, TPageParam> {
   /// The param each page was fetched with, index for index with [pages].
   final List<TPageParam> pageParams;
 
-  /// Whether no page is held.
+  /// Whether no page is held — `pages.isEmpty`. A value written by a fetch
+  /// always holds at least one page; an empty one comes from `initialData`
+  /// or `setQueryData`.
   bool get isEmpty => pages.isEmpty;
 
   /// Every item of every page, for the common case where a page is a list.
   ///
   /// Every page must be an `Iterable<TItem>`; one that is not throws an
   /// [ArgumentError] naming its runtime type, checked up front rather than
-  /// in the middle of a loop over the result (ninth review, 2026-09-10,
-  /// C20). `flatten()` with no type argument flattens to `Iterable<dynamic>`
-  /// — name the item type, or project the pages with a `select` instead.
+  /// in the middle of a loop over the result. `flatten()` with no type
+  /// argument flattens to `Iterable<dynamic>` — name the item type, or
+  /// project the pages with a `select` instead.
   Iterable<TItem> flatten<TItem>() {
     for (final page in pages) {
       if (page is! Iterable<TItem>) {
@@ -112,8 +120,7 @@ final class InfiniteData<TPageData, TPageParam> {
 
   /// Equal when the runtime types are and both lists hold equal elements. The
   /// runtime-type check keeps `==` symmetric across type arguments, as
-  /// `QueryResult`'s and the structural-sharing walk's (release review,
-  /// 2026-09-23, L3-2).
+  /// `QueryResult`'s and the structural-sharing walk's are.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -141,15 +148,32 @@ bool _listEquals<T>(List<T> a, List<T> b) {
   return true;
 }
 
-/// What a page function is handed.
+/// What a page function ([InfiniteQueryOptions.pageFn]) is handed: the
+/// param of the page to fetch, the direction, and the query's key, client,
+/// meta and cancellation token.
 ///
 /// Its own type rather than [QueryFunctionContext], so [pageParam] and
 /// [direction] are typed instead of `Object?`.
+///
+/// {@category Infinite queries}
 class InfinitePageContext<TPageParam> {
-  /// Built by the paging behaviour for each page; a page function receives
-  /// one rather than constructing it. Construct one directly to call a
-  /// `pageFn` in a test, with a [signalProvider] that returns a token of the
-  /// test's own — `() => QueryCancelToken()` (API-02, 2026-09-12).
+  /// Built by the library for each page; a page function receives one rather
+  /// than constructing it.
+  ///
+  /// Construct one directly to call a `pageFn` in a test. [signalProvider]
+  /// is called when the page function reads [signal]; hand it a token of
+  /// the test's own, and cancel that token to test cancellation:
+  ///
+  /// ```dart
+  /// final token = QueryCancelToken();
+  /// final page = await options.pageFn(InfinitePageContext(
+  ///   client: QueryClient(),
+  ///   queryKey: QueryKey(['feed']),
+  ///   pageParam: 0,
+  ///   direction: FetchDirection.forward,
+  ///   signalProvider: () => token,
+  /// ));
+  /// ```
   InfinitePageContext({
     required this.client,
     required this.queryKey,
@@ -159,16 +183,22 @@ class InfinitePageContext<TPageParam> {
     this.meta,
   }) : _signalProvider = signalProvider;
 
-  /// The client the query lives in — upstream's `client` on the context.
+  /// The client the query lives in, for a page function that reads or
+  /// writes other queries.
   final QueryClient client;
 
-  /// The key of the infinite query being fetched — upstream's `queryKey`.
+  /// The key of the infinite query being fetched, for a page function that
+  /// reads its parameters from the key.
   final QueryKey queryKey;
 
-  /// The param this page is being fetched with.
+  /// The param this page is being fetched with: `initialPageParam` for the
+  /// first page, otherwise what `getNextPageParam` (or
+  /// `getPreviousPageParam`, going backward) returned.
   final TPageParam pageParam;
 
-  /// Which end of the pages this fetch is extending.
+  /// Which end of the pages this fetch is extending: [FetchDirection.forward]
+  /// for a next page and for every page of a refetch,
+  /// [FetchDirection.backward] for a previous page.
   final FetchDirection direction;
 
   /// The query's [QueryOptions.meta], if one was set.
@@ -183,14 +213,36 @@ class InfinitePageContext<TPageParam> {
   QueryCancelToken get signal => _signalProvider();
 }
 
-/// Fetches one page.
+/// Fetches one page, given the context that names its param — the page
+/// function of an infinite query ([InfiniteQueryOptions.pageFn]).
+///
+/// It may return the page directly or as a `Future`. A throw (or a failed
+/// future) fails the fetch the same way a query function's does, retries
+/// included.
+///
+/// {@category Infinite queries}
 typedef InfinitePageFn<TPageData, TPageParam> = FutureOr<TPageData> Function(
     InfinitePageContext<TPageParam> context);
 
 /// Where the next (or previous) page starts, or `null` when there is none.
 ///
-/// `null` is the end of the list — the reason a nullable [TPageParam] is a poor
-/// choice of param type (https://github.com/KoTTi97/flutter_query/issues/16).
+/// Given the page at the end being extended (the last page for
+/// `getNextPageParam`, the first for `getPreviousPageParam`), all pages, the
+/// param that end page was fetched with, and all params. For an offset
+/// cursor, for example:
+///
+/// ```dart
+/// getNextPageParam: (page, pages, pageParam, pageParams) =>
+///     page.length < pageSize ? null : pageParam + page.length,
+/// ```
+///
+/// Returning `null` means "no more pages": `hasNextPage` (or
+/// `hasPreviousPage`) turns false and a page fetch in that direction fetches
+/// nothing. Because `null` has that meaning, a nullable [TPageParam] is a
+/// poor choice: a param that is itself `null` cannot be told apart from the
+/// end of the list. Use a non-nullable type such as `int` or `String`.
+///
+/// {@category Infinite queries}
 typedef PageParamFn<TPageData, TPageParam> = TPageParam? Function(
   TPageData page,
   List<TPageData> pages,
@@ -198,11 +250,43 @@ typedef PageParamFn<TPageData, TPageParam> = TPageParam? Function(
   List<TPageParam> pageParams,
 );
 
-/// Everything that describes an infinite query at the cache layer.
+/// Everything that describes an infinite query at the cache layer: a list
+/// whose pages are fetched one at a time, "load more" style.
 ///
-/// Extends [QueryOptions] over `InfiniteData`, because that is what the query
-/// holds; the user's function is [pageFn] rather than `queryFn`, since it
-/// returns one page.
+/// An infinite query is an ordinary query whose data is an [InfiniteData] —
+/// the pages and the param each was fetched with. So these options extend
+/// [QueryOptions] over `InfiniteData`, and every cache operation works on
+/// the query as on any other. What differs is the fetch: instead of a
+/// `queryFn` there is [pageFn], which returns one page, and the paging
+/// fields say where each page starts:
+///
+/// - [initialPageParam] — the param of the first page;
+/// - [getNextPageParam] — the param of the page after the last one, or
+///   `null` when there is none;
+/// - [getPreviousPageParam] — the same backwards, for paging in both
+///   directions;
+/// - [maxPages] — how many pages to keep at most.
+///
+/// A first fetch loads one page. A refetch — invalidation, focus, polling —
+/// refetches every page held, first to last, each with the param computed
+/// from the page before it, so the list stays consistent.
+///
+/// ```dart
+/// final options = InfiniteQueryOptions<List<Post>, int>(
+///   queryKey: QueryKey(['feed']),
+///   pageFn: (context) => api.feed(offset: context.pageParam),
+///   initialPageParam: 0,
+///   getNextPageParam: (page, pages, pageParam, pageParams) =>
+///       page.isEmpty ? null : pageParam + page.length,
+/// );
+/// final data = await client.infiniteQuery(options);
+/// ```
+///
+/// This class is what `QueryClient.infiniteQuery` takes. To watch an
+/// infinite query and page it, use [InfiniteQueryObserverOptions] (or
+/// [InfiniteQuerySelectOptions]) with an `InfiniteQueryObserver`.
+///
+/// {@category Infinite queries}
 @immutable
 base class InfiniteQueryOptions<TPageData, TPageParam>
     extends QueryOptions<InfiniteData<TPageData, TPageParam>> {
@@ -230,11 +314,14 @@ base class InfiniteQueryOptions<TPageData, TPageParam>
     super.meta,
   });
 
-  /// Fetches one page, given its param and direction — upstream's `queryFn`
-  /// for an infinite query.
+  /// Fetches one page, given its param and direction. Required.
+  ///
+  /// It takes the place of a query's `queryFn` (TanStack Query calls this
+  /// function `queryFn` for infinite queries too).
   final InfinitePageFn<TPageData, TPageParam> pageFn;
 
-  /// The param the first page is fetched with.
+  /// The param the first page is fetched with. Required; there is no
+  /// default.
   ///
   /// Also what a refetch falls back to when the first held page param is
   /// `null` — which is why a nullable [TPageParam] cannot tell "no param"
@@ -242,35 +329,46 @@ base class InfiniteQueryOptions<TPageData, TPageParam>
   final TPageParam initialPageParam;
 
   /// Given the last page, the param for the one after it, or `null` when
-  /// there is none — upstream's `getNextPageParam`. Required, as upstream
-  /// made it; it is also what `hasNextPage` reads.
+  /// there is none. Required.
+  ///
+  /// It is what `hasNextPage` asks, what a next-page fetch fetches, and what
+  /// a refetch uses to walk from each held page to the next — a refetch
+  /// stops early when it returns `null`.
   final PageParamFn<TPageData, TPageParam> getNextPageParam;
 
-  /// Only an option with one of these can page backwards.
+  /// Given the first page, the param for the one before it, or `null` when
+  /// there is none. Default: none — unset, `hasPreviousPage` is always false
+  /// and a previous-page fetch fetches nothing.
   final PageParamFn<TPageData, TPageParam>? getPreviousPageParam;
 
-  /// How many pages to keep. Older ones fall off the far end — one per fetch:
-  /// a page added past the limit drops exactly one page from the other end
-  /// and never more (upstream's `addToEnd`/`addToStart` arithmetic), so on a
-  /// query already holding more pages than a lowered limit a page fetch
-  /// swaps one page for one, and the count comes down to the limit only at
-  /// the next refetch, which rebuilds the pages from the first.
+  /// How many pages to keep at most. Default: unset, which keeps every page;
+  /// `0` also keeps every page.
+  ///
+  /// Pages fall off the far end — one per fetch: a next page added past the
+  /// limit drops the first page, a previous page drops the last, and never
+  /// more than one. So on a query already holding more pages than a lowered
+  /// limit, a page fetch swaps one page for one, and the count comes down to
+  /// the limit only at the next refetch, which rebuilds the pages from the
+  /// first. Set [getPreviousPageParam] too if pages can drop off the front,
+  /// or the user cannot page back to them.
   final int? maxPages;
 
   /// How many pages to fetch up front — used to warm a cache with several
-  /// pages, or to refetch a fixed number of them.
+  /// pages, or to refetch a fixed number of them. Default: unset, which
+  /// fetches one page into an empty query and refetches as many pages as
+  /// the query already holds.
   ///
   /// Read only on the options handed to `QueryClient.infiniteQuery` (or
-  /// `query`). On an [InfiniteQueryObserverOptionsBase] it is always `null`: an
-  /// observer refetches as many pages as the query already holds, as
-  /// upstream's observer does, and a fixed count there would throw away the
-  /// pages the user had paged to on the next refetch.
+  /// `query`). On an [InfiniteQueryObserverOptionsBase] it is always `null`:
+  /// an observer refetches as many pages as the query already holds, and a
+  /// fixed count there would throw away the pages the user had paged to on
+  /// the next refetch.
   ///
-  /// A count handed to `QueryClient.infiniteQuery` is installed on the shared
-  /// query's options, so it also shapes every later option-less refetch —
-  /// `invalidateQueries`, `refetchQueries` — until an observer's fetch
-  /// reinstalls its own options with no count; upstream persists it the same
-  /// way (IN-02, 2026-09-12).
+  /// A count handed to `QueryClient.infiniteQuery` is kept on the shared
+  /// query's options, so it also shapes every later refetch that brings no
+  /// options of its own — `invalidateQueries`, `refetchQueries` — until an
+  /// observer's fetch installs its own options, which have no count.
+  /// TanStack Query keeps it the same way.
   final int? pages;
 
   /// This, with the given fields replaced — paging fields included, so the
@@ -344,7 +442,7 @@ base class InfiniteQueryOptions<TPageData, TPageParam>
   /// `QueryOptions<InfiniteData>` that pages wherever a `QueryOptions` is
   /// accepted — `QueryClient.query` included — rather than one that fails
   /// with `MissingQueryFunctionError` unless it went through
-  /// `infiniteQuery` (fourth review, 2026-09-09). A fresh instance per read,
+  /// `infiniteQuery`. A fresh instance per read,
   /// which is harmless: it has value equality over what it reads.
   @internal
   @override
@@ -367,15 +465,25 @@ base class InfiniteQueryOptions<TPageData, TPageParam>
       };
 }
 
-/// [InfiniteQueryOptions] plus the observer-only options.
+/// [InfiniteQueryOptions] plus the observer-only options: `select`,
+/// `placeholderData`, the `refetchOn*` triggers, polling and
+/// `retryOnMount`.
 ///
 /// Sealed over exactly two shapes, as [QueryObserverOptionsBase] is:
 /// [InfiniteQueryObserverOptions], which has no `select` and whose data is
 /// the [InfiniteData] the query holds, and [InfiniteQuerySelectOptions],
-/// which requires a `select` over it (ADR-0001). `InfiniteQueryObserver`
-/// and the binding's infinite entry points take this base: either shape
-/// carries all three type arguments, so inference reads them off the
-/// options and a call site names none.
+/// which requires a `select` over it. They are separate classes because
+/// Dart cannot infer the observed type from an optional `select`: with
+/// `select` required on one class and absent from the other, the type of
+/// what the observer reports ([TData]) is always anchored.
+/// `InfiniteQueryObserver` and the Flutter binding's infinite entry points
+/// take this base: either shape carries all three type arguments, so
+/// inference reads them off the options and a call site names none.
+///
+/// There is no `pages` parameter here (see [InfiniteQueryOptions.pages]):
+/// every refetch an observer triggers refetches all pages the query holds.
+///
+/// {@category Infinite queries}
 @immutable
 sealed class InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>
     extends InfiniteQueryOptions<TPageData, TPageParam> {
@@ -416,25 +524,40 @@ sealed class InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>
   /// [InfiniteQueryObserverOptions], never on an [InfiniteQuerySelectOptions].
   SelectFn<InfiniteData<TPageData, TPageParam>, TData>? get select;
 
-  /// [QueryObserverOptionsBase.placeholderData], as an [InfiniteData].
+  /// Pages shown while the query has none of its own, as an [InfiniteData];
+  /// never written to the cache. Default: none. See
+  /// [QueryObserverOptionsBase.placeholderData].
   final PlaceholderData<InfiniteData<TPageData, TPageParam>>? placeholderData;
 
-  /// [QueryObserverOptionsBase.refetchOnMount]. A refetch re-requests every
-  /// held page, first to last.
+  /// Whether this observer subscribing triggers a refetch. Default
+  /// [RefetchOn.ifStale]. A refetch re-requests every held page, first to
+  /// last. See [QueryObserverOptionsBase.refetchOnMount].
   final RefetchOn? refetchOnMount;
 
-  /// [QueryObserverOptionsBase.refetchOnWindowFocus].
+  /// Whether the app regaining focus triggers a refetch. Default
+  /// [RefetchOn.ifStale]. A refetch re-requests every held page, first to
+  /// last. See [QueryObserverOptionsBase.refetchOnWindowFocus].
   final RefetchOn? refetchOnWindowFocus;
 
+  /// Whether the device coming back online triggers a refetch. Default
+  /// [RefetchOn.ifStale] ([RefetchOn.never] under [NetworkMode.always]). A
+  /// refetch re-requests every held page, first to last. See
   /// [QueryObserverOptionsBase.refetchOnReconnect].
   final RefetchOn? refetchOnReconnect;
 
+  /// Polls the query on a timer while this observer is subscribed. Default
+  /// [RefetchInterval.off]. Each poll re-requests every held page, first to
+  /// last — mind the cost with many pages. See
   /// [QueryObserverOptionsBase.refetchInterval].
   final RefetchInterval? refetchInterval;
 
+  /// Whether [refetchInterval] keeps polling while the app is not focused.
+  /// Default `false`. See
   /// [QueryObserverOptionsBase.refetchIntervalInBackground].
   final bool? refetchIntervalInBackground;
 
+  /// Whether a query that ended in an error is fetched again when an
+  /// observer subscribes. Default `true`. See
   /// [QueryObserverOptionsBase.retryOnMount].
   final bool? retryOnMount;
 
@@ -520,7 +643,10 @@ sealed class InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData>
 /// ```
 ///
 /// To flatten or otherwise project the pages, use
-/// [InfiniteQuerySelectOptions].
+/// [InfiniteQuerySelectOptions], or add a `select` to these options with
+/// [withSelect].
+///
+/// {@category Infinite queries}
 @immutable
 final class InfiniteQueryObserverOptions<TPageData, TPageParam>
     extends InfiniteQueryObserverOptionsBase<TPageData, TPageParam,
@@ -624,9 +750,17 @@ final class InfiniteQueryObserverOptions<TPageData, TPageParam>
     );
   }
 
-  /// [QueryObserverOptions.withSelect] for the paged shape: these options
-  /// with a [select] added and every other field carried over (release
-  /// review, 2026-09-23, LIB-3).
+  /// These options with [select] added, as [InfiniteQuerySelectOptions], and
+  /// every other field carried over — the paged counterpart of
+  /// [QueryObserverOptions.withSelect]. Useful when one shared options value
+  /// is observed both whole and through different projections:
+  ///
+  /// ```dart
+  /// final feed = feedQuery();
+  /// final titles = feed.withSelect(
+  ///   (data) => [for (final page in data.pages) ...page.map((p) => p.title)],
+  /// );
+  /// ```
   InfiniteQuerySelectOptions<TPageData, TPageParam, R> withSelect<R>(
           SelectFn<InfiniteData<TPageData, TPageParam>, R> select) =>
       InfiniteQuerySelectOptions<TPageData, TPageParam, R>(
@@ -700,6 +834,8 @@ final class InfiniteQueryObserverOptions<TPageData, TPageParam>
 ///       select: (data) => [for (final page in data.pages) ...page],
 ///     );
 /// ```
+///
+/// {@category Infinite queries}
 @immutable
 final class InfiniteQuerySelectOptions<TPageData, TPageParam, TData>
     extends InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> {
@@ -838,12 +974,23 @@ final class InfiniteQuerySelectOptions<TPageData, TPageParam, TData>
 
 /// Which end of an infinite query a fetch is extending. Travels in
 /// `FetchOptions.meta`, and so ends up in `QueryState.fetchMeta`.
+///
+/// `InfiniteQueryObserver.fetchNextPage` and `fetchPreviousPage` attach one;
+/// a fetch without one (a first load or a refetch) refetches all pages. The
+/// observer reads it back from the query's state to answer
+/// `isFetchingNextPage` and its siblings. Code outside the library rarely
+/// needs it, except to recognise a page fetch in `QueryState.fetchMeta`.
+///
+/// {@category Advanced}
 @immutable
 final class FetchMore {
-  /// A fetch extending the pages in [direction].
+  /// Marks a fetch as extending the pages in [direction]:
+  /// `FetchMore(FetchDirection.forward)` appends a next page,
+  /// `FetchMore(FetchDirection.backward)` prepends a previous one.
   const FetchMore(this.direction);
 
-  /// Which end is being extended.
+  /// Which end is being extended: [FetchDirection.forward] adds after the
+  /// last page, [FetchDirection.backward] before the first.
   final FetchDirection direction;
 
   @override

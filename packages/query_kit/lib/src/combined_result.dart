@@ -1,10 +1,5 @@
-/// Combining the results of queries whose data types differ.
-///
-/// Port-only: upstream's `useQueries({ combine })` types a heterogeneous tuple,
-/// which Dart cannot — a `List` has one element type. A record has one per
-/// position, so the combination is a function over a **record of results**,
-/// and the observing is left to whatever already produced them. Decided on
-/// https://github.com/KoTTi97/flutter_query/issues/82.
+/// Combining the results of several queries, of the same or of different
+/// data types, into one result.
 library;
 
 import 'package:meta/meta.dart';
@@ -17,13 +12,40 @@ import 'structural_sharing.dart';
 /// ([CombinedError]), or every source's data run through the combiner
 /// ([CombinedData]).
 ///
-/// Built with `combine` on a record of results:
+/// A screen that needs two queries at once — the tasks and the user — would
+/// otherwise check each result for loading and error by hand. `combine`
+/// does that once, by the rules below, and hands the combiner plain data.
+/// It works on a **record of results**, one position per query, so each
+/// source keeps its own data type; the queries are observed by whatever
+/// already produced the results (observers, or the Flutter binding's
+/// controllers), and `combine` only reads them.
 ///
 /// ```dart
-/// final overview = (status, devices).combine(
-///   (status, devices) => Overview(status, devices),
+/// final CombinedResult<Dashboard> dashboard = (tasks, user).combine(
+///   (tasks, user) => Dashboard(tasks: tasks, user: user),
 /// );
+///
+/// switch (dashboard) {
+///   case CombinedPending():
+///     showSpinner();
+///   case CombinedError(:final error):
+///     showError(error, onRetry: dashboard.retry);
+///   case CombinedData(:final data):
+///     showDashboard(data);
+/// }
 /// ```
+///
+/// Records of two to six results have `combine` (the extensions
+/// [CombineQueryResults2] to [CombineQueryResults6]). A list of results of
+/// one type has `combine` and `combineWith` ([CombineQueryResultList]).
+/// A source the screen can do without is marked with
+/// [OptionalQueryResult.optional]. An expensive combiner can be skipped when
+/// nothing changed by passing a [CombineMemo] as `memo:`.
+///
+/// Past six sources, combine a list of what the sources have in common —
+/// `<QueryResult<Object?>>[...]` at worst — and cast in the combiner. A
+/// [CombinedResult] is not itself a source, so two combinations cannot be
+/// combined.
 ///
 /// The rules, in order:
 ///
@@ -36,6 +58,11 @@ import 'structural_sharing.dart';
 ///    of a failed refetch — and the whole is [CombinedData]. A failed refetch
 ///    shows up as [CombinedData.refetchError], not as an error state: content
 ///    that is on screen is not blanked, as [QueryError.staleData] is not.
+///
+/// TanStack Query offers this as `useQueries({ combine })` over a list;
+/// Dart's lists have one element type, so here a record carries the types.
+///
+/// {@category Combining results}
 @immutable
 sealed class CombinedResult<T> {
   const CombinedResult._(this._sources);
@@ -48,16 +75,18 @@ sealed class CombinedResult<T> {
   /// Whether any source is paused — wanted to fetch and may not, offline.
   bool get isPaused => _sources.any((source) => source.isPaused);
 
-  /// Whether this is a [CombinedPending].
+  /// Whether this is a [CombinedPending]: some source has nothing to show
+  /// yet.
   bool get isPending => this is CombinedPending<T>;
 
-  /// Whether this is a [CombinedError].
+  /// Whether this is a [CombinedError]: a source failed with nothing to
+  /// show.
   bool get isError => this is CombinedError<T>;
 
-  /// Whether this is a [CombinedData].
+  /// Whether this is a [CombinedData]: every source has data.
   bool get hasData => this is CombinedData<T>;
 
-  /// The combined value, if there is one.
+  /// The combiner's result on a [CombinedData], `null` otherwise.
   T? get dataOrNull => switch (this) {
         CombinedData<T>(:final data) => data,
         _ => null,
@@ -69,7 +98,7 @@ sealed class CombinedResult<T> {
   /// single result, cancels a fetch already running over data and starts
   /// again; `false` joins it. Two combinations that share a source refetch it
   /// once each, so a pull-to-refresh over both fetches it twice unless one of
-  /// them passes `false` (release review, 2026-09-23, LIB-5).
+  /// them passes `false`.
   Future<void> refetch({bool cancelRefetch = true}) => Future.wait([
         for (final source in _sources)
           source.refetch(cancelRefetch: cancelRefetch),
@@ -103,6 +132,8 @@ sealed class CombinedResult<T> {
 }
 
 /// At least one source has nothing to show yet, and none has failed outright.
+///
+/// {@category Combining results}
 final class CombinedPending<T> extends CombinedResult<T> {
   const CombinedPending._(super.sources) : super._();
 
@@ -113,14 +144,17 @@ final class CombinedPending<T> extends CombinedResult<T> {
   String toString() => 'CombinedPending<$T>(isFetching: $isFetching)';
 }
 
-/// A source failed and has no data to fall back on.
+/// A source failed and has no data to fall back on. `retry()` refetches the
+/// failed sources.
+///
+/// {@category Combining results}
 final class CombinedError<T> extends CombinedResult<T> {
   const CombinedError._(super.sources, this.error, this.stackTrace) : super._();
 
-  /// What the first failed source threw.
+  /// What the first failed source threw, in record (or list) order.
   final Object error;
 
-  /// Where [error] was thrown.
+  /// The stack trace that came with [error].
   final StackTrace stackTrace;
 
   @override
@@ -131,6 +165,12 @@ final class CombinedError<T> extends CombinedResult<T> {
 }
 
 /// Every source has data; [data] is what the combiner made of it.
+///
+/// A source whose background refetch failed still counts as having data —
+/// its stale data goes into the combiner — and the failure shows up as
+/// [refetchError] rather than as an error state.
+///
+/// {@category Combining results}
 final class CombinedData<T> extends CombinedResult<T> {
   const CombinedData._(
     super.sources,
@@ -139,7 +179,7 @@ final class CombinedData<T> extends CombinedResult<T> {
     this.refetchErrorStackTrace,
   ) : super._();
 
-  /// The combiner's result.
+  /// What the combiner returned for the sources' current data.
   final T data;
 
   /// What the first source whose background refetch failed threw; its stale
@@ -149,11 +189,12 @@ final class CombinedData<T> extends CombinedResult<T> {
   /// The stack trace that came with [refetchError].
   final StackTrace? refetchErrorStackTrace;
 
-  /// Whether any source is showing `placeholderData`.
+  /// Whether any source is showing `placeholderData` rather than data of its
+  /// own.
   bool get isPlaceholderData =>
       _sources.any((source) => source.isPlaceholderData);
 
-  /// Whether any source is stale.
+  /// Whether any source's data is stale, by its own `staleTime`.
   bool get isStale => _sources.any((source) => source.isStale);
 
   @override
@@ -175,16 +216,38 @@ final class CombinedData<T> extends CombinedResult<T> {
 /// The combiner is skipped when every source's data is the **identical**
 /// instance it was last time — which structural sharing makes the normal case
 /// for a refetch that changed nothing. When it does run, its result is
-/// structurally shared with the previous one, as upstream shares the result of
-/// `combine`.
+/// structurally shared with the previous one, as TanStack Query shares the
+/// result of `combine`.
 ///
 /// **The combiner must be a function of the sources and of `keys`, and of
 /// nothing else.** A memo cannot see what a closure captures: a combiner that
 /// filters by a search text it closes over keeps returning the list for the
 /// old text until a source changes. Either do that work on the combined data,
 /// after `combine`, or name what the combiner reads — `keys: [search]` —
-/// which is compared with `==` and re-runs the combiner when it differs
-/// (second integration report, 2026-09-20).
+/// which is compared with `==` and re-runs the combiner when it differs.
+///
+/// ```dart
+/// class _TaskListState extends State<TaskList> {
+///   final _visible = CombineMemo<List<Task>>();
+///   String search = '';
+///
+///   CombinedResult<List<Task>> visible(
+///     QueryResult<List<Task>> tasks,
+///     QueryResult<Set<int>> hidden,
+///   ) =>
+///       (tasks, hidden).combine(
+///         (tasks, hidden) => [
+///           for (final task in tasks)
+///             if (!hidden.contains(task.id) && task.title.contains(search))
+///               task,
+///         ],
+///         memo: _visible,
+///         keys: [search],
+///       );
+/// }
+/// ```
+///
+/// {@category Combining results}
 final class CombineMemo<T> {
   /// An empty memo: the first `combine` through it runs the combiner.
   CombineMemo();
@@ -269,7 +332,9 @@ CombinedResult<R> _combine<R>(
 final Expando<QueryResult<Object?>> _optionalOrigin =
     Expando<QueryResult<Object?>>('optional origin');
 
-/// A source a combination can do without.
+/// Marks a source a combination can do without — see [optional].
+///
+/// {@category Combining results}
 extension OptionalQueryResult<T> on QueryResult<T> {
   /// This result for a combination that must neither wait for it nor fail
   /// with it: an optional feature's endpoint answers 404, and the rest of the
@@ -315,8 +380,19 @@ extension OptionalQueryResult<T> on QueryResult<T> {
   }
 }
 
-/// [combine] over a list of results of one type — a `QueriesController`'s
-/// value, say — by the same rules as a record of them.
+/// `combine` over a list of results of one type — a `QueriesObserver`'s
+/// results, say, one per item of a dynamic list — by the same rules as a
+/// record of them, and `combineWith` for that list plus one more source of
+/// another type.
+///
+/// ```dart
+/// final details = itemResults.combineWith(
+///   listResult,
+///   (items, list) => Page(title: list.title, items: items),
+/// );
+/// ```
+///
+/// {@category Combining results}
 extension CombineQueryResultList<T> on List<QueryResult<T>> {
   /// What the list amounts to together — see [CombinedResult] for the rules:
   /// a source that failed with nothing to show wins, otherwise one without
@@ -361,7 +437,16 @@ extension CombineQueryResultList<T> on List<QueryResult<T>> {
 
 // `dataOrNull as A`, not `!`: a nullable `A` holds nulls that are data.
 
-/// [combine] over two results.
+/// `combine` over a record of two results: runs the combiner once both
+/// have data, by the rules on [CombinedResult].
+///
+/// ```dart
+/// final page = (tasks, user).combine(
+///   (tasks, user) => TaskPage(tasks: tasks, owner: user),
+/// );
+/// ```
+///
+/// {@category Combining results}
 extension CombineQueryResults2<A, B> on (QueryResult<A>, QueryResult<B>) {
   /// What the two amount to together — see [CombinedResult] for the rules.
   /// [combiner] runs only when both have data. With a [memo] it must be a
@@ -373,7 +458,10 @@ extension CombineQueryResults2<A, B> on (QueryResult<A>, QueryResult<B>) {
           memo, keys);
 }
 
-/// [combine] over three results.
+/// `combine` over a record of three results: runs the combiner once all
+/// three have data, by the rules on [CombinedResult].
+///
+/// {@category Combining results}
 extension CombineQueryResults3<A, B, C> on (
   QueryResult<A>,
   QueryResult<B>,
@@ -390,7 +478,10 @@ extension CombineQueryResults3<A, B, C> on (
           keys);
 }
 
-/// [combine] over four results.
+/// `combine` over a record of four results: runs the combiner once all
+/// four have data, by the rules on [CombinedResult].
+///
+/// {@category Combining results}
 extension CombineQueryResults4<A, B, C, D> on (
   QueryResult<A>,
   QueryResult<B>,
@@ -408,7 +499,10 @@ extension CombineQueryResults4<A, B, C, D> on (
           keys);
 }
 
-/// [combine] over five results.
+/// `combine` over a record of five results: runs the combiner once all
+/// five have data, by the rules on [CombinedResult].
+///
+/// {@category Combining results}
 extension CombineQueryResults5<A, B, C, D, E> on (
   QueryResult<A>,
   QueryResult<B>,
@@ -427,10 +521,13 @@ extension CombineQueryResults5<A, B, C, D, E> on (
           keys);
 }
 
-/// [combine] over six results. Past six, combine a list of what the sources
-/// have in common — `<QueryResult<Object?>>[...]` at worst — and cast in the
-/// combiner; a [CombinedResult] is not a source, so two combinations cannot
-/// be combined.
+/// `combine` over a record of six results: runs the combiner once all six
+/// have data, by the rules on [CombinedResult]. Past six, combine a list of
+/// what the sources have in common — `<QueryResult<Object?>>[...]` at worst
+/// — and cast in the combiner; a [CombinedResult] is not a source, so two
+/// combinations cannot be combined.
+///
+/// {@category Combining results}
 extension CombineQueryResults6<A, B, C, D, E, F> on (
   QueryResult<A>,
   QueryResult<B>,

@@ -1,0 +1,1 @@
+Mutations change data on the server. `MutationOptions` describe one (the mutation function and its `onMutate`/`onSuccess`/`onError`/`onSettled` callbacks), `MutationResult` reports it, and a `MutationScope` runs related mutations one at a time.

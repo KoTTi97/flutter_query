@@ -1,4 +1,4 @@
-/// Port of `query-core/src/queryObserver.ts` at upstream `50680b98c`.
+/// [QueryObserver]: one query's state turned into results for listeners.
 library;
 
 import 'dart:async';
@@ -19,20 +19,79 @@ import 'timers.dart';
 
 /// What a [QueryObserver.subscribe] listener receives: the new
 /// [QueryResult], each time it changes.
+///
+/// {@category Observers}
 typedef QueryObserverListener<TData> = void Function(QueryResult<TData> result);
 
-/// Watches one query and turns its state into a [QueryResult].
+/// Watches one query in a [QueryClient]'s cache and reports its state to
+/// listeners as a [QueryResult].
 ///
-/// Two type parameters, not upstream's five: what the cache holds
-/// ([TQueryData]) and what the consumer sees after `select` ([TData]).
-/// See https://github.com/KoTTi97/flutter_query/issues/7. Takes either
-/// options shape — a `QueryObserverOptions<T>` makes a `QueryObserver<T, T>`,
-/// a `QuerySelectOptions<TQueryData, TData>` a `QueryObserver<TQueryData,
-/// TData>` — through their sealed base (ADR-0001).
+/// An observer is what a screen, a widget or a service holds to *use* a
+/// query. It finds or creates the cache entry for its options' key, fetches
+/// when its options say so — on the first subscribe if there is no data or
+/// the data is stale, on focus and reconnect, on a polling interval — and
+/// recomputes a [QueryResult] each time the query changes, telling its
+/// listeners whenever that result differs from the last one. Several
+/// observers of the same key share one query and one fetch. The Flutter
+/// binding's widgets and controllers are built on observers; pure Dart code
+/// uses one directly.
+///
+/// The lifecycle:
+///
+/// - **Construct** with a client and options. This resolves the options
+///   against the client's defaults and joins or creates the query, but does
+///   not fetch. [currentResult] is readable at once.
+/// - **[subscribe]** a listener. The first listener attaches the observer to
+///   the query, starts a fetch if one is due, and arms the stale and polling
+///   timers. `subscribe` returns the function that removes the listener.
+/// - **Use** it: read [currentResult], call [refetch], or hand it new
+///   options with [setOptions] — a new key moves it to another query.
+/// - **Stop**: when the last listener is removed the observer detaches from
+///   the query ([destroy] runs), which starts the query's `gcTime` clock.
+///   Subscribing again attaches it again.
+///
+/// The two type parameters: [TQueryData] is what the query function returns
+/// and the cache holds, and [TData] is what listeners see — the same type
+/// when there is no `select`, the `select`'s return type when there is one.
+/// Both are inferred from the options: a `QueryObserverOptions<T>` makes a
+/// `QueryObserver<T, T>`, a `QuerySelectOptions<TQueryData, TData>` a
+/// `QueryObserver<TQueryData, TData>`.
+///
+/// ```dart
+/// final client = QueryClient();
+/// final observer = QueryObserver(
+///   client,
+///   QueryObserverOptions<List<Task>>(
+///     queryKey: QueryKey(['tasks']),
+///     queryFn: (_) => api.tasks(),
+///   ),
+/// );
+/// final unsubscribe = observer.subscribe((result) {
+///   switch (result) {
+///     case QueryPending():
+///       print('Loading…');
+///     case QuerySuccess(:final data):
+///       print('${data.length} tasks');
+///     case QueryError(:final error):
+///       print('Failed: $error');
+///   }
+/// });
+/// // Later, when the tasks are no longer needed:
+/// unsubscribe();
+/// ```
+///
+/// TanStack Query's `QueryObserver` has five type parameters; this one
+/// keeps the two a Dart caller actually names.
+///
+/// {@category Observers}
 class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// Creates an observer for [options], resolved against the client's
   /// defaults, and builds — or joins — the query for its key. No fetch happens
   /// until the first [subscribe]; [currentResult] is readable at once.
+  ///
+  /// Throws an [ArgumentError] if the options have no `select` and a
+  /// [TQueryData] is not a [TData]: without a projection the observer reports
+  /// the cached data as it is, so the two types must agree.
   QueryObserver(
     this._client,
     QueryObserverOptionsBase<TQueryData, TData> options,
@@ -60,27 +119,37 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   // Function(QueryResult<TData>)>` puts TData in a contravariant position of a
   // superinterface, which the language forbids. A field has no such rule, so
   // composition keeps the listener type exact — and the registry is the same
-  // one `Subscribable` itself holds (C50).
+  // one `Subscribable` itself holds.
   final ListenerRegistry<QueryObserverListener<TData>> _listeners =
       ListenerRegistry<QueryObserverListener<TData>>();
 
-  /// Whether anyone is subscribed — upstream's "mounted". Fetch-on-mount, the
-  /// stale timer and the polling timer only run while this is true.
+  /// Whether anyone is subscribed (TanStack Query calls this "mounted").
+  /// Fetch-on-mount, the stale timer and the polling timer only run while
+  /// this is true.
   bool get hasListeners => _listeners.hasListeners;
 
   /// Registers [listener] and returns the function that removes it again.
   ///
-  /// Each handle removes its own registration, once — see [ListenerRegistry].
+  /// The listener is called with each new [QueryResult] from then on —
+  /// including the ones a fetch started by this subscribe produces — but not
+  /// with the result that was current before; read that from
+  /// [currentResult]. A listener that throws has its error reported to the
+  /// current zone; the other listeners still run. The first listener
+  /// attaches the observer to its query, fetches if the options say
+  /// a fetch is due (no data yet, or stale data and `refetchOnMount`), and
+  /// arms the stale and polling timers. Removing the last listener detaches
+  /// the observer again, as [destroy] does.
+  ///
+  /// Each returned function removes its own registration, and only once:
+  /// calling it again does nothing, even if the same listener was added
+  /// twice.
   ///
   /// The first subscribe runs user code — an `Enabled.when`, a
   /// `StaleTime.dynamic`, a `RefetchOn.when`, a `RefetchInterval.dynamic`, a
-  /// `PlaceholderData.compute` — and a throw there is the caller's to see, so
-  /// it propagates. But it propagates *clean*: the listener is removed and the
-  /// observer detached again before it leaves, exactly as if the subscribe
-  /// had never happened. Upstream adds the listener to its `Set` first and
-  /// lets `onSubscribe` throw over it; the caller then holds no handle for a
-  /// listener that is registered and an observer that is attached, and the
-  /// query is never collected (pre-release verification, 2026-09-12, AR-02).
+  /// `PlaceholderData.compute` — and a throw there propagates to the caller.
+  /// It leaves nothing behind: the listener is removed and the observer
+  /// detached again before the error leaves, as if the subscribe had never
+  /// happened. (TanStack Query keeps the listener registered in that case.)
   void Function() subscribe(QueryObserverListener<TData> listener) {
     final remove = _listeners.add(listener, onRemoved: _onUnsubscribe);
     try {
@@ -113,9 +182,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   // Captured when the selector throws, not per result: a standing select
   // error read at `clock.now()` on every `createResult` made two results
   // computed a millisecond apart unequal, and every `setOptions` a
-  // notification — through the binding, a rebuild loop (fourth review,
-  // 2026-09-09). Upstream reads `Date.now()` there too, but its render
-  // tracking hides the churn; this port has no such filter.
+  // notification — through the binding, a rebuild loop. Upstream reads `Date.now()` there too, but its render
+  // tracking hides the churn; this package has no such filter.
   DateTime? _selectErrorUpdatedAt;
   TData Function(TQueryData data)? _selectFn;
   TData? _selectResult;
@@ -126,7 +194,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   // `_selectResult` is what a throwing `select` shows as `staleData`, and
   // that is only stale data of *this* query if this query once reported it:
   // after a key change the previous key's selection was labelled the new
-  // key's `isRefetchError` (OB-01, 2026-09-12). Upstream keeps `#selectResult`
+  // key's `isRefetchError`. Upstream keeps `#selectResult`
   // across `#updateQuery` and has the same leak.
   Query<TQueryData>? _selectQuery;
   int _resultRevision = 0;
@@ -163,16 +231,23 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   Timer? _refetchTimer;
   Duration? _currentRefetchInterval;
   // The resolved stale time the stale timer was last armed for — the
-  // `_currentRefetchInterval` of the stale timer (L2-3).
+  // `_currentRefetchInterval` of the stale timer.
   StaleTime? _armedStaleTime;
 
   // What `enabled` came to when this observer last committed options or
   // subscribed: [setOptions]' and the preview's "was it enabled?". Not the
   // last result's `isEnabled`, which a query update or a preview recomputes
-  // against the new world (release review, 2026-09-23, CORE-2, L2-5).
+  // against the new world.
   late bool _lastSeenEnabled;
 
-  /// The most recently computed result.
+  /// The result as of now — the last one computed, which is also the last
+  /// one listeners were told about unless [getOptimisticResult] has replaced
+  /// it since.
+  ///
+  /// Readable right after construction, before any subscribe; it is then
+  /// the query's state as the options see it (typically [QueryPending] for a
+  /// query that has never been fetched). Read it after [subscribe] to get the
+  /// value the listener will not be called with.
   QueryResult<TData> get currentResult => _currentResult;
 
   /// The cache entry this observer is watching right now. Changes when
@@ -238,8 +313,23 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   /// Replaces the options, switching queries if the key changed.
   ///
+  /// Call it whenever the inputs to the options change — a new id in the
+  /// key, a flipped `enabled`. Handing it options equal to the current ones
+  /// is cheap and notifies nobody. While subscribed, it fetches when the
+  /// observer moved to a query whose data is stale or missing, or when
+  /// `enabled` went from false to true over stale data, and it re-arms the
+  /// stale and polling timers when what they depend on changed. Listeners
+  /// hear about the new result if it differs from the last.
+  ///
+  /// `enabled` is compared with what it came to the last time this observer
+  /// applied options, not with the previous options evaluated again now, so
+  /// an `Enabled.when` over state outside the cache takes effect on the next
+  /// `setOptions` after that state changed.
+  ///
   /// Throws an [ArgumentError] before touching anything if the options have
   /// no `select` and [TQueryData] is not a [TData] — see [QueryObserver.new].
+  /// A throwing `InitialData.compute` for the new query propagates, and the
+  /// observer stays on the options and the query it had.
   void setOptions(QueryObserverOptionsBase<TQueryData, TData> options) {
     _checkDataType(options);
     final prevOptions = _options;
@@ -249,12 +339,12 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // new at the same instant, so a predicate over state outside the cache —
     // "a write is in flight", a connection flag — never reads as changed:
     // both sides see the same world, and polling paused that way never
-    // resumed (first integration, #84). Against what the observer last saw,
+    // resumed. Against what the observer last saw,
     // handing it its options again — which every rebuild does — is a
     // re-evaluation. A dedicated field, not the last result's `isEnabled`:
     // a preview and every query update recompute that result with the *new*
     // world, and either one between the flip and the rebuild swallowed the
-    // fetch (release review, 2026-09-23, CORE-2).
+    // fetch.
     final wasEnabled = _lastSeenEnabled;
 
     final nextOptions =
@@ -264,17 +354,17 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     final nextQuery =
         _client.queryCache.build<TQueryData>(_client, nextOptions.queryOptions);
     // `InitialData.compute` is user code, and an existing query with no data
-    // runs it here. Its throw is the caller's (AR-05) — and it comes before
+    // runs it here. Its throw is the caller's — and it comes before
     // the switch, so the observer is still on the options and the query it
     // had, and the previous query's fetch still has its observer: switching
     // first detached it, which cancelled and reverted that fetch before the
-    // rollback could re-attach (release review, 2026-09-23, L2-1).
+    // rollback could re-attach.
     //
     // The options, though, are committed before the seed, as upstream
     // assigns `this.options` before `setOptions`: with the key unchanged the
     // seed's update reaches this observer, and it has to compute its result
-    // with the new `select`, not run the old one and notify with that
-    // (V-C-1). Only `_options` is rolled back on a throw — nothing has
+    // with the new `select`, not run the old one and notify with that.
+    // Only `_options` is rolled back on a throw — nothing has
     // switched yet.
     _options = nextOptions;
     try {
@@ -304,7 +394,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // `Enabled.when` or `StaleTime.dynamic` built inline is a new closure on
     // every build, and comparing the wrappers would restart the timers — the
     // polling one included — on every rebuild, so a widget rebuilding faster
-    // than its interval would never poll (third review, 2026-09-09).
+    // than its interval would never poll.
     final queryChanged = !identical(_currentQuery, prevQuery);
     final enabledChanged = queryChanged
         ? _options.enabled.resolve(_currentQuery) !=
@@ -315,8 +405,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // timer was last armed for, not with the previous options resolved now:
     // a `StaleTime.dynamic` over outside state reads the same world on both
     // sides and never differed, so a stale time shortened by outside state
-    // was never armed and `isStale` stayed false (release review, 2026-09-23,
-    // L2-3 — #84's twin).
+    // was never armed and `isStale` stayed false.
     if (mounted &&
         (queryChanged ||
             enabledChanged ||
@@ -337,9 +426,13 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// The result these options would produce right now, building the query if
   /// it does not exist yet.
   ///
-  /// This is the adapter contract's synchronous read: a widget's first build
-  /// shows `isLoading` rather than a stale idle state
-  /// (https://github.com/KoTTi97/flutter_query/issues/15).
+  /// The result already accounts for the fetch that subscribing (or
+  /// [setOptions], if subscribed) is about to start: it reports
+  /// `isFetching` — or `isLoading` for a query with no data — rather than an
+  /// idle state that the next frame would contradict. That is what makes it
+  /// the right read for a UI's first build, before the subscription exists.
+  /// It fetches nothing and does not apply the options; it does become
+  /// [currentResult] until the next real update.
   QueryResult<TData> getOptimisticResult(
     QueryObserverOptionsBase<TQueryData, TData> options,
   ) {
@@ -368,15 +461,27 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     return result;
   }
 
-  /// Refetches, completing with the result the refetch produced.
+  /// Fetches the query again, whether or not its data is stale, and
+  /// completes with the [currentResult] after the fetch settled.
+  ///
+  /// With [cancelRefetch] `true` (the default), a fetch that is already
+  /// running for a query that has data is cancelled and replaced by this
+  /// one; with `false`, this call joins the running fetch instead. A query
+  /// with no data always joins. The returned future never completes with an
+  /// error: a failed fetch completes with a [QueryError] result. The
+  /// query's `enabled` is not consulted — an explicit refetch runs on a
+  /// disabled query too.
   Future<QueryResult<TData>> refetch({bool cancelRefetch = true}) async {
     await executeFetch(cancelRefetch: cancelRefetch);
     updateResult();
     return _currentResult;
   }
 
-  /// Defaults to false, as upstream's unset `cancelRefetch` does: only an
-  /// explicit `refetch()` cancels a fetch that is already running.
+  /// Runs the query's fetch with this observer's options; the error, if
+  /// any, lands in the query's state and is never rethrown.
+  ///
+  /// [cancelRefetch] defaults to false: only an explicit [refetch] cancels
+  /// a fetch that is already running.
   ///
   /// [meta] rides along into `QueryState.fetchMeta`; infinite queries put the
   /// page direction there.
@@ -401,8 +506,8 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
   /// not only in `createResult`: there it was an `assert`, and the assertion
   /// fired inside `Query._dispatch` during the *fetch* — the `AssertionError`
   /// became the shared query's error state, this observer stayed pending, and
-  /// a correctly typed observer on the same key saw the query in error (fifth
-  /// review, 2026-09-09). A subtype test rather than exact equality, because
+  /// a correctly typed observer on the same key saw the query in error. A
+  /// subtype test rather than exact equality, because
   /// `QueryObserver<int, num>` without a `select` is sound and
   /// `QueryObserver<int, String>` is not; on every platform the reified
   /// `List<TQueryData>` is a `List<TData>` exactly when that holds.
@@ -450,8 +555,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // cut to 24.8 days — and the callback then finds the data still fresh.
     // It used to stop there, and `isStale` never flipped by timer; upstream
     // adds a millisecond for the truncation and has no clamp. The deadline is
-    // the truth: still fresh means "arm again for what is left" (fifth
-    // review, 2026-09-09).
+    // the truth: still fresh means "arm again for what is left".
     _staleTimer = Timer(
         clampTimerDuration(
             ceilToMilliseconds(deadline.difference(clock.now()))), () {
@@ -505,10 +609,18 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   // ---------------------------------------------------------------- result
 
-  /// Turns a query's state into the result an observer reports.
+  /// Turns [query]'s state into the result this observer reports under
+  /// [options]: applies placeholder data while the query has none, runs
+  /// `select` (memoised on its input and the selector), turns a throwing
+  /// `select` into a [QueryError] that keeps the last selected value as its
+  /// stale data, and fills in the derived flags such as `isStale`.
   ///
-  /// `@protected` rather than private so `InfiniteQueryObserver` can extend it
-  /// (https://github.com/KoTTi97/flutter_query/issues/16).
+  /// With [optimistic], the state is first adjusted for the fetch that a
+  /// subscribe or [setOptions] is about to start — see
+  /// [getOptimisticResult].
+  ///
+  /// Only for subclasses: `InfiniteQueryObserver` extends this observer.
+  /// Callers read [currentResult] instead.
   @protected
   QueryResult<TData> createResult(
     Query<TQueryData> query,
@@ -527,7 +639,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
       final mounted = hasListeners;
       final fetchOnMount = !mounted && options.shouldFetchOnMount(query);
       // The same "was it enabled?" [setOptions] is about to ask, so the
-      // preview shows the fetch the commit starts (L2-5).
+      // preview shows the fetch the commit starts.
       final fetchOptionally = mounted &&
           options.shouldFetchOptionally(query, _currentQuery, _options,
               wasEnabled: _lastSeenEnabled);
@@ -598,8 +710,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
         // The selector is compared with `==`, as the options compare it: an
         // instance-method tear-off is `==` to the next tear-off of the same
         // method but never `identical`, so an `identical` memo re-ran such a
-        // `select` on every `setOptions` that changed nothing (ninth review,
-        // 2026-09-10, C14). A closure is only ever `==` to itself.
+        // `select` on every `setOptions` that changed nothing. A closure is only ever `==` to itself.
         if (_hasSelectInput &&
             candidate == _selectInput &&
             select == _selectFn) {
@@ -608,7 +719,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           // Equal input through the same selector is this query's selection
           // too, whichever query first produced it — unless the input is a
           // placeholder, which is no query's data: a selection of it stands
-          // behind nobody's select error (release review, 2026-09-23, L2-2).
+          // behind nobody's select error.
           _selectQuery = isPlaceholderData ? null : query;
         } else {
           if (!identical(query, _selectQuery)) {
@@ -633,7 +744,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             // `TData`. So only the recognised opt-out steps back from the
             // selection — a hook that shares in its own way leaves the
             // selection at the default walk, rather than paying for an
-            // opt-out it never asked for (pre-release review, 2026-09-12, F4).
+            // opt-out it never asked for.
             final selected = select(candidate as TQueryData);
             outData = isNoStructuralSharing(options.structuralSharing)
                 ? selected
@@ -641,7 +752,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
             _selectResult = outData;
             _hasSelectResult = true;
             hasOutData = true;
-            // A selection of a placeholder belongs to no query (L2-2): the
+            // A selection of a placeholder belongs to no query: the
             // next pass over this query's real data starts without stale
             // data, as a failed first fetch does.
             if (isPlaceholderData) _selectQuery = null;
@@ -676,8 +787,7 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
           // Cached data goes through as it is, as upstream's `data =
           // state.data`: the cache write already applied `structuralSharing`,
           // and re-sharing it against the last result here hid an opt-out
-          // (`(_, next) => next`) from every reader — the showcase's
-          // select-and-sharing screen found it (2026-09-09).
+          // (`(_, next) => next`) from every reader.
           outData = candidate as TData;
         }
         hasOutData = true;
@@ -782,18 +892,23 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
 
   /// Whether listeners hear about [next], given [previous] — the result they
   /// last heard about, `null` before the first. Here: the first result, and
-  /// then every one that is not value-equal to the last. `updateResult` has
-  /// already installed [next] as [currentResult] when this is asked, so a
-  /// subclass can read what it derives from the result and the query;
-  /// `InfiniteQueryObserver` adds its paging flags this way, which are not
-  /// part of the result and used to change without a word (fifth review,
-  /// 2026-09-09).
+  /// then every one that is not value-equal to the last.
+  ///
+  /// A hook for subclasses that report state beside the result. [updateResult]
+  /// has already installed [next] as [currentResult] when this is asked, so
+  /// an override can compare whatever it derives from the result and the
+  /// query; `InfiniteQueryObserver` adds its paging flags (`hasNextPage`,
+  /// `isFetchingNextPage`, ...) this way, so a listener hears when one of
+  /// them changes even if the result itself did not.
   @protected
   bool shouldNotify(QueryResult<TData>? previous, QueryResult<TData> next) =>
       previous == null || next != previous;
 
-  /// Recomputes the result and notifies listeners if it changed — as
-  /// [shouldNotify] decides.
+  /// Recomputes the result from the query's current state and notifies
+  /// listeners if it changed — as [shouldNotify] decides.
+  ///
+  /// The observer calls this itself whenever the query changes, after its
+  /// own fetches and when its stale timer fires; a caller rarely needs to.
   void updateResult() {
     final prevResult = _previousResult;
     final nextResult = createResult(_currentQuery, _options);
@@ -908,14 +1023,12 @@ typedef _SelectionSnapshot<TInput, TOutput> = ({
 });
 
 /// The refetch rules, as questions asked of one observer's options about one
-/// query. They were five free functions over `Query<Object?>` at the end of
-/// this file (ninth review, C53): the rules belong to the *options* — the
-/// query supplies the state, the options supply `enabled`, `staleTime` and the
-/// three `refetchOn*` fields, and every one of them reads
-/// `options.<rule>(query)` now.
+/// query. The rules belong to the *options*: the query supplies the state,
+/// the options supply `enabled`, `staleTime` and the three `refetchOn*`
+/// fields, and every one of them reads `options.<rule>(query)`.
 ///
-/// **Four similar names, four different questions** — the "round trip" C53
-/// describes is this, and it terminates because the third step reads a field:
+/// **Four similar names, four different questions** — a round trip between
+/// query and observer that terminates because the third step reads a field:
 ///
 /// 1. [Query.isStale] — the *query's* view: does any observer call its own
 ///    result stale, or, with nothing observing, is there no data / has it been
@@ -965,7 +1078,7 @@ extension _RefetchRules on DefaultedQueryObserverOptions<Object?, Object?> {
       shouldFetchOn(query, refetchOnReconnect);
 
   /// `setOptions` moved to another query, or re-enabled this one, and what it
-  /// landed on is stale. Upstream's `shouldFetchOptionally`.
+  /// landed on is stale. (TanStack Query: `shouldFetchOptionally`.)
   bool shouldFetchOptionally(
     Query<Object?> query,
     Query<Object?> prevQuery,

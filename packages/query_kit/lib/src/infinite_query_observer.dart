@@ -1,4 +1,4 @@
-/// Port of `query-core/src/infiniteQueryObserver.ts` at upstream `50680b98c`.
+/// [InfiniteQueryObserver]: a [QueryObserver] that also pages.
 library;
 
 import 'infinite_query.dart';
@@ -21,13 +21,46 @@ typedef _DirectionFlags = ({
 
 /// Watches one infinite query, and pages it.
 ///
-/// The paging surface lives here rather than on the result: upstream fattens
-/// its result object with `hasNextPage` and friends because a React hook
-/// returns exactly one value, while a sealed [QueryResult] cannot grow fields
-/// per query kind without every consumer paying for them
-/// (https://github.com/KoTTi97/flutter_query/issues/16). What the shape
-/// costs is paid in [shouldNotify]: a listener is told when a paging flag
-/// changes, whether or not the result did.
+/// Everything [QueryObserver] does applies — subscribe, [currentResult],
+/// [refetch], [setOptions], [destroy] — with an [InfiniteData] as the
+/// query's data (or whatever a `select` makes of it). On top, it adds:
+///
+/// - paging: [fetchNextPage] and [fetchPreviousPage];
+/// - whether there is more: [hasNextPage] and [hasPreviousPage];
+/// - which fetch is running or failed: [isFetchingNextPage],
+///   [isFetchingPreviousPage], [isFetchNextPageError],
+///   [isFetchPreviousPageError], and [isRefetching] / [isRefetchError]
+///   narrowed to refetches of the pages already held.
+///
+/// These live on the observer rather than on the result, because the
+/// sealed [QueryResult] is shared by every kind of query. A listener is
+/// still told when one of them changes, whether or not the result did, so
+/// reading them in the listener is always up to date. (TanStack Query puts
+/// them on its infinite result object instead.)
+///
+/// ```dart
+/// final observer = InfiniteQueryObserver(
+///   client,
+///   InfiniteQueryObserverOptions<List<Post>, int>(
+///     queryKey: QueryKey(['feed']),
+///     pageFn: (context) => api.feed(offset: context.pageParam),
+///     initialPageParam: 0,
+///     getNextPageParam: (page, pages, pageParam, pageParams) =>
+///         page.isEmpty ? null : pageParam + page.length,
+///   ),
+/// );
+/// final unsubscribe = observer.subscribe((result) {
+///   if (result case QuerySuccess(:final data)) {
+///     render(data.flatten<Post>(), canLoadMore: observer.hasNextPage);
+///   }
+/// });
+/// // When the user scrolls to the end:
+/// if (observer.hasNextPage && !observer.isFetchingNextPage) {
+///   await observer.fetchNextPage();
+/// }
+/// ```
+///
+/// {@category Observers}
 class InfiniteQueryObserver<TPageData, TPageParam, TData>
     extends QueryObserver<InfiniteData<TPageData, TPageParam>, TData> {
   /// Creates an observer for [options], whose paging half becomes the query's
@@ -39,14 +72,16 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
 
   /// The paging half of the current options.
   ///
-  /// Read off the options' behaviour rather than held beside them: a copy
-  /// kept in parallel went stale on a direct [setOptions], and `hasNextPage`
-  /// then asked the old `getNextPageParam` while the fetch used the new one
-  /// (fourth review, 2026-09-09).
+  /// Always the paging functions of the options in force, including after
+  /// a [setOptions], so [hasNextPage] asks the same `getNextPageParam` the
+  /// next fetch will use.
   InfiniteQueryOptions<TPageData, TPageParam> get infiniteOptions =>
       _pagingOptionsOf(options.behavior);
 
-  /// Replaces the options — the typed convenience over [setOptions].
+  /// Replaces the options, taking the infinite options a user writes — the
+  /// typed form of [setOptions], which behaves the same otherwise: a new key
+  /// moves the observer to another query, and a change that makes a fetch
+  /// due starts one.
   void setInfiniteOptions(
     InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) =>
@@ -96,11 +131,15 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   InfiniteData<TPageData, TPageParam>? get _data =>
       currentQuery.state.hasData ? currentQuery.state.data : null;
 
-  /// Whether [fetchNextPage] would fetch anything.
+  /// Whether [fetchNextPage] would fetch anything: there are pages, and
+  /// `getNextPageParam` returns a param for the last one. False before the
+  /// first page has arrived.
   bool get hasNextPage =>
       hasNextPageOf<TPageData, TPageParam>(infiniteOptions, _data);
 
-  /// Whether [fetchPreviousPage] would fetch anything.
+  /// Whether [fetchPreviousPage] would fetch anything: there are pages,
+  /// `getPreviousPageParam` is set, and it returns a param for the first
+  /// one. False before the first page has arrived.
   bool get hasPreviousPage =>
       hasPreviousPageOf<TPageData, TPageParam>(infiniteOptions, _data);
 
@@ -109,30 +148,31 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
     return meta is FetchMore ? meta.direction : null;
   }
 
-  /// Whether a [fetchNextPage] is in flight. Upstream's `isFetchingNextPage`.
+  /// Whether a [fetchNextPage] is in flight — the "loading more" state at
+  /// the end of a list. A refetch of the held pages does not count.
   bool get isFetchingNextPage =>
       currentResult.isFetching && _fetchDirection == FetchDirection.forward;
 
-  /// Whether a [fetchPreviousPage] is in flight. Upstream's
-  /// `isFetchingPreviousPage`.
+  /// Whether a [fetchPreviousPage] is in flight — the "loading more" state
+  /// at the start of a list.
   bool get isFetchingPreviousPage =>
       currentResult.isFetching && _fetchDirection == FetchDirection.backward;
 
   /// Whether the query's error came from a [fetchNextPage] rather than a
-  /// refetch or the initial load. Upstream's `isFetchNextPageError`.
+  /// refetch or the initial load. The pages already held are still there;
+  /// a UI typically shows a retry button at the end of the list.
   bool get isFetchNextPageError =>
       currentResult.isError && _fetchDirection == FetchDirection.forward;
 
-  /// Whether the query's error came from a [fetchPreviousPage]. Upstream's
-  /// `isFetchPreviousPageError`.
+  /// Whether the query's error came from a [fetchPreviousPage] rather than
+  /// a refetch or the initial load.
   bool get isFetchPreviousPageError =>
       currentResult.isError && _fetchDirection == FetchDirection.backward;
 
   /// Whether the pages already held are being refetched — *not* a page being
-  /// added. The sealed result's `isRefetching` is true while a page is
-  /// fetched, because the query is fetching and has data; upstream's infinite
-  /// result subtracts the page directions, and so does this, where the other
-  /// paging flags live.
+  /// added. The result's own `isRefetching` is also true while a page is
+  /// fetched, because the query is fetching and has data; this one leaves
+  /// page fetches out.
   bool get isRefetching =>
       currentResult.isRefetching &&
       !isFetchingNextPage &&
@@ -161,13 +201,11 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   InfiniteData<TPageData, TPageParam>? _notifiedData;
 
   /// The base rule, or a change in any paging flag since the last
-  /// notification. The flags are not part of the result, so a
+  /// notification. The flags are not part of the result, so without this a
   /// `fetchPreviousPage` cancelling a `fetchNextPage` (same data, still
   /// fetching, other direction) and a `setOptions` whose new
   /// `getNextPageParam` says "no more" (same result, `hasNextPage` now false)
-  /// both left listeners — and a binding's "load more" button — unaware
-  /// (fifth review, 2026-09-09). Upstream's flags ride on its result object
-  /// and are compared with the rest of it.
+  /// would leave listeners — and a "load more" button — unaware.
   ///
   /// Exact, but lazy about user code: the six flags that follow from the
   /// result and the fetch direction are compared as values, while
@@ -175,11 +213,12 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   /// function — are only re-asked when the paging functions or the data
   /// differ from what the last notification was answered over, old over old
   /// against new over new. Same functions over the same data is the same
-  /// answer, and the ported suite counts those calls. The data is part of
+  /// answer, so the paging functions are not called more often than needed.
+  /// The data is part of
   /// the key because an equal *result* does not mean equal data: a `select`
   /// that collapses the change — `pages.length` over a page whose cursor
-  /// turned null — left the flags flipping with no notification when the
-  /// write kept `dataUpdatedAt` too (ninth review, 2026-09-10, C13).
+  /// turned null — would otherwise leave the flags flipping with no
+  /// notification.
   ///
   /// The snapshot is taken here, on `true`, because `updateResult` notifies
   /// exactly then.
@@ -223,13 +262,30 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
   ///
   /// This does not commit the query or its options. [hasNextPage],
   /// [hasPreviousPage] and paging actions continue to describe the committed
-  /// query until [setInfiniteOptions] applies the previewed options.
+  /// query until [setInfiniteOptions] applies these options.
   QueryResult<TData> getOptimisticInfiniteResult(
     InfiniteQueryObserverOptionsBase<TPageData, TPageParam, TData> options,
   ) =>
       getOptimisticResult(client.infiniteObserverOptions(options));
 
-  /// Fetches the page after the ones already held.
+  /// Fetches the page after the ones already held and appends it.
+  ///
+  /// The page's param is what `getNextPageParam` returns for the last held
+  /// page. When that is `null` ([hasNextPage] is false), the page function
+  /// is not called and the pages stay as they are. On a query with no pages
+  /// yet, this loads the first page from `initialPageParam`.
+  ///
+  /// With [cancelRefetch] `true` (the default), a fetch already running on
+  /// a query that holds pages — a refetch or another page fetch — is
+  /// cancelled and this one starts; with `false`, or while the first page is
+  /// still loading, this call joins the running fetch and adds no page. Check
+  /// [isFetchingNextPage] first to avoid cancelling a page fetch of your
+  /// own, as a scroll listener firing repeatedly would.
+  ///
+  /// With `maxPages` set, a page added past the limit drops the first page.
+  /// Completes with [currentResult] once the fetch settled; it never
+  /// completes with an error — a failed page fetch completes with a
+  /// [QueryError], and [isFetchNextPageError] is then true.
   Future<QueryResult<TData>> fetchNextPage({bool cancelRefetch = true}) async {
     await executeFetch(
       cancelRefetch: cancelRefetch,
@@ -239,7 +295,15 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
     return currentResult;
   }
 
-  /// Fetches the page before the ones already held.
+  /// Fetches the page before the ones already held and prepends it.
+  ///
+  /// The mirror of [fetchNextPage]: the param comes from
+  /// `getPreviousPageParam` for the first held page, and when there is none
+  /// ([hasPreviousPage] is false, or `getPreviousPageParam` is not set) the
+  /// pages stay as they are. [cancelRefetch] works as there, and with
+  /// `maxPages` set a page added past the limit drops the last page. A
+  /// failure completes with a [QueryError] and sets
+  /// [isFetchPreviousPageError].
   Future<QueryResult<TData>> fetchPreviousPage(
       {bool cancelRefetch = true}) async {
     await executeFetch(
@@ -253,7 +317,7 @@ class InfiniteQueryObserver<TPageData, TPageParam, TData>
 
 /// The top-level `hasNextPage` under a name the observer can reach from
 /// inside its class, where `hasNextPage` is its own getter. Not exported:
-/// nothing outside the package needs it (ninth review, 2026-09-10, C24).
+/// nothing outside the package needs it.
 bool hasNextPageOf<TPageData, TPageParam>(
   InfiniteQueryOptions<TPageData, TPageParam> options,
   InfiniteData<TPageData, TPageParam>? data,

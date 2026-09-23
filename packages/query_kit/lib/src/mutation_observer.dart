@@ -1,4 +1,4 @@
-/// Port of `query-core/src/mutationObserver.ts` at upstream `50680b98c`.
+/// The mutation observer: runs mutations and reports their results.
 library;
 
 import 'dart:async';
@@ -13,11 +13,46 @@ import 'query_client.dart';
 
 /// What a [MutationObserver.subscribe] listener receives: the new
 /// [MutationResult], each time it changes.
+///
+/// {@category Observers}
 typedef MutationObserverListener<TData, TVariables> = void Function(
     MutationResult<TData, TVariables> result);
 
-/// Watches one mutation at a time and turns its state into a
-/// [MutationResult].
+/// Runs mutations and reports the latest one's state as a [MutationResult].
+///
+/// This is the pure-Dart entry point for writes; the Flutter binding wraps
+/// one for its widgets. The lifecycle:
+///
+/// * **Create** it with the client and the [MutationOptions]. It starts
+///   idle; nothing runs yet.
+/// * **Subscribe** to hear each new result; [currentResult] holds the
+///   latest one at any time.
+/// * **[mutate]** (fire and forget) or **[mutateAsync]** (a future of the
+///   data) starts a run with the given variables, optionally with
+///   per-call [MutateCallbacks]. Each call builds a new mutation in the
+///   cache, and the observer follows the newest one.
+/// * **[reset]** goes back to idle, **[cancel]** fails the run in flight,
+///   and [setOptions] swaps the options (a rebuild's new callbacks, say).
+/// * **Unsubscribe** and **[destroy]** when done. A mutation already running
+///   finishes on its own and is collected after its `gcTime`.
+///
+/// ```dart
+/// final observer = MutationObserver<Todo, String, void>(
+///   client,
+///   MutationOptions(
+///     mutationFn: (String title) => api.addTodo(title),
+///     onSuccess: (todo, title, _) => client.invalidateQueries(
+///         filters: QueryFilters(queryKey: QueryKey(['todos']))),
+///   ),
+/// );
+/// final unsubscribe = observer.subscribe((result) => print(result.status));
+/// observer.mutate('Buy milk');
+/// // Later:
+/// unsubscribe();
+/// observer.destroy();
+/// ```
+///
+/// {@category Observers}
 class MutationObserver<TData, TVariables, TOnMutateResult>
     implements MutationObserverRef {
   /// Creates an idle observer for [options], resolved against the client's
@@ -37,7 +72,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
 
   // See the note in QueryObserver: Dart's variance rules stop an observer from
   // extending `Subscribable` with a listener type that mentions its own type
-  // parameters, so it holds the same registry as a field instead (C50).
+  // parameters, so it holds the same registry as a field instead.
   final ListenerRegistry<MutationObserverListener<TData, TVariables>>
       _listeners =
       ListenerRegistry<MutationObserverListener<TData, TVariables>>();
@@ -132,9 +167,10 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
 
   void _mutate(TVariables variables) => mutate(variables);
 
-  /// Fire and forget. Errors reach the callbacks and the result, never the
-  /// zone — an unawaited failing future would otherwise fail the enclosing
-  /// test file.
+  /// Starts a run with [variables] and returns at once. Errors reach the
+  /// callbacks and the result, never the zone — an unawaited failing future
+  /// would otherwise surface as an uncaught error. [callbacks] are the
+  /// per-call callbacks for this run only.
   ///
   /// `onMutate` runs now, even for a mutation that then waits its turn in a
   /// `MutationScope`; only the mutation function waits. The result stays
@@ -148,9 +184,11 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
     mutateAsync(variables, callbacks: callbacks).ignore();
   }
 
-  /// Completes with the data, or throws — after the callbacks have run, as
-  /// [mutate]'s result settles. The same order applies: `onMutate` at
-  /// submission, the function in its scope's turn.
+  /// Starts a run with [variables] and completes with the data, or throws
+  /// the error — after the callbacks have run, as [mutate]'s result
+  /// settles. The same order applies: `onMutate` at submission, the function
+  /// in its scope's turn. Use it when the caller must await the write;
+  /// otherwise prefer [mutate].
   Future<TData> mutateAsync(
     TVariables variables, {
     MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks,
@@ -195,12 +233,11 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   }
 
   /// Stops observing for good: drops every listener and leaves the mutation,
-  /// which starts its `gcTime` clock.
-  ///
-  /// Upstream has no counterpart — a React observer is simply forgotten — but
-  /// a binding that owns the observer's lifetime needs a way to say so, or a
-  /// mutation that ran without listeners keeps an observer nobody will ever
-  /// remove and can never be collected.
+  /// which starts its `gcTime` clock. Call it when whatever owns the
+  /// observer goes away; without it, a mutation that ran without listeners
+  /// keeps an observer nobody will ever remove and can never be collected.
+  /// (TanStack Query has no counterpart; a JavaScript observer is simply
+  /// forgotten.)
   void destroy() {
     _invocation++;
     _resultRevision++;
@@ -300,8 +337,7 @@ class MutationObserver<TData, TVariables, TOnMutateResult>
   }
 
   /// A per-call callback that throws must not take the caller's future down
-  /// with it: the failure goes to the zone, as upstream re-throws it into a
-  /// fresh execution context.
+  /// with it: the failure goes to the zone instead.
   static void _reporting(FutureOr<void> Function() body) {
     try {
       final result = body();

@@ -1,0 +1,1 @@
+The values of the options. Dart has no union types, so each option TanStack Query types as "number, flag or function" is a small `const` sealed family here: `StaleTime`, `GcTime`, `Enabled`, `RetryPolicy`, `RetryDelay`, `RefetchOn`, `RefetchInterval`, `NetworkMode`, `InitialData`, `PlaceholderData`. "Off" is always a value of its own, never `null`.

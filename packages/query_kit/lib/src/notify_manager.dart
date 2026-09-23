@@ -1,29 +1,44 @@
-/// Port of `query-core/src/notifyManager.ts` at upstream `50680b98c`.
+/// Notification batching: [NotifyManager].
 library;
 
 import 'dart:async';
 
-/// Schedules when a batch of notifications runs.
+/// Schedules when a batch of notifications runs: given the delivery as a
+/// callback, runs it now or later. The default is [scheduleMicrotask];
+/// install one with [NotifyManager.setScheduler] (the Flutter binding
+/// installs a build-phase-aware one).
+///
+/// {@category Managers}
 typedef ScheduleFunction = void Function(void Function() callback);
 
-/// Wraps the delivery of a single notification.
+/// Wraps the delivery of a single notification: must call the callback it
+/// is given exactly once. Install one with
+/// [NotifyManager.setNotifyFunction], for example to run each listener
+/// inside a zone or an error boundary. The default calls it directly.
+///
+/// {@category Managers}
 typedef NotifyFunction = void Function(void Function() callback);
 
-/// Wraps the delivery of a whole batch.
+/// Wraps the delivery of a whole batch: must call the callback it is given
+/// exactly once. Install one with [NotifyManager.setBatchNotifyFunction] —
+/// in a UI framework, to apply every update of a batch in one frame. The
+/// default calls it directly.
+///
+/// {@category Managers}
 typedef BatchNotifyFunction = void Function(void Function() callback);
 
 /// Batches cache notifications so one cascade of cache writes produces one
 /// round of listener calls.
 ///
-/// Two divergences from upstream, both decided on
-/// https://github.com/KoTTi97/flutter_query/issues/19:
+/// Each client owns one, as `QueryClient.notifyManager`; most apps never
+/// touch it. Two differences from TanStack Query:
 ///
 /// * The default scheduler is [scheduleMicrotask], not a zero-delay timer.
 ///   It is faster, it is deterministic, and `fake_async` controls it.
 /// * This is an ordinary object rather than a module-level singleton, so a
 ///   `QueryClient` can own one and tests are hermetic. A client constructed
-///   without one creates its own; apps that want upstream's single shared
-///   queue pass [NotifyManager.shared] to every client.
+///   without one creates its own; apps that want a single shared queue pass
+///   [NotifyManager.shared] to every client.
 ///
 /// A [batch] holds callbacks submitted through [schedule] or [batchCalls]
 /// until the outermost batch ends, then delivers them through the scheduler.
@@ -31,13 +46,28 @@ typedef BatchNotifyFunction = void Function(void Function() callback);
 /// synchronous per dispatch. Wrap a subscription with [batchCalls] when its
 /// delivery should be deferred. A throwing callback in a queued batch is
 /// reported to the zone and does not discard later callbacks in that batch.
+///
+/// ```dart
+/// // Several writes; callbacks queued through `schedule` or `batchCalls`
+/// // meanwhile are delivered in one round after the batch ends:
+/// client.notifyManager.batch(() {
+///   client.setQueryData<int>(QueryKey(['a']), 1);
+///   client.setQueryData<int>(QueryKey(['b']), 2);
+/// });
+///
+/// // A cache subscription whose calls are deferred and batched:
+/// client.queryCache.subscribe(
+///   client.notifyManager.batchCalls((QueryCacheEvent event) => log(event)),
+/// );
+/// ```
+///
+/// {@category Managers}
 class NotifyManager {
   /// Creates an independent queue with the default microtask scheduler.
   NotifyManager();
 
   /// A process-wide instance, for batching across clients. Not the default:
-  /// a client constructed without one creates its own (third review,
-  /// 2026-09-09).
+  /// a client constructed without one creates its own.
   static final NotifyManager shared = NotifyManager();
 
   final List<void Function()> _queue = <void Function()>[];
@@ -78,7 +108,8 @@ class NotifyManager {
     }
   }
 
-  /// Delivers everything queued so far.
+  /// Delivers everything queued so far, through the scheduler. [batch] calls
+  /// this when its outermost call ends; calling it by hand is rarely needed.
   void flush() {
     if (_queue.isEmpty) {
       return;
@@ -98,10 +129,10 @@ class NotifyManager {
     });
   }
 
-  /// Replaces how a single notification is delivered.
+  /// Replaces how a single notification is delivered; see [NotifyFunction].
   void setNotifyFunction(NotifyFunction fn) => _notifyFn = fn;
 
-  /// Replaces how a whole batch is delivered.
+  /// Replaces how a whole batch is delivered; see [BatchNotifyFunction].
   void setBatchNotifyFunction(BatchNotifyFunction fn) => _batchNotifyFn = fn;
 
   /// Replaces when the next batch runs. The Flutter binding installs a

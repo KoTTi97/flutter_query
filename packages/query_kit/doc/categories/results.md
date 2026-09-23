@@ -1,0 +1,1 @@
+What an observer reports: a sealed `QueryResult` (`QueryPending`, `QuerySuccess` or `QueryError`) with the fetch state (`isFetching`, `isStale`, `failureCount`, ...) on every variant. Switch over it; the data needs no `!`.

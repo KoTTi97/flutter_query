@@ -1,0 +1,1 @@
+What a query is and how it behaves. `QueryOptions` describe the cache entry (key, query function, staleness, retries); `QueryObserverOptions` add what an observer does (refetch triggers, polling, placeholder data), and `QuerySelectOptions` add a `select` that changes the type observers see. Every field left `null` takes the client's default.

@@ -1,5 +1,5 @@
-/// Mutation options. Ports the mutation half of `query-core/src/types.ts` at
-/// upstream `50680b98c` (https://github.com/KoTTi97/flutter_query/issues/14).
+/// Mutation options, the mutation function's context and the callback
+/// typedefs.
 library;
 
 import 'dart:async';
@@ -9,17 +9,25 @@ import 'package:meta/meta.dart';
 import 'cancel_token.dart';
 import 'option_values.dart';
 // A cycle (query_client → here), which Dart allows; the context names the
-// client, as upstream's does.
+// client.
 import 'query_client.dart';
 import 'query_key.dart';
 
 /// Mutations sharing a scope run one at a time, in the order they started.
 ///
-/// The reason it ships: replaying three edits to the same record concurrently
-/// reorders them, which is exactly what an offline queue must not do.
+/// Use a scope when several writes to the same record must reach the server
+/// in order — an offline queue replaying three edits concurrently could
+/// reorder them. Set it through [MutationOptions.scope]:
 ///
-/// **What waits for the scope is the mutation function, not `onMutate`.**
-/// Upstream's order, kept here:
+/// ```dart
+/// MutationOptions<Task, Task, void>(
+///   mutationFn: (Task task) => api.saveTask(task),
+///   // Every save of this task queues behind the one before it.
+///   scope: MutationScope('task-$taskId'),
+/// )
+/// ```
+///
+/// **What waits for the scope is the mutation function, not `onMutate`:**
 ///
 /// * `onMutate` — the cache-wide one and the mutation's own — runs when the
 ///   mutation is *submitted*, while an earlier mutation of the scope may
@@ -37,16 +45,21 @@ import 'query_key.dart';
 ///   `.ignore()`s it.
 ///
 /// While it waits, a queued mutation is `pending` with `isPaused` set. No
-/// hook runs at the moment the scope admits a mutation: upstream has none,
-/// and the one case that asks for it — a snapshot taken at the turn — is
-/// served by rolling back per item (release review, 2026-09-23, LIB-1).
+/// hook runs at the moment the scope admits a mutation; to undo an
+/// optimistic update safely, roll back per item rather than restoring a
+/// whole snapshot.
+///
+/// TanStack Query spells this `scope: { id }`, with the same order.
+///
+/// {@category Mutations}
 @immutable
 final class MutationScope {
-  /// Scopes with equal [id]s are the same scope.
+  /// Creates the scope named [id]. Scopes with equal [id]s are the same
+  /// scope, so two `MutationScope('task-1')` values queue together.
   const MutationScope(this.id);
 
-  /// The scope's identity — upstream's `scope: { id }`. Any value with value
-  /// equality; a string naming the record being edited is the usual choice.
+  /// The scope's identity. Any value with value equality; a string naming
+  /// the record being edited is the usual choice.
   final Object id;
 
   @override
@@ -59,21 +72,27 @@ final class MutationScope {
   String toString() => 'MutationScope($id)';
 }
 
-/// What a mutation runs.
+/// The function a mutation runs: it performs the write for [variables] and
+/// returns (or completes with) the server's answer, which becomes the
+/// mutation's data. Throwing, or completing with an error, fails the
+/// attempt. Set through [MutationOptions.mutationFn].
+///
+/// {@category Mutations}
 typedef MutationFn<TData, TVariables> = FutureOr<TData> Function(
     TVariables variables);
 
 /// What a [MutationFnWithContext] is told about the run it is part of.
 ///
-/// Upstream's `MutationFunctionContext` holds [client], [meta] and
-/// [mutationKey]. The other two are this port's, asked for by its first real
-/// integration (https://github.com/KoTTi97/flutter_query/issues/83):
+/// [client], [meta] and [mutationKey] describe the mutation, as in TanStack
+/// Query's `MutationFunctionContext`. This package adds two more:
 ///
 /// * [onMutateResult] — after an optimistic patch the cache no longer says
 ///   what was there before; whatever `onMutate` kept does, and a function
 ///   that diffs "before" against "wanted" needs it.
 /// * [signal] — cancelled by `Mutation.cancel`, so a transport that can abort
 ///   does. A function that ignores it runs on, and its result is discarded.
+///
+/// {@category Mutations}
 @immutable
 final class MutationFunctionContext<TOnMutateResult> {
   /// Built by the mutation for each run; not for callers.
@@ -86,13 +105,16 @@ final class MutationFunctionContext<TOnMutateResult> {
     required this.signal,
   });
 
-  /// The client the mutation belongs to.
+  /// The client the mutation belongs to — handy for reading or writing the
+  /// query cache from inside the function.
   final QueryClient client;
 
-  /// [MutationOptions.meta], with the default applied.
+  /// The mutation's [MutationOptions.meta], after the client's defaults
+  /// were applied; `null` when none was set anywhere.
   final Object? meta;
 
-  /// [MutationOptions.mutationKey].
+  /// The mutation's [MutationOptions.mutationKey], or `null` for an unkeyed
+  /// mutation.
   final QueryKey? mutationKey;
 
   /// What `onMutate` returned for this run — `null` when there is no
@@ -103,24 +125,34 @@ final class MutationFunctionContext<TOnMutateResult> {
   /// and by nothing else. One token for the whole run: a cancelled mutation
   /// does not retry. Removing the mutation from the cache or disposing what
   /// watches it does **not** cancel it: an attempt in flight is left to
-  /// settle, as upstream leaves it, so there is nothing to abort.
+  /// settle, so there is nothing to abort.
   final QueryCancelToken signal;
 }
 
-/// What a mutation runs, told about its run: [MutationOptions.mutationFnWithContext].
+/// A [MutationFn] that also receives the [MutationFunctionContext] of its
+/// run. Set through [MutationOptions.mutationFnWithContext].
+///
+/// {@category Mutations}
 typedef MutationFnWithContext<TData, TVariables, TOnMutateResult>
     = FutureOr<TData> Function(
   TVariables variables,
   MutationFunctionContext<TOnMutateResult> context,
 );
 
-/// [MutationOptions.onMutate]: runs before the mutation function, and what
-/// it returns is the `onMutateResult` the other callbacks receive.
+/// The signature of [MutationOptions.onMutate]: runs before the mutation
+/// function with its variables, and what it returns is the
+/// `onMutateResult` the other callbacks receive — typically a snapshot to
+/// roll an optimistic update back to. A returned future is awaited.
+///
+/// {@category Mutations}
 typedef OnMutate<TVariables, TOnMutateResult> = FutureOr<TOnMutateResult?>
     Function(TVariables variables);
 
-/// [MutationOptions.onSuccess] and [MutateCallbacks.onSuccess]: the data,
-/// the variables, and what `onMutate` returned.
+/// The signature of [MutationOptions.onSuccess] and
+/// [MutateCallbacks.onSuccess]: the data, the variables, and what
+/// `onMutate` returned.
+///
+/// {@category Mutations}
 typedef OnMutationSuccess<TData, TVariables, TOnMutateResult> = FutureOr<void>
     Function(
   TData data,
@@ -128,8 +160,11 @@ typedef OnMutationSuccess<TData, TVariables, TOnMutateResult> = FutureOr<void>
   TOnMutateResult? onMutateResult,
 );
 
-/// [MutationOptions.onError] and [MutateCallbacks.onError]: the error and
-/// where it was thrown, the variables, and what `onMutate` returned.
+/// The signature of [MutationOptions.onError] and [MutateCallbacks.onError]:
+/// the error and where it was thrown, the variables, and what `onMutate`
+/// returned (`null` when `onMutate` itself threw or there is none).
+///
+/// {@category Mutations}
 typedef OnMutationError<TVariables, TOnMutateResult> = FutureOr<void> Function(
   Object error,
   StackTrace stackTrace,
@@ -137,8 +172,12 @@ typedef OnMutationError<TVariables, TOnMutateResult> = FutureOr<void> Function(
   TOnMutateResult? onMutateResult,
 );
 
-/// [MutationOptions.onSettled] and [MutateCallbacks.onSettled]: whichever of
-/// `data` and `error` applies, the variables, and what `onMutate` returned.
+/// The signature of [MutationOptions.onSettled] and
+/// [MutateCallbacks.onSettled]: whichever of `data` and `error` applies (the
+/// other is `null`), the error's stack trace, the variables, and what
+/// `onMutate` returned.
+///
+/// {@category Mutations}
 typedef OnMutationSettled<TData, TVariables, TOnMutateResult> = FutureOr<void>
     Function(
   TData? data,
@@ -149,43 +188,98 @@ typedef OnMutationSettled<TData, TVariables, TOnMutateResult> = FutureOr<void>
 );
 
 /// Callbacks a caller can attach to a single `mutate` call, on top of the ones
-/// in the options.
+/// in the options — for what only that call site cares about, such as
+/// closing a dialog or showing a snack bar.
+///
+/// They run after the cache-wide hooks and the options' callbacks have run
+/// and the result has settled, and only while the observer still has a
+/// listener: a `mutate` whose widget has gone still updates the cache, but
+/// does not call back into it. A returned future is not awaited, and a throw
+/// is reported to the zone rather than failing the mutation.
+///
+/// ```dart
+/// observer.mutate(
+///   draft,
+///   callbacks: MutateCallbacks(
+///     onSuccess: (task, draft, _) => print('Saved ${task.id}'),
+///     onError: (error, stackTrace, draft, _) => print('Failed: $error'),
+///   ),
+/// );
+/// ```
+///
+/// {@category Mutations}
 @immutable
 final class MutateCallbacks<TData, TVariables, TOnMutateResult> {
-  /// Any of the three may be left unset.
+  /// Creates the callbacks; any of the three may be left unset.
   const MutateCallbacks({this.onSuccess, this.onError, this.onSettled});
 
   /// Runs after the options' `onSuccess`, with the data, the variables, and
   /// what `onMutate` returned. Like the other two, it is skipped when the
-  /// observer has stopped listening before the mutation settled — upstream's
-  /// per-call `onSuccess`.
+  /// observer has stopped listening before the mutation settled. No default.
   final OnMutationSuccess<TData, TVariables, TOnMutateResult>? onSuccess;
 
-  /// Runs after the options' `onError`, once retries are spent — upstream's
-  /// per-call `onError`.
+  /// Runs after the options' `onError`, once retries are spent. No default.
   final OnMutationError<TVariables, TOnMutateResult>? onError;
 
   /// Runs after the options' `onSettled`, on success and error alike, with
-  /// whichever of `data` and `error` applies — upstream's per-call
-  /// `onSettled`.
+  /// whichever of `data` and `error` applies. No default.
   final OnMutationSettled<TData, TVariables, TOnMutateResult>? onSettled;
 }
 
-/// Everything that describes a mutation.
+/// Everything that describes a mutation: the write it performs, its
+/// callbacks, and how it retries, pauses and queues.
 ///
-/// `TOnMutateResult` is upstream's renamed `TContext`: what [onMutate] returns
-/// and [onError]/[onSettled] receive — the rollback handle for an optimistic
-/// update. The rename matters more in Flutter, where `BuildContext` owns the
-/// word. A mutation with no optimistic step has no such result; [simple]
-/// spells that out as `void` so the other two types infer from [mutationFn].
+/// Hand one to a `MutationObserver` (or the Flutter binding's mutation
+/// helpers). The three type arguments are what the function returns
+/// (`TData`), what it is called with (`TVariables`), and what [onMutate]
+/// returns (`TOnMutateResult`) — the rollback handle an optimistic update
+/// passes to [onError] and [onSettled]. A mutation with no optimistic step
+/// has no such result; [simple] spells that out as `void` so the other two
+/// types infer from [mutationFn].
+///
+/// An optimistic update: patch the cache in [onMutate], restore the
+/// snapshot in [onError], and refetch the truth in [onSettled]:
+///
+/// ```dart
+/// final todosKey = QueryKey(['todos']);
+/// final addTodo = MutationOptions<Todo, Todo, List<Todo>>(
+///   mutationFn: (Todo todo) => api.addTodo(todo),
+///   onMutate: (Todo todo) async {
+///     await client.cancelQueries(filters: QueryFilters(queryKey: todosKey));
+///     final previous = client.getQueryData<List<Todo>>(todosKey) ?? [];
+///     client.setQueryData<List<Todo>>(todosKey, [...previous, todo]);
+///     return previous;
+///   },
+///   onError: (error, stackTrace, todo, previous) {
+///     if (previous != null) client.setQueryData(todosKey, previous);
+///   },
+///   onSettled: (data, error, stackTrace, todo, previous) =>
+///       client.invalidateQueries(filters: QueryFilters(queryKey: todosKey)),
+/// );
+/// ```
+///
+/// Every field is optional. An unset field takes the default registered for
+/// the mutation's key with `QueryClient.setMutationDefaults`, then the
+/// client's `DefaultOptions.mutations`, then the default each field states.
+/// The callbacks have no client-level default.
+///
+/// The order the callbacks run in: the cache-wide `MutationCache.onMutate`,
+/// then [onMutate]; after the function, `MutationCache.onSuccess` (or
+/// `onError`), then [onSuccess] (or [onError]), then
+/// `MutationCache.onSettled`, then [onSettled]. Each returned future is
+/// awaited before the next one runs, and the mutation stays `pending` until
+/// the last has completed. The per-call [MutateCallbacks] come after that.
 ///
 /// No value equality, on purpose: options built inline are re-applied on
 /// every build, and the observer compares the resolved values — so inline
 /// callbacks are not a change by themselves.
+///
+/// {@category Mutations}
 @immutable
 final class MutationOptions<TData, TVariables, TOnMutateResult> {
-  /// Every field is optional; an unset field takes the client's default when
-  /// the mutation is built.
+  /// Creates the options. Every field is optional; an unset field takes the
+  /// client's default when the mutation is built. Pass at most one of
+  /// [mutationFn] and [mutationFnWithContext].
   const MutationOptions({
     this.mutationKey,
     this.mutationFn,
@@ -251,13 +345,14 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
       );
 
   /// Groups mutations for the cache's filters, for `isMutating`, and for the
-  /// defaults registered with `QueryClient.setMutationDefaults`. Optional: a
-  /// mutation without a key simply cannot be addressed by one.
+  /// defaults registered with `QueryClient.setMutationDefaults`. No default:
+  /// a mutation without a key simply cannot be addressed by one.
   final QueryKey? mutationKey;
 
   /// Runs the mutation. Left unset, the function registered for the key with
-  /// `setMutationDefaults` is used, and a mutation with none fails with
-  /// `MissingMutationFunctionError`.
+  /// `setMutationDefaults` (or in `DefaultOptions.mutations`) is used, and a
+  /// mutation with none fails with `MissingMutationFunctionError` when it
+  /// runs, without retrying.
   final MutationFn<TData, TVariables>? mutationFn;
 
   /// [mutationFn] with a second argument: the [MutationFunctionContext] of the
@@ -265,38 +360,51 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
   /// `signal` that `Mutation.cancel` cancels. Instead of [mutationFn], never
   /// beside it — both at once fails an assertion at the constructor in a
   /// debug build, and is an [ArgumentError] when the client resolves the
-  /// options in a release build; when set it also wins over a function registered with
-  /// `setMutationDefaults`, which has no context form.
+  /// options in a release build; when set it also wins over a function
+  /// registered with `setMutationDefaults`, which has no context form. No
+  /// default.
   ///
-  /// A second field rather than a second parameter on [mutationFn], which is
-  /// upstream's shape: Dart has no optional-arity function types, so that
-  /// would make every `(variables) => …` and every tear-off a type error for
-  /// the sake of the few functions that want the context.
+  /// A second field rather than a second parameter on [mutationFn]: Dart has
+  /// no optional-arity function types, so that would make every
+  /// `(variables) => …` and every tear-off a type error for the sake of the
+  /// few functions that want the context. (TanStack Query passes the context
+  /// as the function's second argument.)
   final MutationFnWithContext<TData, TVariables, TOnMutateResult>?
       mutationFnWithContext;
 
-  /// Runs before the mutation function; its result is handed to [onError] and
-  /// [onSettled] so an optimistic update can be rolled back.
+  /// Runs before the mutation function, when the mutation is submitted; its
+  /// result is handed to [onSuccess], [onError] and [onSettled] so an
+  /// optimistic update can be rolled back. A returned future is awaited
+  /// before the function runs; a throw fails the mutation without running
+  /// the function. No default.
   final OnMutate<TVariables, TOnMutateResult>? onMutate;
 
-  /// Runs when the mutation function succeeds, before the result reports
-  /// success. Throwing here turns the success into an error, as upstream
-  /// does.
+  /// Runs when the mutation function succeeds, after the cache-wide
+  /// `MutationCache.onSuccess` and before the result reports success. A
+  /// returned future is awaited. Throwing here turns the success into an
+  /// error. No default.
   final OnMutationSuccess<TData, TVariables, TOnMutateResult>? onSuccess;
 
-  /// Runs when the mutation fails for good, retries spent, with what
-  /// [onMutate] returned so an optimistic update can be rolled back.
+  /// Runs when the mutation fails for good, retries spent, after the
+  /// cache-wide `MutationCache.onError`, with what [onMutate] returned so an
+  /// optimistic update can be rolled back. A returned future is awaited; a
+  /// throw is reported to the zone and does not replace the original error.
+  /// No default.
   final OnMutationError<TVariables, TOnMutateResult>? onError;
 
-  /// Runs after [onSuccess] or [onError], with whichever of `data` and
-  /// `error` applies.
+  /// Runs after [onSuccess] or [onError] and the cache-wide
+  /// `MutationCache.onSettled`, with whichever of `data` and `error`
+  /// applies. A returned future is awaited, and the mutation stays `pending`
+  /// until it completes — return an invalidation's future to report success
+  /// only once the refetch is done. No default.
   final OnMutationSettled<TData, TVariables, TOnMutateResult>? onSettled;
 
-  /// Whether a failed attempt is retried. Default [RetryPolicy.never] —
-  /// upstream's `retry: 0` for mutations, which are rarely safe to repeat.
+  /// Whether a failed attempt is retried. Default [RetryPolicy.never]:
+  /// mutations are rarely safe to repeat. (TanStack Query: `retry: 0`.)
   final RetryPolicy? retry;
 
-  /// How long to wait between attempts. Default [RetryDelay.defaultValue].
+  /// How long to wait between attempts. Default [RetryDelay.defaultValue]:
+  /// one second, doubling per attempt, at most thirty seconds.
   final RetryDelay? retryDelay;
 
   /// How connectivity gates the run. Default [NetworkMode.online]: submitted
@@ -310,20 +418,25 @@ final class MutationOptions<TData, TVariables, TOnMutateResult> {
 
   /// Mutations in the same scope run one at a time — see [MutationScope],
   /// which says what waits (the function, not [onMutate]) and for how long
-  /// (until the running one's [onSettled] has completed). Unset, mutations
-  /// run concurrently.
+  /// (until the running one's [onSettled] has completed). No default:
+  /// unscoped mutations run concurrently.
   ///
   /// Read when a run starts and fixed for that run: changing it through an
   /// observer's `setOptions` while the mutation is pending does not move the
   /// mutation to the new queue, nor release the old one early.
   final MutationScope? scope;
 
-  /// Arbitrary data carried along for logging, devtools or the callbacks.
+  /// Arbitrary data carried along for logging, devtools or the callbacks;
+  /// readable as `Mutation.meta` and [MutationFunctionContext.meta]. No
+  /// default.
   final Object? meta;
 }
 
 /// Mutation options with every default resolved. Only `QueryClient` produces
-/// one, and `final` keeps it that way.
+/// one, and `final` keeps it that way; read it from `Mutation.options` or
+/// `MutationObserver.options` to see what a mutation actually runs with.
+///
+/// {@category Advanced}
 @immutable
 final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// Built by `QueryClient.defaultMutationOptions`; not for callers.
@@ -344,7 +457,7 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
     required this.meta,
   });
 
-  /// [MutationOptions.mutationKey]; there is no default.
+  /// [MutationOptions.mutationKey], as given; keys have no default.
   final QueryKey? mutationKey;
 
   /// [MutationOptions.mutationFn], with the key's registered default applied.
@@ -358,46 +471,46 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
 
   /// [MutationOptions.onMutate], carried through as given.
   ///
-  /// `MutationDefaults` carries no callbacks, so there is no per-key default
-  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
-  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
-  /// review, 2026-09-10).
+  /// There is no client-level default for callbacks, so this is exactly
+  /// what the options held — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one.
   final OnMutate<TVariables, TOnMutateResult>? onMutate;
 
   /// [MutationOptions.onSuccess], carried through as given.
   ///
-  /// `MutationDefaults` carries no callbacks, so there is no per-key default
-  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
-  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
-  /// review, 2026-09-10).
+  /// There is no client-level default for callbacks, so this is exactly
+  /// what the options held — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one.
   final OnMutationSuccess<TData, TVariables, TOnMutateResult>? onSuccess;
 
   /// [MutationOptions.onError], carried through as given.
   ///
-  /// `MutationDefaults` carries no callbacks, so there is no per-key default
-  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
-  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
-  /// review, 2026-09-10).
+  /// There is no client-level default for callbacks, so this is exactly
+  /// what the options held — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one.
   final OnMutationError<TVariables, TOnMutateResult>? onError;
 
   /// [MutationOptions.onSettled], carried through as given.
   ///
-  /// `MutationDefaults` carries no callbacks, so there is no per-key default
-  /// to merge in — unlike `mutationFn`, `retry`, `retryDelay`,
-  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one (eighth
-  /// review, 2026-09-10).
+  /// There is no client-level default for callbacks, so this is exactly
+  /// what the options held — unlike `mutationFn`, `retry`, `retryDelay`,
+  /// `networkMode`, `gcTime`, `scope` and `meta`, which do have one.
   final OnMutationSettled<TData, TVariables, TOnMutateResult>? onSettled;
 
-  /// [MutationOptions.retry], with the default applied.
+  /// [MutationOptions.retry], or the registered default, or
+  /// [RetryPolicy.never].
   final RetryPolicy retry;
 
-  /// [MutationOptions.retryDelay], with the default applied.
+  /// [MutationOptions.retryDelay], or the registered default, or
+  /// [RetryDelay.defaultValue].
   final RetryDelay retryDelay;
 
-  /// [MutationOptions.networkMode], with the default applied.
+  /// [MutationOptions.networkMode], or the registered default, or
+  /// [NetworkMode.online].
   final NetworkMode networkMode;
 
-  /// [MutationOptions.gcTime], with the default applied.
+  /// [MutationOptions.gcTime], or the registered default, or
+  /// [GcTime.defaultValue] (five minutes).
   final GcTime gcTime;
 
   /// [MutationOptions.scope], with the key's registered default applied.
@@ -406,9 +519,8 @@ final class DefaultedMutationOptions<TData, TVariables, TOnMutateResult> {
   /// [MutationOptions.meta], with the key's registered default applied.
   final Object? meta;
 
-  /// Field-by-field equality, functions compared by identity — upstream's
-  /// `shallowEqualObjects` over defaulted options, which is what tells a
-  /// rebuild that nothing actually changed.
+  /// Field-by-field equality, functions compared by identity, which is what
+  /// tells a rebuild that nothing actually changed.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

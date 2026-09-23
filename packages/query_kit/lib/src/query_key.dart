@@ -1,23 +1,35 @@
-/// The cache's identity type.
-///
-/// Ports the *semantics* of `hashKey` and `partialMatchKey` from
-/// `query-core/src/utils.ts` at upstream `50680b98c`, but not their mechanism:
-/// upstream hashes keys to a JSON string because JavaScript has no structural
-/// equality, whereas here the key is a value type and the cache is keyed by it
-/// directly. See https://github.com/KoTTi97/flutter_query/issues/8.
+/// The cache's identity type, [QueryKey].
 library;
 
 import 'package:meta/meta.dart';
 
 import 'hashing.dart';
 
-/// An immutable, structurally compared cache key.
+/// An immutable, structurally compared cache key: what identifies a query
+/// in the cache.
+///
+/// Two options objects with equal keys address the same cache entry, so a
+/// key must describe everything the query function's result depends on —
+/// a list key and a detail key per id, a filter object as part of the key.
 ///
 /// ```dart
 /// QueryKey(['tasks']);
 /// QueryKey(['tasks', id]);
 /// QueryKey(['tasks', {'status': 'active', 'project': 'website'}]);
+///
+/// final tasks = QueryKey(['tasks']);
+/// final task = tasks.append([id]);          // QueryKey(['tasks', id])
+/// task.matches(tasks);                      // true: a prefix matches
+/// client.invalidateQueries(filters: QueryFilters(queryKey: tasks));
 /// ```
+///
+/// Filters such as `QueryFilters.queryKey` match by prefix ([matches]), so a
+/// hierarchical key — the most general part first — lets one call
+/// invalidate a whole family of queries.
+///
+/// Unlike TanStack Query, which hashes keys to a JSON string because
+/// JavaScript has no structural equality, a key here is a value type with
+/// `==` and `hashCode`, and the cache is keyed by it directly.
 ///
 /// Parts are deep-copied into unmodifiable collections at construction, so a
 /// list or map you keep a reference to cannot later corrupt the cache.
@@ -33,14 +45,15 @@ import 'hashing.dart';
 ///
 /// Parts compare with `==`, and `1 == 1.0` holds in Dart on every platform,
 /// so `QueryKey([1])` and `QueryKey([1.0])` are the same key — not a web
-/// quirk (ninth review, 2026-09-10, C23).
+/// quirk.
 ///
 /// Two [DateTime] parts compare by instant: a UTC and a local `DateTime` of
-/// the same moment are one key, as they are upstream, whose JSON hash writes
-/// both as the same ISO string. Dart's own `DateTime.==` also compares the
-/// time zone flag. The parts keep what was passed; the entry keeps the key it
-/// was created with. Only as parts — a `DateTime` used as a *map key* in a
-/// part is looked up with its own `==` (release review, 2026-09-23).
+/// the same moment are one key, as they are in TanStack Query, whose JSON
+/// hash writes both as the same ISO string (Dart's own `DateTime.==` also
+/// compares the time zone flag). The parts keep what was passed; the entry
+/// keeps the key it was created with. This holds only for parts — a
+/// `DateTime` used as a *map key* inside a part is looked up with its own
+/// `==`.
 ///
 /// **What the debug assertion cannot see.** It looks at `hashCode`, so it
 /// passes two kinds of part that never match a second, equal-looking key:
@@ -58,6 +71,8 @@ import 'hashing.dart';
 /// test as a part, with one addition: a collection as a map key is refused,
 /// because a map part is compared by looking its keys up, and a collection
 /// key hashes by identity.
+///
+/// {@category Queries}
 @immutable
 final class QueryKey {
   /// A key of [parts], each list, set and map in them deep-copied into an
@@ -85,16 +100,18 @@ final class QueryKey {
 
   /// Whether [filter] matches this key.
   ///
-  /// With `exact: false` (the default) this is upstream's `partialMatchKey`:
-  /// the filter is a prefix, and any map inside it needs only the entries it
-  /// names. `QueryKey(['tasks'])` matches `QueryKey(['tasks', 3])`, and
-  /// `QueryKey(['tasks', {'project': 'website'}])` matches a key whose map also
-  /// carries a `'status'` entry.
+  /// With `exact: false` (the default) the filter is a prefix, and any map
+  /// inside it needs only the entries it names (TanStack Query's
+  /// `partialMatchKey`). `QueryKey(['tasks'])` matches
+  /// `QueryKey(['tasks', 3])`, and
+  /// `QueryKey(['tasks', {'project': 'website'}])` matches a key whose map
+  /// also carries a `'status'` entry.
   bool matches(QueryKey filter, {bool exact = false}) =>
       exact ? this == filter : _partialMatch(parts, filter.parts);
 
-  /// A canonical rendering with map keys sorted — upstream's `hashKey` output,
-  /// kept as a debugging view rather than as the key's identity.
+  /// A canonical rendering with map keys sorted, for logs and debugging
+  /// (the same shape as TanStack Query's `hashKey`). Not the key's identity:
+  /// equality is structural, see the class doc.
   String get debugString => _describe(parts);
 
   @override
@@ -146,7 +163,7 @@ bool _partsEqual(Object? a, Object? b) {
     // The set's own equality first, in O(n): `==` implies parts-equal, and a
     // set holds no duplicates under its own equality, so the multisets below
     // agree whenever this does. A set of ids never goes further; counting
-    // partners pairwise cost 120 ms for a 2 000-element part (review AR-01).
+    // partners pairwise cost 120 ms for a 2 000-element part.
     if (a.containsAll(b)) {
       return true;
     }
@@ -209,8 +226,9 @@ int _hashPart(Object? part) {
   return spreadHash(part.hashCode);
 }
 
-/// Upstream `partialMatchKey`: every element of [filter] must partially match
-/// the element at the same position (or under the same map key) in [key].
+/// TanStack Query's `partialMatchKey`: every element of [filter] must
+/// partially match the element at the same position (or under the same map
+/// key) in [key].
 bool _partialMatch(Object? key, Object? filter) {
   if (identical(key, filter)) {
     return true;
@@ -274,7 +292,7 @@ bool _debugCheckParts(Object? part) {
     // lookup: a key that is itself a collection would never be found again.
     // Upstream cannot hit this — JSON object keys are strings. Any other map
     // key is held to the test a part is: a record or a value class keys a
-    // map as well as a string does (release review, 2026-09-23, L5-3).
+    // map as well as a string does.
     return part.entries.every(
       (entry) =>
           entry.key is! List &&
