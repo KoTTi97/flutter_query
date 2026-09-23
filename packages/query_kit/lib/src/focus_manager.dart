@@ -1,6 +1,8 @@
 /// Port of `query-core/src/focusManager.ts` at upstream `50680b98c`.
 library;
 
+import 'dart:async';
+
 import 'package:clock/clock.dart';
 import 'package:meta/meta.dart';
 
@@ -57,13 +59,24 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   /// tell, so it assumes the best case.
   bool isFocused() => _focused ?? true;
 
+  /// Reinstalls the event source the last listener's departure tore down.
+  ///
+  /// A setup that throws here is reported to the zone rather than thrown out
+  /// of `subscribe`: the listener is registered by then, and a throw would
+  /// lose the handle that removes it — a client's mount listener that could
+  /// never be unsubscribed, and one more after every remount (release review,
+  /// 2026-09-23). The next subscription tries the setup again.
   @override
   @protected
   void onSubscribe() {
     if (_cleanup == null) {
       final setup = _setup;
       if (setup != null) {
-        setEventListener(setup);
+        try {
+          setEventListener(setup);
+        } catch (error, stackTrace) {
+          Zone.current.handleUncaughtError(error, stackTrace);
+        }
       }
     }
   }
@@ -80,7 +93,11 @@ class AppFocusManager extends Subscribable<void Function(bool focused)> {
   /// Replaces the source of focus events.
   void setEventListener(FocusSetup setup) {
     _setup = setup;
-    _cleanup?.call();
+    final previous = _cleanup;
+    // Cleared before the setup runs: a setup that throws must not leave the
+    // spent cleanup behind to be called a second time.
+    _cleanup = null;
+    previous?.call();
     _cleanup = setup((focused) {
       if (focused is bool) {
         setFocused(focused);

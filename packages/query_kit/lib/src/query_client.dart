@@ -424,18 +424,44 @@ class QueryClient {
 
   /// How many queries matching [filters] are fetching right now — actually
   /// fetching, not paused. Every query when the filters are empty. Upstream's
-  /// `isFetching`.
+  /// `isFetching`, which overrides the filters' `fetchStatus` with
+  /// `fetching`: a [QueryFilters.fetchStatus] passed here is ignored rather
+  /// than combined, so it cannot make the count 0 (release review,
+  /// 2026-09-23, L5-4).
   int isFetching({QueryFilters filters = const QueryFilters()}) => queryCache
-      .findAll(filters: filters)
-      .where((query) => query.state.fetchStatus == FetchStatus.fetching)
+      .findAll(
+        filters: QueryFilters(
+          queryKey: filters.queryKey,
+          exact: filters.exact,
+          type: filters.type,
+          stale: filters.stale,
+          fetchStatus: FetchStatus.fetching,
+          status: filters.status,
+          predicate: filters.predicate,
+        ),
+      )
       .length;
 
   /// How many mutations matching [filters] are pending right now. Every
-  /// mutation when the filters are empty. Upstream's `isMutating`.
+  /// mutation when the filters are empty. Upstream's `isMutating`, which
+  /// overrides the filters' `status` with `pending`: a
+  /// [MutationFilters.status] passed here is ignored rather than combined.
+  ///
+  /// A mutation counts until its run has finished, callbacks included: it is
+  /// `pending` while its own `onSuccess`/`onError` and `onSettled` run, and
+  /// until the future `onSettled` returned has completed. So `onSettled`
+  /// sees itself in this count — `isMutating(...) > 1` there means another
+  /// matching mutation is pending — as upstream's does.
   int isMutating({MutationFilters filters = const MutationFilters()}) =>
       mutationCache
-          .findAll(filters: filters)
-          .where((mutation) => mutation.state.status == MutationStatus.pending)
+          .findAll(
+            filters: MutationFilters(
+              mutationKey: filters.mutationKey,
+              exact: filters.exact,
+              status: MutationStatus.pending,
+              predicate: filters.predicate,
+            ),
+          )
           .length;
 
   /// The cached data under [queryKey], or `null` if there is none.
@@ -492,21 +518,38 @@ class QueryClient {
   /// seeding a key before its query exists:
   /// `setQueryData<List<Todo>>(key, [])`
   /// (ninth review, 2026-09-10, C23; final review, 2026-09-18, SURF-1).
+  ///
+  /// Returns what the cache now holds: after structural sharing, that is the
+  /// instance already cached when [data] is deep-equal to it.
+  ///
+  /// A bare `setQueryData(key, null)` — the type argument inferred as `Null`
+  /// — writes nothing and returns `null`, as upstream's
+  /// `setQueryData(key, undefined)` does. To store `null`, name the entry's
+  /// nullable type: `setQueryData<Todo?>(key, null)`.
   TQueryData setQueryData<TQueryData>(
     QueryKey queryKey,
     TQueryData data, {
     DateTime? updatedAt,
   }) {
-    // Not for paged data: an `InfiniteData` inferred from its literals is
-    // narrower in its type arguments, not in its value, and once stored the
-    // next `copyWith` typed for the entry fails its covariant parameter check
-    // with a raw `TypeError`, far from this write. It keeps the loud error.
+    // A bare `setQueryData(key, null)` infers `Null`: upstream's
+    // `setQueryData(key, undefined)`, which writes nothing. Written, it
+    // nulled the data of an existing entry, or created a `Query<Null>` that
+    // made every typed reader of the key throw until it was collected
+    // (release review, 2026-09-23, L5-2). A deliberate null write names the
+    // entry's type: `setQueryData<Todo?>(key, null)`.
+    if (TQueryData == Null) {
+      return data;
+    }
     final existing = queryCache.peek(queryKey);
     if (existing != null &&
         existing.dataType != TQueryData &&
-        data is! InfiniteData<Object?, Object?> &&
-        existing.trySetData(data, updatedAt: updatedAt)) {
-      return data;
+        _holds<TQueryData>(existing, data)) {
+      // What sharing stored, as the typed path and upstream return it; the
+      // argument only when the stored value is not a `TQueryData` — an older
+      // instance of a wider type kept by sharing (release review,
+      // 2026-09-23, CORE-3).
+      final stored = existing.setData(data, updatedAt: updatedAt, manual: true);
+      return stored is TQueryData ? stored : data;
     }
     final query = queryCache.build<TQueryData>(
       this,
@@ -517,19 +560,46 @@ class QueryClient {
     return query.setData(data, updatedAt: updatedAt, manual: true);
   }
 
+  /// Whether [query] takes [data] through [setQueryData]: a value of its own
+  /// type — exactly, or one its type can hold.
+  ///
+  /// Not for paged data: an `InfiniteData` inferred from its literals is
+  /// narrower in its type arguments, not in its value, and once stored the
+  /// next `copyWith` typed for the entry fails its covariant parameter check
+  /// with a raw `TypeError`, far from this write. It keeps the loud error.
+  static bool _holds<TQueryData>(Query<Object?> query, TQueryData data) =>
+      query.dataType == TQueryData ||
+      (data is! InfiniteData<Object?, Object?> && query.canHold(data));
+
+  /// What [query] holds, for an updater typed `TQueryData? Function(TQueryData?)`
+  /// — or [QueryDataTypeError] when the held data is not a `TQueryData`.
+  static TQueryData? _heldFor<TQueryData>(Query<Object?> query) {
+    final held = query.state.hasData ? query.state.data : null;
+    if (held is! TQueryData?) {
+      throw QueryDataTypeError(query.queryKey, TQueryData, query.dataType);
+    }
+    return held;
+  }
+
   /// Updates the cached data under [queryKey].
   ///
   /// Split from [setQueryData] because Dart cannot overload on "a value or a
   /// function" (https://github.com/KoTTi97/flutter_query/issues/17).
   /// Returning `null` from [updater] leaves the cache untouched.
+  ///
+  /// Takes what [setQueryData] takes. `TQueryData` usually infers from the
+  /// updater's parameter, so `(Todo? old) => …` is a `Todo` update, and it
+  /// lands in an entry holding `Todo?` or a supertype of `Todo`. What the
+  /// entry holds must be a `TQueryData` for the updater to see it, and what
+  /// the updater returns must be a value the entry can hold; either failing
+  /// throws [QueryDataTypeError] (release review, 2026-09-23, L5-1).
   TQueryData? updateQueryData<TQueryData>(
     QueryKey queryKey,
     TQueryData? Function(TQueryData? previous) updater, {
     DateTime? updatedAt,
   }) {
-    final existing = queryCache.get<TQueryData>(queryKey);
-    final previous =
-        existing != null && existing.state.hasData ? existing.state.data : null;
+    final existing = queryCache.peek(queryKey);
+    final previous = existing == null ? null : _heldFor<TQueryData>(existing);
     final next = updater(previous);
     if (next == null) {
       return null;
@@ -540,7 +610,13 @@ class QueryClient {
   /// Runs [updater] over every query matching [filters] and returns each key
   /// with what it now holds. A type mismatch anywhere under the filters
   /// throws before anything is written. The filtered twin of
-  /// [updateQueryData], upstream's `setQueriesData`.
+  /// [updateQueryData], upstream's `setQueriesData`, and as lenient: a
+  /// matching entry takes any value its own type can hold.
+  ///
+  /// For the mismatch to be caught before the first write, every updater
+  /// runs before any value is written — upstream calls each one just before
+  /// its own write. An updater that reads another matched key's cache entry
+  /// therefore sees it unwritten.
   ///
   /// The writes run in one [NotifyManager.batch]. Only callbacks submitted
   /// through `schedule` or `batchCalls` are deferred until the batch ends.
@@ -553,25 +629,35 @@ class QueryClient {
   }) {
     final queries = queryCache.findAll(filters: filters);
     // Checked before anything is written, so a mismatch under the prefix
-    // throws with the cache untouched rather than half-updated.
-    for (final query in queries) {
-      if (query.dataType != TQueryData) {
-        throw QueryDataTypeError(query.queryKey, TQueryData, query.dataType);
+    // throws with the cache untouched rather than half-updated: what each
+    // entry holds, then what each updater returned for it.
+    final previous = [for (final query in queries) _heldFor<TQueryData>(query)];
+    final next = [for (final held in previous) updater(held)];
+    for (var i = 0; i < queries.length; i++) {
+      final value = next[i];
+      if (value != null && !_holds<TQueryData>(queries[i], value)) {
+        throw QueryDataTypeError(
+          queries[i].queryKey,
+          TQueryData,
+          queries[i].dataType,
+        );
       }
     }
     return notifyManager.batch(
-      () => queries
-          .map(
-            (query) => (
-              query.queryKey,
-              updateQueryData<TQueryData>(
-                query.queryKey,
-                updater,
-                updatedAt: updatedAt,
-              ),
-            ),
-          )
-          .toList(),
+      () => [
+        for (var i = 0; i < queries.length; i++)
+          (
+            queries[i].queryKey,
+            switch (next[i]) {
+              null => null,
+              final TQueryData value => setQueryData<TQueryData>(
+                  queries[i].queryKey,
+                  value,
+                  updatedAt: updatedAt,
+                ),
+            },
+          ),
+      ],
     );
   }
 
@@ -748,6 +834,30 @@ class QueryClient {
   /// stale data completes with that data even when it is in an error state and
   /// even when the background refresh fails too — the error reaches the state
   /// and the cache callbacks, not this caller.
+  ///
+  /// **"Fresh" means "no older than a fetch in flight", not "started after
+  /// this call".** When the data is stale — always, with `staleTime:
+  /// StaleTime.zero` — and the query is already fetching, this call joins
+  /// that fetch, which may have started before a write the caller just made;
+  /// it does not cancel and restart it. And if that fetch is then cancelled
+  /// with `revert` (`cancelQueries`' default, and what an optimistic
+  /// update's `onMutate` usually calls), the call completes with the
+  /// reverted data — whatever the cache held before the fetch, an
+  /// optimistic patch included — rather than failing. Upstream's
+  /// `fetchQuery` behaves the same way on both counts and has no option to
+  /// force a new fetch either. A caller that needs a fetch that begins after
+  /// its own write can `await client.refetchQueries(...)` for the key, whose
+  /// `cancelRefetch` defaults to `true`, and then read the cache (release
+  /// review, 2026-09-23, E1 LIB-2).
+  ///
+  /// **The options become the query's options**, as an observer's do: the
+  /// cache entry is shared, and it runs its later refetches — an
+  /// invalidation, a focus refetch — with the options it was last handed. An
+  /// explicit `retry` passed here therefore stays on the query after this
+  /// call, like its `queryFn` or `gcTime`, until an observer or another call
+  /// hands in its own; upstream's `fetchQuery` does the same. Only the
+  /// no-retry default for a caller who configured none is limited to this
+  /// one fetch (E1 LIB-3).
   Future<TQueryData> query<TQueryData>(QueryOptions<TQueryData> options,
       {bool revalidateIfStale = false}) {
     // Resolved once: the scan over the registered defaults runs per call.

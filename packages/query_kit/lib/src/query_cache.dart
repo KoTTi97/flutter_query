@@ -132,13 +132,14 @@ final class QueryDataTypeError implements Exception {
       return 'A default produced $actual where $expected was expected. One '
           'default is being used with two data types.';
     }
-    // `setQueryData(key, 'x')` against a `Query<String?>`: the argument
-    // inferred the non-nullable type, and naming the query's type is the
-    // cure (ninth review, 2026-09-10, C23).
+    // A read or write typed `String` against a `Query<String?>`: the type
+    // argument inferred the non-nullable type, and naming the query's type
+    // is the cure (ninth review, 2026-09-10, C23). Which call it was is not
+    // known here, so the cure names the type, not a method (release review,
+    // 2026-09-23, L5-1).
     final cure = '$actual' == '$expected?'
         ? " The query's type is nullable and the type argument inferred the "
-            'non-nullable one: name it, as in setQueryData<$actual>(key, '
-            'value).'
+            'non-nullable one: name the type argument <$actual> on the call.'
         : '';
     return 'Query $key holds $actual but was used as $expected. One key is '
         'being used with two data types.$cure';
