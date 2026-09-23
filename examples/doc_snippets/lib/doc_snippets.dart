@@ -673,7 +673,7 @@ class Feed extends StatelessWidget {
 mixin LoadMoreOnScroll<T extends StatefulWidget> on State<T> {
   final ScrollController scrollController = ScrollController();
   // >>> guides/infinite-queries.md#asked-at
-  double? _askedAt;
+  double? _askedAtExtent;
   // <<<
 
   InfiniteQueryController<List<Post>, int, InfiniteData<List<Post>, int>>
@@ -683,10 +683,10 @@ mixin LoadMoreOnScroll<T extends StatefulWidget> on State<T> {
   void onScroll() {
     final position = scrollController.position;
     if (position.extentAfter < 400 &&
-        position.pixels != _askedAt &&
+        position.maxScrollExtent != _askedAtExtent &&
         feed.hasNextPage &&
         !feed.isFetchingNextPage) {
-      _askedAt = position.pixels;
+      _askedAtExtent = position.maxScrollExtent;
       feed.fetchNextPage().ignore();
     }
   }
