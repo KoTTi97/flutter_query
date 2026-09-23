@@ -30,7 +30,7 @@ starts once C3 has fixed the sidebar and slugs.
 | C7 | API reference pages, differences page, troubleshooting cleanup | merged into C4d | 3 | done |
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | done |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
-| F1 | Follow-ups | B22, B25, B27, leftover ranking words; fresh re-check of C4d's reference fact edits (query-client, query-options, widgets-and-controllers) | 4 | open |
+| F1 | Follow-ups | B22, B25, B27, leftover ranking words; fresh re-check of C4d's reference fact edits (query-client, query-options, widgets-and-controllers) | 4 | done |
 | R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | done |
 | X | Independent review by a Codex agent | after E; `codex exec -m gpt-6-sol -s read-only` (maintainer's model choice), findings reproduced before fixing | 6 | open |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | open |
@@ -115,12 +115,14 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B19 | C4d | `guides/filters.md`: `isMutating(filters:)` counts only pending, ignores `filters.status`; `isFetching` ignores `fetchStatus` | fixed `33b2662` |
 | B20 | C4d | `reading-queries-in-widgets.md`: implies `QueryMixin` throws for item-builder contexts (only `context.query`); ranking words "most explicit/predictable" (also `query_builder.dart:62`) | fixed `fc28fec` |
 | B21 | C4d | `connectivity.md` gaps (swapped clients, reset timing); `queries.md` paused ≠ network only, disabled/static never stale; `combining-queries.md` refetch cancels only sources with data | fixed `80e6dfa`, `fc28fec` |
-| B22 | C4d | dartdoc: `resetQueries` "all four bulk operations" misleads about `removeQueries`; throwing `select` → `QueryError` undocumented; `CombinedResult.isPaused` covers app-hidden wait | open → F1 |
+| B22 | C4d | dartdoc: `resetQueries` "all four bulk operations" misleads about `removeQueries`; throwing `select` → `QueryError` undocumented; `CombinedResult.isPaused` covers app-hidden wait | fixed `d29456b` |
 | B23 | C5 review | `examples/index` renamed to .mdx broke 11 links (build failed); GitHub source links pinned to `main` instead of the built commit | fixed `4d6a791` |
 | B24 | C5 review | 6 P2 + 7 P3 "what to try" bullets promised what the screens don't show | fixed `4d6a791` |
-| B25 | C5 review | four-call-styles card 7 titled "two styles" but shows three panels | open → F1 |
+| B25 | C5 review | four-call-styles card 7 titled "two styles" but shows three panels | fixed `d29456b` |
 | B26 | C6a | `guides/infinite-queries.md` shows a pixel-offset scroll guard the showcase's load_more code says fails | fixed `80e6dfa` |
-| B27 | C6a | `QueryCancelToken` dartdoc says package:http has no cancellation; http ≥1.5 has `AbortableRequest` | open → F1 |
+| B28 | F1 | `QuerySelectOptions` dartdoc + options page: select was said to suppress notifications for unselected changes (it keeps only `data`'s instance); inline `queryFn` said to be no change | fixed `d29456b` |
+| B29 | F1 | 3 broken anchors (`paginated-queries` → `placeholder-query-data#keeping-the-previous-page`, `prefetching#where-to-prefetch`, one more) | open → E |
+| B27 | C6a | `QueryCancelToken` dartdoc says package:http has no cancellation; http ≥1.5 has `AbortableRequest` | fixed `d29456b` |
 
 ## Log
 
@@ -142,3 +144,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C6a | `551ce17`, `ce2a092` | 10 recipes on one catalogue app; review fixed a P1 (token-refresh repeat through the queued interceptor could deadlock), 4 P2 (http base URL, timeout, cancellation fact, non-Dio refresh failure), tests for the claims; merge: one explicit 20-recipe sidebar list, dead generator/CSS removed |
 | 2026-09-23 | C4d | `d50cc98`, `f3b978a` | tools guides + 8 reference pages (C7 folded in); four sub-reviews: ~40 fixes (missing members, throw sites, 11 missing divergences, dio adapter signature, pumpAndSettle advice), TanStack column moved into descriptions, no table scrolls at 1440px; wave 3 fully merged, 97 LiveDemos on the site |
 | 2026-09-23 | R | `2b03d4a` | 87 files: repo URLs and base path → query_kit; GitHub Pages switched on (Actions source); Codex CLI smoke-tested with gpt-6-sol |
+| 2026-09-23 | F1 | `d29456b` | B22/B25/B27; fresh re-check of three reference pages found 2 P1 wrong statements (select notifications, inline queryFn) + P2s, fixed in dartdoc and site; core 1157, binding 299 |
