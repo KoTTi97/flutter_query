@@ -2,7 +2,6 @@
 title: Routing with go_router
 sidebar_label: Routing (go_router)
 description: Derive query keys from path parameters, prefetch before a route opens, refetch when the user comes back, and read queries in dialogs.
-sidebar_position: 14
 ---
 
 # Routing with go_router

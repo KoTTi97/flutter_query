@@ -2,7 +2,6 @@
 title: Where the client lives
 sidebar_label: Dependency injection
 description: Create the QueryClient once, provide it with QueryClientProvider, reach it with of, maybeOf and read, and register it in get_it when code outside the tree needs it.
-sidebar_position: 13
 ---
 
 # Where the client lives

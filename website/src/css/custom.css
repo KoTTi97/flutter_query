@@ -222,16 +222,6 @@ h4 {
   background: transparent;
 }
 
-/* A category that is one page for now (Examples, Cookbook) renders as a
-   plain link; it keeps the look of the category headings around it. */
-.qk-sidebar-heading > .menu__link {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 /* The mobile drawer takes the navbar's background, which is translucent for
    the blur behind the bar; over a page of text it has to be opaque. */
 .navbar-sidebar {

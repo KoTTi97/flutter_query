@@ -2,7 +2,6 @@
 title: Offline first, and surviving a restart
 sidebar_label: Offline first and persistence
 description: Save chosen queries and unsent writes to disk, restore them before the first frame, and let paused writes go out when the network comes back.
-sidebar_position: 12
 ---
 
 # Offline first, and surviving a restart

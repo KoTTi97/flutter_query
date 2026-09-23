@@ -2,7 +2,6 @@
 title: Next to Riverpod, Bloc or Provider
 sidebar_label: Riverpod, Bloc, Provider
 description: Keep server state in query_kit and app state in your state-management package, and connect the two through QueryController without keeping a second copy.
-sidebar_position: 11
 ---
 
 # Next to Riverpod, Bloc or Provider

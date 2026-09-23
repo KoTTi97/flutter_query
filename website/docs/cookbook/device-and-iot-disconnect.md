@@ -2,7 +2,6 @@
 title: Disconnecting a device
 sidebar_label: Device and IoT disconnect
 description: Stop every query for a device the user disconnected, with no request sent to it afterwards and no old reading left in the cache.
-sidebar_position: 17
 ---
 
 # Disconnecting a device

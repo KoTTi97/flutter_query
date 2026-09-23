@@ -2,7 +2,6 @@
 title: Models with freezed and JSON
 sidebar_label: freezed and JSON models
 description: What a model needs to work well in the cache, how freezed and json_serializable provide it, and why a wrapper class needs StructurallyShareable to keep unchanged items.
-sidebar_position: 20
 ---
 
 # Models with freezed and JSON

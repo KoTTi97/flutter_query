@@ -2,7 +2,6 @@
 title: Realtime updates over a WebSocket
 sidebar_label: Realtime and WebSockets
 description: Let server events write to the cache or invalidate it, keep the socket's lifetime in one widget, and resynchronise after a reconnect.
-sidebar_position: 15
 ---
 
 # Realtime updates over a WebSocket

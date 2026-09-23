@@ -2,7 +2,6 @@
 title: Poll until a device confirms
 sidebar_label: Poll until confirmed
 description: A write the server accepts but a device confirms later, with the requested value shown at once, a poll that starts and stops itself, and a clear state for giving up.
-sidebar_position: 16
 ---
 
 # Poll until a device confirms

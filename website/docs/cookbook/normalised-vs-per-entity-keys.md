@@ -2,7 +2,6 @@
 title: Normalised data or one key per entity
 sidebar_label: Normalised vs per-entity keys
 description: When to cache a list plus one entry per item, when to cache a map by id, and how to keep unchanged items' instances either way.
-sidebar_position: 19
 ---
 
 # Normalised data or one key per entity

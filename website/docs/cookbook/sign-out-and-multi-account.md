@@ -2,7 +2,6 @@
 title: Sign out and multiple accounts
 sidebar_label: Sign out and multi-account
 description: Give each signed-in user a fresh cache, empty it at sign-out without a refetch storm, warn about unsent writes, and keep several accounts apart in one client.
-sidebar_position: 18
 ---
 
 # Sign out and multiple accounts
