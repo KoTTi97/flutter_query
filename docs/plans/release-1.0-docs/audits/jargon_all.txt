@@ -1,0 +1,215 @@
+query_kit/lib/query_kit.dart:1 (library;) — 50680b98c, review, 2026-09-10, C23, 2026-09-09
+query_kit/lib/src/cancel_token.dart:1 (library;) — 50680b98c, issues/11
+query_kit/lib/src/cancel_token.dart:56 (void onCancel(void Function() callback) {) — review, 2026-09-10, C16
+query_kit/lib/src/combined_result.dart:1 (library;) — issues/82
+query_kit/lib/src/combined_result.dart:66 (Future<void> refetch({bool cancelRefetch = true}) ) — review, 2026-09-23, LIB-5
+query_kit/lib/src/combined_result.dart:167 (final class CombineMemo<T> {) — 2026-09-20
+query_kit/lib/src/filters.dart:1 (library;) — 50680b98c
+query_kit/lib/src/filters.dart:44 (final class QueryFilters {) — issues/17
+query_kit/lib/src/filters.dart:205 (String describeFilters(String type, Map<String, Ob) — review, 2026-09-10, C23
+query_kit/lib/src/focus_manager.dart:1 (library;) — 50680b98c
+query_kit/lib/src/focus_manager.dart:15 (class AppFocusManager extends Subscribable<void Fu) — issues/19, issues/60
+query_kit/lib/src/focus_manager.dart:62 (void onSubscribe() {) — review, 2026-09-23
+query_kit/lib/src/hashing.dart:6 (int spreadHash(int hash) =>) — reviews, R3-1
+query_kit/lib/src/infinite_query.dart:1 (library;) — 50680b98c, issues/16
+query_kit/lib/src/infinite_query.dart:23 (final class InfiniteData<TPageData, TPageParam> {) — review, 2026-09-10, C20
+query_kit/lib/src/infinite_query.dart:38 (InfiniteData({required this.pages, required this.p) — review, 2026-09-12, IN-01
+query_kit/lib/src/infinite_query.dart:73 (Iterable<TItem> flatten<TItem>() {) — review, 2026-09-10, C20
+query_kit/lib/src/infinite_query.dart:113 (bool operator ==(Object other) =>) — review, 2026-09-23, L3-2
+query_kit/lib/src/infinite_query.dart:149 (InfinitePageContext({) — API-02, 2026-09-12
+query_kit/lib/src/infinite_query.dart:190 (typedef PageParamFn<TPageData, TPageParam> = TPage) — issues/16
+query_kit/lib/src/infinite_query.dart:260 (final int? pages;) — IN-02, 2026-09-12
+query_kit/lib/src/infinite_query.dart:341 (FetchBehavior<InfiniteData<TPageData, TPageParam>>) — review, 2026-09-09
+query_kit/lib/src/infinite_query.dart:370 (sealed class InfiniteQueryObserverOptionsBase<TPag) — ADR-0001
+query_kit/lib/src/infinite_query.dart:627 (InfiniteQuerySelectOptions<TPageData, TPageParam, ) — review, 2026-09-23, LIB-3
+query_kit/lib/src/infinite_query_observer.dart:1 (library;) — 50680b98c
+query_kit/lib/src/infinite_query_observer.dart:22 (class InfiniteQueryObserver<TPageData, TPageParam,) — issues/16
+query_kit/lib/src/infinite_query_observer.dart:40 (InfiniteQueryOptions<TPageData, TPageParam> get in) — review, 2026-09-09
+query_kit/lib/src/infinite_query_observer.dart:163 (bool shouldNotify(QueryResult<TData>? previous, Qu) — review, 2026-09-09, 2026-09-10, C13
+query_kit/lib/src/infinite_query_observer.dart:254 (bool hasNextPageOf<TPageData, TPageParam>() — review, 2026-09-10, C24
+query_kit/lib/src/listener_registry.dart:1 (library;) — C50, issues/59
+query_kit/lib/src/listener_registry.dart:7 (class ListenerRegistry<TListener extends Function>) — review, 2026-09-10, C6, 2026-09-09
+query_kit/lib/src/mutation.dart:1 (library;) — 50680b98c
+query_kit/lib/src/mutation.dart:42 (abstract interface class MutationObserverRef {) — review, 2026-09-10, C21
+query_kit/lib/src/mutation.dart:82 (bool canRunMutation(Mutation<Object?, Object?, Obj) — review, 2026-09-23, L4-6
+query_kit/lib/src/mutation.dart:228 (void validate() {) — review, 2026-09-12, MU-03, R2-3
+query_kit/lib/src/mutation.dart:472 (MutationScope? get schedulingScope =>) — review, 2026-09-09
+query_kit/lib/src/mutation.dart:543 (Future<void> continueMutation() {) — review, 2026-09-10, C10, C12
+query_kit/lib/src/mutation.dart:584 (bool get canResume => _retryer != null) — review, 2026-09-10, C4, 2026-09-23, L4-4
+query_kit/lib/src/mutation.dart:641 (void cancel() {) — review, 2026-09-23, L4-3, issues/83
+query_kit/lib/src/mutation_cache.dart:1 (library;) — 50680b98c
+query_kit/lib/src/mutation_cache.dart:91 (MutationCache({this.onMutate, this.onSuccess, this) — C59, issues/66
+query_kit/lib/src/mutation_cache.dart:147 (final Set<Mutation<Object?, Object?, Object?>> _re) — review, 2026-09-23, third pass, V3-3
+query_kit/lib/src/mutation_cache.dart:161 (Mutation<TData, TVariables, TOnMutateResult>) — review, 2026-09-10, C8, C12, 2026-09-12, MU-03, MU-02
+query_kit/lib/src/mutation_cache.dart:237 (void remove(Mutation<Object?, Object?, Object?> mu) — review, DC-02, 2026-09-12, ADR-0003, MU-01
+query_kit/lib/src/mutation_cache.dart:305 (void clear() {) — ADR-0003, MU-01, 2026-09-12
+query_kit/lib/src/mutation_cache.dart:359 (Future<void> resumePaused() async {) — review, 2026-09-09, 2026-09-10, C4, C10, 2026-09-23, L4-4
+query_kit/lib/src/mutation_cache.dart:443 (bool canRunMutation(Mutation<Object?, Object?, Obj) — review, 2026-09-23, L4-6
+query_kit/lib/src/mutation_observer.dart:1 (library;) — 50680b98c
+query_kit/lib/src/mutation_options.dart:1 (library;) — 50680b98c, issues/14
+query_kit/lib/src/mutation_options.dart:16 (final class MutationScope {) — review, 2026-09-23, LIB-1
+query_kit/lib/src/mutation_options.dart:66 (final class MutationFunctionContext<TOnMutateResul) — issues/83
+query_kit/lib/src/mutation_options.dart:359 (final OnMutate<TVariables, TOnMutateResult>? onMut) — review, 2026-09-10
+query_kit/lib/src/mutation_options.dart:367 (final OnMutationSuccess<TData, TVariables, TOnMuta) — review, 2026-09-10
+query_kit/lib/src/mutation_options.dart:375 (final OnMutationError<TVariables, TOnMutateResult>) — review, 2026-09-10
+query_kit/lib/src/mutation_options.dart:383 (final OnMutationSettled<TData, TVariables, TOnMuta) — review, 2026-09-10
+query_kit/lib/src/mutation_result.dart:1 (library;) — issues/14
+query_kit/lib/src/mutation_result.dart:59 (final bool isPaused;) — review, 2026-09-23, L4-6
+query_kit/lib/src/mutation_result.dart:73 (final void Function(TVariables variables) mutate;) — review, 2026-09-10, C23
+query_kit/lib/src/mutation_state_observer.dart:41 (static MutationStateObserver<TSelected> typed<TDat) — issues/85, review, 2026-09-23, L4-1
+query_kit/lib/src/notify_manager.dart:1 (library;) — 50680b98c
+query_kit/lib/src/notify_manager.dart:15 (class NotifyManager {) — issues/19
+query_kit/lib/src/notify_manager.dart:38 (static final NotifyManager shared = NotifyManager() — review, 2026-09-09
+query_kit/lib/src/online_manager.dart:1 (library;) — 50680b98c
+query_kit/lib/src/online_manager.dart:14 (class OnlineManager extends Subscribable<void Func) — issues/21, issues/5
+query_kit/lib/src/online_manager.dart:36 (void onSubscribe() {) — review, 2026-09-23
+query_kit/lib/src/option_values.dart:1 (library;) — issues/10
+query_kit/lib/src/option_values.dart:26 (static const StaleTime static = StaleTimeStatic();) — DC-05, 2026-09-12
+query_kit/lib/src/option_values.dart:39 (const factory StaleTime.dynamic() — review, 2026-09-10
+query_kit/lib/src/option_values.dart:94 (final class StaleTimeStatic extends StaleTime {) — 50680b98c, review, 2026-09-09
+query_kit/lib/src/option_values.dart:219 (static const Enabled no = EnabledNo();) — issues/17, review, 2026-09-12
+query_kit/lib/src/option_values.dart:232 (const factory Enabled.when(bool Function(Query<Obj) — review, 2026-09-10
+query_kit/lib/src/queries_observer.dart:1 (library;) — 50680b98c
+query_kit/lib/src/queries_observer.dart:53 (void Function() subscribe(void Function(List<Query) — 2026-09-12, AR-02
+query_kit/lib/src/query.dart:1 (library;) — 50680b98c
+query_kit/lib/src/query.dart:20 (abstract interface class QueryObserverRef {) — review, 2026-09-10, C21
+query_kit/lib/src/query.dart:98 (abstract interface class FetchBehavior<TQueryData>) — issues/16
+query_kit/lib/src/query.dart:186 (final RetryPolicy? retry;) — review, 2026-09-09
+query_kit/lib/src/query.dart:302 (class Query<TQueryData> extends Removable {) — issues/7
+query_kit/lib/src/query.dart:336 (Type get dataType => TQueryData;) — review, 2026-09-09
+query_kit/lib/src/query.dart:374 (Completer<TQueryData>? _operation;) — review, 2026-09-09
+query_kit/lib/src/query.dart:474 (bool canHold(Object? value) => value is TQueryData) — review, 2026-09-23, L5-1, V-C-7, 2026-09-18
+query_kit/lib/src/query.dart:488 (void setState(QueryState<TQueryData> state) {) — issues/17, review, 2026-09-10, 2026-09-12, QE-02
+query_kit/lib/src/query.dart:521 (Future<void> cancel({bool revert = false, bool sil) — review, 2026-09-10, 2026-09-12, C9
+query_kit/lib/src/query.dart:624 (bool isActive() => List<QueryObserverRef>.of(_obse) — review, 2026-09-12, AR-04
+query_kit/lib/src/query.dart:668 (bool isStatic() =>) — AR-04
+query_kit/lib/src/query.dart:817 (Future<TQueryData> fetch({) — review, 2026-09-09
+query_kit/lib/src/query.dart:996 (Future<void> _settle() — review, 2026-09-23, L1-1
+query_kit/lib/src/query.dart:1078 (void _runCacheHook(void Function() hook) {) — review, 2026-09-10, C3
+query_kit/lib/src/query_cache.dart:1 (library;) — 50680b98c
+query_kit/lib/src/query_cache.dart:77 (final class QueryObserverOptionsUpdated extends Qu) — DC-04, 2026-09-12
+query_kit/lib/src/query_cache.dart:99 (final class QueryDataTypeError implements Exceptio) — issues/7
+query_kit/lib/src/query_cache.dart:152 (QueryCache({this.onSuccess, this.onError, this.onS) — C59, issues/66
+query_kit/lib/src/query_cache.dart:199 (Query<TQueryData> build<TQueryData>() — review, 2026-09-10, C8, 2026-09-12, QE-02
+query_kit/lib/src/query_cache.dart:286 (void clear() {) — review, 2026-09-12, QE-03
+query_kit/lib/src/query_cache.dart:347 (void notify(QueryCacheEvent event) =>) — review, 2026-09-09
+query_kit/lib/src/query_client.dart:1 (library;) — 50680b98c
+query_kit/lib/src/query_client.dart:57 (final QueryFn<Object?>? queryFn;) — issues/7
+query_kit/lib/src/query_client.dart:66 (final Object? Function(Object? previous, Object? n) — review, 2026-09-12
+query_kit/lib/src/query_client.dart:325 (final AppFocusManager focusManager;) — issues/19
+query_kit/lib/src/query_client.dart:385 (Future<void> _resumeThen(void Function() then) asy) — review, 2026-09-18, C-P3-2
+query_kit/lib/src/query_client.dart:425 (int isFetching({QueryFilters filters = const Query) — review, 2026-09-23, L5-4
+query_kit/lib/src/query_client.dart:490 (List<(QueryKey, TQueryData?)> getQueriesData<TQuer) — review, 2026-09-09
+query_kit/lib/src/query_client.dart:511 (TQueryData setQueryData<TQueryData>() — review, 2026-09-10, C23, 2026-09-18
+query_kit/lib/src/query_client.dart:586 (TQueryData? updateQueryData<TQueryData>() — issues/17, review, 2026-09-23, L5-1
+query_kit/lib/src/query_client.dart:718 (Future<void> resetQueries({) — 2026-09-12, AR-12
+query_kit/lib/src/query_client.dart:815 (Future<TQueryData> query<TQueryData>(QueryOptions<) — issues/17, review, 2026-09-23, LIB-2, LIB-3
+query_kit/lib/src/query_client.dart:905 (Future<void> resumePausedMutations() => mutationCa) — review, 2026-09-09, 2026-09-10, C10
+query_kit/lib/src/query_client.dart:927 (void clear() {) — review, 2026-09-10, C11, MU-01, 2026-09-12, QE-03
+query_kit/lib/src/query_client.dart:1263 (QueryObserverOptionsBase<InfiniteData<TPageData, T) — review, 2026-09-10
+query_kit/lib/src/query_client.dart:1283 (Future<InfiniteData<TPageData, TPageParam>>) — issues/17
+query_kit/lib/src/query_key.dart:1 (library;) — 50680b98c, issues/8
+query_kit/lib/src/query_key.dart:14 (final class QueryKey {) — review, 2026-09-10, C23, 2026-09-23
+query_kit/lib/src/query_observer.dart:1 (library;) — 50680b98c
+query_kit/lib/src/query_observer.dart:24 (class QueryObserver<TQueryData, TData> implements ) — issues/7, ADR-0001
+query_kit/lib/src/query_observer.dart:71 (void Function() subscribe(QueryObserverListener<TD) — 2026-09-12, AR-02
+query_kit/lib/src/query_observer.dart:337 (QueryResult<TData> getOptimisticResult() — issues/15
+query_kit/lib/src/query_observer.dart:399 (static void _checkDataType<TQueryData, TData>() — review, 2026-09-09
+query_kit/lib/src/query_observer.dart:508 (QueryResult<TData> createResult() — issues/16
+query_kit/lib/src/query_observer.dart:783 (bool shouldNotify(QueryResult<TData>? previous, Qu) — review, 2026-09-09
+query_kit/lib/src/query_observer.dart:910 (extension _RefetchRules on DefaultedQueryObserverO) — review, C53
+query_kit/lib/src/query_options.dart:1 (library;) — 50680b98c, issues/10
+query_kit/lib/src/query_options.dart:31 (QueryFunctionContext({) — API-02, 2026-09-12
+query_kit/lib/src/query_options.dart:64 (QueryCancelToken get signal {) — review, 2026-09-12
+query_kit/lib/src/query_options.dart:100 (typedef StructuralSharing<TQueryData> = TQueryData) — issues/12, review, 2026-09-12
+query_kit/lib/src/query_options.dart:130 (StructuralSharing<TQueryData> noStructuralSharing<) — review, 2026-09-12
+query_kit/lib/src/query_options.dart:251 (final TQueryData? Function() compute;) — #9743
+query_kit/lib/src/query_options.dart:521 (Map<String, Object?> get toStringFields => <String) — review, 2026-09-10, C23
+query_kit/lib/src/query_options.dart:553 (sealed class QueryObserverOptionsBase<TQueryData, ) — review, C1, ADR-0001
+query_kit/lib/src/query_options.dart:783 (QuerySelectOptions<TData, R> withSelect<R>(SelectF) — review, 2026-09-23, LIB-3
+query_kit/lib/src/query_options.dart:1162 (late final DefaultedQueryOptions<TQueryData> query) — review, C52, 2026-09-09
+query_kit/lib/src/query_result.dart:1 (library;) — 50680b98c, issues/12
+query_kit/lib/src/query_result.dart:79 (final int consecutiveErrorCount;) — review, 2026-09-23, LIB-2
+query_kit/lib/src/query_state.dart:1 (library;) — 50680b98c
+query_kit/lib/src/query_state.dart:35 (final class QueryState<TQueryData> {) — issues/12, issues/7, issues/17
+query_kit/lib/src/query_state.dart:54 (void validate() {) — review, 2026-09-12, R2-3
+query_kit/lib/src/query_state.dart:123 (final int consecutiveErrorCount;) — issues/85
+query_kit/lib/src/removable.dart:1 (library;) — 50680b98c
+query_kit/lib/src/removable.dart:11 (abstract class Removable {) — review, 2026-09-09
+query_kit/lib/src/retryer.dart:1 (library;) — 50680b98c
+query_kit/lib/src/retryer.dart:34 (bool canContinue(NetworkMode networkMode, OnlineMa) — review, 2026-09-10, C4
+query_kit/lib/src/retryer.dart:146 (Future<TData> start() {) — review, 2026-09-09
+query_kit/lib/src/retryer.dart:246 (bool _hook(void Function()? hook) {) — review, 2026-09-09
+query_kit/lib/src/structural_sharing.dart:1 (library;) — 50680b98c
+query_kit/lib/src/structural_sharing.dart:14 (abstract interface class StructurallyShareable<T> ) — first integration, issues/86
+query_kit/lib/src/structural_sharing.dart:65 (T replaceEqualDeep<T>(Object? previous, T next, [i) — first integration, 2026-09-19, review, 2026-09-12, R2-1, R2-2, R2-4, AR-01, 2026-09-09, issues/12
+query_kit/lib/src/structural_sharing.dart:282 (bool _equalDeep(Object? a, Object? b, int depth) {) — review, 2026-09-09
+query_kit/lib/src/structural_sharing.dart:383 (int sharingBucketOf(Object? value, int depth) =>) — R3-1, review
+query_kit/lib/src/subscribable.dart:1 (library;) — 50680b98c
+query_kit/lib/src/subscribable.dart:8 (abstract class Subscribable<TListener extends Func) — C50, issues/59
+query_kit/lib/src/timers.dart:1 (library;) — 50680b98c, review, 2026-09-09
+query_kit/lib/src/timers.dart:30 (Duration ceilToMilliseconds(Duration duration) {) — review, 2026-09-09
+query_kit_flutter/lib/query_kit_flutter.dart:1 (library;) — issues/21
+query_kit_flutter/lib/src/controller_lifetime.dart:1 (library;) — C50, issues/59
+query_kit_flutter/lib/src/controller_lifetime.dart:9 (class ControllerLifetime<S> {) — review, 2026-09-10
+query_kit_flutter/lib/src/is_fetching_controller.dart:10 (class IsFetchingController extends ChangeNotifier) — review, 2026-09-18, B-1
+query_kit_flutter/lib/src/mutation_state_controller.dart:49 (late final ControllerLifetime<List<TSelected>> _li) — C15, C50
+query_kit_flutter/lib/src/notify_gate.dart:1 (library;) — C48, issues/57, C49, issues/55
+query_kit_flutter/lib/src/online_status.dart:1 (library;) — issues/60
+query_kit_flutter/lib/src/online_status.dart:7 (sealed class OnlineStatus {) — issues/10
+query_kit_flutter/lib/src/queries_builder.dart:11 (class QueriesBuilder<TQueryData, TData> extends St) — C49, issues/55, review, 2026-09-23, B2-4
+query_kit_flutter/lib/src/queries_builder.dart:52 (class _QueriesBuilderState<TQueryData, TData>) — C59, issues/66, issues/58
+query_kit_flutter/lib/src/queries_builder.dart:97 (List<(QueryResult<TData>, QueryRefetch<TData>)>? _) — review, 2026-09-23, B2-4
+query_kit_flutter/lib/src/query_builder.dart:1 (library;) — issues/21, C48, C59, issues/57
+query_kit_flutter/lib/src/query_builder.dart:33 (Object get options;) — #84, review, 2026-09-23, issues/10
+query_kit_flutter/lib/src/query_builder.dart:54 (mixin _QueryBuilderWidget<TQueryData, TData>) — C59
+query_kit_flutter/lib/src/query_builder.dart:66 (class QueryBuilder<TData> extends StatefulWidget) — ADR-0001
+query_kit_flutter/lib/src/query_builder.dart:111 (final BuildWhen<QueryResult<TData>>? buildWhen;) — issues/15
+query_kit_flutter/lib/src/query_builder.dart:187 (class _QueryBuilderState<W extends _QueryBuilderWi) — C59
+query_kit_flutter/lib/src/query_builder.dart:206 (class InfiniteQueryBuilder<TPageData, TPageParam, ) — ADR-0001
+query_kit_flutter/lib/src/query_builder.dart:369 (abstract class _ControllerBuilderState<W extends _) — C48
+query_kit_flutter/lib/src/query_client_provider.dart:1 (library;) — issues/22
+query_kit_flutter/lib/src/query_client_provider.dart:87 (final OnlineStatus? onlineStatus;) — review, 2026-09-23, V-B-3, 2026-09-10, issues/60
+query_kit_flutter/lib/src/query_client_provider.dart:111 (final bool observeAppLifecycle;) — issues/60
+query_kit_flutter/lib/src/query_client_provider.dart:123 (final bool Function(AppLifecycleState state)? isAp) — review, 2026-09-10
+query_kit_flutter/lib/src/query_client_provider.dart:223 (bool _released = false;) — fifth pass, V5-2
+query_kit_flutter/lib/src/query_client_provider.dart:289 (static void _setFocused(QueryClient client, bool s) — review, 2026-09-23
+query_kit_flutter/lib/src/query_client_provider.dart:323 (void _follow(OnlineStatus? onlineStatus) {) — review, 2026-09-09
+query_kit_flutter/lib/src/query_client_provider.dart:374 (void _cancelOnline() {) — review, 2026-09-23, B1-2
+query_kit_flutter/lib/src/query_client_provider.dart:403 (static void _releaseOnline(QueryClient client, {bo) — review, 2026-09-23, second pass, V-B-3
+query_kit_flutter/lib/src/query_client_provider.dart:486 (static final Map<NotifyManager, ({ScheduleFunction) — review, 2026-09-10
+query_kit_flutter/lib/src/query_context.dart:1 (library;) — issues/21, review, 2026-09-23, fourth pass, V4-5, V4-1, third pass, V3-1, V3-2
+query_kit_flutter/lib/src/query_context.dart:105 (QueryResult<TData> query<TData>() — C49, issues/55
+query_kit_flutter/lib/src/query_context.dart:144 (QueryResult<TData> selectQuery<TQueryData, TData>() — ADR-0001
+query_kit_flutter/lib/src/query_context.dart:196 (MutationController<TData, TVariables, TOnMutateRes) — issues/67
+query_kit_flutter/lib/src/query_context.dart:261 (class QueryScope extends InheritedWidget {) — C59, issues/66
+query_kit_flutter/lib/src/query_context.dart:301 (final Map<Element, ReadSet> _readers = <Element, R) — C47, issues/56
+query_kit_flutter/lib/src/query_context.dart:306 (final Set<Element> _detached = <Element>{};) — review, 2026-09-10
+query_kit_flutter/lib/src/query_context.dart:327 (ReadSet readsFor(Element reader, String call) {) — V-B-2
+query_kit_flutter/lib/src/query_controller.dart:1 (library;) — issues/21
+query_kit_flutter/lib/src/query_controller.dart:22 (abstract interface class ObservedState {) — review, 2026-09-10
+query_kit_flutter/lib/src/query_controller.dart:89 (static QueryController<TData, TData> create<TData>) — ADR-0001, review, 2026-09-10
+query_kit_flutter/lib/src/query_controller.dart:160 (void setOptions(QueryObserverOptionsBase<TQueryDat) — issues/22, review, 2026-09-23, B2-3
+query_kit_flutter/lib/src/query_controller.dart:203 (class InfiniteQueryController<TPageData, TPagePara) — issues/16, ADR-0001
+query_kit_flutter/lib/src/query_controller.dart:379 (MutationObserver<TData, TVariables, TOnMutateResul) — second pass, review, 2026-09-23, V-B-5
+query_kit_flutter/lib/src/query_controller.dart:413 (Future<TData> mutateAsync() — review, 2026-09-10, C18
+query_kit_flutter/lib/src/query_controller.dart:493 (bool _debugDataTypeIsAnchored<TData>() => <Object?) — ADR-0001
+query_kit_flutter/lib/src/query_listener.dart:18 (const QueryListener({) — review, 2026-09-10, C19
+query_kit_flutter/lib/src/query_mixin.dart:1 (library;) — issues/21, review, 2026-09-23, fourth pass, V4-5
+query_kit_flutter/lib/src/query_mixin.dart:69 (late final ReadSet _reads = ReadSet(rebuild: _rebu) — C47, issues/56
+query_kit_flutter/lib/src/query_mixin.dart:86 (QueryResult<TData> watchQuery<TData>() — C49, issues/55
+query_kit_flutter/lib/src/query_mixin.dart:117 (QueryResult<TData> watchSelectQuery<TQueryData, TD) — ADR-0001
+query_kit_flutter/lib/src/query_mixin.dart:159 (MutationController<TData, TVariables, TOnMutateRes) — issues/67
+query_kit_flutter/lib/src/query_mixin.dart:224 (void _reconcileClient() {) — review, 2026-09-10
+query_kit_flutter/lib/src/read_entry.dart:1 (library;) — C48, issues/57, issues/21
+query_kit_flutter/lib/src/read_entry.dart:62 (Object? _builtState;) — review, 2026-09-10
+query_kit_flutter/lib/src/read_entry.dart:83 (bool _shouldRebuild() {) — review, 2026-09-09
+query_kit_flutter/lib/src/read_set.dart:1 (library;) — issues/21, C47, issues/56, 2026-09-10, C48, issues/57, C49, issues/55, issues/67
+query_kit_flutter/lib/src/read_set.dart:60 (typedef _MutationShape = () — third pass, V3-6, fourth pass, V4-3, fifth pass, V5-3
+query_kit_flutter/lib/src/read_set.dart:71 (class ReadSet {) — review, 2026-09-23, V4-5, third pass, V3-1, V3-2, fourth pass, V4-1, second pass, V-B-1, V-B-2
+query_kit_flutter/lib/src/read_set.dart:179 (bool _marked = false;) — fourth pass, V4-1
+query_kit_flutter/lib/src/read_set.dart:185 (Constraints? _builtWith;) — fourth pass, V4-1
+query_kit_flutter/lib/src/read_set.dart:197 (void beginBuild(int generation, Element reader) {) — fourth pass, V4-1
+query_kit_flutter/lib/src/read_set.dart:313 (QueryResult<TData> readQuery<TQueryData, TData>() — ADR-0001
+query_kit_flutter/lib/src/read_set.dart:511 (static Object? _byVariant(Object? option) =>) — fifth pass, V5-3
+query_kit_flutter/lib/src/repeat_read.dart:8 (void debugCheckRepeatRead() — review, 2026-09-09
