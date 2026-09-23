@@ -47,13 +47,13 @@ name similarity, where any exists, is descriptive — it says what this is a por
 
 **Please do not take problems with this package to them.** Bugs, questions and
 complaints belong in [this repository's
-issues](https://github.com/KoTTi97/query_kit/issues), and nowhere near
+issues](https://github.com/dualmeta-gmbh/query_kit/issues), and nowhere near
 TanStack's.
 :::
 
 The package name here is deliberately not TanStack's:
-[`docs/releasing.md`](https://github.com/KoTTi97/query_kit/blob/main/docs/releasing.md)
-explains why, and the [naming research](https://github.com/KoTTi97/query_kit/blob/main/docs/research/package-naming-and-affiliation.md)
+[`docs/releasing.md`](https://github.com/dualmeta-gmbh/query_kit/blob/main/docs/releasing.md)
+explains why, and the [naming research](https://github.com/dualmeta-gmbh/query_kit/blob/main/docs/research/package-naming-and-affiliation.md)
 records what was actually checked — pub.dev's rules, what TanStack has and has
 not said about community ports, and how ports in six other languages named
 themselves.

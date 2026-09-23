@@ -171,7 +171,7 @@ The *Task manager* example has no state-management package at all. Its
 server state — the task list, each task, the search results — is queries and
 mutations. Its client state — which task is open, the search text, the
 project filter — is one small `ChangeNotifier`, `AppState` in
-[`examples/task_manager/lib/src/app_state.dart`](https://github.com/KoTTi97/query_kit/blob/main/examples/task_manager/lib/src/app_state.dart),
+[`examples/task_manager/lib/src/app_state.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/examples/task_manager/lib/src/app_state.dart),
 with no copy of any task in it. The search text and the project go into the
 list's query key, debounced, so the list follows them. A larger app keeps
 its package for the client side and loses most of the server-side code.

@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-09-11
-ticket: https://github.com/KoTTi97/query_kit/issues/36
+ticket: https://github.com/dualmeta-gmbh/query_kit/issues/36
 ---
 
 # The widget-test teardown is a documented snippet, not an export

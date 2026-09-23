@@ -2,7 +2,7 @@
 ///
 /// Upstream has no counterpart for these, so they live outside the
 /// one-file-per-upstream-file mapping
-/// (https://github.com/KoTTi97/query_kit/issues/18).
+/// (https://github.com/dualmeta-gmbh/query_kit/issues/18).
 library;
 
 import 'package:query_kit/query_kit.dart';

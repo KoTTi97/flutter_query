@@ -37,9 +37,9 @@ const config: Config = {
   tagline: 'TanStack Query for Dart and Flutter, ported test for test',
   favicon: 'img/favicon.svg',
 
-  url: 'https://kotti97.github.io',
+  url: 'https://dualmeta-gmbh.github.io',
   baseUrl,
-  organizationName: 'KoTTi97',
+  organizationName: 'dualmeta-gmbh',
   projectName: repository,
   trailingSlash: false,
 
@@ -82,7 +82,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/docs',
-          editUrl: 'https://github.com/KoTTi97/query_kit/tree/main/website/',
+          editUrl: 'https://github.com/dualmeta-gmbh/query_kit/tree/main/website/',
           showLastUpdateTime: false,
         },
         blog: false,
@@ -124,7 +124,7 @@ const config: Config = {
         { to: '/docs/project/fidelity', position: 'left', label: 'Fidelity' },
         { to: '/docs/project/credits', position: 'left', label: 'Credits' },
         {
-          href: 'https://github.com/KoTTi97/query_kit',
+          href: 'https://github.com/dualmeta-gmbh/query_kit',
           position: 'right',
           className: 'header-github-link',
           'aria-label': 'GitHub repository',
@@ -149,14 +149,14 @@ const config: Config = {
             { label: 'Credits, and what this is not', to: '/docs/project/credits' },
             { label: 'How fidelity is proven', to: '/docs/project/fidelity' },
             { label: 'How the examples are built', to: '/docs/project/examples' },
-            { label: 'Contributing', href: 'https://github.com/KoTTi97/query_kit/blob/main/CONTRIBUTING.md' },
-            { label: 'Porting notes', href: 'https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md' },
+            { label: 'Contributing', href: 'https://github.com/dualmeta-gmbh/query_kit/blob/main/CONTRIBUTING.md' },
+            { label: 'Porting notes', href: 'https://github.com/dualmeta-gmbh/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md' },
           ],
         },
         {
           title: 'Elsewhere',
           items: [
-            { label: 'GitHub', href: 'https://github.com/KoTTi97/query_kit' },
+            { label: 'GitHub', href: 'https://github.com/dualmeta-gmbh/query_kit' },
             { label: 'TanStack Query', href: 'https://tanstack.com/query' },
           ],
         },

@@ -275,8 +275,8 @@ screenTest('a refused save shows the server\'s field errors',
 - **The same cases against the real backend.** A list of cases run against
   the fake *and* against a local copy of the server keeps the two from
   drifting apart. The
-  [task manager](https://github.com/KoTTi97/query_kit/tree/main/examples/task_manager)
-  and the [showcase](https://github.com/KoTTi97/query_kit/tree/main/examples/showcase)
+  [task manager](https://github.com/dualmeta-gmbh/query_kit/tree/main/examples/task_manager)
+  and the [showcase](https://github.com/dualmeta-gmbh/query_kit/tree/main/examples/showcase)
   both have one, `backend_contract_test.dart`.
 - **Testing a query without widgets.** A query's options are plain values: in
   a unit test, `await client.query(productListQuery(fake))` runs the query

@@ -147,7 +147,7 @@ semantics.
 ## Where the plan lives
 
 Decisions are tracked as a wayfinder map on
-[issue #1](https://github.com/KoTTi97/query_kit/issues/1); each fork in the
+[issue #1](https://github.com/dualmeta-gmbh/query_kit/issues/1); each fork in the
 road is a sub-issue closed with the options, the answer, and why it beat the
 alternatives. The research behind them is under [`docs/`](docs/). If you are
 proposing something that changes the shape of the API, open an issue first —

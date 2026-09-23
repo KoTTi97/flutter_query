@@ -427,8 +427,8 @@ class HttpApiClient {
 The same split: a query function receives an `AbortSignal` and passes it to
 `fetch` or axios. Here the signal is a `QueryCancelToken`, and the one-line
 bridge in `_bridge` plays the part that `signal` plays for axios. The
-[showcase](https://github.com/KoTTi97/query_kit/blob/main/examples/showcase/lib/shared/api.dart)
-and the [task manager](https://github.com/KoTTi97/query_kit/blob/main/examples/task_manager/lib/src/api.dart)
+[showcase](https://github.com/dualmeta-gmbh/query_kit/blob/main/examples/showcase/lib/shared/api.dart)
+and the [task manager](https://github.com/dualmeta-gmbh/query_kit/blob/main/examples/task_manager/lib/src/api.dart)
 both wire dio this way.
 :::
 

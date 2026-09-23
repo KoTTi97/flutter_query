@@ -1,6 +1,6 @@
 /// The test harness every ported suite uses.
 ///
-/// Decided on https://github.com/KoTTi97/query_kit/issues/9: upstream's
+/// Decided on https://github.com/dualmeta-gmbh/query_kit/issues/9: upstream's
 /// suites are written against `await vi.advanceTimersByTimeAsync(n)`, which
 /// fires timers *and* drains microtasks in between. `FakeAsync.elapse` cannot
 /// be called re-entrantly, and a ported test body runs inside the zone — so the
@@ -183,7 +183,7 @@ void scheduleMicrotaskShim(void Function() callback) =>
     scheduleMicrotask(callback);
 
 /// A client with its own managers, so nothing leaks between tests
-/// (https://github.com/KoTTi97/query_kit/issues/19).
+/// (https://github.com/dualmeta-gmbh/query_kit/issues/19).
 QueryClient testClient({
   DefaultOptions? defaultOptions,
   QueryCache? queryCache,

@@ -1,7 +1,7 @@
 # The Flutter binding's API shape
 
-**Decided by Christian on 2026-09-08 ([#21](https://github.com/KoTTi97/query_kit/issues/21),
-[#23](https://github.com/KoTTi97/query_kit/issues/23)).** The ruling: no
+**Decided by Christian on 2026-09-08 ([#21](https://github.com/dualmeta-gmbh/query_kit/issues/21),
+[#23](https://github.com/dualmeta-gmbh/query_kit/issues/23)).** The ruling: no
 third-party package required by the main package — not `flutter_hooks`, not
 signals, not `connectivity_plus`; hooks and signals may come later as opt-in
 packages. And no default in the documentation: the four call styles are
@@ -36,7 +36,7 @@ decision is one line:
 
 `ValueListenable` lives in `package:flutter/foundation.dart`, so that adapter
 belongs to the binding package and the core stays Flutter-free
-([#19](https://github.com/KoTTi97/query_kit/issues/19)). Everything after
+([#19](https://github.com/dualmeta-gmbh/query_kit/issues/19)). Everything after
 that is sugar, and **all of it is additive** — nothing below excludes anything
 else below.
 
@@ -304,6 +304,6 @@ smaller ecosystem (signals). I will build whichever you pick.
 ## What happens next
 
 Say the word — a variant letter, or "your recommendation" — and the binding gets
-built on it, with [#22](https://github.com/KoTTi97/query_kit/issues/22)
+built on it, with [#22](https://github.com/dualmeta-gmbh/query_kit/issues/22)
 (observer lifetime, key changes, `AppLifecycleState` → focus, the connectivity
 adapter) decided AFK right after, since most of it is shape-independent.

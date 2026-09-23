@@ -48,7 +48,7 @@ Nothing here is exported by the package. `flutter_test` is a dev dependency
 of `query_kit_flutter`, not a regular one, so nothing a test needs sits in
 your app's dependency graph. Copy the steps, or the harness below, into your
 own test folder. The Flutter samples on this page are test cases in
-[`examples/doc_snippets/test/`](https://github.com/KoTTi97/query_kit/tree/main/examples/doc_snippets/test)
+[`examples/doc_snippets/test/`](https://github.com/dualmeta-gmbh/query_kit/tree/main/examples/doc_snippets/test)
 — the teardown and the harness in `teardown_snippet_test.dart` — which CI
 runs, so they cannot rot.
 
@@ -95,12 +95,12 @@ queryWidgetTest('the list loads', (tester, client) async {
 
 Both example apps wrap this shape with a fixture of their own, in the same
 teardown order: `showcaseTest` in
-[`examples/showcase/test/harness.dart`](https://github.com/KoTTi97/query_kit/blob/main/examples/showcase/test/harness.dart),
+[`examples/showcase/test/harness.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/examples/showcase/test/harness.dart),
 which also brings a fresh fake backend and opens the app on one route, and
 `demoTest` in
-[`examples/task_manager/test/acceptance_test.dart`](https://github.com/KoTTi97/query_kit/blob/main/examples/task_manager/test/acceptance_test.dart).
+[`examples/task_manager/test/acceptance_test.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/examples/task_manager/test/acceptance_test.dart).
 The binding's own suite has the fuller version in
-[`packages/query_kit_flutter/test/harness.dart`](https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit_flutter/test/harness.dart)
+[`packages/query_kit_flutter/test/harness.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/packages/query_kit_flutter/test/harness.dart)
 — a second client adopted for the teardown, the provider wired with lifecycle
 observation off, the app lifecycle put back to `resumed` when a case faked
 it. None of them is importable; they are worth reading before you write your
@@ -244,7 +244,7 @@ final dio = Dio(BaseOptions(baseUrl: 'https://shop.test/api'))
 
 This is how the *Showcase* example's widget tests run: an in-memory
 backend behind `dio`, in
-[`examples/showcase/lib/demo/in_memory_backend.dart`](https://github.com/KoTTi97/query_kit/blob/main/examples/showcase/lib/demo/in_memory_backend.dart),
+[`examples/showcase/lib/demo/in_memory_backend.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/examples/showcase/lib/demo/in_memory_backend.dart),
 with a contract test that runs the same cases against it and the real
 server, so the fake cannot drift from what it stands in for.
 
@@ -577,7 +577,7 @@ when a test ends, and Flutter's test binding does.
 ## In the examples
 
 The *Task manager* example's acceptance suite,
-[`examples/task_manager/test/acceptance_test.dart`](https://github.com/KoTTi97/query_kit/blob/main/examples/task_manager/test/acceptance_test.dart),
+[`examples/task_manager/test/acceptance_test.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/examples/task_manager/test/acceptance_test.dart),
 is one widget test per feature of a whole app — the first load, detail
 entries seeded from the list, a debounced search, a rename that rolls back,
 a switch confirmed by polling, a retried error — against a fake of its

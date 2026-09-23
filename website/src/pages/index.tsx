@@ -270,7 +270,7 @@ export default function Home(): ReactNode {
               <strong>It is not theirs.</strong> Not affiliated with, endorsed by, reviewed by, or connected in any way
               to Tanner Linsley, the TanStack team, or the TanStack organisation. Please do not take problems with this
               package to them —{' '}
-              <a href="https://github.com/KoTTi97/query_kit/issues">they belong here</a>.
+              <a href="https://github.com/dualmeta-gmbh/query_kit/issues">they belong here</a>.
             </p>
           </div>
         </section>

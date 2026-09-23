@@ -4,8 +4,8 @@ description: >-
   retries and mutations, no Flutter needed. An AI-coded community port, not
   affiliated with TanStack.
 version: 1.0.0
-repository: https://github.com/KoTTi97/query_kit
-issue_tracker: https://github.com/KoTTi97/query_kit/issues
+repository: https://github.com/dualmeta-gmbh/query_kit
+issue_tracker: https://github.com/dualmeta-gmbh/query_kit/issues
 topics:
   - cache
   - state-management

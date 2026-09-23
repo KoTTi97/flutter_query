@@ -77,7 +77,7 @@ class _BuilderReader extends StatelessWidget {
 /// requirement — so a read is identified by its key and types unless the
 /// caller supplies an `id:`. That is the same trade that makes `watchQuery`
 /// inside an `if` legal, and C49 kept it
-/// (https://github.com/KoTTi97/query_kit/issues/55, item 2): the loop
+/// (https://github.com/dualmeta-gmbh/query_kit/issues/55, item 2): the loop
 /// below with an `id:` pins that the observer *follows* the key, so
 /// `PlaceholderData.compute((previous, _) => previous)` has a previous; the
 /// second loop pins that without one, a new key is a new read. A builder and a

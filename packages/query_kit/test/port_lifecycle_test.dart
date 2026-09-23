@@ -7,7 +7,7 @@
 /// that file is the observer, structural-sharing and option-value side of the
 /// same review, and the two were worked in parallel with a strict file split.
 /// Both are port-only tests, so neither maps to an upstream file
-/// (https://github.com/KoTTi97/query_kit/issues/18). Cases are named by
+/// (https://github.com/dualmeta-gmbh/query_kit/issues/18). Cases are named by
 /// the finding: `D` for review A, `F` for review B, `N` for the nits.
 library;
 

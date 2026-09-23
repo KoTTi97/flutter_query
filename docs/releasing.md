@@ -40,6 +40,25 @@ The examples (`examples/showcase`, `examples/task_manager`) are never published
   legs. The wizard's preflight looks this up for `HEAD` and refuses a red or
   unfinished run.
 
+## Verified publisher
+
+Both packages are published under the verified publisher **dualmeta.io**
+(DualMeta GmbH), not under a personal account. The publisher has to exist
+before the first release:
+
+1. Verify `dualmeta.io` as a *Domain property* in the
+   [Google Search Console](https://search.google.com/search-console) with the
+   Google account that will publish (a DNS TXT record).
+2. Create the publisher at <https://pub.dev/create-publisher> with that
+   domain, signed in with the same account.
+3. Add further admins under the publisher's *Members* page if more than one
+   person should be able to publish.
+
+A package's first publish lands under the signed-in account; the wizard's
+stage 7 then moves both packages to the publisher from each package's admin
+page (*Transfer to publisher*). Automated publishing (stage 8) is configured
+on the same admin pages and is unaffected by the move.
+
 ## Tags
 
 One tag per package, named after the package and the version:

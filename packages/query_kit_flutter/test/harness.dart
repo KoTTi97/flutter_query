@@ -3,7 +3,7 @@
 /// `QueryClient` needs — once, in the order the testing guide documents.
 ///
 /// The teardown is the documented snippet, not an export of the package
-/// (ADR-0002, https://github.com/KoTTi97/query_kit/issues/42): a
+/// (ADR-0002, https://github.com/dualmeta-gmbh/query_kit/issues/42): a
 /// `QueryClient` outlives the widget tree and owns the `gcTime` timers of
 /// everything in its cache, and Flutter's test binding asserts that no timer
 /// is pending when the tree comes down — *before* any `tearDown` runs. So the

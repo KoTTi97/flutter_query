@@ -1,6 +1,6 @@
 // What the barrel hides, asserted rather than assumed: the ninth review's
 // API decisions (C21, C23, C24) changed the list
-// (https://github.com/KoTTi97/query_kit/issues/43). Dart offers no
+// (https://github.com/dualmeta-gmbh/query_kit/issues/43). Dart offers no
 // runtime view of an export's combinators without `dart:mirrors`, which the
 // Flutter-bundled SDK does not ship, so the source is read; the positive
 // half — every name a consumer may write — is the import below compiling

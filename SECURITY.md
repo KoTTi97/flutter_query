@@ -24,7 +24,7 @@ releases.
 **Please do not open a public issue for a vulnerability.**
 
 Use GitHub's private reporting — *Security* → *Report a vulnerability*, or
-<https://github.com/KoTTi97/query_kit/security/advisories/new> directly. It
+<https://github.com/dualmeta-gmbh/query_kit/security/advisories/new> directly. It
 is enabled on this repository and is the only channel: there is no contact
 email, deliberately. Please include:
 

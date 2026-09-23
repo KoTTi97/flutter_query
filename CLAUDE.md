@@ -36,7 +36,7 @@ first, which switched element sharing off for sealed lists and broke
 infinite-query page sharing unseen by 750 tests; then instance identity with a
 fixed-length copy, which PORTING_NOTES' I1 argues. One was a
 packaging gap in the docs. The rest are upstream-faithful or beyond upstream,
-and they were charted as map [#81](https://github.com/KoTTi97/query_kit/issues/81)
+and they were charted as map [#81](https://github.com/dualmeta-gmbh/query_kit/issues/81)
 and worked off on 2026-09-20 — PORTING_NOTES' "After the first integration"
 has a row per ticket: `(a, b).combine(…)` over a record of results (#82);
 `mutationFnWithContext` and `Mutation.cancel`, a failure and not a revert
@@ -51,7 +51,7 @@ captures (now `keys:`), and a manual write resetting `consecutiveErrorCount`
 report". A third report, against `9c5066a` — the app now runs on the new
 surface, its nine-step simulator pass clean — measured that a value class
 wrapping a list is a leaf to structural sharing (0 of 25 instances kept) and
-answered [#86](https://github.com/KoTTi97/query_kit/issues/86):
+answered [#86](https://github.com/dualmeta-gmbh/query_kit/issues/86):
 `StructurallyShareable`, `optional()` sources and `combine` over a list
 followed, and a fourth round confirmed them by measurement (24 of 25 with no
 hook) and brought the one case `combine` still lacked: `combineWith`, a list
@@ -59,7 +59,7 @@ plus the query it was derived from. Core 783 VM / 779 browser, binding 144.
 The app has replaced six of its own building blocks, some 450 lines; what is
 untested is the real BR64 — the 202 confirmation with cancel, and giving up
 after five failures. The sharing
-trade-off stays discussable on [#86](https://github.com/KoTTi97/query_kit/issues/86);
+trade-off stays discussable on [#86](https://github.com/dualmeta-gmbh/query_kit/issues/86);
 the traps opened the site's `reference/troubleshooting.md`.
 
 The **2026-09-23 release review** was a deep dive over both repositories —
@@ -240,16 +240,16 @@ spent: **the Notes and Decisions of all three remain in force**, they are
 cited by number throughout this file, and a closed issue reads and links
 exactly like an open one.
 
-- [#1](https://github.com/KoTTi97/query_kit/issues/1) — the fresh port.
+- [#1](https://github.com/dualmeta-gmbh/query_kit/issues/1) — the fresh port.
   Its Notes are the oldest standing rules (AFK, the upstream pin, no
   third-party dependency, the four equal call styles); **start there** when
   you need to know why something is the way it is.
-- [#33](https://github.com/KoTTi97/query_kit/issues/33) — release 0.1.0
+- [#33](https://github.com/dualmeta-gmbh/query_kit/issues/33) — release 0.1.0
   (the version became 1.0.0 at the 2026-09-23 release review).
   Worked off the ninth review's findings C1–C46, two of them as ADRs under
   [`docs/adr/`](docs/adr/), and ended at the wizard's door with the release
   commit (#47).
-- [#49](https://github.com/KoTTi97/query_kit/issues/49) — the structural
+- [#49](https://github.com/dualmeta-gmbh/query_kit/issues/49) — the structural
   findings **C47–C59** that #33 ruled out of its own scope. Nineteen tickets,
   all worked through on 2026-09-12 (`60173bb`, state docs in `15dd9a0`). Its
   *Not yet specified* section holds the seeds for the next map.
@@ -288,8 +288,8 @@ What the map settles:
 - **Decide, then build.** Production Dart lands as soon as the decisions
   covering it are closed.
 - **The binding's API shape was Christian's call, and he made it (2026-09-08).**
-  [#21](https://github.com/KoTTi97/query_kit/issues/21) and
-  [#23](https://github.com/KoTTi97/query_kit/issues/23) are closed. What he
+  [#21](https://github.com/dualmeta-gmbh/query_kit/issues/21) and
+  [#23](https://github.com/dualmeta-gmbh/query_kit/issues/23) are closed. What he
   ruled: **no third-party package required by the main package** — not
   `flutter_hooks`, not signals, and by the same reasoning not
   `connectivity_plus`; hooks and signals may come later as opt-in packages. And
@@ -306,19 +306,19 @@ The wayfinder, grilling, prototype and research flows come from the
 uses.
 
 Names, layout and licence are settled on
-[#13](https://github.com/KoTTi97/query_kit/issues/13); every module cites
+[#13](https://github.com/dualmeta-gmbh/query_kit/issues/13); every module cites
 the ticket that decided its shape in its dartdoc.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues live in this repo's GitHub Issues (`KoTTi97/query_kit`, via the
+Issues live in this repo's GitHub Issues (`dualmeta-gmbh/query_kit`, via the
 `gh` CLI). See `docs/agents/issue-tracker.md` — its "Wayfinding operations"
 section is what `/wayfinder` sessions follow. The current wayfinder map is the
 issue labelled `wayfinder:map`.
 
-**Always pass `--repo KoTTi97/query_kit`.** The nested `query/` clone points
+**Always pass `--repo dualmeta-gmbh/query_kit`.** The nested `query/` clone points
 at `TanStack/query`, and `gh` infers the repo from the working directory.
 
 ### Domain docs
@@ -367,7 +367,7 @@ cd examples/task_manager/server && npm install && npm run dev
 
 A first `query_core` implementation lived at `flutter-port/` until the fresh
 core's ported suites went green.
-[#13](https://github.com/KoTTi97/query_kit/issues/13) settled that it would
+[#13](https://github.com/dualmeta-gmbh/query_kit/issues/13) settled that it would
 be removed then, because the same information now lives in a better place and an
 out-of-date copy is a trap for readers. It is still reachable:
 
@@ -417,7 +417,7 @@ semantics.
   `QueryObserverOptions.withSelect` and `InfiniteQueryObserverOptions.withSelect`
   (LIB-3's test fails for a forgotten field only if it sets that field).
   Explored and kept as the price of const value classes
-  ([#62](https://github.com/KoTTi97/query_kit/issues/62)).
+  ([#62](https://github.com/dualmeta-gmbh/query_kit/issues/62)).
 - **When porting a test, port it — don't rewrite it.** Keep the upstream name so
   the two files diff against each other, and if the assertion has to change,
   record why in PORTING_NOTES.md. Port-only behaviour goes in `smoke_test.dart`,

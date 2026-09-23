@@ -18,7 +18,7 @@ re-exports all of this.
 > reason — and run against this code, with thanks to Tanner Linsley and the
 > TanStack team. This package is not affiliated with,
 > endorsed by or connected to them; please take problems to
-> [this repository's issues](https://github.com/KoTTi97/query_kit/issues),
+> [this repository's issues](https://github.com/dualmeta-gmbh/query_kit/issues),
 > not to TanStack.
 
 ## Install
@@ -153,23 +153,23 @@ rendering and devtools.
 
 ## Learn more
 
-- [Overview](https://kotti97.github.io/query_kit/docs/overview) and
-  [important defaults](https://kotti97.github.io/query_kit/docs/important-defaults)
-- [Using the core without Flutter](https://kotti97.github.io/query_kit/docs/guides/pure-dart)
-- [Queries](https://kotti97.github.io/query_kit/docs/guides/queries),
-  [query keys](https://kotti97.github.io/query_kit/docs/guides/query-keys),
-  [mutations](https://kotti97.github.io/query_kit/docs/guides/mutations)
-  and [infinite queries](https://kotti97.github.io/query_kit/docs/guides/infinite-queries)
-- [Coming from React Query](https://kotti97.github.io/query_kit/docs/coming-from-react-query):
+- [Overview](https://dualmeta-gmbh.github.io/query_kit/docs/overview) and
+  [important defaults](https://dualmeta-gmbh.github.io/query_kit/docs/important-defaults)
+- [Using the core without Flutter](https://dualmeta-gmbh.github.io/query_kit/docs/guides/pure-dart)
+- [Queries](https://dualmeta-gmbh.github.io/query_kit/docs/guides/queries),
+  [query keys](https://dualmeta-gmbh.github.io/query_kit/docs/guides/query-keys),
+  [mutations](https://dualmeta-gmbh.github.io/query_kit/docs/guides/mutations)
+  and [infinite queries](https://dualmeta-gmbh.github.io/query_kit/docs/guides/infinite-queries)
+- [Coming from React Query](https://dualmeta-gmbh.github.io/query_kit/docs/coming-from-react-query):
   the JavaScript names and their Dart counterparts
-- [Differences from TanStack Query](https://kotti97.github.io/query_kit/docs/reference/differences-from-tanstack)
-- [Troubleshooting](https://kotti97.github.io/query_kit/docs/reference/troubleshooting)
+- [Differences from TanStack Query](https://dualmeta-gmbh.github.io/query_kit/docs/reference/differences-from-tanstack)
+- [Troubleshooting](https://dualmeta-gmbh.github.io/query_kit/docs/reference/troubleshooting)
 - [API reference](https://pub.dev/documentation/query_kit/latest/)
-- A runnable tour: [`example/example.dart`](https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit/example/example.dart)
+- A runnable tour: [`example/example.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/packages/query_kit/example/example.dart)
 
 ## License and credits
 
 MIT. query_kit is a port of [TanStack Query](https://tanstack.com/query) by
 Tanner Linsley and contributors, whose MIT notice is kept in
 `LICENSE-TANSTACK`. Bugs and questions go to
-[the issue tracker](https://github.com/KoTTi97/query_kit/issues).
+[the issue tracker](https://github.com/dualmeta-gmbh/query_kit/issues).

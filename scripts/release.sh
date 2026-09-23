@@ -185,9 +185,12 @@ finish() {
 # this one is the path. Keep them in step.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=9
+TOTAL_STAGES=10
 
-REPO="KoTTi97/query_kit"
+REPO="dualmeta-gmbh/query_kit"
+# The verified pub.dev publisher both packages move to after their first
+# publish. It has to exist before the wizard runs (docs/releasing.md).
+PUBLISHER="dualmeta.io"
 CORE_PKG="query_kit"
 CORE_DIR="packages/query_kit"
 BINDING_PKG="query_kit_flutter"
@@ -337,6 +340,12 @@ pause "All clear for $VERSION. Press Enter to continue."
 stage "pub.dev — sign in"
 say "The first publish of a new package is manual, so the dart CLI needs to be"
 say "signed in as the Google account that should own these two names."
+say "That account has to be an admin of the verified publisher $PUBLISHER,"
+say "or stage 7 cannot move the packages to it."
+printf '\n'
+open_url "https://pub.dev/publishers/$PUBLISHER"
+step "The page should show $PUBLISHER with a verified badge. A 404 means the"
+step "publisher does not exist yet — see docs/releasing.md, 'Verified publisher'."
 printf '\n'
 step "A browser window opens — pick the account and grant access."
 note "Already signed in? Then this is a no-op."
@@ -398,6 +407,22 @@ printf '\n'
 ok "$BINDING_PKG $VERSION is published"
 
 # ── 7 ─────────────────────────────────────────────────────────────────────
+stage "Move both packages to the publisher $PUBLISHER"
+say "A first publish lands under the signed-in Google account. Moving the"
+say "packages to the company's verified publisher shows $PUBLISHER on pub.dev"
+say "and hands administration to the publisher's members."
+printf '\n'
+open_url "https://pub.dev/packages/$CORE_PKG/admin"
+step "Ownership → 'Transfer to publisher' → $PUBLISHER → Transfer."
+printf '\n'
+pause "Transferred $CORE_PKG? Press Enter for the binding."
+printf '\n'
+open_url "https://pub.dev/packages/$BINDING_PKG/admin"
+step "The same for $BINDING_PKG."
+printf '\n'
+pause "Both packages show 'Published by $PUBLISHER'? Press Enter."
+
+# ── 8 ─────────────────────────────────────────────────────────────────────
 stage "Enable automated publishing for both packages"
 say "Both packages now exist, which is the precondition pub.dev puts on this."
 say "From here a pushed tag publishes, authenticated by GitHub OIDC — no secrets."
@@ -421,7 +446,7 @@ note "triggers on '$CORE_PKG-v*' and '$BINDING_PKG-v*'."
 printf '\n'
 confirm "Both admin pages saved?" || fail "Stopped before tagging — re-run once both are set."
 
-# ── 8 ─────────────────────────────────────────────────────────────────────
+# ── 9 ─────────────────────────────────────────────────────────────────────
 stage "Tag $VERSION without firing the publish workflow"
 CORE_TAG="$CORE_PKG-v$VERSION"
 BINDING_TAG="$BINDING_PKG-v$VERSION"
@@ -489,7 +514,7 @@ ok "pushed $CORE_TAG and $BINDING_TAG"
 restore_workflow
 trap - EXIT
 
-# ── 9 ─────────────────────────────────────────────────────────────────────
+# ── 10 ─────────────────────────────────────────────────────────────────────
 stage "Verify"
 printf '\n'
 for pkg in "$CORE_PKG" "$BINDING_PKG"; do

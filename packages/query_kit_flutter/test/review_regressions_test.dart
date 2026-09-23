@@ -1636,7 +1636,7 @@ void main() {
   });
 
   // The three regions of the reader registry the suite did not reach before
-  // C47 (https://github.com/KoTTi97/query_kit/issues/56) moved it into
+  // C47 (https://github.com/dualmeta-gmbh/query_kit/issues/56) moved it into
   // one `ReadSet`. Written and run green against the two copies first, so
   // they say the extraction changed nothing rather than describing it: the
   // mixin's two debug assertions (only `context`'s were exercised) and the
@@ -1701,7 +1701,7 @@ void main() {
 
   // The rebuild decision — "read the value and its `observedStateOf`, rebuild
   // only if it moved, then ask `buildWhen`" — was written once per builder
-  // until C48 (https://github.com/KoTTi97/query_kit/issues/57). Three of
+  // until C48 (https://github.com/dualmeta-gmbh/query_kit/issues/57). Three of
   // the four copies were counted somewhere (B3 and R02 above, and
   // `buildWhen on every builder` for the infinite and the mutation one);
   // these are the gaps that probing the four copies with the branch disabled
@@ -1813,7 +1813,7 @@ void main() {
   group('C49 the four styles made equal', () {
     // `buildWhen` on the two keyless reads, and the notification a controller
     // no longer passes on. Both from
-    // https://github.com/KoTTi97/query_kit/issues/55; neither was
+    // https://github.com/dualmeta-gmbh/query_kit/issues/55; neither was
     // reachable before, so nothing here is a rewrite of an older case.
     for (final (name, reader) in <(String, _C49QueryReader)>[
       ('QueryMixin.watchQuery', _C49MixinQuery.new),
@@ -2002,7 +2002,7 @@ void main() {
   group('C67 the mutation reads made equal', () {
     // `MutationBuilder` took a `buildWhen` and the two keyless mutation reads
     // did not — C49's asymmetry, one surface over
-    // (https://github.com/KoTTi97/query_kit/issues/67). Unlike the query
+    // (https://github.com/dualmeta-gmbh/query_kit/issues/67). Unlike the query
     // side there is no `select` to offer instead, and unlike the mutation
     // half of `NotifyGate` — which fires zero times across these three suites
     // — the predicate is asked about *every* notification: a
@@ -2044,7 +2044,7 @@ void main() {
 
   group('C51 one OnlineStatus instead of a pair', () {
     // The `Stream<bool>` + `initialOnlineStatus` pair became one sealed value
-    // (https://github.com/KoTTi97/query_kit/issues/60). The stream form's
+    // (https://github.com/dualmeta-gmbh/query_kit/issues/60). The stream form's
     // two branches were already pinned by B2, R07 and M6; these are the
     // fixed form, the value semantics the new type has to have, and the one
     // rule that could not be written before — what a swapped stream does to a
@@ -2151,7 +2151,7 @@ void main() {
     // and now keeps its controller's lifetime where the other four builders
     // keep theirs; `QueryClientProvider` installed two InheritedWidgets for
     // one client and now installs one
-    // (https://github.com/KoTTi97/query_kit/issues/66). Behaviour is the
+    // (https://github.com/dualmeta-gmbh/query_kit/issues/66). Behaviour is the
     // invariant, and these are the branches the suite had never reached.
 
     Widget collection(QueryClient? client) => QueriesBuilder<String, String>(

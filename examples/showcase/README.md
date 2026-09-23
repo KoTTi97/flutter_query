@@ -154,7 +154,7 @@ Not here, because the port does not have them: hydration and persisters,
 `useQueries`' `combine` option as upstream spells it (the homogeneous list is
 `query-collections` above, and what several reads of different types amount
 to together is `combine`), `streamedQuery`, SSR. The reasons are in the core's
-[PORTING_NOTES](https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md).
+[PORTING_NOTES](https://github.com/dualmeta-gmbh/query_kit/blob/main/packages/query_kit/test/PORTING_NOTES.md).
 
 No screen presents one of the four call styles as the default; across the
 catalogue each is used in its turn.

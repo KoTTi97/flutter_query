@@ -18,7 +18,7 @@ void main() {
 
     setUp(() {
       // Upstream resets the module-level managers here; ours are per-test
-      // instances (https://github.com/KoTTi97/query_kit/issues/19).
+      // instances (https://github.com/dualmeta-gmbh/query_kit/issues/19).
       focusManager = AppFocusManager();
       onlineManager = OnlineManager();
     });
@@ -377,7 +377,7 @@ void main() {
       (time) async {
         var calls = 0;
         // `.ignore()` because the retryer is the only listener and it attaches
-        // one microtask later (https://github.com/KoTTi97/query_kit/issues/9).
+        // one microtask later (https://github.com/dualmeta-gmbh/query_kit/issues/9).
         final initial = Future<String>.microtask(
           () => throw StateError('initial failed'),
         )..ignore();

@@ -35,7 +35,7 @@ export type LiveDemoProps = {
 
 type ShowcaseFeature = { id: string; title: string; summary: string }
 
-const repository = 'https://github.com/KoTTi97/query_kit/tree/main/examples'
+const repository = 'https://github.com/dualmeta-gmbh/query_kit/tree/main/examples'
 
 const taskManager = {
   title: 'Task manager',

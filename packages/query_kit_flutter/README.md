@@ -16,7 +16,7 @@ of four equal styles suits the screen. **No dependency beyond Flutter** — not
 > reason — and run against the core, with thanks to Tanner Linsley and the
 > TanStack team. This package is not affiliated with,
 > endorsed by or connected to them; please take problems to
-> [this repository's issues](https://github.com/KoTTi97/query_kit/issues),
+> [this repository's issues](https://github.com/dualmeta-gmbh/query_kit/issues),
 > not to TanStack.
 
 ## Install
@@ -233,30 +233,30 @@ testWidgets('the list loads', (tester) async {
 });
 ```
 
-The [testing guide](https://kotti97.github.io/query_kit/docs/guides/testing)
+The [testing guide](https://dualmeta-gmbh.github.io/query_kit/docs/guides/testing)
 wraps these steps once per suite.
 
 ## Learn more
 
-- [Overview](https://kotti97.github.io/query_kit/docs/overview),
-  [quick start](https://kotti97.github.io/query_kit/docs/quick-start) and
-  [important defaults](https://kotti97.github.io/query_kit/docs/important-defaults)
-- [Four ways to read a query](https://kotti97.github.io/query_kit/docs/guides/reading-queries-in-widgets)
-  and [what rebuilds, and when](https://kotti97.github.io/query_kit/docs/guides/render-optimizations)
-- [Mutations](https://kotti97.github.io/query_kit/docs/guides/mutations),
-  [optimistic updates](https://kotti97.github.io/query_kit/docs/guides/optimistic-updates)
-  and [infinite queries](https://kotti97.github.io/query_kit/docs/guides/infinite-queries)
-- [App focus](https://kotti97.github.io/query_kit/docs/guides/window-focus-refetching)
-  and [connectivity](https://kotti97.github.io/query_kit/docs/guides/connectivity)
-- [Testing](https://kotti97.github.io/query_kit/docs/guides/testing)
-- [Coming from React Query](https://kotti97.github.io/query_kit/docs/coming-from-react-query)
-  and [troubleshooting](https://kotti97.github.io/query_kit/docs/reference/troubleshooting)
+- [Overview](https://dualmeta-gmbh.github.io/query_kit/docs/overview),
+  [quick start](https://dualmeta-gmbh.github.io/query_kit/docs/quick-start) and
+  [important defaults](https://dualmeta-gmbh.github.io/query_kit/docs/important-defaults)
+- [Four ways to read a query](https://dualmeta-gmbh.github.io/query_kit/docs/guides/reading-queries-in-widgets)
+  and [what rebuilds, and when](https://dualmeta-gmbh.github.io/query_kit/docs/guides/render-optimizations)
+- [Mutations](https://dualmeta-gmbh.github.io/query_kit/docs/guides/mutations),
+  [optimistic updates](https://dualmeta-gmbh.github.io/query_kit/docs/guides/optimistic-updates)
+  and [infinite queries](https://dualmeta-gmbh.github.io/query_kit/docs/guides/infinite-queries)
+- [App focus](https://dualmeta-gmbh.github.io/query_kit/docs/guides/window-focus-refetching)
+  and [connectivity](https://dualmeta-gmbh.github.io/query_kit/docs/guides/connectivity)
+- [Testing](https://dualmeta-gmbh.github.io/query_kit/docs/guides/testing)
+- [Coming from React Query](https://dualmeta-gmbh.github.io/query_kit/docs/coming-from-react-query)
+  and [troubleshooting](https://dualmeta-gmbh.github.io/query_kit/docs/reference/troubleshooting)
 - [API reference](https://pub.dev/documentation/query_kit_flutter/latest/)
-- A runnable one-file tour: [`example/lib/main.dart`](https://github.com/KoTTi97/query_kit/blob/main/packages/query_kit_flutter/example/lib/main.dart)
+- A runnable one-file tour: [`example/lib/main.dart`](https://github.com/dualmeta-gmbh/query_kit/blob/main/packages/query_kit_flutter/example/lib/main.dart)
 
 ## License and credits
 
 MIT. query_kit is a port of [TanStack Query](https://tanstack.com/query) by
 Tanner Linsley and contributors, whose MIT notice is kept in
 `LICENSE-TANSTACK`. Bugs and questions go to
-[the issue tracker](https://github.com/KoTTi97/query_kit/issues).
+[the issue tracker](https://github.com/dualmeta-gmbh/query_kit/issues).

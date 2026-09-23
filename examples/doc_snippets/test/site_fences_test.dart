@@ -9,7 +9,7 @@
 /// not name a method that no longer existed — but a fence could drift from
 /// its twin by a renamed parameter, a dropped line or a whole rewritten body
 /// and both halves would still be green. Fifty fences, none verified
-/// (map #70, https://github.com/KoTTi97/query_kit/issues/72).
+/// (map #70, https://github.com/dualmeta-gmbh/query_kit/issues/72).
 ///
 /// So a region of a twin file is marked, and the fence that shows it names
 /// the region:
