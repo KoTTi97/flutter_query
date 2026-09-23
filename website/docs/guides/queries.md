@@ -1,36 +1,118 @@
 ---
 title: Queries
-description: What a query is, the three result states, status versus fetchStatus, and the flags that combine them.
+description: What a query is, where it lives in an app, the three result states, status versus fetchStatus, and the flags that combine them.
 ---
-
-{/* depth: todo */}
-{/* demo: simple */}
 
 # Queries
 
-A query is a declarative dependency on a piece of asynchronous data, tied to a
-**unique key**. You give it the key and a function that returns a `Future`;
-the cache decides when to call the function and who is told about the
-result.
+A screen that shows server data has to answer the same questions every time:
+is it loading, did it fail, is what I show still current, is a refresh
+running? Written by hand, that is a `Future` in a `State`, three flags and a
+`setState` per screen — and two screens showing the same data fetch it twice.
 
-```dart snippet="quick-start.md#key quick-start.md#options"
-final QueryKey tasksKey = QueryKey(<Object?>['tasks']);
+A **query** answers those questions once. It is a declarative dependency on a
+piece of asynchronous data, tied to a **unique key**. You give it the key and
+a function that returns a `Future`; the cache decides when to call the
+function, keeps the result under the key, and tells every widget that reads
+it.
 
-QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
-      queryKey: tasksKey,
-      queryFn: (context) => api.listTasks(signal: context.signal),
-      staleTime: const StaleTime.duration(Duration(seconds: 30)),
+## Describing a query
+
+The smallest useful shape is a function that returns the options, kept next
+to the rest of the app's data layer:
+
+```dart snippet="guides/queries.md#device-queries"
+// lib/data/device_queries.dart
+QueryObserverOptions<List<Device>> devicesQuery({String? roomId}) =>
+    QueryObserverOptions(
+      queryKey: DeviceKeys.list(roomId: roomId),
+      queryFn: (context) =>
+          repository.devices(roomId: roomId, signal: context.signal),
+    );
+
+QueryObserverOptions<Device> deviceQuery(String id) => QueryObserverOptions(
+      queryKey: DeviceKeys.detail(id),
+      queryFn: (context) => repository.device(id, signal: context.signal),
     );
 ```
 
-- The key is how the cache stores, shares and invalidates the data. See
-  [query keys](query-keys.md).
-- The function resolves with the data or throws. See [query
-  functions](query-functions.md).
+- The **key** is how the cache stores, shares and invalidates the data. Two
+  widgets that build the same key share one entry and one request. See [query
+  keys](query-keys.md).
+- The **function** resolves with the data or throws. Passing
+  `context.signal` on lets the cache cancel a request nobody waits for any
+  more. See [query functions](query-functions.md).
+- The **type** comes from the function: `devicesQuery()` is a
+  `QueryObserverOptions<List<Device>>`, and so is everything read through it.
 
-Reading it in a widget is covered in [four ways to read a
-query](reading-queries-in-widgets.md); every style hands you the same
-`QueryResult`.
+A function per query, not a widget-local literal, is what lets the same
+description be read on one screen, prefetched on another and invalidated by a
+mutation — see [describing a query once](query-options.md).
+
+## Reading it on a screen
+
+Every call style hands you the same `QueryResult`. Here it is read with
+`context.query`, one of [four equal ways](reading-queries-in-widgets.md):
+
+```dart snippet="guides/queries.md#devices-screen"
+// lib/ui/devices_screen.dart
+class DevicesScreen extends StatelessWidget {
+  const DevicesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final devices = context.query(devicesQuery());
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Devices'),
+        // A background refetch: the list stays, and a thin bar says so.
+        bottom: devices.isRefetching
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(2),
+                child: LinearProgressIndicator(minHeight: 2),
+              )
+            : null,
+      ),
+      body: switch (devices) {
+        QueryPending() => const Center(child: CircularProgressIndicator()),
+        // A refetch failed: say so above the data that is still good.
+        QueryError(:final error, :final staleData?) => Column(
+            children: <Widget>[
+              Text('Could not refresh: $error'),
+              Expanded(child: DeviceListView(staleData)),
+            ],
+          ),
+        // The first load failed: there is nothing to show.
+        QueryError(:final error) =>
+          Center(child: Text('Could not load devices: $error')),
+        QuerySuccess(:final data) => RefreshIndicator(
+            onRefresh: devices.refetch,
+            child: DeviceListView(data),
+          ),
+      },
+    );
+  }
+}
+```
+
+Four things are happening without code of their own:
+
+- The first build starts the fetch; the second screen that reads
+  `devicesQuery()` does not start another.
+- Pull-to-refresh awaits `refetch()`, which completes when the fetch does.
+- A failed *refetch* keeps the list: `staleData` is the last good value, and
+  the banner sits above it.
+- Leaving the screen and coming back within five minutes renders the cached
+  list at once and refetches behind it — the [important
+  defaults](../important-defaults.md) at work.
+
+The showcase's *basic* screen is that last point, live. Tap a post, go back —
+its row now says `cached` — and open it again: the title is there at once,
+with a `refreshing` pill while the refetch runs. The screen sets a `gcTime` of
+ten seconds, so wait that long on the list and the entry is gone:
+
+<LiveDemo feature="basic" />
 
 ## The three states
 
@@ -96,4 +178,27 @@ Widget taskTitle(QueryResult<Task> task) => switch (task) {
   [polling](polling.md).
 - `isPlaceholderData` — the data is a placeholder, not in the cache. See
   [placeholder data](placeholder-query-data.md).
-- `refetch()` — fetch again now.
+- `refetch()` — fetch again now. Its future completes with the new result;
+  pass `cancelRefetch: false` to join a fetch already running instead of
+  replacing it.
+
+## Traps
+
+- **Build the options, not the client, in `build`.** An options function is
+  cheap to call on every build: the reader compares it by value and changes
+  nothing when it is equal. A `QueryClient` built in `build` is a new, empty
+  cache every time.
+- **`isLoading` is not "a spinner is needed".** It is false during a
+  background refetch, when the data is on screen — which is what you want —
+  and also false for a pending query that is *paused* offline. Match
+  `QueryPending(isPaused: true)` if that deserves its own message.
+- **An error does not clear the data.** Match `QueryError(:final staleData?)`
+  before `QueryError()`, or the screen blanks on the first failed refresh.
+
+:::note[In React Query]
+This is `useQuery`. `status` and `fetchStatus` are the same two axes; the
+sealed result replaces `data | undefined` with a field that exists only on the
+states that have it, and `isLoadingError`/`isRefetchError` move onto
+`QueryError`. See [differences from
+TanStack Query](../reference/differences-from-tanstack.md).
+:::

@@ -3,15 +3,17 @@ title: Describing a query once
 description: Options functions, the two observer options shapes, withSelect, what null means, and why options built in build are fine.
 ---
 
-{/* depth: todo */}
-{/* demo: select-and-sharing */}
-
 # Describing a query once
 
-A query is described by an options object: its key, its function and
-whatever it configures. Put that object behind a function and every widget
-that reads the query reads the same description — the Dart counterpart of
-TanStack Query's `queryOptions()` helper.
+A query read in three places is easy to describe three ways: one screen
+forgets the `staleTime`, another spells the key slightly differently, a
+prefetch uses a function the screen has since stopped using. Each difference
+is a second cache entry or a refetch nobody asked for.
+
+So a query is described by an options object — its key, its function and
+whatever it configures — and that object lives behind a function. Every
+widget that reads the query, every prefetch and every test calls the same
+function and gets the same description.
 
 ## Two rules
 
@@ -76,12 +78,49 @@ mirror this — see [infinite queries](infinite-queries.md).
 
 ## `withSelect`
 
-A factory that builds the plain shape serves a projecting reader too:
-`taskQuery(id).withSelect((task) => task.name)` is a `QuerySelectOptions`
-with every other field kept — no copying fields by hand, and no field
-forgotten when one is added. `InfiniteQueryObserverOptions.withSelect` does
-the same for the paged shape. What a `select` does to rebuilds is in [what
-rebuilds, and when](render-optimizations.md).
+A factory that builds the plain shape serves a projecting reader too.
+`withSelect` turns it into a `QuerySelectOptions` with every other field
+kept — no copying fields by hand, and no field forgotten when one is added:
+
+```dart snippet="guides/query-options.md#with-select"
+// The name only: this label rebuilds when the name changes, not when the
+// device is switched on or off.
+final name = context.selectQuery(
+  deviceQuery(id).withSelect((device) => device.name),
+);
+```
+
+Both readers share one cache entry and one request; only what each is told
+about differs. `InfiniteQueryObserverOptions.withSelect` does the same for
+the paged shape. What a `select` does to rebuilds is in [what rebuilds, and
+when](render-optimizations.md).
+
+The showcase's *select and sharing* screen puts five readers on one list of
+todos — four with a `select`, one without — each with a `data builds` count.
+Press *Refetch*: the server sends the same list, and no `data builds` count
+moves. *Toggle todo 1* moves only the reader that selects done and open
+counts, and the one without a `select`. Switch *Structural sharing off* and
+press *Refetch* again: now the reader without a `select` gets a new list
+every time:
+
+<LiveDemo feature="select-and-sharing" height={720} />
+
+## One description, many uses
+
+The same function that a screen reads is what the client takes for a
+prefetch — `QueryObserverOptions` is a `QueryOptions`, so no second
+description is needed:
+
+```dart snippet="guides/query-options.md#prefetch"
+// The same options, handed to the client: warm the detail before the
+// detail screen opens. A second reader within staleTime fetches nothing.
+Future<void> prefetchDevice(QueryClient client, String id) =>
+    client.query(deviceQuery(id));
+```
+
+And its key is what a mutation invalidates, so the three can never disagree
+about which entry they mean. See [prefetching](prefetching.md) and
+[invalidations from mutations](invalidations-from-mutations.md).
 
 ## Options built in `build` are fine
 
@@ -110,3 +149,24 @@ dynamic callback still reads whatever it closes over each time it is called.
 An imperative `client.query` hands its options to the cache entry, as an
 observer does: an explicit `retry` in them stays with the query for later
 refetches. See [prefetching](prefetching.md).
+
+## Traps
+
+- **A literal per widget.** Two widgets that build their own options for one
+  key share an entry, but whichever mounted last set its `gcTime`, and each
+  refetches by its own `staleTime`. One function per query ends that.
+- **The same key with two data types.** A projection of a key's data is a
+  `select`, not a second options function that fetches into the same key
+  with another type — that one throws `QueryDataTypeError`.
+- **Expecting an inline `select` to be skipped.** A new closure is a new
+  function, so it runs again on the next result. That is correct and cheap
+  for a projection; hoist it to a top-level or static function only when it
+  is expensive.
+
+:::note[In React Query]
+This is the `queryOptions()` helper, made the only way: there is no
+positional `useQuery(key, fn)` form. `select` moves into its own options
+shape so its second type argument can be inferred, and `withSelect` adds one
+to an existing description. See [differences from TanStack
+Query](../reference/differences-from-tanstack.md).
+:::

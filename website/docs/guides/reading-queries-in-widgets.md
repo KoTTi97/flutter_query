@@ -3,17 +3,19 @@ title: Four ways to read a query
 description: context.query, QueryBuilder, QueryMixin and QueryController — four equal call styles, how to pick between them, and when a read is released.
 ---
 
-{/* demo: four-call-styles */}
-
 # Four ways to read a query
 
 `useQuery` has no single counterpart here. The binding offers **four equal
 ways** to read a query, and **the documentation names no default**.
 
 They are layered, not competing — each is a thin shell over the one below —
-and they interoperate inside one screen. The showcase's `four-call-styles`
-screen puts all four on one key and shows that five readers still cost one
-request.
+and they interoperate inside one screen. The showcase's *four call styles*
+screen puts them all on one key. Its first card, *One entry, five readers*,
+reads `observers=5` and `fetches=1`: press *Refetch* and every reader moves
+together on one request. Further down, *QueryListener, a side effect* counts
+`listener-calls` as you press *Drop a post*:
+
+<LiveDemo feature="four-call-styles" height={720} />
 
 Two rules hold for all of them:
 
@@ -197,6 +199,38 @@ it does.
   subscription, and the rows scrolled away stay subscribed until the list is
   rebuilt or goes.)
 
+### A widget per row
+
+The fix for a lazily built list, in full. The list builds one widget per id,
+and each row reads its own query in its own `build`:
+
+```dart snippet="guides/reading-queries-in-widgets.md#device-rows"
+ListView.builder(
+  itemCount: ids.length,
+  // Each row is a widget of its own, so each row's read is its own.
+  itemBuilder: (context, index) => DeviceRow(ids[index]),
+)
+```
+
+```dart snippet="guides/reading-queries-in-widgets.md#device-row"
+class DeviceRow extends StatelessWidget {
+  const DeviceRow(this.id, {super.key});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    final device = context.query(deviceQuery(id));
+    return ListTile(title: deviceTitle(device));
+  }
+}
+```
+
+A row scrolled away unmounts and releases its read; one scrolled back in
+reads again, from the cache if the entry is still there. Fifty rows are fifty
+observers of fifty entries — and each entry, fetched once, is what a detail
+screen for that device opens on at once.
+
 [Troubleshooting](../reference/troubleshooting.md) has each of these as a
 symptom, with the fix.
 
@@ -213,3 +247,10 @@ final done = computed(() => signal.value.dataOrNull?.done ?? false);
 ```
 
 Nothing is needed from this package for that.
+
+:::note[In React Query]
+`useQuery` is one hook; here it is four shapes of the same observer, because
+Flutter has no hooks in the framework. `context.query` is the closest in
+feel. See [differences from TanStack
+Query](../reference/differences-from-tanstack.md).
+:::
