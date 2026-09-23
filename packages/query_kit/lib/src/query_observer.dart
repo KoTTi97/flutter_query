@@ -269,8 +269,20 @@ class QueryObserver<TQueryData, TData> implements QueryObserverRef {
     // had, and the previous query's fetch still has its observer: switching
     // first detached it, which cancelled and reverted that fetch before the
     // rollback could re-attach (release review, 2026-09-23, L2-1).
-    nextQuery.setOptions(nextOptions.queryOptions);
+    //
+    // The options, though, are committed before the seed, as upstream
+    // assigns `this.options` before `setOptions`: with the key unchanged the
+    // seed's update reaches this observer, and it has to compute its result
+    // with the new `select`, not run the old one and notify with that
+    // (V-C-1). Only `_options` is rolled back on a throw — nothing has
+    // switched yet.
     _options = nextOptions;
+    try {
+      nextQuery.setOptions(nextOptions.queryOptions);
+    } catch (_) {
+      _options = prevOptions;
+      rethrow;
+    }
     _updateQuery(nextQuery);
 
     if (_options != prevOptions) {

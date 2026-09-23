@@ -456,6 +456,21 @@ class MutationCache
     if (scope == null) {
       return;
     }
+    // A run that settles without the scope ever having been claimed — a
+    // restored mutation cancelled before it could start (L4-3) — holds it
+    // only when it was first in line. Behind an earlier pending mate it held
+    // nothing, and handing the scope on would start that mate although
+    // nobody resumed it (release review, 2026-09-23, V-C-3); the mate hands
+    // on itself when it settles.
+    if (!_scopeOwners.containsKey(scope)) {
+      for (final other in _mutations) {
+        if (identical(other, mutation)) break;
+        if (_scopeOf(other) == scope &&
+            other.state.status == MutationStatus.pending) {
+          return;
+        }
+      }
+    }
     _releaseScope(scope, mutation);
   }
 

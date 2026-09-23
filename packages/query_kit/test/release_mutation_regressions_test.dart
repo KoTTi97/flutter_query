@@ -470,6 +470,77 @@ void main() {
   });
 
   testFakeAsync(
+      'V-C-2 a typed selection\'s type test runs before the caller\'s '
+      'predicate', (time) async {
+    final client = testClient();
+    final seen = <Object?>[];
+    final selection = MutationStateObserver.typed(client,
+        filters: MutationFilters(predicate: (m) {
+          seen.add(m.state.variables);
+          return (m.state.variables as String?)?.isNotEmpty ?? false;
+        }),
+        select: (Mutation<Object?, String, Object?> m) => m.state.variables!);
+    final unsubscribe = selection.subscribe((_) {});
+    final ints = MutationObserver<void, int, void>(
+        client, MutationOptions.simple(mutationFn: (int v) async {}));
+    final strings = MutationObserver<void, String, void>(
+        client, MutationOptions.simple(mutationFn: (String v) async {}));
+    ints.mutate(1);
+    strings.mutate('x');
+    await time.flushMicrotasks();
+    expect(selection.currentResult, ['x']);
+    expect(seen.whereType<int>(), isEmpty);
+    expect(seen, contains('x'));
+    // And across a setOptions that brings a new predicate.
+    selection.setOptions(
+        filters: MutationFilters(
+            predicate: (m) => (m.state.variables as String?) == 'y'));
+    ints.mutate(2);
+    await time.flushMicrotasks();
+    expect(selection.currentResult, isEmpty);
+    unsubscribe();
+    selection.destroy();
+    ints.destroy();
+    strings.destroy();
+    client.clear();
+  });
+
+  testFakeAsync('V-C-3 cancelling the tail of a restored scope starts nothing',
+      (time) async {
+    final client = testClient();
+    final ran = <int>[];
+    Mutation<int, int, void> restore(int v) =>
+        client.mutationCache.build<int, int, void>(
+            client,
+            client.defaultMutationOptions(MutationOptions<int, int, void>(
+              scope: const MutationScope('s'),
+              mutationFn: (v) {
+                ran.add(v);
+                return v;
+              },
+            )),
+            state: MutationState<int, int, void>(
+                status: MutationStatus.pending,
+                variables: v,
+                hasVariables: true,
+                isPaused: true));
+    final head = restore(1);
+    final tail = restore(2);
+    tail.cancel();
+    await time.flushMicrotasks();
+    expect(tail.state.status, MutationStatus.error);
+    expect(ran, isEmpty);
+    expect(head.state.status, MutationStatus.pending);
+    expect(head.state.isPaused, isTrue);
+    // The head still runs when it is resumed.
+    await client.resumePausedMutations();
+    await time.flushMicrotasks();
+    expect(ran, [1]);
+    expect(head.state.status, MutationStatus.success);
+    client.clear();
+  });
+
+  testFakeAsync(
       'L4-4 resumePausedMutations does not wait offline on a scope held by a '
       'network-paused mutation', (time) async {
     final client = testClient();

@@ -471,14 +471,11 @@ class Query<TQueryData> extends Removable {
     return data;
   }
 
-  /// Whether [value] is a [TQueryData] — the test [trySetData] makes, without
-  /// the write, for a caller that checks several entries before writing any
-  /// (release review, 2026-09-23, L5-1).
-  @internal
-  bool canHold(Object? value) => value is TQueryData;
-
-  /// [setData] for a caller that holds a value but not this query's exact
-  /// type: writes [newData] when it fits [TQueryData] and says whether it did.
+  /// Whether [value] is a [TQueryData], for a caller that holds a value but
+  /// not this query's exact type — and, checking several entries before
+  /// writing any, cannot write as it tests (release review, 2026-09-23,
+  /// L5-1). It replaced `trySetData`, which tested and wrote in one call
+  /// (V-C-7).
   ///
   /// `QueryClient.setQueryData` infers its type argument from the value, and a
   /// value infers narrowly — a `String` for a `String?` query, a sealed
@@ -486,11 +483,7 @@ class Query<TQueryData> extends Removable {
   /// handed; here the entry keeps its one exact type and takes any value
   /// that type can hold (final review, 2026-09-18, SURF-1).
   @internal
-  bool trySetData(Object? newData, {DateTime? updatedAt}) {
-    if (newData is! TQueryData) return false;
-    setData(newData, updatedAt: updatedAt, manual: true);
-    return true;
-  }
+  bool canHold(Object? value) => value is TQueryData;
 
   /// Replaces this query's state wholesale — the *merge* half of the door
   /// persistence and devtools come through

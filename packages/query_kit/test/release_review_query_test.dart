@@ -20,6 +20,18 @@ class _Box implements StructurallyShareable<_Box> {
       _Box(replaceEqualDeep<List<int>>(previous.items, items));
 }
 
+/// Identity equality again, but its `shareWith` hands back `previous` when
+/// nothing changed — the one way such a class keeps its instance (V-C-4).
+class _IdBox implements StructurallyShareable<_IdBox> {
+  _IdBox(this.items);
+  final List<int> items;
+  @override
+  _IdBox shareWith(_IdBox previous) {
+    final shared = replaceEqualDeep<List<int>>(previous.items, items);
+    return identical(shared, previous.items) ? previous : _IdBox(shared);
+  }
+}
+
 void main() {
   group('CORE-2 / L2-5 the #84 baseline is what setOptions last saw', () {
     testFakeAsync(
@@ -130,6 +142,45 @@ void main() {
     expect(completed, isTrue);
     expect(observer.currentQuery.state.data, 1);
     expect(observer.currentResult.dataOrNull, 1);
+    unsubscribe();
+    client.clear();
+  });
+
+  testFakeAsync(
+      'V-C-1: a same-key seed runs the new select, and listeners see only '
+      'that', (time) async {
+    final client = testClient();
+    final key = queryKey();
+    final calls = <String>[];
+    final seen = <String?>[];
+    final observer = QueryObserver<int, String>(
+        client,
+        QuerySelectOptions<int, String>(
+          queryKey: key,
+          enabled: Enabled.no,
+          queryFn: (_) async => 1,
+          select: (v) {
+            calls.add('old:$v');
+            return 'old:$v';
+          },
+        ));
+    final unsubscribe =
+        observer.subscribe((result) => seen.add(result.dataOrNull));
+    await time.flushMicrotasks();
+    observer.setOptions(QuerySelectOptions<int, String>(
+      queryKey: key,
+      enabled: Enabled.no,
+      queryFn: (_) async => 1,
+      initialData: const InitialDataValue<int>(7),
+      select: (v) {
+        calls.add('new:$v');
+        return 'new:$v';
+      },
+    ));
+    await time.flushMicrotasks();
+    expect(calls, ['new:7']);
+    expect(seen, ['new:7']);
+    expect(observer.currentResult.dataOrNull, 'new:7');
     unsubscribe();
     client.clear();
   });
@@ -302,6 +353,28 @@ void main() {
     });
   });
 
+  testFakeAsync(
+      'V-C-4: a shareWith that returns previous for unchanged content keeps '
+      'the instance, in debug builds too', (time) async {
+    final client = testClient();
+    final observer = QueryObserver<_IdBox, _IdBox>(
+        client,
+        QueryObserverOptions(
+          queryKey: queryKey(),
+          retry: RetryPolicy.never,
+          queryFn: (_) async => _IdBox([1, 2, 3]),
+        ));
+    final unsubscribe = observer.subscribe((_) {});
+    await time.flushMicrotasks();
+    final first = observer.currentResult.dataOrNull;
+    await observer.refetch();
+    expect(observer.currentResult.isSuccess, isTrue,
+        reason: '${observer.currentQuery.state.error}');
+    expect(observer.currentResult.dataOrNull, same(first));
+    unsubscribe();
+    client.clear();
+  });
+
   group('L3-1 a plain fetch of an infinite key borrows the paging', () {
     InfiniteQueryObserverOptions<int, int> feed(
             QueryKey key, List<int> calls) =>
@@ -374,6 +447,42 @@ void main() {
       unsubscribe();
       client.clear();
     });
+  });
+
+  testFakeAsync(
+      'V-C-5: after a member\'s setOptions throws, the collection reports '
+      'what the members before it now show', (time) async {
+    final client = testClient();
+    final k1 = queryKey();
+    final k2 = queryKey();
+    QueryObserverOptions<int> plain(QueryKey key) => QueryObserverOptions<int>(
+        queryKey: key, enabled: Enabled.no, queryFn: (_) async => 0);
+    final observer = QueriesObserver<int, int>(client, [plain(k1), plain(k2)]);
+    final notified = <List<QueryResult<int>>>[];
+    final unsubscribe = observer.subscribe(notified.add);
+    await time.flushMicrotasks();
+    notified.clear();
+    expect(
+        () => observer.setQueries([
+              QueryObserverOptions<int>(
+                  queryKey: k1,
+                  enabled: Enabled.no,
+                  queryFn: (_) async => 0,
+                  initialData: const InitialDataValue<int>(5)),
+              QueryObserverOptions<int>(
+                  queryKey: k2,
+                  enabled: Enabled.no,
+                  queryFn: (_) async => 0,
+                  initialData:
+                      InitialData.compute(() => throw StateError('seed'))),
+            ]),
+        throwsStateError);
+    expect(observer.observers.first.currentResult.dataOrNull, 5);
+    expect(observer.currentResult.first.dataOrNull, 5);
+    expect(notified, hasLength(1));
+    expect(notified.single.first.dataOrNull, 5);
+    unsubscribe();
+    client.clear();
   });
 
   testFakeAsync(
