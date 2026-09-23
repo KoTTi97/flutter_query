@@ -322,9 +322,8 @@ class _DefaultQueryFunctionScreenState extends State<DefaultQueryFunctionScreen>
 
 /// One comment: its author in a fixed-width column, its text beside it.
 ///
-/// Was `LabeledRow` in `lib/shared/`, where it had this one caller and no
-/// other — a module in `shared/` is something more than one feature calls, so
-/// it came home (#69).
+/// It lives here, beside its one caller, rather than in `lib/shared/`: a
+/// module in `shared/` is something more than one feature calls.
 class _CommentRow extends StatelessWidget {
   const _CommentRow(this.label, this.value);
 

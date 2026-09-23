@@ -1,8 +1,7 @@
 /// The binding's own story, with no upstream counterpart: one query — the
 /// post list — read five ways at once, next to one mutation read two ways.
 ///
-/// The four call styles are **equal alternatives**
-/// (https://github.com/KoTTi97/flutter_query/issues/21): there is no default
+/// The four call styles are **equal alternatives**: there is no default
 /// and no recommendation, so this screen ranks nothing. It shows what each
 /// one looks like, and that they all end up at the same cache entry — five
 /// readers, one request, one set of data. The fifth card drops the binding
@@ -320,8 +319,8 @@ class _BuilderCard extends StatelessWidget {
         title: '2. QueryBuilder',
         code: 'QueryBuilder<List<Post>>(options: …, builder: …)',
         note: 'Takes buildWhen, the port\'s answer to notifyOnChangeProps — '
-            'as context.query and watchQuery do since C49. This one does not '
-            'use it, so it rebuilds like the rest.',
+            'as context.query and watchQuery do. This one does not use it, '
+            'so it rebuilds like the rest.',
         name: 'builder',
         result: posts,
         builds: builds.next(),

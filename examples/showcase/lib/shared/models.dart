@@ -2,7 +2,7 @@
 /// `server/server.ts`.
 ///
 /// Every type carries value equality. The library asks data types for `==`
-/// explicitly (https://github.com/KoTTi97/flutter_query/issues/12): a refetch
+/// explicitly: a refetch
 /// that returns equal data must not look like a change to a reader.
 library;
 

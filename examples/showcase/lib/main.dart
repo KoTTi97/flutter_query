@@ -54,7 +54,7 @@ const bool _e2e = bool.fromEnvironment('E2E');
 ///
 /// Here rather than in `lib/shared/`: a `ThemeData` has exactly one caller —
 /// the [MaterialApp] below — and a module in `shared/` is something more than
-/// one feature calls (#69). What *is* shared is the theme given a shape, and
+/// one feature calls. What *is* shared is the theme given a shape, and
 /// that is `shared/chrome.dart`.
 ThemeData _showcaseTheme() => ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B5FFF)),

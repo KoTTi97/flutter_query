@@ -13,10 +13,8 @@
 /// backend is then a smoke test, not a leap of faith.
 ///
 /// "Same" is a claim, and `backend_contract_test.dart` is what checks it: one
-/// list of cases run against this and against the express process. It found
-/// six places where the two had drifted apart
-/// (https://github.com/KoTTi97/flutter_query/issues/54), so every rule below
-/// that mirrors one in `server/server.ts` names it. The seed is the one thing
+/// list of cases run against this and against the express process, and every
+/// rule below that mirrors one in `server/server.ts` names it. The seed is the one thing
 /// the two differ on deliberately — see [tasks].
 library;
 

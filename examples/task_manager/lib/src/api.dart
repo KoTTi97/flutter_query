@@ -13,8 +13,7 @@
 /// lift out whole — putting it in a package both examples import would hide
 /// it behind a workspace row and an import. What keeps each copy honest is
 /// not a common ancestor but `test/backend_contract_test.dart`: one list of
-/// cases, run against this app's fake *and* against its real server
-/// (https://github.com/KoTTi97/flutter_query/issues/52).
+/// cases, run against this app's fake *and* against its real server.
 library;
 
 import 'dart:convert';
@@ -86,8 +85,7 @@ class TaskApi {
 
   /// Bridges a query's cancellation to dio's.
   ///
-  /// This is the interop point the core is designed around
-  /// (https://github.com/KoTTi97/flutter_query/issues/11): reading
+  /// This is the interop point the core is designed around: reading
   /// `context.signal` marks the fetch as cancellable, and `onCancel` hands the
   /// abort to whatever transport is underneath. A `queryFn` that never touches
   /// the token is simply uncancellable, and its result still lands in the cache.

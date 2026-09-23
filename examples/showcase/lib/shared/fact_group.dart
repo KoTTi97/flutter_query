@@ -7,19 +7,14 @@
 /// fact by its exact text; the end-to-end suite finds the same group with
 /// `getByRole('group', { name })` and the same fact with `getByText`.
 ///
-/// **One name.** Before this module every screen spelled the group twice — a
-/// semantics label and a widget key — and invented the relation between them:
-/// `debug x`/`debug-x`, `x facts`/`facts-x`, `facts x`/`facts-x`,
-/// `x`/`x-facts`, `entry x`/`entry-x`, `post 3`/`post-row-3`. Thirty-one named
-/// groups, thirteen label forms and six different label-to-key relations, of
-/// which only four sites used the identity. Here the
-/// name is **one string**, [SemanticsGroup.name], and the key is derived from
-/// it in one place, so a test that knows the group's name knows how to find it
-/// in either layer. Nothing derives a *label*: the names on screen are the
-/// names the suites already read, and none of them moved (C56, #51).
+/// **One name.** A group is not spelled twice — once as a semantics label and
+/// once as a widget key, with a relation between them each screen would
+/// invent. The name is **one string**, [SemanticsGroup.name], and the key is
+/// derived from it in one place, so a test that knows the group's name knows
+/// how to find it in either layer.
 ///
 /// The first of the showcase's three widget modules, split from the other two
-/// by what a test does with them (#69): everything here is something a test
+/// by what a test does with them: everything here is something a test
 /// **reads**. What it presses is `controls.dart`; what it does neither to is
 /// `chrome.dart`.
 ///
@@ -41,7 +36,7 @@
 /// `debug_strip.dart` instead of being a call to [FactGroup].
 ///
 /// **Three screens now write "a named group with a heading and some facts" and
-/// none of them is a copy of another (#69).** Counted: `select_and_sharing`'s
+/// none of them is a copy of another.** Counted: `select_and_sharing`'s
 /// `_ReaderRow` puts a two-column heading *inside* the group and its counts
 /// beside the facts as two `Pill`s; `build_when`'s `_ReaderRow` puts a
 /// one-line heading inside and its count *in* the fact list, as
@@ -85,7 +80,7 @@ const TextStyle monoStyleSmall =
 /// clock — what a test does with `dataUpdatedAt=12:03:44` is compare it with
 /// the reading before it — so what this owes them is only that two readings of
 /// the same instant are the same string. It belongs with the facts rather than
-/// with the controls it was swept in beside (#69).
+/// with the controls.
 String hhmmss(DateTime at) {
   final local = at.toLocal();
   String two(int n) => n.toString().padLeft(2, '0');

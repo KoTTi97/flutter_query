@@ -6,8 +6,7 @@
 ///   names a type other than the one the entry holds throws *synchronously*,
 ///   from the call itself — `getQueryData`, `setQueryData`, `getQueriesData`,
 ///   an observer's `setOptions` — rather than handing back a value that is
-///   not what the caller asked for
-///   (https://github.com/KoTTi97/flutter_query/issues/7). The error names
+///   not what the caller asked for. The error names
 ///   the key, the type asked for and the type held.
 /// * [MissingMutationFunctionError] — a mutation run with no `mutationFn` and
 ///   no default registered for its key fails with it, as its error state, the

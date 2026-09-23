@@ -4,8 +4,7 @@
 /// request. The list and the detail are both `QueryBuilder`s.
 ///
 /// The prefetch is `client.query(options).ignore()`: upstream's
-/// `prefetchQuery` is folded into `query`
-/// (https://github.com/KoTTi97/flutter_query/issues/17), and ignoring the
+/// `prefetchQuery` is folded into `query`, and ignoring the
 /// future is what makes it a prefetch. Upstream prefetches on hover; here it
 /// is a button, because hover never reaches a `MouseRegion` through Flutter
 /// web's semantics overlay. A row whose post is in the cache shows a

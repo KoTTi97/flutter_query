@@ -14,7 +14,9 @@
 /// and while the current page has real data and `hasMore`, the next page is
 /// prefetched with `client.query(...).ignore()`, so the usual `Next page`
 /// costs no request at all. `staleTime` is 5 s, upstream's, which is what
-/// makes the prefetched page count as fresh when it is opened.
+/// makes the prefetched page count as fresh when it is opened — within those
+/// 5 s. A page opened or returned to after that is shown from the cache at
+/// once and refetched in the background.
 ///
 /// Proofs (widget tests in `test/features/pagination_test.dart`, end-to-end
 /// in `e2e/tests/pagination.spec.ts`): page 0 costs one request and, once it
@@ -22,7 +24,7 @@
 /// prefetched page costs no request and prefetches the page after; a page
 /// whose prefetch has not answered shows the previous page's rows with
 /// `isPlaceholderData=true` and `Next page` disabled until it does; `Previous
-/// page` returns to a cached page with no request; on the last page `Next
+/// page` returns to a cached, still fresh page with no request; on the last page `Next
 /// page` is disabled and nothing beyond it is prefetched.
 library;
 
@@ -137,7 +139,9 @@ class _PaginationScreenState extends State<PaginationScreen> {
           child: Notice(
             'Each page keeps the previous one on screen while it loads, and '
             'the next page is prefetched as soon as this one has data. Pages '
-            'stay fresh for 5 s, so going back costs no request.',
+            'stay fresh for 5 s: going back within that costs no request; '
+            'later, the cached page shows at once and refetches in the '
+            'background.',
           ),
         ),
         SectionCard(
