@@ -1,7 +1,7 @@
 # Upstream `query-core` inventory at `50680b98c`, and what moved since `5bb950be8`
 
 - **Date:** 2026-09-08
-- **Ticket:** https://github.com/KoTTi97/flutter_query/issues/2
+- **Ticket:** https://github.com/dualmeta-gmbh/query_kit/issues/2
 - **Upstream:** https://github.com/TanStack/query, package `packages/query-core`
 - **Target revision:** `50680b98c` — `release-2026-08-27-1607-69-g50680b98c`, committed 2026-09-08, `@tanstack/query-core` **5.102.8**
 - **Baseline revision:** `5bb950be8` — `release-2026-08-24-1925-6-g5bb950be8`, committed 2026-08-25, `@tanstack/query-core` **5.102.3**

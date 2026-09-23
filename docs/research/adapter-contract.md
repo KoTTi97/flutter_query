@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-08
 - **Upstream revision:** TanStack Query `50680b98c` (`50680b98c4dc5ac4d97f7762014fa83f09a41d9a`, `origin/main`)
-- **Ticket:** https://github.com/KoTTi97/flutter_query/issues/4
+- **Ticket:** https://github.com/dualmeta-gmbh/query_kit/issues/4
 - **Sources:** read-only from the upstream clone at `query/`. Citations are `packages/<pkg>/src/<file>:<line>` at that revision. `docs/framework/*` is cited only for stated intent.
 
 ## Question

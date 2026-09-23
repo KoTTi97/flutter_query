@@ -31,7 +31,7 @@ starts once C3 has fixed the sidebar and slugs.
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | done |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
 | F1 | Follow-ups | B22, B25, B27, leftover ranking words; fresh re-check of C4d's reference fact edits (query-client, query-options, widgets-and-controllers) | 4 | done |
-| R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | done |
+| R | Repo URLs after the rename | every old-repo URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | done |
 | X | Independent review by a Codex agent | after E; `codex exec -m gpt-6-sol -s read-only` (maintainer's model choice), findings reproduced before fixing | 6 | done |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | done |
 
@@ -40,7 +40,7 @@ starts once C3 has fixed the sidebar and slugs.
 - **D1 — Name.** The product is `query_kit` in all prose (site title, README
   headings, landing page); the packages are `query_kit` and
   `query_kit_flutter`. The maintainer approved renaming the repository; it
-  was renamed to `KoTTi97/query_kit` on 2026-09-23 and, at the maintainer's
+  was renamed to `query_kit` on 2026-09-23 and, at the maintainer's
   request, transferred to the company organisation as
   **`dualmeta-gmbh/query_kit`** the same day (GitHub redirects both old
   URLs). The packages publish under the verified pub.dev publisher
@@ -155,6 +155,7 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C4d | `d50cc98`, `f3b978a` | tools guides + 8 reference pages (C7 folded in); four sub-reviews: ~40 fixes (missing members, throw sites, 11 missing divergences, dio adapter signature, pumpAndSettle advice), TanStack column moved into descriptions, no table scrolls at 1440px; wave 3 fully merged, 97 LiveDemos on the site |
 | 2026-09-23 | R | `2b03d4a` | 87 files: repo URLs and base path → query_kit; GitHub Pages switched on (Actions source); Codex CLI smoke-tested with gpt-6-sol |
 | 2026-09-23 | F1 | `d29456b` | B22/B25/B27; fresh re-check of three reference pages found 2 P1 wrong statements (select notifications, inline queryFn) + P2s, fixed in dartdoc and site; core 1157, binding 299 |
-| 2026-09-23 | R2 | — | repo transferred to `dualmeta-gmbh/query_kit` (Pages carried over); every URL, site `url`/`organizationName`, wizard `REPO` updated; verified publisher dualmeta.io: wizard stage 7 + `docs/releasing.md` section. LICENSE holder still `KoTTi97` — maintainer's call |
+| 2026-09-23 | R2 | — | repo transferred to `dualmeta-gmbh/query_kit` (Pages carried over); every URL, site `url`/`organizationName`, wizard `REPO` updated; verified publisher dualmeta.io: wizard stage 7 + `docs/releasing.md` section. LICENSE holder: the maintainer's call, since settled (R3) |
+| 2026-09-23 | R3 | — | maintainer: the name is `Dualmeta GmbH`, and `KoTTi97` appears nowhere in the tree. LICENSE holder (root and both packages) → Dualmeta GmbH; every old-account URL, historical records included, → `dualmeta-gmbh/query_kit` (issue numbers survive the transfer); a local absolute path dropped. Git history keeps the old author — it is pushed and is not rewritten |
 | 2026-09-23 | E | `4ea460e`…`9ee6e5b` | clean pass: core 1157 VM/1153 Chrome, binding 299/298, showcase 256 + contract 50 + Playwright 177, task_manager 34 + contract 29 + Playwright 10, doc_snippets 42, site e2e 69, coverage 99.83/99.77 %, dry-runs and dart doc 0 warnings; browser read light/dark/375px clean; floors job (Flutter 3.27.4) not run locally |
 | 2026-09-23 | X | `1c735ca`…`753ab95` | Codex (gpt-6-sol, read-only) over the whole branch: 1 P1, 1 P2, 2 P3, all reproduced and fixed; three further Codex passes over the fix converged (last finding was contract wording). Work complete; branch `release/1.0-docs` not pushed |

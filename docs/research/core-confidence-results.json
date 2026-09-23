@@ -162,7 +162,7 @@
   "runner_note": "Canonical commands assume resolved workspace dependencies. Local core runs used the SDK binaries and cached test runners with explicit package_config.json to avoid SDK-manager setup writes. Consumer server was owned by a temporary subprocess and terminated after the run.",
   "integration_followup": {
     "initial_commit": "bac176aa90a3bc3ca860c8893a1050ab2e7c717d",
-    "initial_ci_url": "https://github.com/KoTTi97/flutter_query/actions/runs/34712717614",
+    "initial_ci_url": "https://github.com/dualmeta-gmbh/query_kit/actions/runs/34712717614",
     "initial_ci_passed_jobs": [
       "gates",
       "floors",

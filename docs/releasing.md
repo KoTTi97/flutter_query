@@ -43,7 +43,7 @@ The examples (`examples/showcase`, `examples/task_manager`) are never published
 ## Verified publisher
 
 Both packages are published under the verified publisher **dualmeta.io**
-(DualMeta GmbH), not under a personal account. The publisher has to exist
+(Dualmeta GmbH), not under a personal account. The publisher has to exist
 before the first release:
 
 1. Verify `dualmeta.io` as a *Domain property* in the

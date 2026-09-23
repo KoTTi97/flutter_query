@@ -1,12 +1,12 @@
 # Shipping a widget-test helper without a regular `flutter_test` dependency
 
 - **Date:** 2026-09-11
-- **Ticket:** https://github.com/KoTTi97/flutter_query/issues/48 (part of #33)
+- **Ticket:** https://github.com/dualmeta-gmbh/query_kit/issues/48 (part of #33)
 - **Scope:** facts only. How published Dart/Flutter packages ship a
   widget-test helper, what pub.dev's `pana` does about a regular
   `flutter_test` dependency, what the SDK's `test_api` pin does to resolution,
   and what a third package would cost this repository. The decision is
-  [#36](https://github.com/KoTTi97/flutter_query/issues/36)'s.
+  [#36](https://github.com/dualmeta-gmbh/query_kit/issues/36)'s.
 
 `packages/query_kit_flutter` lists `flutter_test` under `dependencies` so that
 `lib/testing.dart` can export `queryWidgetTest`. Published packages split three

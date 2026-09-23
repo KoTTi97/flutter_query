@@ -141,7 +141,7 @@ separate Entscheidungen. Neue konkrete Fehler
 
 Die Abnahme wurde als `bac176aa90a3bc3ca860c8893a1050ab2e7c717d`
 committed und nach `main` gepusht. Im
-[ersten CI-Lauf](https://github.com/KoTTi97/flutter_query/actions/runs/34712717614)
+[ersten CI-Lauf](https://github.com/dualmeta-gmbh/query_kit/actions/runs/34712717614)
 bestanden `gates`, `floors`, `website` und die Showcase-E2E-Suite. Im
 Task-Manager bestanden die neun vorhandenen Browserfälle; der neue Fall
 scheiterte auch im Retry vor dem zweiten Submit: Das Eingabefeld enthielt

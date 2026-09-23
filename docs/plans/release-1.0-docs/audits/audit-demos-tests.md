@@ -169,7 +169,7 @@ so size is not a reason to switch.
 
 ### A-7. Base href
 
-The site is `url: https://kotti97.github.io`, `baseUrl: '/flutter_query/'`
+The site is `url: https://dualmeta-gmbh.github.io`, `baseUrl: '/flutter_query/'`
 (`website/docusaurus.config.ts`). Files under `website/static/demo/showcase/`
 are served at `/flutter_query/demo/showcase/`, so:
 
@@ -215,7 +215,7 @@ in the build script rather than hard-coding it twice.
 - "Open full screen" links to the same URL without `embed=1` in a new tab, so a
   user can explore the whole catalogue.
 - "View source" links to
-  `https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/${feature.replaceAll('-', '_')}`.
+  `https://github.com/dualmeta-gmbh/query_kit/tree/main/examples/showcase/lib/features/${feature.replaceAll('-', '_')}`.
   The GitHub coordinates should come from `siteConfig.customFields` so the
   rename is one edit.
 - When JavaScript is disabled or the static build is missing (`npm start`
@@ -490,7 +490,7 @@ The grep excluded `query/`, `reference-projects/`, `node_modules`, `build`,
 matches in about 140 files.
 
 **(1) Repo URL. Keep until the repo is renamed; GitHub redirects afterwards.**
-Almost all matches in code are `https://github.com/KoTTi97/flutter_query/issues/NN`
+Almost all matches in code are `https://github.com/dualmeta-gmbh/query_kit/issues/NN`
 in dartdoc: about 60 across `packages/*/lib/src/*.dart` and the library files,
 and they ship to pub.dev. Others:
 
@@ -514,7 +514,7 @@ Two items tied to the repo name that are not plain URLs:
 - `website/README.md:10,105` (the local URL and the Pages URL), and
   `website/docs/getting-started/installation.md:63,67`
   (`path: ../flutter_query/packages/...`, the checkout directory name).
-- `CLAUDE.md:316,321` (`--repo KoTTi97/flutter_query`). This is correct as long
+- `CLAUDE.md:316,321` (`--repo dualmeta-gmbh/query_kit`). This is correct as long
   as the repo keeps its name.
 
 **(2) Prose names that should become query_kit**

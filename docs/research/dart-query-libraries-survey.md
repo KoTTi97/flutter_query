@@ -1,7 +1,7 @@
 # Survey: how existing Dart/Flutter query libraries shape their API, and what users complain about
 
 - **Date:** 2026-09-08
-- **Ticket:** https://github.com/KoTTi97/flutter_query/issues/3
+- **Ticket:** https://github.com/dualmeta-gmbh/query_kit/issues/3
 - **Purpose:** input for the binding-shape decision. The port's `query_core` is
   done; the open question is what the *Flutter-facing* API should look like to
   be the best Flutter-world result rather than the closest translation.

@@ -6,7 +6,7 @@ in [README.md](README.md) apply.
 ## The model
 
 TanStack Query's React docs (`query/docs/framework/react/`, read them from
-`/Users/kotti/Coding/eltako/flutter_query/query/docs/framework/react`) are the
+`query/docs/framework/react`) are the
 bar: one concept per page, opening with the problem in the reader's words,
 then the smallest working code, then the variations, then the traps. Adapt,
 never copy: no sentence of TanStack's text is reproduced; the ideas and order

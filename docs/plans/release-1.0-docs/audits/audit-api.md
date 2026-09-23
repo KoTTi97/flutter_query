@@ -86,7 +86,7 @@ Line numbers are the declaration line (or the doc-comment start for library docs
 Provenance ("Ported against upstream 50680b98c"), export policy ("close to upstream's index.ts", `*CacheRef`, `@internal`) and review IDs ("ninth review, 2026-09-10, C23", "fourth review, 2026-09-09"). This is the package landing page of the API docs. Rewrite as a user intro + quick start (P1-3).
 
 ### `query_kit_flutter/lib/query_kit_flutter.dart` — library doc (l.1-18)
-Good shape (four call styles listed). Drop `https://github.com/KoTTi97/flutter_query/issues/21`; add a 10-line example (provider + one `context.query` + one `MutationController`), and link the per-style class docs that should absorb P1-1's content.
+Good shape (four call styles listed). Drop `https://github.com/dualmeta-gmbh/query_kit/issues/21`; add a 10-line example (provider + one `context.query` + one `MutationController`), and link the per-style class docs that should absorb P1-1's content.
 
 ### `query_kit/lib/query_kit.dart` (auto-flagged: 1 jargon, 0 short/restating)
 
@@ -150,7 +150,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 50 | `QueryFilters` | issues/17 | …ers matches everything — the same convention the options model uses (https://github.com/KoTTi97/flutter_query/issues/17).… |
+| 50 | `QueryFilters` | issues/17 | …ers matches everything — the same convention the options model uses (https://github.com/dualmeta-gmbh/query_kit/issues/17).… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -167,7 +167,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 33 | `AppFocusManager` | issues/19, issues/60 | …s QueryClientProvider maps every AppLifecycleState onto it directly (https://github.com/KoTTi97/flutter_query/issues/19) — or through a setEventListener adapter of your o… |
+| 33 | `AppFocusManager` | issues/19, issues/60 | …s QueryClientProvider maps every AppLifecycleState onto it directly (https://github.com/dualmeta-gmbh/query_kit/issues/19) — or through a setEventListener adapter of your o… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -186,7 +186,7 @@ Internal-history references in rendered docs:
 | 51 | `InfiniteData.InfiniteData.new` | review, 2026-09-12, IN-01 | …'s observer loop and reported to the zone, naming nothing that could be traced back to the write (pre-release review, 2026-09-12, IN-01). The check costs the constructor … |
 | 80 | `InfiniteData.flatten` | review, 2026-09-10, C20 | …entError naming its runtime type, checked up front rather than in the middle of a loop over the result (ninth review, 2026-09-10, C20). flatten() with no type argument fl… |
 | 153 | `InfinitePageContext.InfinitePageContext.new` | API-02, 2026-09-12 | … a pageFn in a test, with a signalProvider that returns a token of the test's own — () => QueryCancelToken() (API-02, 2026-09-12).… |
-| 194 | `PageParamFn` | issues/16 | …t — the reason a nullable TPageParam is a poor choice of param type (https://github.com/KoTTi97/flutter_query/issues/16).… |
+| 194 | `PageParamFn` | issues/16 | …t — the reason a nullable TPageParam is a poor choice of param type (https://github.com/dualmeta-gmbh/query_kit/issues/16).… |
 | 274 | `InfiniteQueryOptions.pages` | IN-02, 2026-09-12 | …ries — until an observer's fetch reinstalls its own options with no count; upstream persists it the same way (IN-02, 2026-09-12).… |
 | 380 | `InfiniteQueryObserverOptionsBase` | ADR-0001 | …se data is the InfiniteData the query holds, and InfiniteQuerySelectOptions, which requires a select over it (ADR-0001). InfiniteQueryObserver and the binding's infinite … |
 | 630 | `InfiniteQueryObserverOptions.withSelect` | review, 2026-09-23, LIB-3 | …withSelect for the paged shape: these options with a select added and every other field carried over (release review, 2026-09-23, LIB-3).… |
@@ -214,7 +214,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 31 | `InfiniteQueryObserver` | issues/16 | …t grow fields per query kind without every consumer paying for them (https://github.com/KoTTi97/flutter_query/issues/16). What the shape costs is paid in shouldNotify: a … |
+| 31 | `InfiniteQueryObserver` | issues/16 | …t grow fields per query kind without every consumer paying for them (https://github.com/dualmeta-gmbh/query_kit/issues/16). What the shape costs is paid in shouldNotify: a … |
 | 46 | `InfiniteQueryObserver.infiniteOptions` | review, 2026-09-09 | …rect setOptions, and hasNextPage then asked the old getNextPageParam while the fetch used the new one (fourth review, 2026-09-09).… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
@@ -272,7 +272,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 100 | `MutationCache.MutationCache.new` | C59, issues/66 | …se when none is passed to it. Final, with no setter, for the reason QueryCache's constructor gives at length (C59, https://github.com/KoTTi97/flutter_query/issues/66): up… |
+| 100 | `MutationCache.MutationCache.new` | C59, issues/66 | …se when none is passed to it. Final, with no setter, for the reason QueryCache's constructor gives at length (C59, https://github.com/dualmeta-gmbh/query_kit/issues/66): up… |
 | 192 | `MutationCache.build` | review, 2026-09-10, C8, C12, 2026-09-12, MU-03, MU-02 | …fused with an ArgumentError in every build mode, as QueryCache.build refuses a data-less success state (ninth review, 2026-09-10, C8 and C12; the twin closed with the sam… |
 | 256 | `MutationCache.remove` | review, DC-02, 2026-09-12, ADR-0003, MU-01 | …error callbacks run a few microtasks after the removal. Upstream lets the retryer run on, as before the third review this did too (DC-02, 2026-09-12). Removing a restored… |
 | 319 | `MutationCache.clear` | ADR-0003, MU-01, 2026-09-12 | …ar() empties its set in one go. Destroying a restored scope head that never ran releases the scope's waiters (ADR-0003), and removing entries one at a time from a live li… |
@@ -299,7 +299,7 @@ Internal-history references in rendered docs:
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
 | 44 | `MutationScope` | review, 2026-09-23, LIB-1 | …nd the one case that asks for it — a snapshot taken at the turn — is served by rolling back per item (release review, 2026-09-23, LIB-1).… |
-| 78 | `MutationFunctionContext` | issues/83 | … other two are this port's, asked for by its first real integration (https://github.com/KoTTi97/flutter_query/issues/83): onMutateResult — after an optimistic patch the c… |
+| 78 | `MutationFunctionContext` | issues/83 | … other two are this port's, asked for by its first real integration (https://github.com/dualmeta-gmbh/query_kit/issues/83): onMutateResult — after an optimistic patch the c… |
 | 365 | `DefaultedMutationOptions.onMutate` | review, 2026-09-10 | …rge in — unlike mutationFn, retry, retryDelay, networkMode, gcTime, scope and meta, which do have one (eighth review, 2026-09-10).… |
 | 373 | `DefaultedMutationOptions.onSuccess` | review, 2026-09-10 | …rge in — unlike mutationFn, retry, retryDelay, networkMode, gcTime, scope and meta, which do have one (eighth review, 2026-09-10).… |
 | 381 | `DefaultedMutationOptions.onError` | review, 2026-09-10 | …rge in — unlike mutationFn, retry, retryDelay, networkMode, gcTime, scope and meta, which do have one (eighth review, 2026-09-10).… |
@@ -352,7 +352,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 73 | `MutationStateObserver.typed` | issues/85, review, 2026-09-23, L4-1 | …receiving them typed — no cast to get at state.variables. Port-only (https://github.com/KoTTi97/flutter_query/issues/85); upstream's useMutationState select is untyped to… |
+| 73 | `MutationStateObserver.typed` | issues/85, review, 2026-09-23, L4-1 | …receiving them typed — no cast to get at state.variables. Port-only (https://github.com/dualmeta-gmbh/query_kit/issues/85); upstream's useMutationState select is untyped to… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -370,7 +370,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 34 | `NotifyManager` | issues/19 | …nd of listener calls. Two divergences from upstream, both decided on https://github.com/KoTTi97/flutter_query/issues/19: The default scheduler is scheduleMicrotask, not a… |
+| 34 | `NotifyManager` | issues/19 | …nd of listener calls. Two divergences from upstream, both decided on https://github.com/dualmeta-gmbh/query_kit/issues/19: The default scheduler is scheduleMicrotask, not a… |
 | 41 | `NotifyManager.shared` | review, 2026-09-09 | …stance, for batching across clients. Not the default: a client constructed without one creates its own (third review, 2026-09-09).… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
@@ -391,7 +391,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 22 | `OnlineManager` | issues/21, issues/5 | …kes an optional Stream<bool> and depends on no connectivity package (https://github.com/KoTTi97/flutter_query/issues/21); a connectivity_plus stream, which reports a link… |
+| 22 | `OnlineManager` | issues/21, issues/5 | …kes an optional Stream<bool> and depends on no connectivity package (https://github.com/dualmeta-gmbh/query_kit/issues/21); a connectivity_plus stream, which reports a link… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -410,7 +410,7 @@ Internal-history references in rendered docs:
 | 33 | `StaleTime.static` | DC-05, 2026-09-12 | …is an ordinary entry to refetchQueries and invalidateQueries, as upstream's isStatic reads the observers too (DC-05, 2026-09-12).… |
 | 46 | `StaleTime.StaleTime.dynamic` | review, 2026-09-10 | …Keep compute cheap and free of side effects; it is a question about the query, not a place to do work (eighth review, 2026-09-10).… |
 | 104 | `StaleTimeStatic` | 50680b98c, review, 2026-09-09 | …h polls a static query exactly as it polls any other — an interval is a request, not a trigger, and upstream (50680b98c) polls too; only refetchQueries filters static out… |
-| 230 | `Enabled.no` | issues/17, review, 2026-09-12 | …works. It is also this port's only spelling of upstream's skipToken (https://github.com/KoTTi97/flutter_query/issues/17), and enabled: false is the meaning that wins wher… |
+| 230 | `Enabled.no` | issues/17, review, 2026-09-12 | …works. It is also this port's only spelling of upstream's skipToken (https://github.com/dualmeta-gmbh/query_kit/issues/17), and enabled: false is the meaning that wins wher… |
 | 241 | `Enabled.Enabled.when` | review, 2026-09-10 | …nswers a question about the query, and anything else it does happens an unpredictable number of times (eighth review, 2026-09-10).… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
@@ -483,11 +483,11 @@ Internal-history references in rendered docs:
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
 | 29 | `QueryObserverRef` | review, 2026-09-10, C21 | …e and on QueryObserver's overrides alike — calling one from outside the package is an analyzer warning (ninth review, 2026-09-10, C21).… |
-| 103 | `FetchBehavior` | issues/16 | … into a loop over pages; nothing else does, and users never set one (https://github.com/KoTTi97/flutter_query/issues/16).… |
+| 103 | `FetchBehavior` | issues/16 | … into a loop over pages; nothing else does, and users never set one (https://github.com/dualmeta-gmbh/query_kit/issues/16).… |
 | 193 | `FetchOptions.retry` | review, 2026-09-09 | …so that the next invalidateQueries refetched an observer's retry: times(3) query with a single attempt (fifth review, 2026-09-09).… |
-| 308 | `Query` | issues/7 | …key is a value type, and the select transform lives in the observer (https://github.com/KoTTi97/flutter_query/issues/7).… |
+| 308 | `Query` | issues/7 | …key is a value type, and the select transform lives in the observer (https://github.com/dualmeta-gmbh/query_kit/issues/7).… |
 | 343 | `Query.dataType` | review, 2026-09-09 | …faultedQueryOptions<int?>, which its setOptions refused with a raw TypeError. One key, one exact type (fourth review, 2026-09-09).… |
-| 516 | `Query.setState` | issues/17, review, 2026-09-10, 2026-09-12, QE-02 | … — the merge half of the door persistence and devtools come through (https://github.com/KoTTi97/flutter_query/issues/17). Restoring an entry that does not exist yet goes … |
+| 516 | `Query.setState` | issues/17, review, 2026-09-10, 2026-09-12, QE-02 | … — the merge half of the door persistence and devtools come through (https://github.com/dualmeta-gmbh/query_kit/issues/17). Restoring an entry that does not exist yet goes … |
 | 542 | `Query.cancel` | review, 2026-09-10, 2026-09-12, C9 | …es its way out. Until then every read reports a fetch that is not happening, which is what idle fixes (eighth review, 2026-09-10; the "never loads again" it was written w… |
 | 633 | `Query.isActive` | review, 2026-09-12, AR-04 | …ficationError out of isFetching, refetchQueries, invalidateQueries and every QueryFilters(type:) (pre-release review, 2026-09-12, AR-04).… |
 | 672 | `Query.isStatic` | AR-04 | …ly fresh. Over a copy, for the reason isActive gives: isStaticForQuery resolves a StaleTime.dynamic callback (AR-04).… |
@@ -522,8 +522,8 @@ Internal-history references in rendered docs:
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
 | 83 | `QueryObserverOptionsUpdated` | DC-04, 2026-09-12 | …dded on the new one, and then this event on the new query, exactly as upstream's observerOptionsUpdated does (DC-04, 2026-09-12).… |
-| 113 | `QueryDataTypeError` | issues/7 | …e mismatch is always a bug, so it is loud rather than a silent null (https://github.com/KoTTi97/flutter_query/issues/7). It is thrown synchronously, from the call that re… |
-| 173 | `QueryCache.QueryCache.new` | C59, issues/66 | …QueryClient constructs one of these when none is passed to it. The hooks are final, and that is the decision (C59, https://github.com/KoTTi97/flutter_query/issues/66). Up… |
+| 113 | `QueryDataTypeError` | issues/7 | …e mismatch is always a bug, so it is loud rather than a silent null (https://github.com/dualmeta-gmbh/query_kit/issues/7). It is thrown synchronously, from the call that re… |
+| 173 | `QueryCache.QueryCache.new` | C59, issues/66 | …QueryClient constructs one of these when none is passed to it. The hooks are final, and that is the decision (C59, https://github.com/dualmeta-gmbh/query_kit/issues/66). Up… |
 | 223 | `QueryCache.build` | review, 2026-09-10, C8, 2026-09-12, QE-02 | … the state and fail in the next observer's constructor with type 'Null' is not a subtype of type 'int' (ninth review, 2026-09-10, C8). A restored QueryState.fetchStatus i… |
 | 293 | `QueryCache.clear` | review, 2026-09-12, QE-03 | …on and this one belongs to a client. Call this directly and the removals are delivered unbatched (pre-release review, 2026-09-12, QE-03).… |
 
@@ -547,19 +547,19 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 64 | `QueryDefaults.queryFn` | issues/7 | …back the wrong type — the same bargain the cache's typed reads make (https://github.com/KoTTi97/flutter_query/issues/7).… |
+| 64 | `QueryDefaults.queryFn` | issues/7 | …back the wrong type — the same bargain the cache's typed reads make (https://github.com/dualmeta-gmbh/query_kit/issues/7).… |
 | 69 | `QueryDefaults.structuralSharing` | review, 2026-09-12 | …is recognised here too, and reaches each query as its own typed opt-out — select output included (pre-release review, 2026-09-12, F4).… |
-| 327 | `QueryClient.focusManager` | issues/19 | …Owned by the client rather than global, so tests are hermetic (https://github.com/KoTTi97/flutter_query/issues/19).… |
+| 327 | `QueryClient.focusManager` | issues/19 | …Owned by the client rather than global, so tests are hermetic (https://github.com/dualmeta-gmbh/query_kit/issues/19).… |
 | 431 | `QueryClient.isFetching` | review, 2026-09-23, L5-4 | … QueryFilters.fetchStatus passed here is ignored rather than combined, so it cannot make the count 0 (release review, 2026-09-23, L5-4).… |
 | 496 | `QueryClient.getQueriesData` | review, 2026-09-09 | …lds another type, as getQueryData does — a null there would read as "nothing cached" and hide the bug (fourth review, 2026-09-09).… |
 | 531 | `QueryClient.setQueryData` | review, 2026-09-10, C23, 2026-09-18 | …s call creates — name it when seeding a key before its query exists: setQueryData<List<Todo>>(key, []) (ninth review, 2026-09-10, C23; final review, 2026-09-18, SURF-1). … |
-| 598 | `QueryClient.updateQueryData` | issues/17, review, 2026-09-23, L5-1 | …etQueryData because Dart cannot overload on "a value or a function" (https://github.com/KoTTi97/flutter_query/issues/17). Returning null from updater leaves the cache unt… |
+| 598 | `QueryClient.updateQueryData` | issues/17, review, 2026-09-23, L5-1 | …etQueryData because Dart cannot overload on "a value or a function" (https://github.com/dualmeta-gmbh/query_kit/issues/17). Returning null from updater leaves the cache unt… |
 | 727 | `QueryClient.resetQueries` | 2026-09-12, AR-12 | …fyManager.batch(() => …) form throws synchronously from a Promise-returning method (pre-release verification, 2026-09-12, AR-12).… |
-| 863 | `QueryClient.query` | issues/17, review, 2026-09-23, LIB-2, LIB-3 | …ery and ensureQueryData are deprecated in favour of this one method (https://github.com/KoTTi97/flutter_query/issues/17): to prefetch, ignore the future: client.query(opt… |
+| 863 | `QueryClient.query` | issues/17, review, 2026-09-23, LIB-2, LIB-3 | …ery and ensureQueryData are deprecated in favour of this one method (https://github.com/dualmeta-gmbh/query_kit/issues/17): to prefetch, ignore the future: client.query(opt… |
 | 925 | `QueryClient.resumePausedMutations` | review, 2026-09-09, 2026-09-10, C10 | ….isOnline(), so an always mutation paused in the background was not resumed by a refocus while offline (fifth review, 2026-09-09). mount's listeners await this before the… |
 | 962 | `QueryClient.clear` | review, 2026-09-10, C11, MU-01, 2026-09-12, QE-03 | …s the callbacks run and clears once more — the widget-test teardown the Flutter binding documents does (ninth review, 2026-09-10, C11). A mutation restored from persisten… |
 | 1273 | `QueryClient.infiniteObserverOptions` | review, 2026-09-10 | …ns are refused there — and a documented path that nothing outside the package may take is not a path (seventh review, 2026-09-10). InfiniteQueryObserver.setInfiniteOption… |
-| 1294 | `QueryClient.infiniteQuery` | issues/17 | …ensureInfiniteQueryData — .ignore() and staleTime: StaleTime.static (https://github.com/KoTTi97/flutter_query/issues/17). A typed convenience: an InfiniteQueryOptions car… |
+| 1294 | `QueryClient.infiniteQuery` | issues/17 | …ensureInfiniteQueryData — .ignore() and staleTime: StaleTime.static (https://github.com/dualmeta-gmbh/query_kit/issues/17). A typed convenience: an InfiniteQueryOptions car… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -589,10 +589,10 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 32 | `QueryObserver` | issues/7, ADR-0001 | …ds (TQueryData) and what the consumer sees after select (TData). See https://github.com/KoTTi97/flutter_query/issues/7. Takes either options shape — a QueryObserverOption… |
+| 32 | `QueryObserver` | issues/7, ADR-0001 | …ds (TQueryData) and what the consumer sees after select (TData). See https://github.com/dualmeta-gmbh/query_kit/issues/7. Takes either options shape — a QueryObserverOption… |
 | 84 | `QueryObserver.subscribe` | 2026-09-12, AR-02 | …t is registered and an observer that is attached, and the query is never collected (pre-release verification, 2026-09-12, AR-02).… |
-| 343 | `QueryObserver.getOptimisticResult` | issues/15 | …widget's first build shows isLoading rather than a stale idle state (https://github.com/KoTTi97/flutter_query/issues/15).… |
-| 513 | `QueryObserver.createResult` | issues/16 | …rotected rather than private so InfiniteQueryObserver can extend it (https://github.com/KoTTi97/flutter_query/issues/16).… |
+| 343 | `QueryObserver.getOptimisticResult` | issues/15 | …widget's first build shows isLoading rather than a stale idle state (https://github.com/dualmeta-gmbh/query_kit/issues/15).… |
+| 513 | `QueryObserver.createResult` | issues/16 | …rotected rather than private so InfiniteQueryObserver can extend it (https://github.com/dualmeta-gmbh/query_kit/issues/16).… |
 | 792 | `QueryObserver.shouldNotify` | review, 2026-09-09 | …ver adds its paging flags this way, which are not part of the result and used to change without a word (fifth review, 2026-09-09).… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
@@ -612,7 +612,7 @@ Internal-history references in rendered docs:
 |---|---|---|---|
 | 36 | `QueryFunctionContext.QueryFunctionContext.new` | API-02, 2026-09-12 | …al: QueryCancelToken())) — and leave onSignalRead unset; it is how the query learns that signal was consumed (API-02, 2026-09-12).… |
 | 78 | `QueryFunctionContext.signal` | review, 2026-09-12 | …al only once across repeated accesses). Here that is one call to _onSignalRead, not one per read (pre-release review, 2026-09-12, fidelity P11). A retry is a new context,… |
-| 127 | `StructuralSharing` | issues/12, review, 2026-09-12 | …e — or to a function of your own to reconcile typed models yourself (https://github.com/KoTTi97/flutter_query/issues/12). A hook governs the cache write and unselected pl… |
+| 127 | `StructuralSharing` | issues/12, review, 2026-09-12 | …e — or to a function of your own to reconcile typed models yourself (https://github.com/dualmeta-gmbh/query_kit/issues/12). A hook governs the cache write and unselected pl… |
 | 156 | `noStructuralSharing` | review, 2026-09-12 | …selection of another type, so a hook of your own leaves the selection shared by the default walk (pre-release review, 2026-09-12, F4). A call rather than a function to pa… |
 | 261 | `InitialDataCompute.compute` | #9743 | … data; once seeded or fetched it is never consulted again. That is upstream's Query.setOptions (TanStack/query#9743), and it is what lets a detail seed itself from a list… |
 | 527 | `QueryObserverOptionsBase.toStringFields` | review, 2026-09-10, C23 | …int reads QueryOptions<int>(QueryKey(["a"]), staleTime: …) rather than Instance of 'QueryOptions<int>' (ninth review, 2026-09-10, C23). A subclass adds its own fields aft… |
@@ -682,8 +682,8 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 53 | `QueryState` | issues/12, issues/7, issues/17 | … sealing happens one layer up, in QueryResult, where users live. See https://github.com/KoTTi97/flutter_query/issues/12. hasData is the port's answer to upstream's two nu… |
-| 135 | `QueryState.consecutiveErrorCount` | issues/85 | …: neither says anything about whether the source answers. Port-only (https://github.com/KoTTi97/flutter_query/issues/85): upstream's fetchFailureCount starts over with ev… |
+| 53 | `QueryState` | issues/12, issues/7, issues/17 | … sealing happens one layer up, in QueryResult, where users live. See https://github.com/dualmeta-gmbh/query_kit/issues/12. hasData is the port's answer to upstream's two nu… |
+| 135 | `QueryState.consecutiveErrorCount` | issues/85 | …: neither says anything about whether the source answers. Port-only (https://github.com/dualmeta-gmbh/query_kit/issues/85): upstream's fetchFailureCount starts over with ev… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -712,7 +712,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 18 | `query_kit_flutter` | issues/21 | …ways to reach a query, none of which needs a package beyond Flutter (https://github.com/KoTTi97/flutter_query/issues/21): QueryController / InfiniteQueryController / Muta… |
+| 18 | `query_kit_flutter` | issues/21 | …ways to reach a query, none of which needs a package beyond Flutter (https://github.com/dualmeta-gmbh/query_kit/issues/21): QueryController / InfiniteQueryController / Muta… |
 
 
 ### `query_kit_flutter/lib/src/controller_lifetime.dart` (auto-flagged: 0 jargon, 2 short/restating)
@@ -757,7 +757,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 36 | `OnlineStatus` | issues/10 | … this port — a sealed value type rather than a pair of half-answers (https://github.com/KoTTi97/flutter_query/issues/10), and null on the option itself is the only way to… |
+| 36 | `OnlineStatus` | issues/10 | … this port — a sealed value type rather than a pair of half-answers (https://github.com/dualmeta-gmbh/query_kit/issues/10), and null on the option itself is the only way to… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -776,7 +776,7 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 28 | `QueriesBuilder` | C49, issues/55, review, 2026-09-23, B2-4 | …ebuild decision is the controller's. The four call styles all take a predicate over the one result they read (C49, https://github.com/KoTTi97/flutter_query/issues/55); th… |
+| 28 | `QueriesBuilder` | C49, issues/55, review, 2026-09-23, B2-4 | …ebuild decision is the controller's. The four call styles all take a predicate over the one result they read (C49, https://github.com/dualmeta-gmbh/query_kit/issues/55); th… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -801,7 +801,7 @@ Internal-history references in rendered docs:
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
 | 86 | `QueryBuilder` | ADR-0001 | …nt is the query's data type; it comes from queryFn's return type, or is written out as QueryBuilder<Task>(…) (ADR-0001). Use QuerySelectBuilder when the query needs a sel… |
-| 120 | `QueryBuilder.buildWhen` | issues/15 | …the port's answer to upstream's notifyOnChangeProps, next to select (https://github.com/KoTTi97/flutter_query/issues/15). Given the result this widget last built from and… |
+| 120 | `QueryBuilder.buildWhen` | issues/15 | …the port's answer to upstream's notifyOnChangeProps, next to select (https://github.com/dualmeta-gmbh/query_kit/issues/15). Given the result this widget last built from and… |
 | 226 | `InfiniteQueryBuilder` | ADR-0001 | …initeQueryObserverOptions or InfiniteQuerySelectOptions — carries all three, and inference reads them off it (ADR-0001).… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
@@ -826,7 +826,7 @@ Internal-history references in rendered docs:
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
 | 109 | `QueryClientProvider.onlineStatus` | review, 2026-09-23, V-B-3, 2026-09-10, issues/60 | …later build, or when the provider leaves the tree: nothing is left to revise an offline verdict then (release review 2026-09-23, BIND-4). Only the last provider with a st… |
-| 121 | `QueryClientProvider.observeAppLifecycle` | issues/60 | …stener is the seam for a focus source that is not the app lifecycle (https://github.com/KoTTi97/flutter_query/issues/60).… |
+| 121 | `QueryClientProvider.observeAppLifecycle` | issues/60 | …stener is the seam for a focus source that is not the app lifecycle (https://github.com/dualmeta-gmbh/query_kit/issues/60).… |
 | 132 | `QueryClientProvider.isAppShown` | review, 2026-09-10 | …ride it for a platform whose conventions differ, or to switch focus refetching to a signal of your own (sixth review, 2026-09-10). The mapping given on the latest build i… |
 
 
@@ -836,9 +836,9 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 137 | `QueryContext.query` | C49, issues/55 | …narrow away — a background refetch moves fetchStatus and dataUpdatedAt, and both are inside QueryResult's == (C49, https://github.com/KoTTi97/flutter_query/issues/55). Ea… |
+| 137 | `QueryContext.query` | C49, issues/55 | …narrow away — a background refetch moves fetchStatus and dataUpdatedAt, and both are inside QueryResult's == (C49, https://github.com/dualmeta-gmbh/query_kit/issues/55). Ea… |
 | 146 | `QueryContext.selectQuery` | ADR-0001 | …query for a query with a select: a QuerySelectOptions, whose required select anchors TData (ADR-0001).… |
-| 229 | `QueryContext.mutation` | issues/67 | …ationObserver has already dropped the ones carrying an equal result (https://github.com/KoTTi97/flutter_query/issues/67).… |
+| 229 | `QueryContext.mutation` | issues/67 | …ationObserver has already dropped the ones carrying an equal result (https://github.com/dualmeta-gmbh/query_kit/issues/67).… |
 
 Short / name-restating docs (heuristic; judge per row — many field docs on action/event classes are acceptable):
 
@@ -854,8 +854,8 @@ Internal-history references in rendered docs:
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
 | 101 | `QueryController.create` | ADR-0001, review, 2026-09-10 | …d one type argument names it — from queryFn's return type, or written out as QueryController.create<Task>(…) (ADR-0001). A static method rather than a named constructor b… |
-| 172 | `QueryController.setOptions` | issues/22, review, 2026-09-23, B2-3 | …changed key switches the observed query without recreating anything (https://github.com/KoTTi97/flutter_query/issues/22). Deliberately does not notify: the observer notif… |
-| 217 | `InfiniteQueryController` | issues/16, ADR-0001 | …enable, with the paging operations the sealed result does not carry (https://github.com/KoTTi97/flutter_query/issues/16). final feed = InfiniteQueryController(client, fee… |
+| 172 | `QueryController.setOptions` | issues/22, review, 2026-09-23, B2-3 | …changed key switches the observed query without recreating anything (https://github.com/dualmeta-gmbh/query_kit/issues/22). Deliberately does not notify: the observer notif… |
+| 217 | `InfiniteQueryController` | issues/16, ADR-0001 | …enable, with the paging operations the sealed result does not carry (https://github.com/dualmeta-gmbh/query_kit/issues/16). final feed = InfiniteQueryController(client, fee… |
 | 388 | `MutationController.observer` | second pass, review, 2026-09-23, V-B-5 | …body listens to the per-call callbacks are dropped, as the core drops them for an observer without listeners (second pass of the release review 2026-09-23, V-B-5). Run mu… |
 | 431 | `MutationController.mutateAsync` | review, 2026-09-10, C18 | …n observer, so the mutation stays in the cache for good; a disposed controller here does not come back (ninth review, 2026-09-10, C18). Hold the controller above the widg… |
 
@@ -899,9 +899,9 @@ Internal-history references in rendered docs:
 
 | line | symbol | tokens | excerpt |
 |---|---|---|---|
-| 110 | `QueryMixin.watchQuery` | C49, issues/55 | …narrow away — a background refetch moves fetchStatus and dataUpdatedAt, and both are inside QueryResult's == (C49, https://github.com/KoTTi97/flutter_query/issues/55). Ea… |
+| 110 | `QueryMixin.watchQuery` | C49, issues/55 | …narrow away — a background refetch moves fetchStatus and dataUpdatedAt, and both are inside QueryResult's == (C49, https://github.com/dualmeta-gmbh/query_kit/issues/55). Ea… |
 | 119 | `QueryMixin.watchSelectQuery` | ADR-0001 | …watchQuery for a query with a select: a QuerySelectOptions, whose required select anchors TData (ADR-0001).… |
-| 182 | `QueryMixin.watchMutation` | issues/67 | …ationObserver has already dropped the ones carrying an equal result (https://github.com/KoTTi97/flutter_query/issues/67).… |
+| 182 | `QueryMixin.watchMutation` | issues/67 | …ationObserver has already dropped the ones carrying an equal result (https://github.com/dualmeta-gmbh/query_kit/issues/67).… |
 
 ## Appendix A — every `///` block in `lib/` with internal-history tokens
 

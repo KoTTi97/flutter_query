@@ -14,7 +14,7 @@ is a bug in this file.
 
 - **Upstream revision:** `50680b98c` (`main`, 2026-09-08).
 - **The policy that governs this file:**
-  [#18](https://github.com/KoTTi97/flutter_query/issues/18).
+  [#18](https://github.com/dualmeta-gmbh/query_kit/issues/18).
 - One Dart file per upstream file; upstream test names kept verbatim; a failing
   ported test means the port is wrong until proven otherwise.
 - Port-only tests (no upstream counterpart) live in `smoke_test.dart`, and
@@ -328,7 +328,7 @@ immediately after unsubscribe, both times — is unchanged.
   it`. There is no `queryHash` here: the cache is keyed by the [QueryKey] value
   itself and `queryKeyHashFn` was dropped, so a per-query hash override has
   nothing to override
-  ([#8](https://github.com/KoTTi97/flutter_query/issues/8)). What the two cases
+  ([#8](https://github.com/dualmeta-gmbh/query_kit/issues/8)). What the two cases
   actually guard — one key, one query — is covered by `QueryCache.add` below
   and by `smoke_test.dart`'s key-equality cases.
 - **adapted:** `QueryCache.remove > should only delete the instance currently
@@ -341,7 +341,7 @@ immediately after unsubscribe, both times — is unchanged.
 - **adapted:** the two `QueryCacheConfig` callback suites. Upstream's callbacks
   take `(data, query)` / `(error, query)`; here `onError` and `onSettled` also
   carry the `StackTrace`
-  ([#7](https://github.com/KoTTi97/flutter_query/issues/7)), and the payload is
+  ([#7](https://github.com/dualmeta-gmbh/query_kit/issues/7)), and the payload is
   asserted field by field because Dart records compare with `==` and two equal
   `Map`s are not `==`.
 - **adapted:** every `queryClient.query({...})` call site — upstream's
@@ -352,7 +352,7 @@ immediately after unsubscribe, both times — is unchanged.
 - **omitted — SSR (2):** `should not retry on the server`,
   `should use an infinite garbage collection time on the server`. There is no
   `isServer` here; `environmentManager` is not ported
-  ([#9](https://github.com/KoTTi97/flutter_query/issues/9)).
+  ([#9](https://github.com/dualmeta-gmbh/query_kit/issues/9)).
 - **portable, not yet ported (1):** `should reset to default state when created
   from hydration`. Filed as an omission "covered by `smoke_test.dart`" until
   2026-09-12, and **that coverage does not exist**: `smoke_test.dart` has no
@@ -372,24 +372,24 @@ immediately after unsubscribe, both times — is unchanged.
   porting pass rather than added under a release deadline, and recorded here so
   the deferral is a decision instead of a false claim of coverage. (Hydration
   itself remains out of the v1 scope,
-  [#17](https://github.com/KoTTi97/flutter_query/issues/17) — that part was
+  [#17](https://github.com/dualmeta-gmbh/query_kit/issues/17) — that part was
   never the problem.)
 - **omitted — undefined guards (1):** `fetch should dispatch an error if the
   queryFn returns undefined`. `Future<T>` with a non-nullable `T` cannot produce
   it, and with a nullable one `null` is a legitimate value
-  ([#7](https://github.com/KoTTi97/flutter_query/issues/7)).
+  ([#7](https://github.com/dualmeta-gmbh/query_kit/issues/7)).
 - **omitted — type-level (1):** `should log error when queryKey is not an
   array`. `QueryKey` is a value type; a `String` does not typecheck
-  ([#8](https://github.com/KoTTi97/flutter_query/issues/8)).
+  ([#8](https://github.com/dualmeta-gmbh/query_kit/issues/8)).
 - **omitted — replaceEqualDeep (1):** `should have an error log when queryFn
   data is not serializable`. Nothing here requires data to be JSON
-  serializable ([#12](https://github.com/KoTTi97/flutter_query/issues/12)); the
+  serializable ([#12](https://github.com/dualmeta-gmbh/query_kit/issues/12)); the
   case it guards — a throwing structural-sharing step ending in an error state
   — is the *next* upstream case, which is ported.
 - **omitted — option not ported (1):** `should use persister if provided`. The
   `persister` option belongs to upstream's experimental persister package and
   is not part of the v1 surface
-  ([#15](https://github.com/KoTTi97/flutter_query/issues/15)).
+  ([#15](https://github.com/dualmeta-gmbh/query_kit/issues/15)).
 - **adapted:** `constructor should call initialDataUpdatedAt if defined as a
   function` uses the additive `initialDataUpdatedAtCompute` callback. The
   existing `DateTime?` field remains supported. Providing both is rejected
@@ -401,7 +401,7 @@ immediately after unsubscribe, both times — is unchanged.
 - **adapted (4):** upstream's page-visibility and `navigator.onLine` mocks are
   `client.focusManager.setFocused(...)` and `client.onlineManager.setOnline(...)`
   on the client's own managers
-  ([#19](https://github.com/KoTTi97/flutter_query/issues/19)).
+  ([#19](https://github.com/dualmeta-gmbh/query_kit/issues/19)).
 - **adapted (3):** the three `vi.spyOn` cases. There is no spy here, so each
   asserts the effect instead: `should refetch the observer when online method is
   called` lets the first fetch settle and counts query-function calls (asserting
@@ -459,7 +459,7 @@ with `cancelRefetch: false` where upstream's default is `true`.
   cases and the two `should (not) track error prop when throwOnError is …`
   cases. All four are React-render-scheduling machinery —
   `notifyOnChangeProps` and `trackProp` decide which fields a render subscribes
-  to — which [#15](https://github.com/KoTTi97/flutter_query/issues/15) replaced
+  to — which [#15](https://github.com/dualmeta-gmbh/query_kit/issues/15) replaced
   with `select` plus the binding's own rebuild filter.
 - **omitted — `throwOnError` dropped (1):** `should throw an error if
   throwOnError option is true`. This one is *not* render machinery, and filing
@@ -514,7 +514,7 @@ with `cancelRefetch: false` where upstream's default is `true`.
 - **adapted:** `staleTime: Infinity` reads as `StaleTime.infinite`, and the
   `enabled` / `staleTime` / `refetchInterval` / `refetchOnWindowFocus` callback
   forms as their sealed `.when` / `.dynamic` constructors
-  ([#10](https://github.com/KoTTi97/flutter_query/issues/10)).
+  ([#10](https://github.com/dualmeta-gmbh/query_kit/issues/10)).
 
 **One port bug this suite caught:** `_createResult` selected placeholder data
 inside the placeholder branch instead of leaving it for the shared `select`
@@ -549,7 +549,7 @@ are in the categories below.
   static staleTime`, `query`, `query used for prefetching`, `infiniteQuery with
   static staleTime`, `infiniteQuery`, `infiniteQuery used for prefetching` —
   which *are* ported
-  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The two
+  ([#17](https://github.com/dualmeta-gmbh/query_kit/issues/17)). The two
   exceptions are the `revalidateIfStale` cases of `ensureQueryData` and
   `ensureInfiniteQueryData`, which are ported (adapted to the named parameter
   on `query` / `infiniteQuery`, upstream names kept) — which is why those two
@@ -565,7 +565,7 @@ are in the categories below.
   all about `persister` defaulting `networkMode` to `offlineFirst`.
 - **omitted — hashKey identity (1):** `setQueryData > should use default
   options`, which sets a `queryKeyHashFn`
-  ([#8](https://github.com/KoTTi97/flutter_query/issues/8)).
+  ([#8](https://github.com/dualmeta-gmbh/query_kit/issues/8)).
 - **omitted — `undefined` as data (2):** `setQueryData > should not create a
   new query if query was not found and data is undefined` and `> should not
   update query data if data is undefined`. There is no `undefined`: a value of
@@ -589,7 +589,7 @@ are in the categories below.
   cached data`), three in `infiniteQuery` (the same shapes), and
   `invalidateQueries > should not refetch inactive queries that have a
   skipToken queryFn even if "refetchType" is "all`. `skipToken` is `Enabled.no`
-  here ([#17](https://github.com/KoTTi97/flutter_query/issues/17)). The three
+  here ([#17](https://github.com/dualmeta-gmbh/query_kit/issues/17)). The three
   reasons are different and only one of them is a language argument:
   - the four `query` cases are **portable, not yet ported**. The recorded
     reason — "the imperative path has no equivalent, it fetches by definition"
@@ -601,7 +601,7 @@ are in the categories below.
   - the three `infiniteQuery` cases are genuinely unportable: `pageFn` is
     required on `InfiniteQueryOptions`, so "an infinite query whose fetcher is
     a skip marker" has no expressible form
-    ([#16](https://github.com/KoTTi97/flutter_query/issues/16)).
+    ([#16](https://github.com/dualmeta-gmbh/query_kit/issues/16)).
   - the `invalidateQueries` case is **not portable as long as one value
     spells two meanings**. It pins the `skipToken` arm of upstream's
     no-observer `isDisabled` (`queryFn === skipToken || !isFetched()`), and
@@ -624,19 +624,19 @@ are in the categories below.
   infinite twins `infiniteQuery > should fetch when disabled and apply select`
   and `> should apply select to infinite query data`. `query()` /
   `infiniteQuery()` keep one type parameter and the transform is a `.then` at
-  the call site ([#7](https://github.com/KoTTi97/flutter_query/issues/7)), so
+  the call site ([#7](https://github.com/dualmeta-gmbh/query_kit/issues/7)), so
   these would assert Dart's `await`, not the library's. (The bullet named the
   three ordinary ones and left the infinite two unnamed.)
 - **omitted — dropped observer feature (1):** `refetchQueries > should throw an
   error if throwOnError option is set to true`
-  ([#15](https://github.com/KoTTi97/flutter_query/issues/15)).
+  ([#15](https://github.com/dualmeta-gmbh/query_kit/issues/15)).
 - **omitted — hydration (1):** `focusManager and onlineManager > should
   resumePausedMutations when coming online after having restored cache (and
   resumed) while offline`.
 - **adapted:** `setQueriesData` reads as `updateQueriesData`, and
   `setQueryData(key, updaterFn)` as `updateQueryData` — Dart cannot overload on
   "a value or a function"
-  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)).
+  ([#17](https://github.com/dualmeta-gmbh/query_kit/issues/17)).
 - **adapted:** `resetQueries > should refetch all active queries` drops its
   third observer, whose `queryFn` is `skipToken`. The case is ported; only that
   observer is gone, so it is an adaptation and not one of the 50 omissions —
@@ -647,7 +647,7 @@ are in the categories below.
 - **adapted:** `should set the new data without comparison if structuralSharing
   is set to false` turns sharing off on the cache write with an identity
   function of its own through `QueryDefaults` (`_keepNext`)
-  ([#12](https://github.com/KoTTI97/flutter_query/issues/12), revised by the
+  ([#12](https://github.com/dualmeta-gmbh/query_kit/issues/12), revised by the
   third review: sharing is now on by default, as upstream). Since the final
   review the port's `false` is spelled `noStructuralSharing()` (F4); the case
   still passes as written, because on the cache write — the only thing it
@@ -726,7 +726,7 @@ could carry a `queryFn` / `mutationFn`, so `setQueryDefaults(key, {queryFn})` �
 a shared fetcher per key prefix, and upstream's own idiom in these tests — was
 not expressible. Both now carry an *erased* one (`QueryFn<Object?>`), adapted to
 the call site's type by `defaultQueryOptions` and throwing `QueryDataTypeError`
-on a mismatch: the same bargain [#7](https://github.com/KoTTi97/flutter_query/issues/7)
+on a mismatch: the same bargain [#7](https://github.com/dualmeta-gmbh/query_kit/issues/7)
 already struck for the cache's typed reads. `structuralSharing` joined them for
 the same reason. A debug assert that fired when several key prefixes matched one
 query also had to go: upstream merges them deliberately, and
@@ -876,7 +876,7 @@ without which every rebuild would report an options change.
 ### `utils.test.tsx`
 
 48 ported, 30 omitted (the 8 `addToEnd`/`addToStart` cases were deferred until
-[#16](https://github.com/KoTTi97/flutter_query/issues/16), the 23
+[#16](https://github.com/dualmeta-gmbh/query_kit/issues/16), the 23
 `replaceEqualDeep` cases until the third review; both are ported now).
 This is the one upstream file that is mostly *not* applicable: it tests
 JavaScript helpers, and the ones that survive the port are already methods on a
@@ -2962,7 +2962,7 @@ scope and the seed of the next one.
 ## Structural work after the ninth review (C47–C59)
 
 The thirteen structural findings of the 2026-09-10 reviews are worked off by
-[map #49](https://github.com/KoTTi97/flutter_query/issues/49), one ticket at a
+[map #49](https://github.com/dualmeta-gmbh/query_kit/issues/49), one ticket at a
 time, and this is where each landing ticket writes its row: **what moved, what
 it replaced, and what proves the behaviour did not change.** None of these
 findings is a bug — they are duplicates, unused seams and surfaces whose
@@ -2973,7 +2973,7 @@ says what was actually counted; where the right answer turned out to be "two
 things that merely look alike", the row says that too, because a refusal to
 extract is a resolution and the next reader should not re-open it.
 
-### C55 — the showcase's copied cache listener ([#50](https://github.com/KoTTi97/flutter_query/issues/50))
+### C55 — the showcase's copied cache listener ([#50](https://github.com/dualmeta-gmbh/query_kit/issues/50))
 
 **Measured**, not taken from §8: the phase-aware rebuild is **12 sites in 11
 files**, of which **11 are md5-identical** 18-line `_rebuild()` bodies (10
@@ -3018,7 +3018,7 @@ across sixteen feature screens, plus ~250 lines of shared module.
 is the deliberate exception to "one self-contained directory per feature", and
 the third copy moves.
 
-### C56 — one fact-group convention for the showcase and both test layers ([#51](https://github.com/KoTTi97/flutter_query/issues/51))
+### C56 — one fact-group convention for the showcase and both test layers ([#51](https://github.com/dualmeta-gmbh/query_kit/issues/51))
 
 **Measured** on `3d2141a`, not taken from §8. `Semantics(container: true,
 explicitChildNodes: true)` appears **52 times in 26 files**. Twenty-one carry
@@ -3087,7 +3087,7 @@ label-value row of the product surface, with no name, no key and no test
 reading it through a group. Its single `getByRole('group')` locator matches a
 `ListTile` row Flutter names by itself. There is nothing there to unify, and
 a shared package between two examples was already refused on
-[#52](https://github.com/KoTTi97/flutter_query/issues/52). `offline`'s `_Knob`
+[#52](https://github.com/dualmeta-gmbh/query_kit/issues/52). `offline`'s `_Knob`
 and `initial-and-placeholder`'s lazy-seed knob stay their own widgets: they
 already obey the one-name rule and differ from `knobButton` by a deliberate
 button style, which #50 had already ruled on.
@@ -3112,22 +3112,22 @@ suite does not have to go looking:
 
 | Upstream behaviour | Here | Decided in |
 |---|---|---|
-| `data === undefined` runtime guard in `Query.fetch` | impossible: `Future<T>` with non-nullable `T` | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
-| `hashKey` string identity, `queryKeyHashFn` | `QueryKey` is a value type; the string is a debug view | [#8](https://github.com/KoTTi97/flutter_query/issues/8) |
-| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; a typed hook replaces it for the cache write and unselected placeholders; `noStructuralSharing()` is `false` and the one spelling of it that turns sharing **off** for what `select` produced too — upstream routes the selection through `replaceData` and so through a function hook as well, which cannot be done here because the hook is typed `StructuralSharing<TQueryData>` and a selection is a `TData`, so a hook of one's own (`(_, next) => next` included) leaves the selection at the default walk, and only the recognised opt-out steps back from it (FI-05, fidelity review 2026-09-12; narrowed by F4, final review 2026-09-12); one limit: the select memo compares its input with `==` (C14's rule), so a data type with value equality — `InfiniteData`, a record, a value class — re-reports the previous selection without re-running the selector, where upstream's `===` memo re-runs it; unselected placeholders use the raw-data sharing hook | [#12](https://github.com/KoTTi97/flutter_query/issues/12), review 2026-09-09 |
-| `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
-| `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
-| `MutationFunctionContext` (a mutation function's second argument) | `MutationFn` still takes variables only; a second option, `mutationFnWithContext`, takes `(variables, MutationFunctionContext<TOnMutateResult>)`. The context holds upstream's `client`, `meta`, `mutationKey` plus a typed `onMutateResult` and a `signal`; `Mutation.cancel()` (port-only) cancels it and fails the run with `CancelledError` |  [#14](https://github.com/KoTTi97/flutter_query/issues/14), [#83](https://github.com/KoTTi97/flutter_query/issues/83) |
-| `skipToken` | `Enabled.no` | [#17](https://github.com/KoTTi97/flutter_query/issues/17) |
+| `data === undefined` runtime guard in `Query.fetch` | impossible: `Future<T>` with non-nullable `T` | [#7](https://github.com/dualmeta-gmbh/query_kit/issues/7) |
+| `hashKey` string identity, `queryKeyHashFn` | `QueryKey` is a value type; the string is a debug view | [#8](https://github.com/dualmeta-gmbh/query_kit/issues/8) |
+| `replaceEqualDeep` structural sharing | `replaceEqualDeep` by default: lists (and `InfiniteData`'s two) element by element, maps and sets whole, `==` otherwise; a typed hook replaces it for the cache write and unselected placeholders; `noStructuralSharing()` is `false` and the one spelling of it that turns sharing **off** for what `select` produced too — upstream routes the selection through `replaceData` and so through a function hook as well, which cannot be done here because the hook is typed `StructuralSharing<TQueryData>` and a selection is a `TData`, so a hook of one's own (`(_, next) => next` included) leaves the selection at the default walk, and only the recognised opt-out steps back from it (FI-05, fidelity review 2026-09-12; narrowed by F4, final review 2026-09-12); one limit: the select memo compares its input with `==` (C14's rule), so a data type with value equality — `InfiniteData`, a record, a value class — re-reports the previous selection without re-running the selector, where upstream's `===` memo re-runs it; unselected placeholders use the raw-data sharing hook | [#12](https://github.com/dualmeta-gmbh/query_kit/issues/12), review 2026-09-09 |
+| `trackResult`, `notifyOnChangeProps` | dropped; `select` plus the binding's `buildWhen` | [#15](https://github.com/dualmeta-gmbh/query_kit/issues/15) |
+| `throwOnError` | dropped; errors live in the sealed result | [#15](https://github.com/dualmeta-gmbh/query_kit/issues/15) |
+| `MutationFunctionContext` (a mutation function's second argument) | `MutationFn` still takes variables only; a second option, `mutationFnWithContext`, takes `(variables, MutationFunctionContext<TOnMutateResult>)`. The context holds upstream's `client`, `meta`, `mutationKey` plus a typed `onMutateResult` and a `signal`; `Mutation.cancel()` (port-only) cancels it and fails the run with `CancelledError` |  [#14](https://github.com/dualmeta-gmbh/query_kit/issues/14), [#83](https://github.com/dualmeta-gmbh/query_kit/issues/83) |
+| `skipToken` | `Enabled.no` | [#17](https://github.com/dualmeta-gmbh/query_kit/issues/17) |
 | a `Set` of listeners in `Subscribable`, and `delete(listener)` as the way out — so the *function* is the identity and a second registration of it is not a second entry | a `List` of **registrations**: Dart tear-offs are `==`, so a Set let one subscriber's unsubscribe silence another's. The handle returned by `subscribe` is the identity, not the function: it removes its own entry and only its own, it is once-only (a second call removes nothing more, where an unguarded one took another registration of the same function with it), and an entry deactivated by `clear()`, `destroy()` or an earlier removal stays dead — a handle held from before a `destroy()` cannot remove a registration made after it. Upstream has no equivalent of any of this because it has no equal functions | eighth review 2026-09-10; extended by [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R08, `release_observer_regressions_test.dart` OI05/OI16/OI17, `release_query_regressions_test.dart` QER18 |
-| module-level managers | instances the `QueryClient` owns — the `NotifyManager` too since the third review (`NotifyManager.shared` opts back in) | [#19](https://github.com/KoTTi97/flutter_query/issues/19), review 2026-09-09 |
-| `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/KoTTi97/flutter_query/issues/10) |
-| `persister` | not ported | [#15](https://github.com/KoTTi97/flutter_query/issues/15) |
+| module-level managers | instances the `QueryClient` owns — the `NotifyManager` too since the third review (`NotifyManager.shared` opts back in) | [#19](https://github.com/dualmeta-gmbh/query_kit/issues/19), review 2026-09-09 |
+| `staleTime: Infinity` | `StaleTime.infinite` (never stale, still refetchable), distinct from `StaleTime.static` | [#10](https://github.com/dualmeta-gmbh/query_kit/issues/10) |
+| `persister` | not ported | [#15](https://github.com/dualmeta-gmbh/query_kit/issues/15) |
 | `initialDataUpdatedAt` as a function | additive `initialDataUpdatedAtCompute`, exclusive with the existing timestamp value | functional improvements plan |
-| `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
-| an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/KoTTi97/flutter_query/issues/16) |
-| `QueryCacheConfig` / `MutationCacheConfig` behind a reassignable `config` field | the hooks are final constructor arguments, with no setter; nothing upstream reassigns one, and a handler that has to change closes over a variable its owner swaps | C59, [#66](https://github.com/KoTTi97/flutter_query/issues/66) |
-| a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` — and a *subtype* is a mismatch: one key, one exact type | [#7](https://github.com/KoTTi97/flutter_query/issues/7), fourth review 2026-09-09 |
+| `hasNextPage` / `fetchNextPage` on the query result | on `InfiniteQueryObserver`; the sealed result stays one shape | [#16](https://github.com/dualmeta-gmbh/query_kit/issues/16) |
+| an infinite query's `queryFn` returning one page | `pageFn`, with its own typed `InfinitePageContext` | [#16](https://github.com/dualmeta-gmbh/query_kit/issues/16) |
+| `QueryCacheConfig` / `MutationCacheConfig` behind a reassignable `config` field | the hooks are final constructor arguments, with no setter; nothing upstream reassigns one, and a handler that has to change closes over a variable its owner swaps | C59, [#66](https://github.com/dualmeta-gmbh/query_kit/issues/66) |
+| a blind cast in `getQueryData` | a type mismatch throws `QueryDataTypeError` — and a *subtype* is a mismatch: one key, one exact type | [#7](https://github.com/dualmeta-gmbh/query_kit/issues/7), fourth review 2026-09-09 |
 | one observer options object with an optional `select` | two shapes over a sealed base: `QueryObserverOptions<TData>` without `select`, `QuerySelectOptions<TQueryData, TData>` with `select` required (infinite: `InfiniteQueryObserverOptions` / `InfiniteQuerySelectOptions`); the binding's controllers refuse a top-typed `TData` in debug builds only — the backstop is compiled out of release | [ADR-0001](../../../docs/adr/0001-one-type-slot-for-plain-queries.md), ninth review 2026-09-11 |
 
 ### A `Set` of listeners does not port
@@ -3146,11 +3146,11 @@ subscriber's listener with it. The port keeps a `List`: one entry per
 removing nothing more. The ported case is renamed "registers the same listener
 reference once per subscribe" and asserts the port's answer, with two
 port-specific cases beside it (eighth review, 2026-09-10).
-| `MutationCache.remove` leaves the mutation's gc timer running | the timer is cancelled, so a removed mutation cannot ask to be removed again | [#22](https://github.com/KoTTi97/flutter_query/issues/22) |
+| `MutationCache.remove` leaves the mutation's gc timer running | the timer is cancelled, so a removed mutation cannot ask to be removed again | [#22](https://github.com/dualmeta-gmbh/query_kit/issues/22) |
 | a cancelled retry can still flip its query from `idle` to `paused` after its delay | the retryer checks `isResolved` after the delay | review, 2026-09-08 |
-| a removed query or mutation re-arms its own gc timer from the fetch's `finally` | removal marks it, and a marked one schedules nothing | [#24](https://github.com/KoTTi97/flutter_query/issues/24) |
-| `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static`, stale-while-revalidate is `revalidateIfStale: true` | [#17](https://github.com/KoTTi97/flutter_query/issues/17), functional improvements plan |
-| `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/KoTTi97/flutter_query/issues/7) |
+| a removed query or mutation re-arms its own gc timer from the fetch's `finally` | removal marks it, and a marked one schedules nothing | [#24](https://github.com/dualmeta-gmbh/query_kit/issues/24) |
+| `fetchQuery` / `prefetchQuery` / `ensureQueryData` (all deprecated upstream at this pin) | one `QueryClient.query`; prefetch is `.ignore()`, ensure is `staleTime: StaleTime.static`, stale-while-revalidate is `revalidateIfStale: true` | [#17](https://github.com/dualmeta-gmbh/query_kit/issues/17), functional improvements plan |
+| `query`'s `select` type slot | none: `await` the future and map it | [#7](https://github.com/dualmeta-gmbh/query_kit/issues/7) |
 | a `select` that threw keeps reporting its error after `select` is removed | the error goes with the selector; the raw data is reported | review, 2026-09-09 |
 | a retained placeholder keeps its old selection after `select` changed | the new `select` runs over the placeholder | review, 2026-09-09 |
 | an observer resubscribing after its query was collected rejoins the dead query | it re-resolves the key and joins the current entry (one adapted assertion in `query_test.dart`) | review, 2026-09-09 |
@@ -3185,7 +3185,7 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | the `select` memo keeps the last selection while the selector is `===` the last one | `==`: an instance-method tear-off is `==` to the next tear-off of the same method, as the options already treat it | ninth review, 2026-09-10 (C14) |
 | observer `TData` defaults to the query's type; nothing checks a mismatch | a `QueryObserver` with no `select` whose `TQueryData` is not a `TData` is refused with `ArgumentError` at construction, `setOptions` and `getOptimisticResult` | fifth review, 2026-09-09 |
 | an observer's `onQueryUpdate` throwing inside a dispatch propagates into the fetch | isolated per observer and reported to the zone, like the cache listeners; the query keeps its state | fifth review, 2026-09-09 (59) |
-| `useQueries` with a heterogeneous tuple and a `combine` step | a homogeneous `QueriesObserver` (`QueriesController`/`QueriesBuilder` in the binding). Different data types combine as a **record of results**: `(a, b).combine(…)` → `CombinedResult`, arities two to six, optional `CombineMemo` — a pure function, no observer of its own | functional improvements plan, `competitor-deep-dive.md` §6 #13; [#82](https://github.com/KoTTi97/flutter_query/issues/82) |
+| `useQueries` with a heterogeneous tuple and a `combine` step | a homogeneous `QueriesObserver` (`QueriesController`/`QueriesBuilder` in the binding). Different data types combine as a **record of results**: `(a, b).combine(…)` → `CombinedResult`, arities two to six, optional `CombineMemo` — a pure function, no observer of its own | functional improvements plan, `competitor-deep-dive.md` §6 #13; [#82](https://github.com/dualmeta-gmbh/query_kit/issues/82) |
 | `useMutationState` reads the cache through a React hook | `MutationStateObserver` (`MutationStateController` in the binding): `MutationFilters` plus a required `select`, structural sharing over the outer list, subscribed only while observed | functional improvements plan, `competitor-deep-dive.md` §6 #9 |
 | no minimum background duration before a focus refetch — every foreground event refetches | `AppFocusManager(refetchMinBackgroundDuration:)`, default `Duration.zero` (upstream's behaviour); a shorter absence suppresses **new** focus refetches only, paused work still resumes | functional improvements plan, `competitor-deep-dive.md` §6 #3 |
 | `keepPreviousData` / `placeholderData: (prev) => prev` | `const PlaceholderData.keepPrevious()` — identical to `.compute((previous, _) => previous)` including its "a previous `null` means no placeholder" rule, but `const`, so it survives the observer's placeholder memoisation | functional improvements plan, `competitor-deep-dive.md` §6 #4 |
@@ -3202,10 +3202,10 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | Sets and Maps are not plain objects, so `replaceEqualDeep` returns `next` for them untouched | shared whole when deep-equal (row above); a set is compared as a multiset under the walk's own relation, never under the set's equality policy: a hashed multiset walk that asks either set for its length and its members only — no `lookup`, `contains`, `containsAll` or `remove` — and the members for `==` and `hashCode` — so a case-insensitive `SplayTreeSet` reports a member that changed case, and a `Set` whose own methods throw or break their contract is compared all the same. About 1.3 ms a write at 10 000 members and 14–22 ms at 100 000, past a 16 ms frame; members that break `==`'s own contract get the greedy walk's answer. A map is still looked up by its own keys, so a map with a custom key equality is compared under that policy and keeps the older key representation; such a map needs its own hook or `noStructuralSharing()`. `QueryKey`'s set parts are frozen to default equality, so its `containsAll` shortcut stays sound | pre-release verification, 2026-09-12 (AR-01); final review 2026-09-12 (F1) and its round 3 (R2-1, R2-2, R2-4), `port_specifics_test.dart` `F1 …` ×4, `R2-1 …` ×2, `R2-2 …`, `R2-4 …` |
 | `Query.isDisabled()`'s no-observer branch is `queryFn === skipToken \|\| !isFetched()`: it consults the `skipToken` sentinel but **not** `enabled`, so an unobserved query whose last observer was `enabled: false` and which holds data is *not* disabled and `refetchType: 'all'` refetches it | `!isFetched()` alone. `Enabled.no` spells both `skipToken` and `enabled: false` (#17), and `enabled: false` is the meaning kept — upstream's `enabled: false` does not reach this arm either. So an unobserved, seeded query whose last observer left with `Enabled.no` is refetched by `refetchType: all`, where upstream's `skipToken` one is not, and no `Enabled.when` predicate is evaluated for a query nobody observes. `enabled` governs automatic fetching; `refetchQueries` is an explicit command. The ported case for the `skipToken` arm is unported again. FI-01 had made this branch `!_options.enabled.resolve(this) \|\| !isFetched()` for part of the day; F2/F3 reverted it | final review of the pre-release branch, 2026-09-12 (F2/F3, reverting FI-01); `port_specifics_test.dart` `F2 …`, `F3 …` |
 | `MutationObserver.#notify` runs its listeners once per action, so a listener sees one state per step of the mutation | listeners are notified only when the result is not `==` the last one they were told — the rule the query side has had since A19. The observable cost is fewer states: `mutation.test.tsx`'s two state cases see 3 where upstream sees 4, and 1 pending state across `onMutate` where upstream sees 2, which is why both moved to `states.last` | pre-release deep-dive review, 2026-09-12 (FI-02); the query-side rule it matches is A19, fourth review 2026-09-09 |
-| `QueryObserver.setOptions` decides "was it re-enabled?" by resolving the **previous** options' `enabled` *now*, beside the new one | compared against what `enabled` came to when the observer last committed options or subscribed — a field of its own, not the last result's `isEnabled`, which a preview or any query update recomputes against the new world. Identical for a value (`Enabled.yes`/`no`). Differs for a callback over state outside the cache, which upstream can never see change (both sides resolve against the same world) and which here takes effect on the next `setOptions`, i.e. the next rebuild. Differs too for an `Enabled.when` over the query whose answer flips between two rebuilds: upstream compares two predicates over the same query and sees nothing, here the rebuild sees a re-enabled observer and refetches if stale. A key change still compares old against new at the same instant. *(Corrected 2026-09-23, CORE-4: this row said "identical for every `enabled` that depends on the query" and "takes effect on the next `setOptions`"; the first was false, and the second was only true once CORE-2 moved the baseline off the last result.)* | [#84](https://github.com/KoTTi97/flutter_query/issues/84); release review 2026-09-23 (CORE-2, CORE-4) |
+| `QueryObserver.setOptions` decides "was it re-enabled?" by resolving the **previous** options' `enabled` *now*, beside the new one | compared against what `enabled` came to when the observer last committed options or subscribed — a field of its own, not the last result's `isEnabled`, which a preview or any query update recomputes against the new world. Identical for a value (`Enabled.yes`/`no`). Differs for a callback over state outside the cache, which upstream can never see change (both sides resolve against the same world) and which here takes effect on the next `setOptions`, i.e. the next rebuild. Differs too for an `Enabled.when` over the query whose answer flips between two rebuilds: upstream compares two predicates over the same query and sees nothing, here the rebuild sees a re-enabled observer and refetches if stale. A key change still compares old against new at the same instant. *(Corrected 2026-09-23, CORE-4: this row said "identical for every `enabled` that depends on the query" and "takes effect on the next `setOptions`"; the first was false, and the second was only true once CORE-2 moved the baseline off the last result.)* | [#84](https://github.com/dualmeta-gmbh/query_kit/issues/84); release review 2026-09-23 (CORE-2, CORE-4) |
 | `MutationObserver.setOptions` notifies the cache with `observerOptionsUpdated` before the first `mutate`, carrying `mutation: undefined` | nothing is emitted until the observer has a mutation (`_currentMutation == null` → no event), so a devtools or logging listener never sees an option change made before the first `mutate` | pre-release deep-dive review, 2026-09-12 (FI-09) |
-| `notifyManager`'s `defaultScheduler` is `setTimeout(0)`, a macrotask | `scheduleMicrotask`: a batch flushes before the next event-loop turn, not after it, which is the finer grain Dart offers and what a Flutter frame wants. `setNotifyFunction` / `setBatchNotifyFunction` / `setScheduler` are all present for anything that needs upstream's timing back | [#19](https://github.com/KoTTi97/flutter_query/issues/19); stated in the `NotifyManager` dartdoc since, and in this table since the pre-release deep-dive review, 2026-09-12 (FI-13) |
-| `setQueryData(key, undefined)` creates nothing and updates nothing — the two `setQueryData` cases pin it | there is no `undefined`, and `null` is a value: `setQueryData<String?>(key, null)` **creates** the entry and writes `null` into it. A bare `setQueryData(key, null)` infers `Null`, and that call is treated as upstream's `undefined`: it writes nothing and returns `null`. So reaching the null write takes naming a nullable type on purpose. "Leave it alone" is also `updateQueryData` returning `null` | [#7](https://github.com/KoTTi97/flutter_query/issues/7), null convention of the second review 2026-09-09; recorded here at the pre-release deep-dive review, 2026-09-12 (FI-18); **corrected 2026-09-23 (L5-2)**: the row used to say a query of another type refuses the bare call, which SURF-1 made false — the bare call nulled an existing entry and created a `Query<Null>` on a new key |
+| `notifyManager`'s `defaultScheduler` is `setTimeout(0)`, a macrotask | `scheduleMicrotask`: a batch flushes before the next event-loop turn, not after it, which is the finer grain Dart offers and what a Flutter frame wants. `setNotifyFunction` / `setBatchNotifyFunction` / `setScheduler` are all present for anything that needs upstream's timing back | [#19](https://github.com/dualmeta-gmbh/query_kit/issues/19); stated in the `NotifyManager` dartdoc since, and in this table since the pre-release deep-dive review, 2026-09-12 (FI-13) |
+| `setQueryData(key, undefined)` creates nothing and updates nothing — the two `setQueryData` cases pin it | there is no `undefined`, and `null` is a value: `setQueryData<String?>(key, null)` **creates** the entry and writes `null` into it. A bare `setQueryData(key, null)` infers `Null`, and that call is treated as upstream's `undefined`: it writes nothing and returns `null`. So reaching the null write takes naming a nullable type on purpose. "Leave it alone" is also `updateQueryData` returning `null` | [#7](https://github.com/dualmeta-gmbh/query_kit/issues/7), null convention of the second review 2026-09-09; recorded here at the pre-release deep-dive review, 2026-09-12 (FI-18); **corrected 2026-09-23 (L5-2)**: the row used to say a query of another type refuses the bare call, which SURF-1 made false — the bare call nulled an existing entry and created a `Query<Null>` on a new key |
 | ~~`isMutating(filters)` spreads the caller's filters and then **overrides** `status: 'pending'`~~ | **no longer a divergence (release review, 2026-09-23, L5-4).** Until then the caller's `status` was kept and `pending` ANDed on top, and `isFetching` did the same with `fetchStatus` without a row. Both now override as upstream does. Neither reading answers a useful question — a caller passing `status: error` to `isMutating` gets 0 always, or the pending count — so the tiebreaker decides, and `IsFetchingController` (upstream's `useIsFetching`) inherits upstream's reading | pre-release deep-dive review, 2026-09-12 (MU-07); reverted 2026-09-23 (L5-4) |
 | `retryDelay` is resolved *before* the retryer decides whether to retry, so the callback runs once more than there are retries — including after the final failure | resolved only when a retry will actually follow. A pure delay function cannot tell the difference; one with side effects (a log line, a counter, a jitter source) runs one fewer time here | pre-release deep-dive review, 2026-09-12 (DC-16 / fidelity P4) |
 | a cancelled fetch's rejection still runs through the query, so a `cancelQueries` followed at once by a new `fetch` can have the *old* response dispatch an error over the successor's state | a fetch dispatches only while it still owns the query's run: the cancelled one settles into nothing, the successor keeps `fetching`, a third caller joins the successor rather than starting a third request, and the late response cannot replace the successor's data | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R01; `release_query_regressions_test.dart` QER3, QER8, QER13 |
@@ -3214,14 +3214,14 @@ port-specific cases beside it (eighth review, 2026-09-10).
 | mutation start always awaits at least once before the mutation function runs, so a second same-scope `mutate` gets its `onMutate` in before the first transport begins: two same-scope mutations with synchronous `onMutate` observe `['optimistic:1', 'optimistic:2', 'transport:1']` | a synchronous `onMutate` runs the transport synchronously — no artificial await between the optimistic update and the request — so the same two mutations observe **`['optimistic:1', 'transport:1', 'optimistic:2']`**. The order is reversed against upstream and this is the deliberate half of the scope work: an optimistic update should reach the UI in the frame that asked for it, and the ordering upstream gets is a by-product of an await it does not need. Neither ADR-0003 nor this file stated the reversal until 2026-09-12 | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) R02; `release_mutation_regressions_test.dart` MU12 |
 | a callback queued in `notifyManager.batch` that throws takes the rest of the batch with it | every queued callback is isolated: a throw is reported to the zone and the callbacks behind it still run, as every other notification loop in the core already does | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) optional robustness; `release_observer_regressions_test.dart` OI08 |
 | a `Query` or `Mutation` that was removed from its cache can be added back, and then runs as a second entry under a key that already has one | a removed object is terminally removed: `QueryCache.add` / `MutationCache.add` refuse it with a `StateError`, and it collects itself rather than lingering. Re-adding was how a removal could quietly produce two live entries for one key | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) V02/V03; `release_query_regressions_test.dart` QER4 |
-| `Set.forEach` visits entries added during the iteration, so a listener that subscribes from inside a notification is delivered **that** round | `ListenerRegistry.notify` iterates a snapshot, so a listener added during a dispatch first hears the next one. Removal keeps upstream's behaviour — a listener unsubscribed by an earlier one in the same round is skipped — because the registry checks each entry is still active before delivering. The snapshot is what makes the loop safe in Dart at all: iterating the live list while a listener subscribes throws | C50, [#59](https://github.com/KoTTi97/flutter_query/issues/59); `listener_registry.dart`, recorded here at the pre-release deep-dive review, 2026-09-12 |
+| `Set.forEach` visits entries added during the iteration, so a listener that subscribes from inside a notification is delivered **that** round | `ListenerRegistry.notify` iterates a snapshot, so a listener added during a dispatch first hears the next one. Removal keeps upstream's behaviour — a listener unsubscribed by an earlier one in the same round is skipped — because the registry checks each entry is still active before delivering. The snapshot is what makes the loop safe in Dart at all: iterating the live list while a listener subscribes throws | C50, [#59](https://github.com/dualmeta-gmbh/query_kit/issues/59); `listener_registry.dart`, recorded here at the pre-release deep-dive review, 2026-09-12 |
 | an `initialData` callback that writes to its own key while it is being computed leaves two entries in play: the caller's `fetchQuery` resolves with the fetched value (3) while the cache keeps what the reentrant write left (1) | one entry is canonical. The reentrant `setQueryData` writes into the query being built, the fetch settles over it, and the caller and the cache agree — both see the fetched value | [ADR-0003](../../../docs/adr/0003-core-operation-lifetimes.md) V02/V03; `release_query_regressions_test.dart` QER5 |
 
 ### Sharing a map whole: what it costs (2026-09-12)
 
 The `replaceEqualDeep` row above says maps and sets are shared **whole** — kept
 by identity when deep-equal, replaced by `next` when not. The rule is simple
-and it is deliberate ([#12](https://github.com/KoTTi97/flutter_query/issues/12)):
+and it is deliberate ([#12](https://github.com/dualmeta-gmbh/query_kit/issues/12)):
 a `Map` is not upstream's "plain object", Dart has no property enumeration that
 means the same thing, and an entry-by-entry rebuild would have to guess a key
 type and an equality policy the map itself owns. What was never written down is
@@ -3252,7 +3252,7 @@ Pinned by `utils_test.dart`'s four adapted `replaceEqualDeep` cases, which
 assert the port's answer rather than upstream's; the pre-release deep-dive
 review re-probed both and reported the gap as a decision to record (FI-11).
 
-### C52 — option-field transcription: explored, kept ([#62](https://github.com/KoTTi97/flutter_query/issues/62))
+### C52 — option-field transcription: explored, kept ([#62](https://github.com/dualmeta-gmbh/query_kit/issues/62))
 
 **Measured**, and higher than §8 said: `refetchIntervalInBackground` is **42**
 lines in `lib/` (§8: 27), `initialDataUpdatedAtCompute` **52** (§8: 36),
@@ -3286,7 +3286,7 @@ it has been read as dead weight once and will be again.
 **What proves nothing changed:** `dart test` 586, unchanged and unrewritten —
 the edit is one dartdoc.
 
-### C54 — the `*Ref` seams, and `Query`'s two ways to the cache ([#64](https://github.com/KoTTi97/flutter_query/issues/64), [#65](https://github.com/KoTTi97/flutter_query/issues/65))
+### C54 — the `*Ref` seams, and `Query`'s two ways to the cache ([#64](https://github.com/dualmeta-gmbh/query_kit/issues/64), [#65](https://github.com/dualmeta-gmbh/query_kit/issues/65))
 
 **The seams stay.** The row is not an unearned abstraction, it is one
 **incomplete interface**, and its twin proves it: `MutationCacheRef` has ten
@@ -3324,7 +3324,7 @@ observer events there too, not to its client's cache` in
 `Actual: WhereTypeIterable<QueryObserverAdded>:[]`, green after. No ported case
 was touched, and the binding's 98 and the showcase's 217 are unchanged.
 
-### C53 — where the staleness decision lives ([#63](https://github.com/KoTTi97/flutter_query/issues/63))
+### C53 — where the staleness decision lives ([#63](https://github.com/dualmeta-gmbh/query_kit/issues/63))
 
 **What moved, and nothing else.** The five refetch rules were free functions
 over `Query<Object?>` at the end of `query_observer.dart` — `_isStale`,
@@ -3357,7 +3357,7 @@ unrewritten — including the 62 ported `queryObserver` cases, which cover these
 rules more densely than anything else in the port. The change is a move and a
 rename of private members; no call gained or lost a condition.
 
-### C47 — the reader registry, once instead of twice ([#56](https://github.com/KoTTi97/flutter_query/issues/56))
+### C47 — the reader registry, once instead of twice ([#56](https://github.com/dualmeta-gmbh/query_kit/issues/56))
 
 **Measured.** §8 already corrected itself once here — the deep-dive's
 "120/130 shared lines" became "~94 shared, ~105 in the four parallel blocks" —
@@ -3424,12 +3424,12 @@ already asks "did `observedStateOf` move?", passed down through
 `ReadSet.readQuery` / `readInfiniteQuery` and stored on the entry beside
 `built` and `builtState`. Written once now, for both call styles; the comment
 marking the spot is in the code. The rebuild-decision copies in
-`query_builder.dart` are [#57](https://github.com/KoTTi97/flutter_query/issues/57)
+`query_builder.dart` are [#57](https://github.com/dualmeta-gmbh/query_kit/issues/57)
 and were not touched.
 
-### C48, C59 — the rebuild decision, once instead of six times ([#57](https://github.com/KoTTi97/flutter_query/issues/57))
+### C48, C59 — the rebuild decision, once instead of six times ([#57](https://github.com/dualmeta-gmbh/query_kit/issues/57))
 
-**Measured** on `78ad692`, after [#56](https://github.com/KoTTi97/flutter_query/issues/56)
+**Measured** on `78ad692`, after [#56](https://github.com/dualmeta-gmbh/query_kit/issues/56)
 had already turned two of C48's three sites into one. §8's line numbers had
 drifted; the ticket's restatement had not. The `_built` / `_builtState` /
 `_record()` trio is at `query_builder.dart:83-94`, `:197-208`, `:323-334` and
@@ -3521,11 +3521,11 @@ elides the private mixins). The core is untouched (587).
 paging-flags exception are now one implementation for all four call styles, so
 #58 writes the wiring rather than the decision.
 
-### C49 — the four call styles, made equal ([#55](https://github.com/KoTTi97/flutter_query/issues/55), [#58](https://github.com/KoTTi97/flutter_query/issues/58))
+### C49 — the four call styles, made equal ([#55](https://github.com/dualmeta-gmbh/query_kit/issues/55), [#58](https://github.com/dualmeta-gmbh/query_kit/issues/58))
 
-[#55](https://github.com/KoTTi97/flutter_query/issues/55) measured the four
+[#55](https://github.com/dualmeta-gmbh/query_kit/issues/55) measured the four
 asymmetries against the ruling that the call styles are **equal alternatives
-with no default** ([#21](https://github.com/KoTTi97/flutter_query/issues/21))
+with no default** ([#21](https://github.com/dualmeta-gmbh/query_kit/issues/21))
 and found two bugs, one honest price and one cost by design. This is the row
 for applying them. Nothing here is a port question — the four styles are the
 binding's own shape — but the guarantee they now all make is upstream's:
@@ -3625,7 +3625,7 @@ places that take a predicate and says in its own sections why a controller and
 a `QueriesBuilder` take none, and `options.md` now says what an inline options
 literal actually costs: **one defaulting pass and nothing else**, because
 `setOptions` compares the *defaulted* options by value
-([#10](https://github.com/KoTTi97/flutter_query/issues/10)) and only a real
+([#10](https://github.com/dualmeta-gmbh/query_kit/issues/10)) and only a real
 difference reaches the query. `key_change_test.dart` gained a header comment
 saying why it runs two loops — two documented behaviours, not one difference
 the styles have yet to settle (#55 item 2 kept it). The new site sample is
@@ -3642,7 +3642,7 @@ for the fetch its own subscription starts. A listener that relied on being
 called per observer event rather than per change should read `fetchStatus`,
 which is inside the equality."*
 
-### C50 — one listener registry, and one controller lifetime ([#59](https://github.com/KoTTi97/flutter_query/issues/59))
+### C50 — one listener registry, and one controller lifetime ([#59](https://github.com/dualmeta-gmbh/query_kit/issues/59))
 
 **Naming the six, which §8 did not.** There are **five** hand-written listener
 registries, all in the core — `Subscribable` (which `QueryCache`,
@@ -3749,7 +3749,7 @@ port-only ones pass byte-for-byte against the delegating `Subscribable`. Core
 three reachable guards), showcase 217, task manager 16, doc snippets 2, all
 green; `dart analyze --fatal-infos` and `dart format` clean.
 
-### C51 — the focus and online seam, applied ([#60](https://github.com/KoTTi97/flutter_query/issues/60), [#61](https://github.com/KoTTi97/flutter_query/issues/61))
+### C51 — the focus and online seam, applied ([#60](https://github.com/dualmeta-gmbh/query_kit/issues/60), [#61](https://github.com/dualmeta-gmbh/query_kit/issues/61))
 
 **Re-measured.** §8's "16× in Binding-Tests" for `observeAppLifecycle: false` is
 **10 occurrences in 3 files** — `binding_test.dart` 1,
@@ -3838,7 +3838,7 @@ snippets 2, all green; `dart analyze --fatal-infos` and `dart format` clean.
 The showcase's `focus_refetch` e2e spec changed only in a test *title* — no
 locator, no step, no backend scenario.
 
-### C58 — the task manager's transport, and the five drifts under it ([#52](https://github.com/KoTTi97/flutter_query/issues/52), [#54](https://github.com/KoTTi97/flutter_query/issues/54))
+### C58 — the task manager's transport, and the five drifts under it ([#52](https://github.com/dualmeta-gmbh/query_kit/issues/52), [#54](https://github.com/dualmeta-gmbh/query_kit/issues/54))
 
 **Nothing was extracted, on purpose.** #52 measured the two examples'
 `api.dart` at **119 shared lines, 85 of them substantial** — not §8's "135/203
@@ -3924,7 +3924,7 @@ only, which this ticket did not touch. Suite counts: task manager 16 → **16 +
 15** (the contract test's fake leg; 29 with a server), showcase 217, core 589,
 binding 123, all green; `dart analyze --fatal-infos` and `dart format` clean.
 
-### C57 — the showcase's five transcriptions, and the routes no case could reach ([#52](https://github.com/KoTTi97/flutter_query/issues/52), [#53](https://github.com/KoTTi97/flutter_query/issues/53))
+### C57 — the showcase's five transcriptions, and the routes no case could reach ([#52](https://github.com/dualmeta-gmbh/query_kit/issues/52), [#53](https://github.com/dualmeta-gmbh/query_kit/issues/53))
 
 **The five stay five**, as #52 ruled: `server/server.ts`, `server/routes.ts`,
 `test/fake_backend.dart`, `lib/shared/api.dart` and `e2e/tests/fixtures.ts`
@@ -4017,10 +4017,10 @@ screen that calls `configureScenario` or `clearRequests` (`retry`,
 run against the real backend and are green. `dart analyze --fatal-infos` and
 `dart format` clean.
 
-### C59 — the four smaller structural points ([#66](https://github.com/KoTTi97/flutter_query/issues/66))
+### C59 — the four smaller structural points ([#66](https://github.com/dualmeta-gmbh/query_kit/issues/66))
 
 C59's fifth row, `_QueryBuilderState` ≡ `_QuerySelectBuilderState`, was closed
-by [#57](https://github.com/KoTTi97/flutter_query/issues/57); these are the
+by [#57](https://github.com/dualmeta-gmbh/query_kit/issues/57); these are the
 other four. Two are moves, two are decisions, and the one the row called cheap
 turned out to be the one worth having.
 
@@ -4065,7 +4065,7 @@ watches its controller through a `ReadEntry`, whose rebuild decision is `==` on
 the value, and this controller's value is a `List` — identity equality, so
 every notification would look like news. The collection's decision is
 element-wise and is made once, in `QueriesController`
-([#58](https://github.com/KoTTi97/flutter_query/issues/58)). Two lifetimes that
+([#58](https://github.com/dualmeta-gmbh/query_kit/issues/58)). Two lifetimes that
 look alike, one rebuild decision each.
 
 **One `InheritedWidget` for one client.** `_QueryClientScope` — private, above
@@ -4099,12 +4099,12 @@ partial-failure case and the F03 replaced-provider-client group are untouched
 and green. No showcase screen or spec changed, so no end-to-end leg was
 affected. `dart analyze --fatal-infos` and `dart format` clean.
 
-### C49, follow-on — the mutation reads made equal ([#67](https://github.com/KoTTi97/flutter_query/issues/67))
+### C49, follow-on — the mutation reads made equal ([#67](https://github.com/dualmeta-gmbh/query_kit/issues/67))
 
-The one thing [#58](https://github.com/KoTTi97/flutter_query/issues/58)
+The one thing [#58](https://github.com/dualmeta-gmbh/query_kit/issues/58)
 deliberately left: `MutationBuilder` took a `buildWhen` and `watchMutation` /
 `context.mutation` did not, which is C49's asymmetry one surface over. The
-question was whether [#55](https://github.com/KoTTi97/flutter_query/issues/55)'s
+question was whether [#55](https://github.com/dualmeta-gmbh/query_kit/issues/55)'s
 answer carries across, and it does — **more strongly than on the query side.**
 
 **Options.** (a) Give the two mutation reads a `buildWhen`. (b) Record the
@@ -4196,11 +4196,11 @@ already took. A mutation has no `select`, so this is the only way a keyless
 mutation reader can ignore a change it does not show — the pending state of a
 run, or a retry's `failureCount`."*
 
-### C39, applied — the catalogue's screen for `buildWhen` ([#68](https://github.com/KoTTi97/flutter_query/issues/68))
+### C39, applied — the catalogue's screen for `buildWhen` ([#68](https://github.com/dualmeta-gmbh/query_kit/issues/68))
 
 C39's rule is one knob or one screen per surviving public member, and
-[#58](https://github.com/KoTTi97/flutter_query/issues/58) (`5af8958`) and
-[#67](https://github.com/KoTTi97/flutter_query/issues/67) (`3a3a1b2`) put
+[#58](https://github.com/dualmeta-gmbh/query_kit/issues/58) (`5af8958`) and
+[#67](https://github.com/dualmeta-gmbh/query_kit/issues/67) (`3a3a1b2`) put
 `buildWhen:` on **eight** keyless reads that had none: `watchQuery`,
 `watchSelectQuery`, `watchInfiniteQuery`, `watchMutation`, `context.query`,
 `context.selectQuery`, `context.infiniteQuery` and `context.mutation`. The
@@ -4214,7 +4214,7 @@ that is not what `buildWhen` is for, so one screen showing both would blur the
 distinction the page exists to draw. Its one todos entry can carry the two
 select reads and nothing else: an infinite query and a mutation have no home
 there at all, and four of the eight members would still have had none. And
-`test/catalogue_test.dart` ([#66](https://github.com/KoTTi97/flutter_query/issues/66))
+`test/catalogue_test.dart` ([#66](https://github.com/dualmeta-gmbh/query_kit/issues/66))
 is exactly the guardrail for a 28th feature — the five artefact sets moved
 together and it stayed green, which is the thing it was written to check.
 
@@ -4232,8 +4232,8 @@ on the screen's own infinite entry, four mutations (one is never shared).
 
 Nothing was added to `lib/shared/`: the screen is `SemanticsGroup` +
 `FactList` + `knobButton` + `Toolbar`/`ActionButton` + `QueryDebugStrip` as
-[#50](https://github.com/KoTTi97/flutter_query/issues/50) and
-[#51](https://github.com/KoTTi97/flutter_query/issues/51) left them, with no
+[#50](https://github.com/dualmeta-gmbh/query_kit/issues/50) and
+[#51](https://github.com/dualmeta-gmbh/query_kit/issues/51) left them, with no
 parameter grown anywhere — which is the first evidence from outside those
 tickets that the two modules are the right shape. The one screen that carries
 a heading beside its facts composes `SemanticsGroup` and `FactList` by hand,
@@ -4281,7 +4281,7 @@ reader *on this screen* that passes a predicate, and points at `build-when`.
 catalogue counts in the root README and `website/docs/project/examples.md` go
 27 → 28.
 
-### C55/C56, follow-on — `lib/shared/` split by ticket history rather than by seam ([#69](https://github.com/KoTTi97/flutter_query/issues/69))
+### C55/C56, follow-on — `lib/shared/` split by ticket history rather than by seam ([#69](https://github.com/dualmeta-gmbh/query_kit/issues/69))
 
 The one ticket of this map with **nothing duplicated to point at**: every file
 in `examples/showcase/lib/shared/` was already the only copy of what it holds.
@@ -4425,12 +4425,12 @@ reentrancy it pins is untouched.
 
 ## Documentation and coverage after map #49
 
-Map [#70](https://github.com/KoTTi97/flutter_query/issues/70). Where the maps
+Map [#70](https://github.com/dualmeta-gmbh/query_kit/issues/70). Where the maps
 before it worked on the port, this one works on what a reader of the port can
 see, and on the two places the browser suites structurally do not reach. One
 row per ticket, appended in the ticket's own commit.
 
-### Phase 0: the site's numbers were remembered, not measured ([#71](https://github.com/KoTTi97/flutter_query/issues/71))
+### Phase 0: the site's numbers were remembered, not measured ([#71](https://github.com/dualmeta-gmbh/query_kit/issues/71))
 
 `website/README.md` states the rule — *"Numbers are measured, not remembered.
 The test counts on the landing page and in `docs/project/fidelity.md` come from
@@ -4464,7 +4464,7 @@ who runs the suite should not have to work that out.
 Two counts in the same class were stale for the same reason and are fixed
 here: `examples/showcase/test/catalogue_test.dart`'s doc comment and
 `examples/task_manager/README.md` both said the catalogue is 27 screens. It
-has been 28 since [#68](https://github.com/KoTTi97/flutter_query/issues/68) —
+has been 28 since [#68](https://github.com/dualmeta-gmbh/query_kit/issues/68) —
 and `catalogue_test.dart` is the file whose whole job is catching exactly that
 drift in the other four artefact sets, which is why its own prose saying 27
 was worth a line in this table.
@@ -4472,7 +4472,7 @@ was worth a line in this table.
 **Nothing about the library changed.** The gate ran in full anyway, because the
 numbers being wrong is the only way to discover that they are.
 
-### Phase 1: a fence is checked against its twin, or it fails ([#72](https://github.com/KoTTi97/flutter_query/issues/72))
+### Phase 1: a fence is checked against its twin, or it fails ([#72](https://github.com/dualmeta-gmbh/query_kit/issues/72))
 
 `website/README.md` claimed: *"Every Dart sample appears in
 `examples/doc_snippets/` … A sample and its twin are kept identical; **that is
@@ -4969,7 +4969,7 @@ correspond to are named below.
 `Enabled.no` query was refetched.** Upstream's no-observer branch is
 `this.options.queryFn === skipToken || !this.isFetched()`
 (`query.ts:400-406`); the port's was `!isFetched()` alone. `skipToken` is
-`Enabled.no` here ([#17](https://github.com/KoTTi97/flutter_query/issues/17)),
+`Enabled.no` here ([#17](https://github.com/dualmeta-gmbh/query_kit/issues/17)),
 and `enabled` *is* a query-level option in this port — an observer's
 `queryOptions` projection carries it, and `Query.setOptions` keeps the last
 one written — so the information upstream reads off `options.queryFn` is right
@@ -4994,7 +4994,7 @@ Two things this deliberately decides:
   *not* disabled there and `refetchType: 'all'` fetches it — while the same
   query, one observer earlier, was skipped for being inactive. `Enabled.no` is
   this port's one spelling of both `skipToken` and `enabled: false`
-  ([#17](https://github.com/KoTTi97/flutter_query/issues/17)), so the two
+  ([#17](https://github.com/dualmeta-gmbh/query_kit/issues/17)), so the two
   cannot be told apart, and the useful half of the pair is the one that stops
   a fetch nobody asked for. Nothing upstream pins the other half: no case in
   `queryClient.test.tsx` refetches an unobserved `enabled: false` query that
@@ -5864,7 +5864,7 @@ Counts after: core 752 VM / 748 browser.
 
 ## After the first integration (map #81)
 
-One row per ticket of [map #81](https://github.com/KoTTi97/flutter_query/issues/81):
+One row per ticket of [map #81](https://github.com/dualmeta-gmbh/query_kit/issues/81):
 what the first real integration asked for beyond upstream, and what was decided.
 
 ### #82 — combine over a record of results

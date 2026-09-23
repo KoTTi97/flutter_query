@@ -1,7 +1,7 @@
 # Dart and Flutter runtime facts the port's timing and lifecycle model depends on
 
 - Date: 2026-09-08
-- Ticket: https://github.com/KoTTi97/flutter_query/issues/5
+- Ticket: https://github.com/dualmeta-gmbh/query_kit/issues/5
 - Scope: the runtime guarantees that `query_core` (fake_async-driven tests, `Timer`/`Future` semantics, unhandled-error policy) and the Flutter binding (frame-safe notification delivery, focus/online sources) rely on.
 
 Local source citations use the SDKs installed on this machine: Flutter 3.38.8 (stable, framework `bd7a4a6b55`) bundling Dart 3.10.7, under `~/.puro/envs/default/flutter/`; and the package versions pinned in `flutter-port/pubspec.lock` (`fake_async 1.3.3`, `clock 1.1.2`, `test 1.31.2` / `test_api 0.7.13` / `test_core 0.6.19`), read from `~/.puro/shared/pub_cache/hosted/pub.dev/`. Line numbers are for those versions. Engine-embedder files were read from `flutter/flutter` `master` on 2026-09-08 (paths under `engine/src/flutter/`).

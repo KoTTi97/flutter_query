@@ -1,7 +1,7 @@
 # Package naming on pub.dev and TanStack affiliation facts
 
 - **Date:** 2026-09-08
-- **Ticket:** https://github.com/KoTTi97/flutter_query/issues/6
+- **Ticket:** https://github.com/dualmeta-gmbh/query_kit/issues/6
 - **Scope:** facts only. Which names are free on pub.dev, what pub.dev's rules
   are, what TanStack has said about community ports, how other ports named
   themselves, and what the MIT licence obliges. The naming decision itself is a

@@ -15,7 +15,7 @@ either), **not reproduced**.
 |---|---|---|---|
 | 1 | Structural sharing returns an unmodifiable list as a growable one | **defect**, reproduced | Fixed: PORTING_NOTES "First real integration", I1. Decided twice: the first fix (never copy a sealed list) cost sealed lists their element sharing and regressed infinite-query pages; the reporter objected with a measurement, and the kept fix returns a fixed-length shared copy, or the sealed list itself when nothing was swapped in |
 | 2 | `removeQueries` with observers still mounted re-creates the entry on the next `setOptions`/poll | faithful | Upstream's `removeQueries` does exactly this; an observer owns a key, not an entry. The request — close a prefix so nothing new is built under it — is beyond upstream. Seed for the next map |
-| 3 | No `MutationFunctionContext` | recorded divergence ([#14](https://github.com/KoTTi97/flutter_query/issues/14)) — and the request is **beyond upstream** | Upstream's context is `{client, meta, mutationKey}`. It carries neither the `onMutate` result nor a signal, so porting it would not have prevented the rename bug. `mutationFn` runs *after* `onMutate` by design; the pre-patch value belongs in the variables, which is what the app did. Seed: is `onMutateResult` in the function's context worth a divergence? |
+| 3 | No `MutationFunctionContext` | recorded divergence ([#14](https://github.com/dualmeta-gmbh/query_kit/issues/14)) — and the request is **beyond upstream** | Upstream's context is `{client, meta, mutationKey}`. It carries neither the `onMutate` result nor a signal, so porting it would not have prevented the rename bug. `mutationFn` runs *after* `onMutate` by design; the pre-patch value belongs in the variables, which is what the app did. Seed: is `onMutateResult` in the function's context worth a divergence? |
 | 4 | No heterogeneous `combine` | recorded divergence (table: "`useQueries` with a heterogeneous tuple") | Confirmed in use as the most-missed piece. Seed: a record-typed combine in the binding |
 | 5 | Mutations cannot be cancelled | faithful | Upstream has no `mutation.cancel()` and no signal on mutations. Beyond upstream; seed, together with 3 |
 | 6 | No consecutive-error counter | faithful, confirmed by reading | `fetchFailureCount` resets per fetch, `errorUpdateCount` never (`query.dart`, the reducer). Upstream has the same two. The app's workaround (retry with the poll interval as delay) is the upstream idiom. Seed |
@@ -43,10 +43,10 @@ mutations (context, cancellation, a typed state selector, scope diagnostics)
 and around reacting to state outside the cache (finding 9). Those are feature
 decisions, not repairs, so by this repository's rules they are charted, not
 patched in: they are map
-[#81](https://github.com/KoTTi97/flutter_query/issues/81) — #82 combine, #83
+[#81](https://github.com/dualmeta-gmbh/query_kit/issues/81) — #82 combine, #83
 mutation context and cancellation, #84 the re-evaluation trigger, #85 the four
 small ones; 7, 8, 13a and 13b are in its fog. The trade-off in finding 1 is
-open for discussion on [#86](https://github.com/KoTTi97/flutter_query/issues/86). By the reporter's
+open for discussion on [#86](https://github.com/dualmeta-gmbh/query_kit/issues/86). By the reporter's
 own priority the order is 4 (combine), 3+5 (mutation context and
 cancellation, one design), 9 (a re-evaluation trigger), then 6, 2, 11, 12.
 
@@ -57,7 +57,7 @@ write never resumed. Verified in `query_observer.dart`: `setOptions` compares
 so a predicate over outside state never reads as changed. It opens the site's
 [troubleshooting page](../../website/docs/reference/troubleshooting.md),
 which this integration started: 9, 2, 10, 13d, 12 and 13c, symptom first, its
-two samples compiled as twins. [#78](https://github.com/KoTTi97/flutter_query/issues/78)
+two samples compiled as twins. [#78](https://github.com/dualmeta-gmbh/query_kit/issues/78)
 adds its own eight entries to the same page.
 
 ## Outcome (2026-09-20)
