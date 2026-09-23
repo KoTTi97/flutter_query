@@ -15,10 +15,9 @@ on:
       - 'query_kit-v[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Nothing by default; each job asks for what it needs — the build only reads
+# the repository, and only the deploy may write to Pages.
+permissions: {}
 
 # One deployment at a time; a newer one waits rather than cancelling a
 # deployment halfway.
@@ -29,6 +28,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -56,6 +57,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

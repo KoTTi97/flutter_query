@@ -1,5 +1,5 @@
 import useBaseUrl from '@docusaurus/useBaseUrl'
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import showcaseFeatures from './showcase-features.json'
 import styles from './styles.module.css'
 
@@ -61,6 +61,9 @@ type Phase = 'idle' | 'checking' | 'missing' | 'loading' | 'running'
 
 export default function LiveDemo({ feature, app = 'showcase', height = 640 }: LiveDemoProps): ReactNode {
   const [phase, setPhase] = useState<Phase>('idle')
+  const frame = useRef<HTMLIFrameElement>(null)
+  const fallback = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(fallback.current), [])
   const root = useBaseUrl(`/demo/${app}/`)
   const demo = describe(app, feature)
 
@@ -96,6 +99,30 @@ export default function LiveDemo({ feature, app = 'showcase', height = 640 }: Li
     }
   }
 
+  // The frame's `load` comes before Flutter has painted anything — the engine
+  // and CanvasKit are still on their way — so the overlay stays until the app
+  // announces its first frame (`flutter-first-frame`, dispatched on the
+  // frame's window; same origin, so it can be heard). A frame that has
+  // already painted (its semantics tree is there, `semantics=1`) or cannot be
+  // read shows at once, and a timeout keeps a silent one from hiding forever.
+  function onFrameLoad() {
+    const show = () => {
+      window.clearTimeout(fallback.current)
+      setPhase('running')
+    }
+    try {
+      const win = frame.current?.contentWindow
+      if (win == null || win.document.querySelector('flt-semantics') !== null) {
+        show()
+        return
+      }
+      win.addEventListener('flutter-first-frame', show, { once: true })
+      fallback.current = window.setTimeout(show, 15_000)
+    } catch {
+      show()
+    }
+  }
+
   const style = { '--live-demo-height': `${height}px` } as CSSProperties
   const started = phase === 'loading' || phase === 'running'
 
@@ -105,14 +132,15 @@ export default function LiveDemo({ feature, app = 'showcase', height = 640 }: Li
         {started ? (
           <>
             <iframe
+              ref={frame}
               className={styles.iframe}
               src={embedded}
               title={frameTitle}
               allow="clipboard-write"
-              onLoad={() => setPhase('running')}
+              onLoad={onFrameLoad}
             />
             {phase === 'loading' && (
-              <div className={styles.overlay} aria-hidden="true">
+              <div className={styles.overlay} role="status">
                 Starting Flutter…
               </div>
             )}

@@ -17,6 +17,8 @@ test('the demo loads on the click, fetches, and refetches', async ({ page }) => 
   await expect(frame.getByText('Local development: setup guide')).toBeVisible()
   await expect(factIn(frame, 'debug post', 'status=success')).toBeVisible()
   await expect(factIn(frame, 'debug post', 'fetches=1')).toBeVisible()
+  // The overlay waits for Flutter's first frame, not the frame's `load`.
+  await expect(page.getByRole('status').filter({ hasText: 'Starting Flutter' })).toHaveCount(0)
   await expect(frame.getByText('in-memory backend', { exact: true })).toBeVisible()
   // Embedded: one feature, and no way back into the catalogue.
   await expect(frame.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
