@@ -26,7 +26,7 @@ starts once C3 has fixed the sidebar and slugs.
 | C3 | Site IA | new sidebar per `audits/audit-site.md` §2; existing content moved into the new slugs; internal history out; stub pages marked | 2 | done |
 | C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | C4b, C4c done; C4a, C4d in review |
 | C5 | Examples section | one page per showcase feature + task manager, live demo + source | 3 | done |
-| C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | open |
+| C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | C6b done; C6a in review |
 | C7 | API reference pages, differences page, troubleshooting cleanup | | 3 | open |
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | done |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
@@ -133,3 +133,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C4b | `861ce26`, `80e6dfa` | 15 guide pages at depth (refetching, network mode, retries, cancellation, paging, infinite, scroll restoration, initial/placeholder data); review fixed 16 (6 P2: scroll guard, demo sentences, cancel-as-error) |
 | 2026-09-23 | C4c | `711fd24`, `33b2662` | 16 mutation and cache guide pages at depth; review fixed B19 and 3 more (caching rebuild claim, prefetching demo steps, sharing counts) |
 | 2026-09-23 | C10 | `98fb761`, `8344491` | editorial landing with live demo and D2 notice; demos follow site theme; task_manager dark palette; review fixed 5 P3; build_demos.sh conflict resolved to C11's parser |
+| 2026-09-23 | C6b | `9a6f2c8`, `1a7a6b5` | 10 recipes (state libs, offline persistence, DI, go_router, websockets, poll-until-confirmed, IoT disconnect, sign-out, key design, freezed); review fixed 2 P2 (`QueryController.create` with select, removeQueries recreation) + 7 P3 |
