@@ -1,5 +1,5 @@
-/// Port of `replaceEqualDeep` from `query-core/src/utils.ts` at upstream
-/// `50680b98c`.
+/// Structural sharing: the deep comparison that keeps unchanged parts of
+/// refetched data as the instances the cache already held.
 library;
 
 import 'dart:typed_data';
@@ -13,49 +13,52 @@ import 'infinite_query.dart';
 
 /// A value class that structural sharing may walk into.
 ///
-/// To the walk a class of your own is a leaf: compared with `==`, kept or
-/// replaced whole. For a wrapper around a list — `DeviceList(items)`, the
-/// shape freezed suggests — that means one changed element renews every
-/// element's instance: `==` downstream still holds, `identical` and everything
-/// built on it does not (measured by the first integration, 25 of 25 instances
-/// lost; https://github.com/KoTTi97/flutter_query/issues/86). A class that
-/// implements this is asked instead:
+/// To [replaceEqualDeep] a class of your own is a leaf: compared with `==`,
+/// kept or replaced whole. For a wrapper around a list — `DeviceList(items)`,
+/// the shape freezed suggests — that means one changed element renews every
+/// element's instance: `==` downstream still holds, `identical` and
+/// everything built on it does not. A class that implements this interface
+/// is asked instead:
 ///
 /// ```dart
-/// @override
-/// DeviceList shareWith(DeviceList previous) =>
-///     copyWith(items: replaceEqualDeep(previous.items, items));
+/// class DeviceList implements StructurallyShareable<DeviceList> {
+///   DeviceList(this.items);
+///
+///   final List<Device> items;
+///
+///   @override
+///   DeviceList shareWith(DeviceList previous) {
+///     final shared = replaceEqualDeep(previous.items, items);
+///     return identical(shared, previous.items)
+///         ? previous
+///         : DeviceList(shared);
+///   }
+/// }
 /// ```
 ///
 /// [shareWith] is called on the **incoming** value, with the cached one, only
 /// when the two have the same runtime type and are not `==` — an equal pair
 /// keeps the cached instance without asking. Return a value equal to `this`
-/// that reuses what it can of [previous]. A [shareWith] that throws, or
+/// that reuses what it can of `previous`. A [shareWith] that throws, or
 /// returns something that is not the caller's type, is ignored and the
 /// incoming value kept: sharing is best effort and never an error.
 ///
-/// Returning [previous] itself is right exactly when nothing changed: for a
+/// Returning `previous` itself is right exactly when nothing changed: for a
 /// class without value equality, `previous` and `this` are never `==` even
 /// with the same content, so the walk asks, and handing `previous` back is
 /// the only way such a class keeps its instance across an unchanged refetch.
 ///
-/// ```dart
-/// @override
-/// DeviceList shareWith(DeviceList previous) {
-///   final shared = replaceEqualDeep(previous.items, items);
-///   return identical(shared, previous.items) ? previous : DeviceList(shared);
-/// }
-/// ```
-///
 /// Nothing checks that contract, because nothing can: for a class whose `==`
 /// is not deep, the walk cannot tell a correct `previous` from a mistaken
-/// one. Two ways to get it wrong, both silent. Returning [previous] — or any
+/// one. Two ways to get it wrong, both silent. Returning `previous` — or any
 /// value **not equal in content to `this`** — when something did change puts
 /// stale data in the cache. Returning an equal value that **shares nothing**
 /// — a plain copy — is correct and merely useless: the saving is lost
 /// without a sound. Measure it once: after a refetch that changed one
 /// element, the others should be `identical` to the instances held before,
 /// and after one that changed nothing, the whole value should be.
+///
+/// {@category Structural sharing}
 abstract interface class StructurallyShareable<T> {
   /// This value, with every part that [previous] already holds an equal
   /// instance of swapped for that instance.
@@ -64,65 +67,61 @@ abstract interface class StructurallyShareable<T> {
 
 /// Returns [previous] when [next] is deep-equal to it, and otherwise [next]
 /// with every deep-equal part swapped for the instance [previous] already
-/// held — upstream's default structural sharing, and the reason a refetch
-/// that brings back the same data does not rebuild anything.
+/// held. This is the default structural sharing of every query, and the
+/// reason a refetch that brings back the same data does not rebuild
+/// anything: unchanged data keeps its instance, so `identical` checks and
+/// `==` short-circuits downstream stay cheap and true.
 ///
-/// Upstream walks plain objects and arrays and compares everything else by
-/// identity. Here a `List` is walked element by element, and a `Map` or `Set`
-/// is shared as a whole when it is deep-equal; everything else is compared
-/// with `==`, so a typed model takes part exactly as far as its own equality
-/// goes: a class with value equality is shared, a class without one is
-/// replaced. Maps are not rebuilt entry by entry because Dart cannot construct
-/// a map of the same runtime type from inside a generic function, and a copy
-/// typed `Map<Object?, Object?>` would not be the caller's `Map<String, int>`.
-/// A list can be copied with `toList()`, which keeps its element type — and
-/// the copy is growable only if the incoming list is. A list that cannot grow
-/// — fixed-length or unmodifiable — comes back as itself when none of its
-/// elements was swapped for a cached instance, and otherwise as a
-/// **fixed-length** copy: no unmodifiable list of its runtime element type can
-/// be built from in here, and keeping the cached instances is what sharing is
-/// for. `add` and `remove` throw on that copy; `list[i] = x` does not. A
-/// caller who needs the cache to hold a sealed list in that case has the
-/// static types to seal it in a `structuralSharing` hook (first integration,
-/// 2026-09-19, I1).
+/// ```dart
+/// // Task has value equality.
+/// final before = [Task(1, 'a'), Task(2, 'b')];
+/// final after = replaceEqualDeep(before, [Task(1, 'a'), Task(2, 'c')]);
+/// identical(after[0], before[0]); // true: kept
+/// identical(after[1], before[1]); // false: changed
+/// ```
 ///
-/// A set is compared as a multiset under this walk's own relation — never
-/// under the set's equality policy, so a `SplayTreeSet` with a
-/// case-insensitive comparator reports a member that changed case
-/// (pre-release review, 2026-09-12, F1). The comparison asks the two sets for
-/// nothing but their length and their members: no `lookup`, `contains` or
-/// `containsAll`, whose answers are the set's policy and, for a `Set` a user
-/// wrote, whatever that implementation does (pre-release review, round 3,
-/// R2-1, R2-2, R2-4). Members are bucketed by a hash consistent with the walk,
-/// so a set of 10 000 ids costs about 1.5 ms a write (review AR-01).
+/// What is walked, and what is compared whole:
 ///
-/// A map is still looked up by its own keys, so a map with a custom key
-/// equality is compared under that policy: two maps whose keys differ only in
-/// a way their own comparator ignores are shared, and the older key
-/// representation is kept. Give such a map a custom `structuralSharing` hook
-/// (or the opt-out `noStructuralSharing`) when the key representation
-/// matters.
+/// - A `List` is walked element by element. The result is a new list holding
+///   the kept instances, of the incoming list's element type, or [previous]
+///   itself when every element was kept.
+/// - An [InfiniteData] is walked as its two lists, `pages` and `pageParams`,
+///   each shared on its own; the whole is [previous] when both come back
+///   unchanged.
+/// - A `Map` or a `Set` is compared deeply and kept whole when it is
+///   deep-equal, otherwise replaced whole: Dart cannot build a map or set of
+///   the caller's runtime type from inside a generic function.
+/// - A class that implements [StructurallyShareable] is asked to share
+///   itself.
+/// - Everything else is a leaf, compared with `==`: a class with value
+///   equality is kept when equal, one without is replaced.
+/// - A typed-data list — `Uint8List`, `Float32List` and the rest — is a leaf
+///   too, never walked: a byte-by-byte walk of an image would cost more than
+///   the rebuild it saves.
 ///
-/// A [TypedData] list — `Uint8List`, `Float32List` and the rest — is a leaf,
-/// as a `Uint8Array` is for upstream: compared with `==` (identity, for
-/// those), never walked. `Uint8List.toList()` is a plain `List<int>`, so a
-/// walked copy could not be handed back as the caller's type, and a
-/// byte-by-byte walk of an image would cost more than the rebuild it saves
-/// (fifth review, 2026-09-09).
+/// A list that cannot grow — fixed-length or unmodifiable — comes back as
+/// itself when none of its elements was swapped for a cached instance, and
+/// otherwise as a **fixed-length** copy: `add` and `remove` throw on it,
+/// `list[i] = x` does not. An unmodifiable list of the caller's element type
+/// cannot be built from in here; a caller who needs the cache to hold one
+/// can seal it in a `structuralSharing` hook, which has the static types.
+///
+/// A set is compared as a multiset under this walk's own equality — never
+/// under the set's own policy, so a `SplayTreeSet` with a case-insensitive
+/// comparator still reports a member that changed case. A map is looked up
+/// by its own keys, so a map with a custom key equality is compared under
+/// that policy: two maps whose keys differ only in a way their comparator
+/// ignores are shared, and the older key representation is kept. Give such
+/// a map a custom `structuralSharing` hook, or `noStructuralSharing()`,
+/// when the key representation matters.
 ///
 /// Sharing is best effort and never a type error: a `previous` that is not a
 /// [T] — `<num>[]` where a `List<double>` was asked for — is not returned as
 /// one, and a shared element that does not fit the incoming list's element
-/// type stays `next`'s.
+/// type stays `next`'s. Nesting deeper than 500 levels is not walked; past
+/// that depth [next] is returned as it is.
 ///
-/// An [InfiniteData] is walked like upstream's `{ pages, pageParams }` object:
-/// each list is shared on its own, and the whole is `previous` when both come
-/// back unchanged. Its `==` alone could not do that, because a page is
-/// usually a `List` — equal only to itself (fourth review, 2026-09-09).
-///
-/// Decided on https://github.com/KoTTi97/flutter_query/issues/12 and revised
-/// after the third review (2026-09-09): a `select` that returns a fresh list
-/// every time used to notify — and rebuild — on every call.
+/// {@category Structural sharing}
 T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
   if (identical(previous, next)) {
     return next;
@@ -140,8 +139,8 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
     final nextLength = next.length;
     // `toList` on the incoming list keeps its runtime element type, which a
     // `List<Object?>` built here would not. Always a copy when not every
-    // element is shared, as upstream's is; the ported suite pins that. The
-    // copy is growable only if `next` is (first integration, 2026-09-19, I1).
+    // element is shared, as TanStack Query's is; the ported suite pins that.
+    // The copy is growable only if `next` is.
     final growable = _isGrowable(next);
     final copy = next.toList(growable: growable);
     var swapped = false;
@@ -167,7 +166,7 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
         // stays `next`'s, and does not count as equal. Whether it fits is a
         // property of its runtime type alone, so a type the list refused once
         // is not tried again: `<int>` against `<double>` used to throw and
-        // catch one `TypeError` per element, 2 µs apiece (review AR-09).
+        // catch one `TypeError` per element, 2 µs apiece.
         final type = shared.runtimeType;
         if (refused != null && refused.contains(type)) {
           continue;
@@ -218,8 +217,7 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
     }
     // Built on `previous`, whose `copyWith` keeps a list handed back
     // unchanged (identity included) and copies a changed one into an
-    // unmodifiable list — the cache never holds a growable page list
-    // (ninth review, 2026-09-10, C20).
+    // unmodifiable list — the cache never holds a growable page list.
     return previous.copyWith(pages: pages, pageParams: pageParams) as T;
   }
 
@@ -254,13 +252,11 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
     } catch (_) {
       // Best effort: the incoming value stands.
     }
-    // Not asserted. `candidate == next` failed every correct `shareWith` of a
-    // class with identity equality (CORE-1), and `!identical(candidate,
-    // previous)` the one of them that keeps the instance when nothing
-    // changed (V-C-4) — each in debug builds only, as a failed fetch
-    // (release review, 2026-09-23). With an `==` that is not deep, the walk
-    // cannot tell a correct result from a stale one; the contract is on
-    // [StructurallyShareable].
+    // Not asserted. `candidate == next` fails every correct `shareWith` of a
+    // class with identity equality, and `!identical(candidate, previous)`
+    // the one of them that keeps the instance when nothing changed. With an
+    // `==` that is not deep, the walk cannot tell a correct result from a
+    // stale one; the contract is on [StructurallyShareable].
     if (candidate != null) {
       return candidate as T;
     }
@@ -281,8 +277,8 @@ bool _isGrowable(List<Object?> list) {
 
 /// The comparison half of [replaceEqualDeep], for the branches that share a
 /// value whole or not at all. Same walk, same depth limit, same leaf rule —
-/// but no copies: comparing a nested list through the sharing walk allocated
-/// a copy of it for nothing (fifth review, 2026-09-09).
+/// but no copies: comparing a nested list through the sharing walk would
+/// allocate a copy of it for nothing.
 bool _equalDeep(Object? a, Object? b, int depth) {
   if (identical(a, b)) {
     return true;
@@ -335,27 +331,27 @@ bool _mapsEqualDeep(
 
 // As multisets, the way `QueryKey` compares sets: "every element of `b` has
 // *a* deep-equal partner in `a`" called `{[1], [1], [2]}` and `{[1], [2],
-// [2]}` equal, and the cache kept the old value (fifth review, 2026-09-09).
+// [2]}` equal, and the cache kept the old value.
 //
 // Only `length` and iteration are asked of either set, and only `==` and
 // `hashCode` of their members, through `_equalDeep` and `_hashDeep` — the
 // contract the rest of the walk relies on. Two shortcuts through the set's own
 // methods were tried and both broke: `a.containsAll(b)` answered with `a`'s
-// equality policy, so a case-insensitive set kept a stale member (F1); a
+// equality policy, so a case-insensitive set kept a stale member; a
 // `lookup` round trip trusted `lookup` to return the stored member and not to
 // throw, but dart2js's default set returns its argument for numbers, which
 // called `{0.0, 1.0, 3.0}` equal to `{-0.0, 0.0, 1.0}` on the web, and
-// `package:collection`'s `MapKeySet.lookup` throws (R2-1, R2-2). Correctness
+// `package:collection`'s `MapKeySet.lookup` throws. Correctness
 // by construction beats correctness by argument on a path that failed twice.
 //
 // Bucketed by a hash consistent with the walk, so a partner is looked for
 // only among the members that can be one. The unbucketed walk this replaced
-// cost 100 ms for 10 000 ints and 10 s for 100 000, on every cache write
-// (review AR-01).
+// cost 100 ms for 10 000 ints and 10 s for 100 000, on every cache write;
+// bucketed, 10 000 cost about 1.5 ms.
 //
 // Elements that break `==`'s own contract — not transitive, or equal without
 // hashing alike — and sets nested past the depth limit get this walk's answer,
-// which is greedy there; nothing better is defined (round 3, R2-5).
+// which is greedy there; nothing better is defined.
 bool _setsEqualDeep(Set<Object?> a, Set<Object?> b, int depth) {
   if (a.length != b.length) {
     return false;
@@ -381,14 +377,14 @@ bool _setsEqualDeep(Set<Object?> a, Set<Object?> b, int depth) {
 }
 
 /// The bucket a member of a compared set goes into: [_hashDeep], mixed.
-/// Hidden from the barrel; visible to the suite, which pins its spread (R3-1).
+/// Hidden from the barrel; visible to the suite, which pins its spread.
 ///
 /// The map the walk buckets into spreads its keys by their low bits, and a
 /// raw hash does not always vary there — on the VM a fractional `double`
 /// hashes to a value whose low bits barely change (`0.5` is
 /// `0x3fe000003fe00000`), so 10 000 half-integers fell into a few dozen
 /// buckets and the walk went quadratic: 40 ms where a `Set<int>` of the same
-/// size took 1.5 ms (round-3 review, R3-1). Mixing moves which bucket a value
+/// size took 1.5 ms. Mixing moves which bucket a value
 /// lands in and nothing else; a partner is still accepted only by
 /// [_equalDeep], so the answer is the same whatever the mix.
 @visibleForTesting

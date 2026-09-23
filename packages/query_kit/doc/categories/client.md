@@ -1,0 +1,1 @@
+The `QueryClient` owns the query and mutation caches and is the entry point for everything imperative: fetching (`query`), reading and writing cached data, invalidating, cancelling and refetching. Create one per app and keep it; `DefaultOptions`, `QueryDefaults` and `MutationDefaults` configure it.

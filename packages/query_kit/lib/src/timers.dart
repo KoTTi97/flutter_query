@@ -2,10 +2,9 @@
 /// timer takes, and the millisecond it is rounded to.
 ///
 /// Every delay the core arms — a `gcTime`, a stale timer, a refetch interval,
-/// a retry backoff — goes through [clampTimerDuration]. Port-only: upstream at
-/// `50680b98c` has no clamp (its `isValidTimeout` only rejects `Infinity`),
-/// and neither did this port until the fourth review (2026-09-09) ran a
-/// 30-day `Timer` under dart2js and watched it fire first. The stale timer
+/// a retry backoff — goes through [clampTimerDuration]. TanStack Query has no
+/// clamp (its `isValidTimeout` only rejects `Infinity`); a 30-day `Timer`
+/// under dart2js fires at once without one. The stale timer
 /// also goes through [ceilToMilliseconds]; see there for why only it does.
 library;
 
@@ -38,7 +37,7 @@ Duration clampTimerDuration(Duration duration) =>
 /// the same reason. The stale timer, which must not fire *before* its
 /// deadline, rounds up here; the gc timer, a refetch interval and a retry
 /// backoff may run a fraction of a millisecond early without anyone noticing,
-/// and take their durations as they are (fifth review, 2026-09-09).
+/// and take their durations as they are.
 Duration ceilToMilliseconds(Duration duration) {
   final micros = duration.inMicroseconds;
   if (micros <= 0) {

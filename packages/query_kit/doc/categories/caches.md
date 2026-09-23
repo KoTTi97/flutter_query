@@ -1,0 +1,1 @@
+`QueryCache` and `MutationCache` hold every query and mutation of a client. Construct them yourself to install cache-wide `onError`/`onSuccess`/`onSettled` callbacks, or subscribe to them for cache events.

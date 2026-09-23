@@ -1,0 +1,1 @@
+`AppFocusManager` and `OnlineManager` tell a client when the app returns to the foreground and when the network comes back; `NotifyManager` batches listener notifications. Each client owns its own; the Flutter binding drives them.

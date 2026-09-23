@@ -1,4 +1,4 @@
-/// Cache-wide mutation selection, analogous to upstream's `useMutationState`.
+/// Cache-wide mutation selection.
 library;
 
 import 'filters.dart';
@@ -8,19 +8,51 @@ import 'query_client.dart';
 import 'structural_sharing.dart';
 
 /// Selects a value from each matching mutation, including concurrent runs
-/// sharing one key. Mutation data is erased because filters span data types.
+/// sharing one key. The mutation's type arguments are erased because filters
+/// span data types; [TypedMutationStateSelect] is the typed form.
+///
+/// {@category Observers}
 typedef MutationStateSelect<TSelected> = TSelected Function(
     Mutation<Object?, Object?, Object?> mutation);
 
 /// [MutationStateSelect] over mutations of one type: what
 /// [MutationStateObserver.typed] takes.
+///
+/// {@category Observers}
 typedef TypedMutationStateSelect<TData, TVariables, TOnMutateResult, TSelected>
     = TSelected Function(Mutation<TData, TVariables, TOnMutateResult> mutation);
 
-/// Observes selected mutation values in cache insertion order.
+/// Watches a selection over every mutation in the cache, in submission
+/// order — not just the ones one observer started.
 ///
-/// Subscribes to the cache only while it has listeners. Selection uses
+/// Use it where one widget needs to know about mutations started elsewhere:
+/// the variables of every pending "add todo" to show optimistic rows, a
+/// count of saves in flight, the last error of any upload. `filters` pick
+/// the mutations (by key, status or predicate) and `select` turns each into
+/// a value; [currentResult] is the list of those values.
+///
+/// ```dart
+/// final pendingTitles = MutationStateObserver<Object?>(
+///   client,
+///   filters: MutationFilters(
+///     mutationKey: QueryKey(['todos', 'add']),
+///     status: MutationStatus.pending,
+///   ),
+///   select: (mutation) => mutation.state.variables,
+/// );
+/// final unsubscribe = pendingTitles.subscribe(print);
+/// // Later:
+/// unsubscribe();
+/// pendingTitles.destroy();
+/// ```
+///
+/// [typed] gives `select` the mutations with their declared types.
+///
+/// It subscribes to the cache only while it has listeners. Selection uses
 /// structural sharing, so equivalent lists and maps do not notify again.
+/// (TanStack Query: `useMutationState`.)
+///
+/// {@category Observers}
 class MutationStateObserver<TSelected> {
   /// Creates a selection, readable immediately through [currentResult].
   MutationStateObserver(
@@ -39,9 +71,8 @@ class MutationStateObserver<TSelected> {
   }
 
   /// A selection over the mutations of one type, [select] receiving them
-  /// typed — no cast to get at `state.variables`. Port-only
-  /// (https://github.com/KoTTi97/flutter_query/issues/85); upstream's
-  /// `useMutationState` select is untyped too.
+  /// typed — no cast to get at `state.variables`. (TanStack Query's
+  /// `useMutationState` has only the untyped form.)
   ///
   /// The types usually come from [select]'s parameter:
   ///
@@ -63,13 +94,9 @@ class MutationStateObserver<TSelected> {
   /// top of whatever filters a later [setOptions] passes, so the selection
   /// only ever holds mutations of the declared types. A select passed to
   /// [setOptions] has the erased signature, and receives those mutations
-  /// only — cast one to its declared type to read it typed. It used to live
-  /// in the filters, and `setOptions(filters: …)` alone dropped it while the
-  /// casting select stayed: the next mutation of another type threw a
-  /// `TypeError` out of `setOptions`, and then out of every cache event
-  /// (release review, 2026-09-23, L4-1). The type test runs first, so a
-  /// predicate in [filters] only ever sees mutations of the declared types
-  /// and may cast to them.
+  /// only — cast one to its declared type to read it typed. The type test
+  /// runs first, so a predicate in [filters] only ever sees mutations of the
+  /// declared types and may cast to them.
   static MutationStateObserver<TSelected> typed<TData, TVariables,
           TOnMutateResult, TSelected>(
     QueryClient client, {
@@ -138,8 +165,7 @@ class MutationStateObserver<TSelected> {
     if (typeTest != null) {
       // The type test guards the caller's predicate, not the other way
       // round: a predicate written for the declared type reads it, and run
-      // on a mutation of another type it threw out of the cache event
-      // (release review, 2026-09-23, V-C-2).
+      // on a mutation of another type it threw out of the cache event.
       final predicate = filters.predicate;
       filters = MutationFilters(
         mutationKey: filters.mutationKey,

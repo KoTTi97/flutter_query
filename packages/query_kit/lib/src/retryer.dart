@@ -1,4 +1,4 @@
-/// Port of `query-core/src/retryer.ts` at upstream `50680b98c`.
+/// Port of TanStack Query's `query-core/src/retryer.ts`.
 library;
 
 import 'dart:async';
@@ -36,8 +36,7 @@ bool canFetch(NetworkMode networkMode, OnlineManager onlineManager) =>
 /// rule (the other halves, focus and the scope's turn, are released by their
 /// own events). Stricter than [canFetch]: an [NetworkMode.offlineFirst] fetch
 /// may *begin* offline but cannot *continue* offline. What
-/// `MutationCache.resumePaused` asks before awaiting a paused mutation (ninth
-/// review, 2026-09-10, C4).
+/// `MutationCache.resumePaused` asks before awaiting a paused mutation.
 bool canContinue(NetworkMode networkMode, OnlineManager onlineManager) =>
     networkMode == NetworkMode.always || onlineManager.isOnline();
 
@@ -46,8 +45,8 @@ bool canContinue(NetworkMode networkMode, OnlineManager onlineManager) =>
 ///
 /// The loop is upstream's, statement for statement, including the order that
 /// matters: the retry decision is taken *before* `failureCount` is incremented,
-/// so `RetryPolicy.times(3)` means three retries after the first failure, and the
-/// delay is computed from the pre-increment count.
+/// so `RetryPolicy.times(3)` means three retries after the first failure,
+/// and the delay is computed from the pre-increment count.
 class Retryer<TData> {
   /// Creates a retryer for [fn] that has not started yet; call [start] to run
   /// it. Every option defaults to upstream's: three retries, exponential delay,
@@ -68,7 +67,6 @@ class Retryer<TData> {
   }) {
     // The future rejects whether or not anybody is listening; without this an
     // unhandled rejection fails the whole enclosing test file.
-    // https://github.com/KoTTi97/flutter_query/issues/9
     _completer.future.ignore();
   }
 
@@ -149,9 +147,8 @@ class Retryer<TData> {
   /// `immediately` — its owner left the cache while it was still being built,
   /// during a mutation's async `onMutate` — rejects with a [CancelledError]
   /// instead of pausing: nothing is in flight to wait for, and nothing would
-  /// ever release the pause once the owner is gone (fifth review,
-  /// 2026-09-09). A loop that *can* start runs its one attempt, as an
-  /// in-flight request is left to settle.
+  /// ever release the pause once the owner is gone. A loop that *can* start
+  /// runs its one attempt, as an in-flight request is left to settle.
   Future<TData> start() {
     // Settled before it started: cancelled from the `fetch` notification the
     // owner dispatches between installing this retryer and starting it. A
@@ -247,7 +244,7 @@ class Retryer<TData> {
   /// and a dispatch reaches listeners — user code. Left unguarded, a throw
   /// escaped into `_attempt`'s ignored future and the completer was never
   /// settled: a fetch pending forever, with nothing reported anywhere
-  /// (fourth review, 2026-09-09). The throw is the fetch's error instead, the
+  /// The throw is the fetch's error instead, the
   /// policy a throwing retry callback already follows. Returns whether the
   /// hook completed.
   bool _hook(void Function()? hook) {
@@ -265,7 +262,7 @@ class Retryer<TData> {
   // a resolved loop through — and `_pause` then skips `onContinue`. Upstream
   // releases first (`continueFn?.()` before `status = ...`), which left a
   // rejected loop parked on its pause for good; nothing observed it, but the
-  // comment in `_pause` said the opposite (release review, 2026-09-23, L1-2).
+  // comment in `_pause` said the opposite.
   void _resolve(TData data) {
     if (!isResolved) {
       _status = RetryerStatus.resolved;

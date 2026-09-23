@@ -1,4 +1,5 @@
-/// Port of `query-core/src/queryCache.ts` at upstream `50680b98c`.
+/// The query cache, its events, and the error for a key read as the wrong
+/// type.
 library;
 
 import 'package:meta/meta.dart';
@@ -11,9 +12,27 @@ import 'query_options.dart';
 import 'query_state.dart';
 import 'subscribable.dart';
 
-/// Something happened to a query in the cache.
+/// Something happened to a query in the cache: what [QueryCache.subscribe]
+/// delivers to its listeners.
+///
+/// Sealed, so a listener can `switch` over it exhaustively. The events are:
+///
+/// * [QueryAdded] — a query was created in the cache.
+/// * [QueryRemoved] — a query left the cache.
+/// * [QueryUpdated] — a query's state changed; carries the [QueryAction].
+/// * [QueryObserverAdded] / [QueryObserverRemoved] — an observer attached to
+///   or detached from a query.
+/// * [QueryObserverOptionsUpdated] — an observer's options changed.
+/// * [QueryObserverResultsUpdated] — an observer delivered a new result.
+///
+/// Events are for watching: logging, devtools, persisting the cache. To
+/// react to a fetch's outcome, the [QueryCache] constructor's `onSuccess`,
+/// `onError` and `onSettled` hooks are simpler.
+///
+/// {@category Advanced}
 @immutable
 sealed class QueryCacheEvent {
+  /// Creates the event for [query].
   const QueryCacheEvent(this.query);
 
   /// The query the event is about. Typed as `Query<Object?>`, since a cache
@@ -23,24 +42,32 @@ sealed class QueryCacheEvent {
 }
 
 /// A query was created and put into the cache, by [QueryCache.build] or
-/// [QueryCache.add]. Upstream's `added` event.
+/// [QueryCache.add] — the first time anything used its key. TanStack Query
+/// calls this event `added`.
+///
+/// {@category Advanced}
 final class QueryAdded extends QueryCacheEvent {
   /// Creates the event for [query].
   const QueryAdded(super.query);
 }
 
-/// A query left the cache: it was garbage-collected, or removed through
-/// `QueryClient.removeQueries`, [QueryCache.remove] or [QueryCache.clear].
-/// Upstream's `removed` event.
+/// A query left the cache: it was garbage-collected after its `gcTime`
+/// without observers, or removed through `QueryClient.removeQueries`,
+/// [QueryCache.remove] or [QueryCache.clear]. TanStack Query calls this
+/// event `removed`.
+///
+/// {@category Advanced}
 final class QueryRemoved extends QueryCacheEvent {
   /// Creates the event for [query].
   const QueryRemoved(super.query);
 }
 
-/// A query's state changed. Emitted for every dispatched [QueryAction] —
-/// fetch, success, error, invalidate, pause, and the rest — so this is the
-/// event a devtools panel or a persister keys its work off. Upstream's
-/// `updated` event.
+/// A query's state changed. Emitted for every [QueryAction] — fetch,
+/// success, error, invalidate, pause, and the rest — so this is the event a
+/// devtools panel or a persister keys its work off. TanStack Query calls
+/// this event `updated`.
+///
+/// {@category Advanced}
 final class QueryUpdated extends QueryCacheEvent {
   /// Creates the event for [query], carrying the [action] that changed it.
   const QueryUpdated(super.query, this.action);
@@ -51,8 +78,10 @@ final class QueryUpdated extends QueryCacheEvent {
 }
 
 /// An observer subscribed to the query. Emitted the moment the observer
-/// attaches, which is also what cancels the query's pending collection.
-/// Upstream's `observerAdded` event.
+/// attaches, which is also what cancels the query's pending garbage
+/// collection. TanStack Query calls this event `observerAdded`.
+///
+/// {@category Advanced}
 final class QueryObserverAdded extends QueryCacheEvent {
   /// Creates the event for [query] and the [observer] that attached.
   const QueryObserverAdded(super.query, this.observer);
@@ -63,9 +92,11 @@ final class QueryObserverAdded extends QueryCacheEvent {
 }
 
 /// An observer unsubscribed from the query. Emitted after the observer has
-/// been detached — and, when it was the last one, after the retryer has been
-/// told to stop retrying and the collection timer has been armed. Upstream's
-/// `observerRemoved` event.
+/// been detached — and, when it was the last one, after the fetch in flight
+/// has been told to stop retrying and the garbage-collection timer has been
+/// started. TanStack Query calls this event `observerRemoved`.
+///
+/// {@category Advanced}
 final class QueryObserverRemoved extends QueryCacheEvent {
   /// Creates the event for [query] and the [observer] that detached.
   const QueryObserverRemoved(super.query, this.observer);
@@ -78,8 +109,10 @@ final class QueryObserverRemoved extends QueryCacheEvent {
 /// `enabled` or a callback, say. Emitted for every change of options, a key
 /// change included: moving an observer to a different key emits
 /// [QueryObserverRemoved] on the old query and [QueryObserverAdded] on the
-/// new one, and then this event on the new query, exactly as upstream's
-/// `observerOptionsUpdated` does (DC-04, 2026-09-12).
+/// new one, and then this event on the new query. TanStack Query calls this
+/// event `observerOptionsUpdated` and orders it the same way.
+///
+/// {@category Advanced}
 final class QueryObserverOptionsUpdated extends QueryCacheEvent {
   /// Creates the event for [query] and the [observer] whose options changed.
   const QueryObserverOptionsUpdated(super.query, this.observer);
@@ -90,7 +123,10 @@ final class QueryObserverOptionsUpdated extends QueryCacheEvent {
 
 /// An observer of the query delivered a new result to its listeners. Emitted
 /// once per delivery, after the listeners have run, so a devtools panel can
-/// mirror what the UI just saw. Upstream's `observerResultsUpdated` event.
+/// mirror what the UI just saw. TanStack Query calls this event
+/// `observerResultsUpdated`.
+///
+/// {@category Advanced}
 final class QueryObserverResultsUpdated extends QueryCacheEvent {
   /// Creates the event for [query].
   const QueryObserverResultsUpdated(super.query);
@@ -100,9 +136,10 @@ final class QueryObserverResultsUpdated extends QueryCacheEvent {
 /// an erased default (`QueryDefaults.queryFn`, `structuralSharing`,
 /// `MutationDefaults.mutationFn`) hands back a value of the wrong type.
 ///
-/// Upstream casts blindly and TypeScript cannot catch it; here the mismatch is
-/// always a bug, so it is loud rather than a silent `null`
-/// (https://github.com/KoTTi97/flutter_query/issues/7). It is thrown
+/// Each key holds exactly one data type. Reading or writing it as another
+/// type is always a bug in the calling code, so it fails loudly here rather
+/// than returning a silent `null` or a wrongly typed value (TanStack Query
+/// casts without checking). It is thrown
 /// *synchronously*, from the call that reads or writes the key —
 /// `getQueryData`, `setQueryData`, `getQueriesData`, `updateQueriesData`,
 /// `QueryClient.query` and an observer's `setOptions` all throw before any
@@ -110,6 +147,12 @@ final class QueryObserverResultsUpdated extends QueryCacheEvent {
 /// mutation the default ran in, as its error. [queryKey] is `null` when the
 /// default that produced the value has no key to name: a sharing hook sees
 /// only the data, and a mutation function only its variables.
+///
+/// A common cause is an inferred type argument: `setQueryData` or
+/// `getQueryData` called without `<T>` on a query whose type is nullable or
+/// wider than the value. The message then says which type argument to name.
+///
+/// {@category Errors}
 final class QueryDataTypeError implements Exception {
   /// Creates the error for a use of [queryKey] — a read or a write — that
   /// [expected] one type and found [actual].
@@ -134,9 +177,8 @@ final class QueryDataTypeError implements Exception {
     }
     // A read or write typed `String` against a `Query<String?>`: the type
     // argument inferred the non-nullable type, and naming the query's type
-    // is the cure (ninth review, 2026-09-10, C23). Which call it was is not
-    // known here, so the cure names the type, not a method (release review,
-    // 2026-09-23, L5-1).
+    // is the cure. Which call it was is not known here, so the cure names
+    // the type, not a method.
     final cure = '$actual' == '$expected?'
         ? " The query's type is nullable and the type argument inferred the "
             'non-nullable one: name the type argument <$actual> on the call.'
@@ -146,19 +188,49 @@ final class QueryDataTypeError implements Exception {
   }
 }
 
-/// Every query, keyed by [QueryKey].
+/// Every query of one [QueryClient], stored under its [QueryKey].
+///
+/// A client owns exactly one query cache, and usually creates it itself:
+/// `QueryClient()` makes an empty one. Queries are added as observers and
+/// fetches first use a key, and leave again when they are garbage-collected
+/// (after `gcTime` without observers) or removed. Most code never touches the
+/// cache directly — the client's methods (`getQueryData`,
+/// `invalidateQueries`, ...) work through it.
+///
+/// Reasons to reach for it:
+///
+/// * **Cache-wide hooks.** Pass [onSuccess], [onError] or [onSettled] to the
+///   constructor, and the cache to the client, to handle every query's
+///   outcome in one place — the usual home of a global error report.
+/// * **Events.** [subscribe] delivers a [QueryCacheEvent] for every query
+///   that is added, removed or updated — for logging, devtools or a
+///   persistence layer.
+/// * **Lookup.** [find], [findAll] and [queries] return the [Query] entries
+///   themselves, with their full state.
+///
+/// ```dart
+/// final client = QueryClient(
+///   queryCache: QueryCache(
+///     onError: (error, stackTrace, query) {
+///       // Only background refreshes: a first load shows its own error.
+///       if (query.state.hasData) {
+///         showSnackBar('Could not refresh ${query.queryKey}: $error');
+///       }
+///     },
+///   ),
+/// );
+/// ```
+///
+/// {@category Caches}
 class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     implements QueryCacheRef {
-  /// Creates an empty cache. The three hooks are optional and cache-wide; a
-  /// [QueryClient] constructs one of these when none is passed to it.
+  /// Creates an empty cache with the given cache-wide hooks, all optional.
+  /// A [QueryClient] constructs one of these when none is passed to it.
   ///
-  /// **The hooks are final, and that is the decision** (C59,
-  /// https://github.com/KoTTi97/flutter_query/issues/66). Upstream keeps them
-  /// in a `public config` field a caller could reassign; nothing in
-  /// `query-core` or its tests does, and a settable hook would make "which
-  /// handler ran for this fetch" a question about *when* it was set. A handler
-  /// that has to change while the app runs is a hook that closes over
-  /// something you own —
+  /// The hooks are final: there is no setter to swap a handler later, so
+  /// "which handler ran for this fetch" never depends on *when* it was set.
+  /// A handler that has to change while the app runs is a hook that closes
+  /// over something you own —
   ///
   /// ```dart
   /// void Function(Object)? report;
@@ -170,23 +242,42 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// cheap, and a second one with its own cache is what a subtree with its own
   /// error handling wants. For watching rather than handling, there is
   /// [subscribe], which needs no hook at all.
+  ///
+  /// TanStack Query takes the same three hooks as its `QueryCache` config.
   QueryCache({this.onSuccess, this.onError, this.onSettled});
 
-  /// Cache-wide hooks, upstream's `QueryCacheConfig`.
+  /// Runs after any query's fetch succeeds, with the fetched data and the
+  /// query. Unset by default.
+  ///
+  /// It runs once per fetch, however many observers share that fetch, and
+  /// after the data has been written to the cache, so `query.state` already
+  /// holds it. Only fetches run it: a manual write with `setQueryData` does
+  /// not. Queries have no per-observer success callback; this hook, or
+  /// awaiting the fetch (`client.query`, `refetch`), is where such code goes.
+  /// A throw from the hook is reported to the current zone and does not fail
+  /// the fetch.
   final void Function(Object? data, Query<Object?> query)? onSuccess;
 
   /// Runs after any query's fetch fails for good — once retries are
-  /// exhausted, not per attempt — with the error and the query. A cancel that
-  /// is not silent (`cancelQueries(revert: false)`, or a bare `Query.cancel()`)
-  /// is such a failure and runs it with a `CancelledError`, as upstream does;
-  /// the default reverting cancel dispatches no error and runs nothing.
-  /// Upstream's `QueryCacheConfig.onError`.
+  /// exhausted, not per attempt — with the error, its stack trace and the
+  /// query. Unset by default.
+  ///
+  /// It runs once per failed fetch, however many observers share it, after
+  /// the error has been written to the query's state; data from an earlier
+  /// success is still in `query.state.data` then, which tells a failed
+  /// background refresh from a failed first load. A cancel that is not
+  /// silent (`cancelQueries(revert: false)`, or a bare `Query.cancel()`) is
+  /// such a failure and runs it with a `CancelledError`; the default
+  /// reverting cancel records no error and runs nothing. A throw from the
+  /// hook is reported to the current zone and does not change the fetch's
+  /// outcome.
   final void Function(
       Object error, StackTrace stackTrace, Query<Object?> query)? onError;
 
   /// Runs after any query's fetch settles, success or failure, with whichever
-  /// of data and error applies. Runs after [onSuccess] or [onError].
-  /// Upstream's `QueryCacheConfig.onSettled`.
+  /// of data and error applies: after a failure, `data` is what the query
+  /// still holds from an earlier success, or `null`. Runs right after
+  /// [onSuccess] or [onError], once per fetch. Unset by default.
   final void Function(
     Object? data,
     Object? error,
@@ -198,28 +289,22 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
 
   /// The query for [options]'s key, creating it if it does not exist yet.
   ///
-  /// [state] is the door a persistence layer restores through; it is used
-  /// only when the query is created here. A `success` state must carry data
-  /// (`hasData`), or the first result built from it would fail on a cast;
-  /// one without is refused with an [ArgumentError] in every build mode, as
-  /// `Query.setState` refuses it. An `assert` let a release build accept the
-  /// state and fail in the next observer's constructor with `type 'Null' is
-  /// not a subtype of type 'int'` (ninth review, 2026-09-10, C8).
+  /// [state] is how a persistence layer restores a saved entry; it is used
+  /// only when the query is created here, and ignored when the key already
+  /// has one. A `success` state must carry data (`hasData`), or the first
+  /// result built from it would fail on a cast; one without is refused with
+  /// an [ArgumentError] in every build mode, as `Query.setState` refuses it,
+  /// so the mistake surfaces here and not later in an observer.
   ///
   /// A restored [QueryState.fetchStatus] is normalised to
   /// [FetchStatus.idle]. A snapshot taken mid-fetch says `fetching` or
   /// `paused`, but no fetch survives the process it ran in: installed
-  /// verbatim it made a query nothing was doing count towards
-  /// `QueryClient.isFetching()`, kept it out of garbage collection for
-  /// good (`Removable` does not collect a fetching entry) and left a
-  /// `paused` one that no reconnect could resume, because there is no
-  /// retryer to continue (pre-release review, 2026-09-12, QE-02). This is
-  /// upstream's rule for the same door, written at `hydration.ts:356` —
-  /// "Reset fetch status to idle to avoid query being stuck in fetching
-  /// state upon hydration". [Query.setState] does *not* normalise: it is
-  /// the other half of hydration, the merge into a query that already
-  /// exists, and upstream preserves an actively fetching status there
-  /// (`hydration.ts:332-335`).
+  /// verbatim it would make a query nothing is doing count towards
+  /// `QueryClient.isFetching()`, keep it out of garbage collection for
+  /// good, and leave a `paused` one that no reconnect could resume. TanStack
+  /// Query's hydration applies the same rule. [Query.setState] does *not*
+  /// normalise: it is the other half of a restore, the merge into a query
+  /// that already exists, and there a fetch may really be running.
   Query<TQueryData> build<TQueryData>(
     QueryClient client,
     DefaultedQueryOptions<TQueryData> options, {
@@ -253,8 +338,8 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
 
   /// Puts [query] into the cache under its key and emits [QueryAdded]. A key
   /// already present keeps the query it has; nothing is replaced. [build] is
-  /// the usual way in — this is upstream's `add`, for a query constructed by
-  /// hand.
+  /// the usual way in — this is for a query constructed by hand.
+  ///
   /// A previously removed instance is terminal and throws [StateError]; use
   /// [build] to create a fresh entry for the same key.
   void add(Query<Object?> query) {
@@ -271,7 +356,8 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   /// Takes [query] out of the cache, cancelling its fetch silently and stopping
   /// its collection timer, then emits [QueryRemoved]. The key's slot is only
   /// cleared when it still holds this very query — a stale reference cannot
-  /// evict its successor. Upstream's `remove`.
+  /// evict its successor. `QueryClient.removeQueries` does the same for
+  /// every query matching a filter.
   void remove(Query<Object?> query) {
     final existing = _queries[query.queryKey];
     if (existing != null) {
@@ -283,13 +369,13 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     }
   }
 
-  /// Removes every query, one [QueryRemoved] each. `QueryClient.clear` calls
-  /// this together with the mutation cache's, inside one
-  /// `notifyManager.batch`, so a deferred subscriber gets one flush for the
-  /// call; upstream batches inside `clear` itself, which it can because its
-  /// notify manager is a module-wide singleton and this one belongs to a
-  /// client. Call this directly and the removals are delivered unbatched
-  /// (pre-release review, 2026-09-12, QE-03).
+  /// Removes every query, one [QueryRemoved] each.
+  ///
+  /// Prefer `QueryClient.clear`: it calls this together with the mutation
+  /// cache's, inside one `notifyManager.batch`, so a deferred subscriber gets
+  /// one flush for the call. The notify manager belongs to the client, not
+  /// to this cache, so calling this directly delivers the removals
+  /// unbatched.
   void clear() {
     for (final query in queries) {
       remove(query);
@@ -321,19 +407,21 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
   Query<Object?>? peek(QueryKey queryKey) => _queries[queryKey];
 
   /// Every query in the cache, as a copy: safe to iterate while removing.
-  /// Upstream's `getAll`.
+  /// TanStack Query calls this `getAll`.
   List<Query<Object?>> get queries => List<Query<Object?>>.of(_queries.values);
 
   /// Every query matching [filters], in insertion order — all of them when the
-  /// filters are empty. Partial key matching by default, as upstream's
-  /// `findAll`.
+  /// filters are empty. A `queryKey` filter matches as a prefix unless
+  /// `exact` is true.
   List<Query<Object?>> findAll({
     QueryFilters filters = const QueryFilters(),
   }) =>
       queries.where(filters.matches).toList();
 
-  /// The first matching query. An unset `exact` means an exact match here,
-  /// as upstream's `find` defaults `{ exact: true, ...filters }`.
+  /// The first query matching [filters], or `null`. Unlike [findAll], an
+  /// unset `exact` means an exact key match here, so
+  /// `find(filters: QueryFilters(queryKey: key))` finds the query stored
+  /// under `key` itself.
   Query<Object?>? find({required QueryFilters filters}) {
     // A copy, like `findAll`: a predicate may remove the query it is shown.
     for (final query in queries) {
@@ -344,10 +432,12 @@ class QueryCache extends Subscribable<void Function(QueryCacheEvent event)>
     return null;
   }
 
+  /// Delivers [event] to every listener added with [subscribe].
+  ///
   /// Each listener is isolated, as observer listeners are: a throw is
-  /// reported to the zone and the rest still run. Unisolated, a devtools or
-  /// logging subscriber that threw on a `failed` action blew up the retryer's
-  /// loop and left the fetch pending forever (fourth review, 2026-09-09).
+  /// reported to the zone and the rest still run, so a devtools or logging
+  /// subscriber that throws cannot break the fetch whose event it was
+  /// handling.
   void notify(QueryCacheEvent event) =>
       notifyListeners((listener) => listener(event));
 

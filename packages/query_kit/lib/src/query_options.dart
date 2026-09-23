@@ -1,11 +1,5 @@
-/// Query options and the query-function contract. Ports the query half of
-/// `query-core/src/types.ts` at upstream `50680b98c`.
-///
-/// Two rules run through this file
-/// (https://github.com/KoTTi97/flutter_query/issues/10):
-/// `null` means "not configured" on every field, so merging defaults is a
-/// per-field `??`; and anything upstream expresses as a union is a sealed
-/// value type, so "off" is a value rather than a null.
+/// Query options, the resolved options the client builds from them, and the
+/// context a query function receives.
 library;
 
 import 'dart:async';
@@ -18,21 +12,41 @@ import 'query.dart';
 import 'query_client.dart';
 import 'query_key.dart';
 
-/// What a query function is handed.
+/// What a query function is handed: the [client], the [queryKey] being
+/// fetched, the query's [meta], and a cancel token, [signal].
 ///
-/// Reading [signal] marks the fetch as cancellable — a Dart getter doing
-/// exactly what upstream's `Object.defineProperty` getter does. If the query
-/// function never touches it, losing the last observer stops the retry loop but
-/// lets the in-flight request finish and populate the cache.
+/// Reading [signal] marks the fetch as cancellable. If the query function
+/// never touches it, losing the last observer stops the retry loop but lets
+/// the in-flight request finish and populate the cache.
+///
+/// ```dart
+/// Future<List<Task>> fetchTasks(QueryFunctionContext context) {
+///   final filter = context.queryKey.parts[1] as String;
+///   final request = api.tasks(filter: filter);
+///   context.signal.onCancel(request.abort);
+///   return request.result;
+/// }
+/// ```
 ///
 /// An infinite query's page function is handed an `InfinitePageContext`
 /// instead, which carries the page param and the direction, typed.
+///
+/// {@category Queries}
 class QueryFunctionContext {
   /// Built by the query for each fetch; a query function receives one rather
-  /// than constructing it. Construct one directly to call a `queryFn` in a
-  /// test — `await fetchTasks(QueryFunctionContext(client: client, queryKey:
-  /// key, signal: QueryCancelToken()))` — and leave [onSignalRead] unset; it
-  /// is how the query learns that [signal] was consumed (API-02, 2026-09-12).
+  /// than constructing it.
+  ///
+  /// Construct one directly to call a query function in a test, and leave
+  /// [onSignalRead] unset — it is how the query learns that [signal] was
+  /// read:
+  ///
+  /// ```dart
+  /// final tasks = await fetchTasks(QueryFunctionContext(
+  ///   client: client,
+  ///   queryKey: QueryKey(['tasks', 'open']),
+  ///   signal: QueryCancelToken(),
+  /// ));
+  /// ```
   QueryFunctionContext({
     required this.client,
     required this.queryKey,
@@ -42,12 +56,12 @@ class QueryFunctionContext {
   })  : _signal = signal,
         _onSignalRead = onSignalRead;
 
-  /// The client the query lives in — upstream's `client` on the context, and
-  /// the way a query function reaches the cache for related data.
+  /// The client the query lives in: the way a query function reaches the
+  /// cache for related data.
   final QueryClient client;
 
-  /// The key of the query being fetched — upstream's `queryKey` — so one
-  /// function can serve every key it is registered for.
+  /// The key of the query being fetched, so one function can serve every key
+  /// it is registered for.
   final QueryKey queryKey;
 
   /// The query's [QueryOptions.meta], if one was set.
@@ -56,25 +70,20 @@ class QueryFunctionContext {
   final QueryCancelToken _signal;
 
   /// Told the moment [signal] is first read, so the query can react *during*
-  /// the fetch rather than after it — upstream's `#abortSignalConsumed` is set
-  /// by the same getter.
+  /// the fetch rather than after it.
   final void Function()? _onSignalRead;
   bool _signalConsumed = false;
 
-  /// The cancel token for this fetch — upstream's `AbortSignal`.
+  /// The cancel token for this fetch (TanStack Query: the `AbortSignal`).
   ///
   /// Reading it marks the fetch as cancellable: from then on, losing the last
   /// observer or a `cancelQueries` cancels the token and the query function
   /// is expected to stop. A function that never reads it is left to finish.
   ///
-  /// Consumed once per context, whatever a query function does with it:
-  /// upstream's `addConsumeAwareSignal` returns the memoized signal on every
-  /// access after the first and registers its abort listener exactly once
-  /// (`utils.ts:596-612`, pinned by `should consume the signal only once
-  /// across repeated accesses`). Here that is one call to [_onSignalRead],
-  /// not one per read (pre-release review, 2026-09-12, fidelity P11). A
-  /// retry is a new context, so an attempt that never touches the token is
-  /// as uncancellable as a first try that did not.
+  /// The first read is what counts; reading it again changes nothing and
+  /// returns the same token. Each retry gets a new context, so an attempt
+  /// that never touches the token is as uncancellable as a first try that
+  /// did not.
   QueryCancelToken get signal {
     if (!_signalConsumed) {
       _signalConsumed = true;
@@ -85,6 +94,8 @@ class QueryFunctionContext {
 }
 
 /// Which end of an infinite query is being fetched.
+///
+/// {@category Queries}
 enum FetchDirection {
   /// Appending after the last page — `fetchNextPage`.
   forward,
@@ -93,43 +104,58 @@ enum FetchDirection {
   backward,
 }
 
-/// The function a query runs to get its data.
+/// The function a query runs to get its data: handed a
+/// [QueryFunctionContext], it returns the data or a future of it. A throw
+/// fails the attempt, which [QueryOptions.retry] may then retry.
+///
+/// {@category Queries}
 typedef QueryFn<TQueryData> = FutureOr<TQueryData> Function(
     QueryFunctionContext context);
 
 /// Decides what is written into the cache when new data arrives, given what
 /// was there before.
 ///
-/// Unset, the port applies `replaceEqualDeep`: data that is deep-equal to the
+/// Unset, `replaceEqualDeep` applies: data that is deep-equal to the
 /// previous data keeps the previous instance, so an unchanged refetch notifies
 /// nobody for unchanged data alone. Lists are shared element by element;
 /// maps and sets are compared deeply and shared whole, while typed models
-/// use their own `==`. Set this to `noStructuralSharing()`
-/// ([noStructuralSharing]) to turn sharing off — upstream's
-/// `structuralSharing: false` — or to a function of your own to reconcile
-/// typed models yourself (https://github.com/KoTTi97/flutter_query/issues/12).
+/// use their own `==` (or `StructurallyShareable`). Set this to
+/// `noStructuralSharing()` ([noStructuralSharing]) to turn sharing off, or to
+/// a function of your own to reconcile typed models yourself. TanStack Query
+/// spells the opt-out `structuralSharing: false`.
+///
+/// ```dart
+/// QueryOptions<Board>(
+///   queryKey: QueryKey(['board']),
+///   queryFn: fetchBoard,
+///   structuralSharing: (previous, next) =>
+///       previous != null && previous.version == next.version
+///           ? previous
+///           : next,
+/// );
+/// ```
 ///
 /// A hook governs the cache write and unselected placeholder data. A
 /// `select`'s output goes through `replaceEqualDeep` instead, because a hook
-/// typed on the raw data cannot be handed a selection of another type —
-/// upstream calls its hook on the selected values, which a
-/// `StructuralSharing<TQueryData>` cannot be (`utils.ts` `replaceData`).
-/// Only `noStructuralSharing()` turns the selection's sharing off as well: a
-/// hook that *does* share, deeply or in its own way, leaves the selection at
-/// the default rather than paying for the opt-out (pre-release review,
-/// 2026-09-12, F4). After removing a selector, an unselected placeholder
-/// receives no previous raw value from that selection.
+/// typed on the raw data cannot be handed a selection of another type.
+/// (TanStack Query calls its hook on the selected value as well.) Only
+/// `noStructuralSharing()` turns the selection's sharing off as well: a hook
+/// that *does* share, deeply or in its own way, leaves the selection at the
+/// default. After removing a selector, an unselected placeholder receives no
+/// previous raw value from that selection.
 ///
 /// [previous] is `null` when nothing has been cached yet. With a nullable
 /// `TQueryData` the hook cannot tell that apart from a previous value that
 /// *was* `null`; a hook that needs the distinction reads
 /// `query.state.hasData` instead.
+///
+/// {@category Structural sharing}
 typedef StructuralSharing<TQueryData> = TQueryData Function(
     TQueryData? previous, TQueryData next);
 
-/// The opt-out for [QueryOptions.structuralSharing] — upstream's
-/// `structuralSharing: false`. Every write keeps the incoming value, so every
-/// refetch reports a new instance, and so does every `select`.
+/// The opt-out for [QueryOptions.structuralSharing]: every write keeps the
+/// incoming value, so every refetch reports a new instance, and so does every
+/// `select`. TanStack Query spells this `structuralSharing: false`.
 ///
 /// ```dart
 /// QueryOptions<List<Task>>(
@@ -144,16 +170,18 @@ typedef StructuralSharing<TQueryData> = TQueryData Function(
 /// unselected placeholder data — but only this one is *recognised* as the
 /// opt-out, and that is what turns sharing off for a `select`'s output too:
 /// no hook typed on the query's data can be handed a selection of another
-/// type, so a hook of your own leaves the selection shared by the default walk
-/// (pre-release review, 2026-09-12, F4).
+/// type, so a hook of your own leaves the selection shared by the default
+/// walk.
 ///
 /// A call rather than a function to pass: it returns one hook per
 /// `TQueryData`, the same instance every time, so options built with it
 /// compare equal across rebuilds. Recognition is by that instance's identity.
-/// Comparing against a tear-off of a generic function instead is not
-/// dependable — `f<T>` instantiated inside a generic class is not `==` to the
-/// `f<String>` a caller passed, on the VM, even when `T` is `String`.
+///
+/// {@category Structural sharing}
 StructuralSharing<TQueryData> noStructuralSharing<TQueryData>() {
+  // Memoised instances rather than a generic tear-off compared by `==`: on
+  // the VM, `f<T>` instantiated inside a generic class is not `==` to the
+  // `f<String>` a caller passed, even when `T` is `String`.
   final existing = _noStructuralSharingHooks[TQueryData];
   if (existing != null) {
     return existing as StructuralSharing<TQueryData>;
@@ -178,33 +206,47 @@ bool isNoStructuralSharing(Function? sharing) =>
     sharing != null && _noStructuralSharingInstances.contains(sharing);
 
 /// Projects a query's data into what an observer reports — the `select` of a
-/// [QuerySelectOptions].
+/// [QuerySelectOptions]. It runs on the observer's side, so every observer of
+/// one query may select something different from the same cached data.
+///
+/// {@category Queries}
 typedef SelectFn<TQueryData, TData> = TData Function(TQueryData data);
 
-/// Seed data written into the cache, as if it had been fetched.
+/// The value of [QueryOptions.initialData]: seed data written into the cache,
+/// as if it had been fetched.
+///
+/// Unlike [PlaceholderData], a seed *is* cached: it is shared with every
+/// observer of the key, and it goes stale by `staleTime` like fetched data.
+/// There is no default — unset, a query starts with no data.
+///
+/// - `InitialData.value(tasks)` — a seed that is always present.
+/// - `InitialData.compute(() => client.getQueryData<Task>(key))` — a seed
+///   computed lazily, skipped while the callback returns `null`.
+///
+/// {@category Option values}
 @immutable
 sealed class InitialData<TQueryData> {
   const InitialData();
 
-  /// A seed that is always present — upstream's `initialData: value`.
+  /// A seed that is always present (TanStack Query: `initialData: value`).
   const factory InitialData.value(TQueryData data) =
       InitialDataValue<TQueryData>;
 
   /// A seed computed lazily — when the query is built, and again on every
   /// options update and every fetch for as long as the query holds no data —
-  /// and skipped while [compute] returns `null`. Upstream's
-  /// `initialData: () => value`; see [InitialDataCompute.compute] for when it
-  /// runs.
+  /// and skipped while [compute] returns `null`. See
+  /// [InitialDataCompute.compute] for when it runs. TanStack Query:
+  /// `initialData: () => value`.
   const factory InitialData.compute(TQueryData? Function() compute) =
       InitialDataCompute<TQueryData>;
 
   /// The seed, and whether there is one.
   ///
   /// `.value(x)` always seeds — `x` may be `null` for a nullable data type,
-  /// and the wrapper itself is the presence. `.compute` returning `null` is
-  /// upstream's `undefined`: no data after all. That is the one place where
-  /// Dart's single null has to carry two meanings, and the callback form is
-  /// where upstream's own "return undefined to skip" idiom lives.
+  /// and the wrapper itself is the presence. `.compute` returning `null`
+  /// means no data after all. That is the one place where Dart's single null
+  /// has to carry two meanings, and the callback form is where "return
+  /// `null` to skip" lives.
   ({bool hasData, TQueryData? data}) seed() => switch (this) {
         InitialDataValue<TQueryData>(:final data) => (
             hasData: true,
@@ -219,18 +261,20 @@ sealed class InitialData<TQueryData> {
 
 /// The [InitialData.value] variant: a seed that is always present, even when
 /// [data] is `null` for a nullable data type.
+///
+/// {@category Option values}
 final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
-  /// Seeds the cache with [data].
+  /// Seeds the cache with [data] when the query is created without data.
   const InitialDataValue(this.data);
 
-  /// The seed.
+  /// The value the cache starts with.
   final TQueryData data;
 
   // Value equality, like every other option value: an `InitialData.value`
   // built inline would otherwise make every `setOptions` look like a change.
   // Exact runtime types here and in the four siblings below: a covariant `is`
   // alone made `.value<num>(1) == .value<int>(1)` but not the reverse, and
-  // the two hashed apart (release review, 2026-09-23, L2-4).
+  // the two hashed apart.
   @override
   bool operator ==(Object other) =>
       other is InitialDataValue<TQueryData> &&
@@ -243,7 +287,18 @@ final class InitialDataValue<TQueryData> extends InitialData<TQueryData> {
 }
 
 /// The [InitialData.compute] variant: a seed computed lazily, for as long as
-/// the query has no data — upstream's `initialData: () => value`.
+/// the query has no data.
+///
+/// ```dart
+/// initialData: InitialData.compute(
+///   () => client
+///       .getQueryData<List<Task>>(QueryKey(['tasks']))
+///       ?.where((task) => task.id == id)
+///       .firstOrNull,
+/// ),
+/// ```
+///
+/// {@category Option values}
 final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
   /// Seeds the cache with what [compute] returns, unless that is `null`.
   const InitialDataCompute(this.compute);
@@ -251,11 +306,11 @@ final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
   /// Called when the query is created, and again on every options update —
   /// every observer rebuild, equal options included — and every fetch, until
   /// the query holds data; once seeded or fetched it is never consulted
-  /// again. That is upstream's `Query.setOptions` (TanStack/query#9743), and
-  /// it is what lets a detail seed itself from a list that arrives later.
+  /// again. That matches TanStack Query's behaviour, and it is what lets a
+  /// detail seed itself from a list that arrives later.
   ///
-  /// Returning `null` means "no seed after all" — upstream's `undefined` —
-  /// and the next call may still yield one. A seed that becomes available
+  /// Returning `null` means "no seed after all", and the next call may still
+  /// yield one. A seed that becomes available
   /// replaces an error the query holds without data. A callback that is
   /// expensive to run is the caller's to memoise.
   final TQueryData? Function() compute;
@@ -275,7 +330,22 @@ final class InitialDataCompute<TQueryData> extends InitialData<TQueryData> {
   String toString() => 'InitialData.compute($compute)';
 }
 
-/// Data shown while the real data is missing. Never written to the cache.
+/// The value of [QueryObserverOptionsBase.placeholderData]: data an observer
+/// shows while its query has none of its own.
+///
+/// A placeholder is never written to the cache. It belongs to the observer
+/// that asked for it, the result built from it reports `isPlaceholderData`,
+/// and it gives way the moment real data arrives. There is no default —
+/// unset, an observer without data reports a pending result.
+///
+/// - `PlaceholderData.keepPrevious()` — keeps what this observer showed for
+///   the previous key while the new key loads: page 2 stays on screen until
+///   page 3 arrives, instead of a spinner in between.
+/// - `PlaceholderData.value(Task.empty)` — a fixed placeholder.
+/// - `PlaceholderData.compute((previousData, previousQuery) => ...)` — a
+///   placeholder computed from what the observer showed last.
+///
+/// {@category Option values}
 @immutable
 sealed class PlaceholderData<TQueryData> {
   const PlaceholderData();
@@ -285,14 +355,14 @@ sealed class PlaceholderData<TQueryData> {
   const factory PlaceholderData.keepPrevious() =
       PlaceholderDataKeepPrevious<TQueryData>;
 
-  /// A fixed placeholder, shown whenever the query has no data of its own —
-  /// upstream's `placeholderData: value`.
+  /// A fixed placeholder, shown whenever the query has no data of its own
+  /// (TanStack Query: `placeholderData: value`).
   const factory PlaceholderData.value(TQueryData data) =
       PlaceholderDataValue<TQueryData>;
 
-  /// The callback form, which also covers upstream's removed
-  /// `keepPreviousData`: return [previousData] to keep the last page's content
-  /// on screen while the new key loads.
+  /// The callback form: return [previousData] to keep the last page's
+  /// content on screen while the new key loads, or anything else derived
+  /// from it. Returning `null` means no placeholder.
   const factory PlaceholderData.compute(
     TQueryData? Function(
             TQueryData? previousData, Query<TQueryData>? previousQuery)
@@ -323,7 +393,12 @@ sealed class PlaceholderData<TQueryData> {
       };
 }
 
-/// The [PlaceholderData.keepPrevious] variant, with no callback allocation.
+/// The [PlaceholderData.keepPrevious] variant: while the observer's new key
+/// has no data, it keeps showing what it showed for the key before, flagged
+/// as `isPlaceholderData`. Equal to every other `keepPrevious()` of its type,
+/// so options that use it compare equal across rebuilds.
+///
+/// {@category Option values}
 final class PlaceholderDataKeepPrevious<TQueryData>
     extends PlaceholderData<TQueryData> {
   /// Keeps the last non-null data as a placeholder.
@@ -342,12 +417,14 @@ final class PlaceholderDataKeepPrevious<TQueryData>
 
 /// The [PlaceholderData.value] variant: a fixed placeholder, shown whenever
 /// the query has no data of its own.
+///
+/// {@category Option values}
 final class PlaceholderDataValue<TQueryData>
     extends PlaceholderData<TQueryData> {
   /// Shows [data] until real data arrives.
   const PlaceholderDataValue(this.data);
 
-  /// The placeholder.
+  /// What the observer shows while the query has no data; never cached.
   final TQueryData data;
 
   @override
@@ -362,11 +439,14 @@ final class PlaceholderDataValue<TQueryData>
 }
 
 /// The [PlaceholderData.compute] variant: a placeholder computed from what
-/// the observer showed last — upstream's
-/// `placeholderData: (previousData, previousQuery) => value`.
+/// the observer showed last (TanStack Query:
+/// `placeholderData: (previousData, previousQuery) => value`).
+///
+/// {@category Option values}
 final class PlaceholderDataCompute<TQueryData>
     extends PlaceholderData<TQueryData> {
-  /// Shows what [compute] returns, unless that is `null`.
+  /// Shows what [compute] returns while the query has no data, unless that
+  /// is `null`.
   const PlaceholderDataCompute(this.compute);
 
   /// Called whenever the observer needs a placeholder. `previousData` and
@@ -390,13 +470,43 @@ final class PlaceholderDataCompute<TQueryData>
   String toString() => 'PlaceholderData.compute($compute)';
 }
 
-/// Everything that describes a query, at the cache layer.
+/// Everything the cache entry for a query needs: its [queryKey], the
+/// [queryFn] that fetches it, and how long and how hard to keep it —
+/// [staleTime], [gcTime], [retry], [retryDelay], [networkMode], [enabled],
+/// [initialData], [structuralSharing] and [meta].
+///
+/// This is what the imperative [QueryClient.query] takes, which fetches once
+/// and completes with the data. An observer — a widget watching the
+/// query — takes [QueryObserverOptions] or [QuerySelectOptions] instead,
+/// which add what only a watcher cares about: when to refetch
+/// (`refetchOnMount`, `refetchOnWindowFocus`, `refetchOnReconnect`,
+/// `refetchInterval`), `placeholderData`, and `select`. Both extend this
+/// class, so one options helper can serve both paths.
+///
+/// **`null` means unset on every option field.** An unset field takes the
+/// default registered for the key with [QueryClient.setQueryDefaults], then
+/// the client's `DefaultOptions`, then the library default each field's
+/// documentation names. An option with a real "off" value says so with a
+/// value — `StaleTime.infinite`, `RetryPolicy.never`, `Enabled.no` — never
+/// with `null`.
+///
+/// ```dart
+/// QueryObserverOptions<List<Todo>> todosQuery() => QueryObserverOptions(
+///       queryKey: QueryKey(['todos']),
+///       queryFn: (context) => api.fetchTodos(),
+///       staleTime: const StaleTime.duration(Duration(minutes: 1)),
+///     );
+///
+/// final todos = await client.query(todosQuery());
+/// ```
 ///
 /// No value equality, on purpose: options built inline in a `build` are
-/// re-applied on every build, as upstream re-applies them on every render,
-/// and the observer works out what actually changed by comparing the
-/// *resolved* values — so two inline closures for `queryFn` do not count as a
-/// change, and neither does a fresh `Enabled.when(…)`.
+/// re-applied on every build, and the observer works out what actually
+/// changed by comparing the *resolved* values — so two inline closures for
+/// `queryFn` do not count as a change, and neither does a fresh
+/// `Enabled.when(…)`.
+///
+/// {@category Options}
 @immutable
 base class QueryOptions<TQueryData> {
   /// Every field but [queryKey] is optional; an unset field takes the
@@ -418,59 +528,69 @@ base class QueryOptions<TQueryData> {
     @internal this.behavior,
   });
 
-  /// The key this query is cached under. Bound to exactly one data type: a
-  /// key read as another type — a supertype included — throws
+  /// The key this query is cached under. Required. Bound to exactly one data
+  /// type: a key read as another type — a supertype included — throws
   /// `QueryDataTypeError`.
   final QueryKey queryKey;
 
-  /// Fetches the data. Left unset, the query uses the function registered for
-  /// its key with [QueryClient.setQueryDefaults], and a fetch with no function
-  /// at all fails with [MissingQueryFunctionError].
+  /// Fetches the data. Unset, the query uses the function registered for its
+  /// key with [QueryClient.setQueryDefaults]; with none there either, a
+  /// fetch fails with [MissingQueryFunctionError].
   final QueryFn<TQueryData>? queryFn;
 
-  /// Whether the query may fetch on its own. Default [Enabled.yes]. A disabled
-  /// query still serves whatever the cache holds and can still be refetched
-  /// by hand.
+  /// Whether the query may fetch on its own. The default: [Enabled.yes]. A
+  /// disabled query still serves whatever the cache holds and can still be
+  /// refetched by hand.
   final Enabled? enabled;
 
-  /// How long fetched data counts as fresh. Default [StaleTime.zero]: stale
-  /// the moment it arrives, so every mount, focus and reconnect refetches.
+  /// How long fetched data counts as fresh. The default: [StaleTime.zero],
+  /// stale the moment it arrives, so every mount, focus and reconnect
+  /// refetches.
   final StaleTime? staleTime;
 
-  /// How long the query stays cached after its last observer leaves. Default
-  /// [GcTime.defaultValue], five minutes.
+  /// How long the query stays cached after its last observer leaves. The
+  /// default: [GcTime.defaultValue], five minutes.
   final GcTime? gcTime;
 
-  /// Whether a failed fetch is retried. Default `RetryPolicy.times(3)` —
-  /// upstream's `retry: 3`, three retries after the first failure.
+  /// Whether a failed fetch is retried. The default: `RetryPolicy.times(3)`,
+  /// three retries after the first failure (TanStack Query: `retry: 3`).
+  /// [QueryClient.query] is the exception: when neither these options nor
+  /// the client's defaults set [retry], its fetch is not retried.
   final RetryPolicy? retry;
 
-  /// How long to wait between attempts. Default [RetryDelay.defaultValue]:
-  /// exponential back-off from one second, capped at thirty.
+  /// How long to wait between attempts. The default:
+  /// [RetryDelay.defaultValue], exponential back-off from one second —
+  /// one, two, four, … — capped at thirty.
   final RetryDelay? retryDelay;
 
-  /// How connectivity gates the fetch. Default [NetworkMode.online]: an
-  /// offline device pauses the fetch until it is back.
+  /// How connectivity gates the fetch. The default: [NetworkMode.online],
+  /// an offline device pauses the fetch until it is back.
   final NetworkMode? networkMode;
 
-  /// Data the cache starts with, as if it had been fetched. Unlike
+  /// Data the cache starts with, as if it had been fetched — see
+  /// [InitialData]. No default: unset, the query starts without data. Unlike
   /// `placeholderData` it *is* written to the cache, and it goes stale by
   /// [staleTime] from [initialDataUpdatedAt] on.
   final InitialData<TQueryData>? initialData;
 
-  /// When [initialData] was fetched, for the staleness clock. Unset, the seed
-  /// counts as fetched the moment the query is created.
+  /// When [initialData] was fetched, for the staleness clock. No default:
+  /// unset, the seed counts as fetched the moment it is written.
   final DateTime? initialDataUpdatedAt;
 
-  /// Computes the seed timestamp only when data is actually seeded.
-  /// Mutually exclusive with [initialDataUpdatedAt]; a null result uses now.
+  /// Computes the seed timestamp only when data is actually seeded. No
+  /// default. Mutually exclusive with [initialDataUpdatedAt]; a `null`
+  /// result means now.
   final DateTime? Function()? initialDataUpdatedAtCompute;
 
   /// How new data is reconciled with what the cache already holds — see
-  /// [StructuralSharing]. Unset, the port applies `replaceEqualDeep`.
+  /// [StructuralSharing]. The default: `replaceEqualDeep`, which keeps every
+  /// deep-equal part of the previous data. [noStructuralSharing] turns it
+  /// off.
   final StructuralSharing<TQueryData>? structuralSharing;
 
-  /// Arbitrary data carried along for logging, devtools or a query function.
+  /// Arbitrary data carried along for logging, devtools or a query function,
+  /// which receives it as [QueryFunctionContext.meta]. No default: unset,
+  /// the key's registered default applies, if any.
   final Object? meta;
 
   /// Rewrites how the fetch runs. Set by the library for infinite queries;
@@ -521,8 +641,8 @@ base class QueryOptions<TQueryData> {
   /// What [toString] shows after the key: every field, in declaration order,
   /// with the unset (`null`) ones skipped — so a test failure or a debug
   /// print reads `QueryOptions<int>(QueryKey(["a"]), staleTime: …)` rather
-  /// than `Instance of 'QueryOptions<int>'` (ninth review, 2026-09-10, C23).
-  /// A subclass adds its own fields after these.
+  /// than `Instance of 'QueryOptions<int>'`. A subclass adds its own fields
+  /// after these.
   @protected
   Map<String, Object?> get toStringFields => <String, Object?>{
         'queryFn': queryFn,
@@ -550,24 +670,35 @@ base class QueryOptions<TQueryData> {
   }
 }
 
-/// Query options plus everything only an observer cares about.
+/// [QueryOptions] plus everything only an observer cares about: when to
+/// refetch ([refetchOnMount], [refetchOnWindowFocus], [refetchOnReconnect],
+/// [refetchInterval], [refetchIntervalInBackground], [retryOnMount]), what
+/// to show while there is no data ([placeholderData]), and what part of the
+/// data to report ([select]).
 ///
-/// Sealed over exactly two shapes — [QueryObserverOptions], which has no
-/// `select`, and [QuerySelectOptions], which requires one — so that the
-/// data type an observer reports is always anchored by a required
-/// parameter: `queryFn` on the plain shape, `select` on the select shape. A
-/// single options type with an optional `select` carried [TData] only in
-/// that one optional field, and an options literal written inline without
-/// it inferred `TData` to `dynamic` — a `Query<dynamic>` in the cache that
-/// every typed reader of the key then tripped over (ninth review, C1;
-/// ADR-0001). This is what `QueryObserver`, `QueryClient`'s defaulting and
-/// the binding's general controller accept; the entry points a widget calls
-/// take one of the two shapes.
+/// The fields [QueryOptions] declares describe the cache entry, which every
+/// observer of the key shares; these describe one observer, so two widgets
+/// watching one key may poll, refetch and select differently. As on
+/// [QueryOptions], `null` means unset on every field, and an unset field
+/// takes the key's registered default, then the client's, then the library
+/// default each field names.
+///
+/// Sealed over exactly two shapes: [QueryObserverOptions], which has no
+/// `select`, and [QuerySelectOptions], which requires one. Dart cannot infer
+/// the query's data type from a `select` function alone, so a select that
+/// changes the type lives on a separate options class that names both type
+/// arguments; the data type an observer reports is then always anchored by
+/// a required parameter — `queryFn` on the plain shape, `select` on the
+/// select shape — and never silently inferred as `dynamic`. `QueryObserver`
+/// and `QueryClient.defaultQueryObserverOptions` accept either shape
+/// through this base.
 ///
 /// Like [QueryOptions], deliberately without value equality: an observer is
 /// handed the options a widget built on every build and compares what they
 /// resolve to, so a `select` or `placeholderData` written inline is not a
 /// change by itself.
+///
+/// {@category Options}
 @immutable
 sealed class QueryObserverOptionsBase<TQueryData, TData>
     extends QueryOptions<TQueryData> {
@@ -598,39 +729,40 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
   });
 
   /// Narrows what the observer reports — and therefore what a change in the
-  /// cached data has to touch before a listener is notified. `null` on a
-  /// [QueryObserverOptions], never on a [QuerySelectOptions].
+  /// cached data has to touch before a listener is notified. No default:
+  /// `null` on a [QueryObserverOptions], never on a [QuerySelectOptions].
   SelectFn<TQueryData, TData>? get select;
 
-  /// Data shown while the query has none of its own. Never written to the
-  /// cache: a result built from it reports `isPlaceholderData`, and it gives
-  /// way the moment real data arrives.
+  /// Data shown while the query has none of its own — see [PlaceholderData].
+  /// No default: unset, an observer without data reports a pending result.
+  /// Never written to the cache: a result built from it reports
+  /// `isPlaceholderData`, and it gives way the moment real data arrives.
   final PlaceholderData<TQueryData>? placeholderData;
 
-  /// Whether this observer subscribing triggers a refetch. Default
-  /// [RefetchOn.ifStale]: only when the data is older than [staleTime].
+  /// Whether this observer subscribing triggers a refetch. The default:
+  /// [RefetchOn.ifStale], only when the data is older than [staleTime].
   final RefetchOn? refetchOnMount;
 
-  /// Whether the app regaining focus triggers a refetch. Default
+  /// Whether the app regaining focus triggers a refetch. The default:
   /// [RefetchOn.ifStale].
   final RefetchOn? refetchOnWindowFocus;
 
-  /// Whether the device coming back online triggers a refetch. Default
+  /// Whether the device coming back online triggers a refetch. The default:
   /// [RefetchOn.ifStale] — except under [NetworkMode.always], where it is
   /// [RefetchOn.never]: a fetch that ignores connectivity has nothing to
   /// catch up on.
   final RefetchOn? refetchOnReconnect;
 
-  /// Polls the query on a timer while this observer is subscribed. Default
-  /// [RefetchInterval.off].
+  /// Polls the query on a timer while this observer is subscribed. The
+  /// default: [RefetchInterval.off].
   final RefetchInterval? refetchInterval;
 
   /// Whether [refetchInterval] keeps polling while the app is not focused.
-  /// Default `false`: the timer skips its turns until focus returns.
+  /// The default: `false`, the timer skips its turns until focus returns.
   final bool? refetchIntervalInBackground;
 
   /// Whether a query that ended in an error retries when an observer mounts.
-  /// Default `true`, as upstream: the mount refetches, and only
+  /// The default: `true`, the mount refetches, and only
   /// `retryOnMount: false` leaves the error standing until something else
   /// asks.
   final bool? retryOnMount;
@@ -685,14 +817,26 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
 /// mode, and the analyzer's `strict-inference` reports it at the literal.
 ///
 /// ```dart
-/// QueryObserverOptions<Task> taskQuery(int id) => QueryObserverOptions(
-///       queryKey: QueryKey(['tasks', id]),
-///       queryFn: (_) => api.task(id),
+/// QueryObserverOptions<List<Todo>> todosQuery() => QueryObserverOptions(
+///       queryKey: QueryKey(['todos']),
+///       queryFn: (context) => api.fetchTodos(),
+///       refetchInterval: const RefetchInterval.every(Duration(seconds: 30)),
 ///     );
+///
+/// // Imperatively: fetch once, if stale, and read the data.
+/// final todos = await client.query(todosQuery());
+///
+/// // Or watch it: the observer fetches on its first subscriber.
+/// final observer = QueryObserver(client, todosQuery());
+/// final unsubscribe = observer.subscribe((result) => print(result));
 /// ```
 ///
-/// For a query whose observers see a projection of the cached data, use
-/// [QuerySelectOptions].
+/// Every field is described on [QueryOptions] and
+/// [QueryObserverOptionsBase], with its default. For a query whose observers
+/// see a projection of the cached data, use [QuerySelectOptions], or
+/// [withSelect] on existing options.
+///
+/// {@category Options}
 @immutable
 final class QueryObserverOptions<TData>
     extends QueryObserverOptionsBase<TData, TData> {
@@ -781,12 +925,15 @@ final class QueryObserverOptions<TData>
       );
 
   /// These options with a [select] added: every field carried over, so a
-  /// shared options factory can serve a projecting reader without being
-  /// written out again field by field — the spelled-out copy is where a
-  /// field went missing (release review, 2026-09-23, LIB-3).
+  /// shared options helper can serve a projecting reader without being
+  /// written out again field by field. The result is a [QuerySelectOptions]
+  /// on the same key, so it shares the cache entry with every other reader.
   ///
   /// ```dart
-  /// final taskName = taskQuery(id).withSelect((task) => task.name);
+  /// final openCount = todosQuery().withSelect(
+  ///   (todos) => todos.where((todo) => !todo.done).length,
+  /// );
+  /// final observer = QueryObserver(client, openCount); // reports an int
   /// ```
   QuerySelectOptions<TData, R> withSelect<R>(SelectFn<TData, R> select) =>
       QuerySelectOptions<TData, R>(
@@ -828,9 +975,20 @@ final class QueryObserverOptions<TData>
 ///     );
 /// ```
 ///
-/// A `select` that keeps the type (`List<Task>` → `List<Task>`) is still a
-/// select and still goes here; the shape is about *whether* there is a
-/// projection, not about the types being different.
+/// Dart cannot infer the query's data type from a `select` function alone,
+/// so a select lives on this separate options class, which names both type
+/// arguments. A `select` that keeps the type (`List<Task>` → `List<Task>`)
+/// is still a select and still goes here; the shape is about *whether*
+/// there is a projection, not about the types being different.
+///
+/// The observer runs [select] on the cached data and reports only the
+/// result, so a change to the cached data reaches its listeners only when
+/// the selected value changes: a widget showing a task's name is not told
+/// when only the task's due date changed.
+/// Existing plain options gain a select with
+/// [QueryObserverOptions.withSelect].
+///
+/// {@category Options}
 @immutable
 final class QuerySelectOptions<TQueryData, TData>
     extends QueryObserverOptionsBase<TQueryData, TData> {
@@ -863,7 +1021,7 @@ final class QuerySelectOptions<TQueryData, TData>
   });
 
   /// Narrows what the observer reports — and therefore what a change in the
-  /// cached data has to touch before a listener is notified.
+  /// cached data has to touch before a listener is notified. Required.
   @override
   final SelectFn<TQueryData, TData> select;
 
@@ -924,17 +1082,20 @@ final class QuerySelectOptions<TQueryData, TData>
       );
 }
 
-/// Options with every default resolved.
+/// [QueryOptions] with every default resolved: what a [Query] actually runs
+/// on, read back as [Query.options].
 ///
-/// Only [QueryClient] can produce one, so nothing downstream can be handed
-/// half-resolved options, and no internal code has to ask whether defaults were
-/// applied. Fields that always have a value are non-nullable here — the type
-/// carries the guarantee instead of a comment.
+/// Only [QueryClient] produces one — [QueryClient.defaultQueryOptions]
+/// fills each unset field from the key's registered defaults, the client's
+/// defaults and the library defaults, in that order. Nothing downstream can
+/// be handed half-resolved options, and fields that always have a value are
+/// non-nullable here. A user meets these when inspecting a query in the
+/// cache, in a devtool or a test; building a query takes [QueryOptions].
 ///
-/// Sealed rather than `final` because [DefaultedQueryObserverOptions] extends
-/// it; the effect is the same — nothing outside this library can extend or
-/// implement it — and the plain cache-layer instance is a private subclass
-/// the constructor redirects to.
+/// Unlike [QueryOptions], these have value equality, which is what tells a
+/// query handed new options on a rebuild that nothing actually changed.
+///
+/// {@category Advanced}
 @immutable
 sealed class DefaultedQueryOptions<TQueryData> {
   @internal
@@ -955,6 +1116,10 @@ sealed class DefaultedQueryOptions<TQueryData> {
     required FetchBehavior<TQueryData>? behavior,
   }) = _DefaultedQueryOptions<TQueryData>;
 
+  // Sealed rather than `final` because [DefaultedQueryObserverOptions]
+  // extends it; nothing outside this library can extend or implement it
+  // either way, and the plain cache-layer instance is a private subclass the
+  // factory redirects to.
   const DefaultedQueryOptions._({
     required this.queryKey,
     required this.queryFn,
@@ -1017,9 +1182,8 @@ sealed class DefaultedQueryOptions<TQueryData> {
   /// [QueryOptions.behavior]: set for infinite queries, `null` otherwise.
   final FetchBehavior<TQueryData>? behavior;
 
-  /// Field-by-field equality, functions compared by identity — the direct
-  /// analogue of upstream's `shallowEqualObjects` over defaulted options. It
-  /// is what tells a rebuild that nothing actually changed.
+  /// Field-by-field equality, functions compared by identity. It is what
+  /// tells a rebuild that nothing actually changed.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1101,7 +1265,17 @@ final class _DefaultedQueryOptions<TQueryData>
   }) : super._();
 }
 
-/// [DefaultedQueryOptions] plus the observer-only options.
+/// [QueryObserverOptionsBase] with every default resolved:
+/// [DefaultedQueryOptions] plus the observer-only options, what a
+/// `QueryObserver` actually runs on.
+///
+/// Only [QueryClient] produces one, through
+/// [QueryClient.defaultQueryObserverOptions]; an observer resolves the
+/// options it is handed on construction and on every `setOptions`. Value
+/// equality tells the observer whether a rebuild changed anything.
+/// [queryOptions] is the part the shared cache entry receives.
+///
+/// {@category Advanced}
 @immutable
 final class DefaultedQueryObserverOptions<TQueryData, TData>
     extends DefaultedQueryOptions<TQueryData> {
@@ -1162,18 +1336,15 @@ final class DefaultedQueryObserverOptions<TQueryData, TData>
   /// The cache-layer view of these options — the fourteen fields a [Query]
   /// runs on, and none of the observer's own.
   ///
-  /// The narrowing is the point, not an accident of construction: a query is
-  /// shared by every observer of its key, and [Query.setOptions] compares
-  /// what it is handed by value. Passing the observer's full options would
-  /// make two observers that differ only in `select`, `refetchOnMount` or
-  /// their refetch triggers look like two different *query* configurations,
-  /// and the query they share would churn between them (read as dead weight
-  /// once, by the ninth review's C52 — it is a projection, and it is
-  /// load-bearing).
+  /// The narrowing is the point: a query is shared by every observer of its
+  /// key, and [Query.setOptions] compares what it is handed by value.
+  /// Passing the observer's full options would make two observers that
+  /// differ only in `select`, `refetchOnMount` or their refetch triggers look
+  /// like two different *query* configurations, and the query they share
+  /// would churn between them.
   ///
-  /// Built on first read and kept: the observer hands it to its query on
-  /// every `setOptions` and every fetch, and a fresh allocation each time was
-  /// the only thing that changed between them (fifth review, 2026-09-09).
+  /// Built on first read and kept, so the observer hands its query the same
+  /// instance on every `setOptions` and every fetch.
   late final DefaultedQueryOptions<TQueryData> queryOptions =
       DefaultedQueryOptions<TQueryData>(
     queryKey: queryKey,

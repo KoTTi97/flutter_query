@@ -1,0 +1,1 @@
+Observers follow cache entries and report a result on every change: `QueryObserver` for one query, `InfiniteQueryObserver` for paged data, `QueriesObserver` for a list of queries, `MutationObserver` for one mutation and `MutationStateObserver` for a selection over all of them. The Flutter binding is built on them.

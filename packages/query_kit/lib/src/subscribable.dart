@@ -1,4 +1,4 @@
-/// Port of `query-core/src/subscribable.ts` at upstream `50680b98c`.
+/// Port of TanStack Query's `query-core/src/subscribable.ts`.
 library;
 
 import 'package:meta/meta.dart';
@@ -13,8 +13,7 @@ import 'listener_registry.dart';
 ///
 /// The list itself, the once-only handle and the notification loop are
 /// [ListenerRegistry], which the four observers hold as well; this class is
-/// upstream's name for it plus the two hooks (C50,
-/// https://github.com/KoTTi97/flutter_query/issues/59).
+/// upstream's name for it plus the two hooks.
 abstract class Subscribable<TListener extends Function> {
   final ListenerRegistry<TListener> _registry = ListenerRegistry<TListener>();
 

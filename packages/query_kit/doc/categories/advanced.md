@@ -1,0 +1,1 @@
+Plumbing most apps never touch: the events a cache subscription receives, the actions that change a query's or mutation's state, the fetch-behaviour hooks behind infinite queries, and the fully resolved `Defaulted*` options.

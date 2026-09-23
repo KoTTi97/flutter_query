@@ -1,0 +1,1 @@
+Paged data: `InfiniteQueryOptions` with a page function and `getNextPageParam`, held in the cache as `InfiniteData` and observed with an `InfiniteQueryObserver`, which fetches the next or previous page on request.

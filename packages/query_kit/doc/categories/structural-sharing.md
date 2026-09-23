@@ -1,0 +1,1 @@
+When new data arrives, `replaceEqualDeep` keeps the parts equal to the cached data as the same instances, so `identical` checks and rebuilds can skip what did not change. `StructurallyShareable` lets your own value classes take part; `StructuralSharing` and `noStructuralSharing` configure it per query.

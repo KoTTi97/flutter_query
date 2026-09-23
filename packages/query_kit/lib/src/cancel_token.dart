@@ -1,19 +1,29 @@
-/// Cancellation. Ports `CancelledError` from `query-core/src/retryer.ts` and
-/// the `AbortSignal` handed to query functions in `query-core/src/query.ts`,
-/// at upstream `50680b98c`.
-///
-/// See https://github.com/KoTTi97/flutter_query/issues/11.
+/// Cancellation: [CancelledError] and [QueryCancelToken], the counterparts of
+/// TanStack Query's `CancelledError` and the `AbortSignal` its query
+/// functions receive.
 library;
 
 import 'dart:async';
 
-/// Thrown into a query's own result when its fetch is cancelled.
+/// What a cancelled fetch fails with.
+///
+/// A fetch is cancelled by `QueryClient.cancelQueries`, by `Query.cancel`,
+/// by a newer fetch taking over (`cancelRefetch`), or when its last observer
+/// unsubscribes while a query function that read its
+/// [QueryFunctionContext.signal] is still running. Whoever awaits that fetch
+/// — `QueryClient.query`, `QueryObserver.refetch` — sees this error.
+/// Depending on [revert] and [silent], the query itself goes back to its
+/// previous state or records the error.
 ///
 /// An [Exception], not an [Error]: cancelling is an expected outcome, not a
-/// programming mistake.
+/// programming mistake. A query function may also throw it itself, through
+/// [QueryCancelToken.throwIfCancelled].
+///
+/// {@category Errors}
 final class CancelledError implements Exception {
   /// Creates the error a cancelled fetch resolves with. [revert] and [silent]
-  /// are the two flags upstream's `cancel` options carry; both default to off.
+  /// are the two flags a cancellation carries (as in TanStack Query's
+  /// `cancel` options); both default to off.
   const CancelledError({this.revert = false, this.silent = false});
 
   /// Whether the query's state is restored to what it was before the fetch.
@@ -26,10 +36,11 @@ final class CancelledError implements Exception {
   String toString() => 'CancelledError(revert: $revert, silent: $silent)';
 }
 
-/// Handed to a query function so it can abort work that is no longer wanted.
+/// Handed to a query function, as [QueryFunctionContext.signal], so it can
+/// abort work that is no longer wanted.
 ///
 /// Dart has no ecosystem-wide cancellation primitive, so [onCancel] is the
-/// universal interop point:
+/// universal interop point — forward it to whatever your HTTP client uses:
 ///
 /// ```dart
 /// queryFn: (context) {
@@ -41,7 +52,20 @@ final class CancelledError implements Exception {
 ///
 /// A client with no cancellation (such as `package:http`) simply never
 /// registers a callback; the request then runs to completion and its result is
-/// discarded, which is exactly what upstream does for the same case.
+/// discarded, as in TanStack Query. For long loops, poll [isCancelled] or
+/// call [throwIfCancelled] between steps, or await [whenCancelled].
+///
+/// Reading `signal` matters: a query whose function never read it is not
+/// cancelled when its last observer leaves — the request cannot be stopped,
+/// so it is allowed to finish and its result is cached. Once the signal has
+/// been read, the fetch is cancelled and the query reverts instead.
+///
+/// The library creates one token per fetch attempt and cancels it; a query
+/// function never calls [cancel]. Tests that call a query function directly
+/// create their own with the default constructor, `QueryCancelToken()`, and
+/// pass it to the `QueryFunctionContext` they build.
+///
+/// {@category Queries}
 class QueryCancelToken {
   final Completer<void> _completer = Completer<void>();
   final List<void Function()> _callbacks = <void Function()>[];
@@ -61,7 +85,7 @@ class QueryCancelToken {
   ///
   /// A callback's throw is its own, whichever path runs it: reported to the
   /// zone, never thrown into [cancel]'s caller or into the query function
-  /// registering it late (ninth review, 2026-09-10, C16).
+  /// registering it late.
   void onCancel(void Function() callback) {
     if (isCancelled) {
       _run(callback);
