@@ -57,10 +57,29 @@ final class CancelledError implements Exception {
 /// }
 /// ```
 ///
-/// A client with no cancellation (such as `package:http`) simply never
-/// registers a callback; the request then runs to completion and its result is
-/// discarded, as in TanStack Query. For long loops, poll [isCancelled] or
-/// call [throwIfCancelled] between steps, or await [whenCancelled].
+/// For a client that takes a future instead, pass [whenCancelled].
+/// `package:http` 1.5 and later aborts an `AbortableRequest` when its
+/// `abortTrigger` completes, and the request then fails with
+/// `RequestAbortedException`:
+///
+/// ```dart
+/// queryFn: (context) async {
+///   final request = http.AbortableRequest(
+///     'GET',
+///     Uri.parse('https://api.example.com/tasks'),
+///     abortTrigger: context.signal.whenCancelled,
+///   );
+///   final response = await http.Response.fromStream(
+///     await client.send(request),
+///   );
+///   return parseTasks(response.body);
+/// }
+/// ```
+///
+/// A client with no cancellation at all simply never registers a callback;
+/// the request then runs to completion and its result is discarded, as in
+/// TanStack Query. For long loops, poll [isCancelled] or call
+/// [throwIfCancelled] between steps, or await [whenCancelled].
 ///
 /// Reading `signal` matters: a query whose function never read it is not
 /// cancelled when its last observer leaves — the request cannot be stopped,

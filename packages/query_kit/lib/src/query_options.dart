@@ -209,6 +209,16 @@ bool isNoStructuralSharing(Function? sharing) =>
 /// [QuerySelectOptions]. It runs on the observer's side, so every observer of
 /// one query may select something different from the same cached data.
 ///
+/// **A select that throws** does not throw out of the observer or the
+/// widget reading it. The observer reports a [QueryError] instead:
+/// [QueryError.error] is what the selector threw, and
+/// [QueryError.staleData] is the last value it selected for this query (none
+/// when it never succeeded). The error is the observer's own — the cached
+/// query stays a success, nothing is retried, the cache's `onError` is not
+/// called and other observers of the key are unaffected — and it clears
+/// the next time the selector runs successfully: on new data, or when a
+/// different selector is set.
+///
 /// {@category Queries}
 typedef SelectFn<TQueryData, TData> = TData Function(TQueryData data);
 
@@ -728,9 +738,11 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
     this.retryOnMount,
   });
 
-  /// Narrows what the observer reports — and therefore what a change in the
-  /// cached data has to touch before a listener is notified. No default:
-  /// `null` on a [QueryObserverOptions], never on a [QuerySelectOptions].
+  /// Narrows the data the observer reports: while the selection stays equal,
+  /// the reported `data` keeps its instance. The rest of the result
+  /// (`fetchStatus`, `dataUpdatedAt`, …) still changes, and listeners are
+  /// told of that. No default: `null` on a [QueryObserverOptions], never on a
+  /// [QuerySelectOptions].
   SelectFn<TQueryData, TData>? get select;
 
   /// Data shown while the query has none of its own — see [PlaceholderData].
@@ -981,10 +993,13 @@ final class QueryObserverOptions<TData>
 /// is still a select and still goes here; the shape is about *whether*
 /// there is a projection, not about the types being different.
 ///
-/// The observer runs [select] on the cached data and reports only the
-/// result, so a change to the cached data reaches its listeners only when
-/// the selected value changes: a widget showing a task's name is not told
-/// when only the task's due date changed.
+/// The observer runs [select] on the cached data and reports the result as
+/// its `data`. While the selection stays equal, that `data` keeps its
+/// instance: a widget showing a task's name sees the same name when only
+/// the task's due date changed. The rest of the result still moves —
+/// the write updates `dataUpdatedAt`, a refetch passes through `fetching` —
+/// and listeners are told of that; a `buildWhen` over the data is what
+/// skips those rebuilds.
 /// Existing plain options gain a select with
 /// [QueryObserverOptions.withSelect].
 ///
@@ -1020,8 +1035,11 @@ final class QuerySelectOptions<TQueryData, TData>
     super.retryOnMount,
   });
 
-  /// Narrows what the observer reports — and therefore what a change in the
-  /// cached data has to touch before a listener is notified. Required.
+  /// Narrows the data the observer reports; see the class doc for what it
+  /// does and does not keep from notifying. Required.
+  ///
+  /// A selector that throws makes the observer report a [QueryError]
+  /// carrying the thrown error — see [SelectFn].
   @override
   final SelectFn<TQueryData, TData> select;
 

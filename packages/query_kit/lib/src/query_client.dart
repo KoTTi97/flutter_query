@@ -894,9 +894,11 @@ class QueryClient {
   /// (default `true`) a fetch already in flight on a query that holds data
   /// is cancelled and started over; on a query without data it is joined.
   ///
-  /// `async`, like [cancelQueries] and [refetchQueries]: a throwing filter
-  /// predicate fails the returned future rather than throwing out of the
-  /// call, so all four bulk operations report the same way.
+  /// `async`, like [cancelQueries], [invalidateQueries] and
+  /// [refetchQueries]: a throwing filter predicate fails the returned future
+  /// rather than throwing out of the call, so those four report it the same
+  /// way. [removeQueries] returns nothing, so there it throws out of the
+  /// call.
   Future<void> resetQueries({
     QueryFilters filters = const QueryFilters(),
     bool cancelRefetch = true,
@@ -1211,8 +1213,9 @@ class QueryClient {
   void setQueryDefaults(QueryKey queryKey, QueryDefaults defaults) =>
       _queryDefaults[queryKey] = defaults;
 
-  /// The registered defaults matching [queryKey], merged in registration
-  /// order.
+  /// The registered defaults matching [queryKey], merged in the order the
+  /// keys were first registered — registering a key again replaces its
+  /// defaults but keeps its place.
   ///
   /// Several prefixes matching one key is the intended usage, not a mistake:
   /// register `['todos']` and then `['todos', 'detail']` and a detail query
@@ -1233,9 +1236,9 @@ class QueryClient {
   void setMutationDefaults(QueryKey mutationKey, MutationDefaults defaults) =>
       _mutationDefaults[mutationKey] = defaults;
 
-  /// The registered defaults matching [mutationKey], merged in registration
-  /// order, later registrations winning per field — or `null` when none
-  /// match. The mutation twin of [getQueryDefaults].
+  /// The registered defaults matching [mutationKey], merged in the order the
+  /// keys were first registered, later ones winning per field — or `null`
+  /// when none match. The mutation twin of [getQueryDefaults].
   MutationDefaults? getMutationDefaults(QueryKey mutationKey) {
     MutationDefaults? merged;
     for (final entry in _mutationDefaults.entries) {

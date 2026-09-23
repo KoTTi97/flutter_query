@@ -72,7 +72,10 @@ sealed class CombinedResult<T> {
   /// Whether any source is fetching, first load or background.
   bool get isFetching => _sources.any((source) => source.isFetching);
 
-  /// Whether any source is paused — wanted to fetch and may not, offline.
+  /// Whether any source is paused ([QueryResult.isPaused]): a fetch that
+  /// wants to run but is waiting — for the network, as the source's
+  /// `networkMode` asks, or for the app to return to the foreground before
+  /// its next retry.
   bool get isPaused => _sources.any((source) => source.isPaused);
 
   /// Whether this is a [CombinedPending]: some source has nothing to show

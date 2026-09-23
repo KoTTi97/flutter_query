@@ -39,10 +39,15 @@ What they share:
 - **One observer per reader, one query per key.** Every builder, controller
   and keyless read owns its own observer. The query in the cache is shared,
   so two readers of one key cost one request.
-- **Options are re-applied on every build.** An `Enabled.when` over outside
-  state is re-evaluated each time; the observer compares the defaulted
-  options by value, and only a real difference reaches the query. A changed
-  key switches the observed query in place.
+- **Options are re-applied whenever the reader is built with them:** on
+  every build for `context.query` and the mixin, and whenever the parent
+  rebuilds a builder widget. An `Enabled.when` over outside state is
+  re-evaluated then; the observer compares the defaulted options by value,
+  and only a real difference reaches the query. A changed key switches the
+  observed query in place for a builder, a controller's `setOptions` and a
+  read with an `id`; a read without an `id` is identified by its key, so a
+  new key is a new observer and the old one is released (see
+  [identity](#identity)).
 - **No notification for nothing.** A reader is never rebuilt for a
   notification carrying what it is already showing. Under a
   `QueryClientProvider`, a result that changes during a build is delivered
@@ -93,9 +98,11 @@ refetching](../guides/window-focus-refetching.md).
 
 At mount the provider also installs a notify scheduler on the client:
 a notification arriving during a frame's build, layout or paint is deferred
-to a post-frame callback, and one arriving during a build outside a frame
-(the root's first build in `runApp`) to a microtask, so a query resolving mid-build cannot
-call `setState` during that build. Several providers may share one client; the scheduler
+to a post-frame callback, and — in debug builds — one arriving during a build
+outside a frame (the root's first build in `runApp`) to a microtask, so a
+query resolving mid-build cannot call `setState` during that build. (The
+assertion that guards against that is debug-only; in release such a
+notification runs at once.) Several providers may share one client; the scheduler
 stays until the last of them goes.
 
 ### Static members
@@ -183,7 +190,7 @@ come from the options; `MutationOptions.simple` infers them from
 
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
-| `options` | [`MutationOptions<TData, TVariables, TOnMutateResult>`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationOptions-class.html) | required | The mutation function and callbacks. Re-applied whenever the parent rebuilds this widget, so the next run uses the latest ones. |
+| `options` | [`MutationOptions<TData, TVariables, TOnMutateResult>`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationOptions-class.html) | required | The mutation function and callbacks. Re-applied whenever the parent rebuilds this widget, so the next run uses the latest ones, and a run still in flight takes them too. A different `mutationKey` (both set) resets the reader to idle. |
 | `builder` | `Widget Function(BuildContext context, MutationController<TData, TVariables, TOnMutateResult> mutation)` | required | Given the controller: the result is `mutation.value`, and `mutate` or `mutateAsync` starts a run. |
 | `buildWhen` | `BuildWhen<MutationResult<TData, TVariables>>?` | `null` | The only filter a mutation reader has; it has no `select`. |
 | `client` | `QueryClient?` | `null` | The client to run on. TanStack: the hook's `queryClient` argument. |
@@ -275,9 +282,9 @@ directions leave the result equal and still notify.
 | [`value`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/value.html) | `MutationResult<TData, TVariables>` | — | The current result. |
 | [`mutate(variables, {callbacks})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/mutate.html) | `void`; `callbacks` is `MutateCallbacks<TData, TVariables, TOnMutateResult>?` | `callbacks: null` | Fire and forget: the result lands in `value`, errors never reach the caller. TanStack: `mutate`. |
 | [`mutateAsync(variables, {callbacks})`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/mutateAsync.html) | `Future<TData>` | `callbacks: null` | Completes with the data or throws. The per-call callbacks run after the options' own for as long as the controller is not disposed, listened to or not. Called after `dispose`, the mutation still runs with its options' callbacks, nothing lands in `value`, and the per-call callbacks are dropped. TanStack: `mutateAsync`. |
-| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/setOptions.html) | `void`; `MutationOptions<TData, TVariables, TOnMutateResult>` | — | Replaces the options the next run uses. Does not notify: the result has not changed. TanStack: `observer.setOptions`. |
+| [`setOptions(options)`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/setOptions.html) | `void`; `MutationOptions<TData, TVariables, TOnMutateResult>` | — | Replaces the options the next run uses; a run still in flight takes them too. Does not notify by itself — except that a different `mutationKey` (both set) resets the controller to idle, which listeners hear like any other change. TanStack: `observer.setOptions`. |
 | [`reset()`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/reset.html) | `void` | — | Back to idle, detaching from the mutation being observed. TanStack: `reset`. |
-| [`cancel()`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/cancel.html) | `void` | — | Fails the run this controller shows with a `CancelledError`; its error callbacks run. See [cancelling mutations](../guides/cancelling-mutations.md). |
+| [`cancel()`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/cancel.html) | `void` | — | Fails the run this controller shows with a `CancelledError`; its error callbacks run. With nothing running it does nothing, and earlier runs are not touched. See [cancelling mutations](../guides/cancelling-mutations.md). |
 | [`observer`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/observer.html) | `MutationObserver<TData, TVariables, TOnMutateResult>` | — | The observer underneath, for its defaulted `options`, say. Run mutations through the controller: `observer.mutate` on a controller nobody listens to drops the per-call callbacks. |
 | [`isDisposed`](https://pub.dev/documentation/query_kit_flutter/latest/query_kit_flutter/MutationController/isDisposed.html) | `bool` | — | Whether `dispose` has run. |
 | `addListener` / `removeListener` | `void` | — | The first listener subscribes the controller to its observer, the last one leaving unsubscribes it. A run started by `mutate` or `mutateAsync` holds its own subscription until it settles, so its per-call callbacks run on a controller nobody listens to. |
@@ -319,12 +326,16 @@ default to `null`.
 - **A mutation read** is identified by `id`, else by its `mutationKey`, each
   with its three types, else by the types alone. Two reads of one identity
   in one build share one controller, so without an `id` a debug assertion
-  fires when they differ in the mutation function, in `onMutate`,
+  fires when they differ in the mutation function (`mutationFn` or
+  `mutationFnWithContext`), in `onMutate`,
   `onSuccess`, `onError` or `onSettled`, or in `scope`, `retry`,
   `retryDelay`, `networkMode` or `gcTime`. Those five compare by value,
   except `RetryPolicy.when` and `RetryDelay.dynamic`, which compare by
-  variant only. `meta` is not compared. A function literal is a new function
-  on every build, so keep it in a field or read the mutation once.
+  variant only. `meta` is not compared. Only reads in a `StatelessWidget`'s
+  or `State`'s own build are compared; a nested builder re-reading through
+  the outer `context`, and a read through a `LayoutBuilder`'s context, are
+  not. A function literal is a new
+  function on every build, so keep it in a field or read the mutation once.
 
 ### Which element a read belongs to, and when it is released
 
@@ -584,7 +595,9 @@ How the provider feeds it to `client.onlineManager` (through `setOnline`):
 
 - **`initial` is applied** whenever a client is given this status: at mount,
   to a client that arrives on a later build, and on any later build that
-  changes the status. Not when a stream delivers while it is being listened
+  changes the status — unless the old and the new status are both
+  `OnlineStatus.stream`: a changed `initial` on the same stream, like a
+  different stream, keeps the client's current verdict. Not when a stream delivers while it is being listened
   to (a synchronous controller's `onListen`): that event is believed over
   `initial`.
 - **Every stream event** is passed to the provider's current client.
