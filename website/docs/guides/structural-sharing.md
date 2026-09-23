@@ -3,8 +3,6 @@ title: Structural sharing
 description: A refetch that brings back equal data keeps the cached instances — what is shared, why a model needs ==, StructurallyShareable, and turning it off.
 ---
 
-{/* demo: select-and-sharing */}
-
 # Structural sharing
 
 On by default, and it is what makes `select` and `buildWhen` worth having: if
@@ -81,6 +79,62 @@ It is found wherever the walk goes — at the top, in a list, in an
 `InfiniteData` page — so one implementation replaces a `structuralSharing`
 hook on every query that holds the type.
 
+## Generated models
+
+Most apps do not write `==` by hand. What the generators give you decides
+what sharing can do:
+
+- **json_serializable alone** generates `fromJson` and `toJson` and nothing
+  else. A model with only those has identity equality, so every fetch is a
+  change to every reader. Add `==` and `hashCode`, or generate them.
+- **freezed** generates a deep `==` and `hashCode`, so a freezed model is an
+  equal leaf: kept when a refetch brings back the same content, replaced
+  when it does not. That is all a model of scalar fields needs.
+- **A freezed class wrapping a list** — a page of results with a cursor — is
+  still a leaf, and one changed item costs every item its instance. Implement
+  `StructurallyShareable` on it; freezed allows it with a private
+  constructor:
+
+```dart snippet="prose-only: needs freezed and json_serializable, code generators the docs package does not run"
+@freezed
+abstract class Device with _$Device {
+  const factory Device({
+    required String id,
+    required String name,
+    required String room,
+    required bool isOn,
+  }) = _Device;
+
+  factory Device.fromJson(Map<String, Object?> json) => _$DeviceFromJson(json);
+}
+
+@freezed
+abstract class DevicePage with _$DevicePage
+    implements StructurallyShareable<DevicePage> {
+  const DevicePage._();
+
+  const factory DevicePage({
+    required List<Device> items,
+    String? nextCursor,
+  }) = _DevicePage;
+
+  factory DevicePage.fromJson(Map<String, Object?> json) =>
+      _$DevicePageFromJson(json);
+
+  // Asked only when the pages are not equal: keep every Device the cache
+  // already holds, and take the new ones.
+  @override
+  DevicePage shareWith(DevicePage previous) =>
+      copyWith(items: replaceEqualDeep(previous.items, items));
+}
+```
+
+Because freezed's `==` is deep, `shareWith` is asked only when something did
+change, so building a new page from the shared items is always right. The
+list freezed hands out is unmodifiable, so what `replaceEqualDeep` rebuilds
+from it is fixed-length (see below), and the `copyWith` wraps it
+unmodifiable again.
+
 ## Maps, sealed lists and sets
 
 "Kept whole" cuts both ways: a `Map<Id, Dto>` in which one entry changed is
@@ -123,3 +177,25 @@ what `select` produces is still shared by the default comparison. That is
 also true of `(_, next) => next`: it keeps every write, but it is not the
 opt-out, and a selection over it stays shared. Use `noStructuralSharing()`
 when you mean off.
+
+## Seeing it
+
+The `select-and-sharing` screen reads one todo list five times and counts
+each reader's builds. Press *Refetch*: the list comes back equal, the cached
+instances are kept, and no reader counts a data change. Tick *Structural
+sharing off* and press *Refetch* again: the list in the cache is a new
+instance each time, so the reader without a `select` and the one whose
+`select` builds a list count a change for the same content, while the ones
+selecting a number, a string or a record do not.
+
+<LiveDemo feature="select-and-sharing" />
+
+See [what rebuilds, and when](render-optimizations.md) for how `select` and
+`buildWhen` build on this.
+
+:::note[In React Query]
+The same algorithm, `replaceEqualDeep`, and the same `structuralSharing`
+option: `false` there is `noStructuralSharing()` here, and a function is a
+function. JavaScript compares plain objects by their fields; Dart has no plain
+objects, so a model takes part through its `==` or `StructurallyShareable`.
+:::

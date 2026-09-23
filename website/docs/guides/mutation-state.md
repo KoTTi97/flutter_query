@@ -3,8 +3,6 @@ title: Mutation state
 description: MutationStateController and MutationStateObserver — every mutation matching a filter, for a "saving…" badge no widget owns, and its typed form.
 ---
 
-{/* demo: mutation-state */}
-
 # Mutation state
 
 `MutationStateController` (and the core's `MutationStateObserver`) reads *every*
@@ -23,6 +21,56 @@ final saving = MutationStateController<int>(
 ```
 
 `client.isMutating()` is the count alone, without a subscription.
+
+## A "saving…" indicator in the app bar
+
+A mutation belongs to the widget that asked for it, so the app bar cannot
+read it. It can read the mutation *cache*, which holds every mutation
+wherever it was started. The indicator below counts the writes in flight —
+the power switches, the renames, a firmware upload — and knows none of them:
+
+```dart snippet="guides/mutation-state.md#saving-indicator"
+// lib/widgets/saving_indicator.dart — in the app bar, owning no mutation.
+class _SavingIndicatorState extends State<SavingIndicator> {
+  late final MutationStateController<int> _saving = MutationStateController(
+    QueryClientProvider.read(context),
+    filters: const MutationFilters(status: MutationStatus.pending),
+    select: (mutation) => mutation.mutationId,
+  );
+
+  @override
+  void dispose() {
+    _saving.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<List<int>>(
+        valueListenable: _saving,
+        builder: (context, running, _) => running.isEmpty
+            ? const SizedBox.shrink()
+            : Text('Saving ${running.length}…'),
+      );
+}
+```
+
+Selecting the `mutationId` rather than a constant keeps each run apart in the
+list, and the list is compared with the previous one before the controller
+notifies: a cache event that leaves the same mutations pending does not
+rebuild the indicator. A widget that wants to know *what* is being saved
+selects the variables instead, as below.
+
+Finished mutations stay in the mutation cache until their `gcTime` runs out
+after their last observer is gone, so a filter without a `status` sees
+recent successes and failures too — useful for a "2 changes could not be
+saved" banner, which filters on `MutationStatus.error`.
+
+The `mutation-state` screen puts such a badge above a todo list. Press *Add
+todo* twice quickly: the badge counts `saving=2` while both run and drops to
+zero when they settle. *Add, failing* ends in `failed=1` instead, and
+`badge-builds` only moves when the selection actually changed.
+
+<LiveDemo feature="mutation-state" />
 
 ## One type of mutation
 
@@ -58,3 +106,10 @@ Three things to know, because an empty list after a filter looks harmless:
 - A typed selection does not replace an untyped one where the mutations are
   mixed on purpose: "is *any* write in flight?" over a scope that holds two
   variable types is still one untyped controller, next to the typed one.
+
+:::note[In React Query]
+`MutationStateController` is `useMutationState({ filters, select })`, and
+`client.isMutating()` is `useIsMutating` without the subscription. The typed
+form has no counterpart there: in TypeScript `select` receives the mutation
+untyped and you cast.
+:::
