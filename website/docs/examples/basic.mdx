@@ -1,0 +1,84 @@
+---
+title: Basic
+description: A list and a detail sharing one cache, a mark on every row the cache already holds, and a detail entry that is dropped once nobody reads it.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/basic/basic_screen.dart'
+
+A list of posts and a detail opened from it, both reading from the same
+cache. A row whose post the cache already holds is marked *cached*, reopening
+that post shows it at once while a background fetch refreshes it, and a post
+nobody has looked at for ten seconds is dropped again. It is the shape of a
+product list with a product page, or a device list with a device screen: the
+second visit to a detail should never show a spinner, and entries nobody
+needs should not pile up.
+
+<LiveDemo feature="basic" />
+
+## What to try
+
+- Watch the list arrive: the `posts` debug strip reads `status=success` and
+  `fetches=1`, and no row carries a *cached* mark yet.
+- Open a post, then press the back arrow (*Back to list*). Its row is now
+  bold and marked *cached*, and no other row is.
+- Open the same post again. The title is on screen immediately, a
+  *refreshing* pill shows the background fetch, and the post's strip counts
+  `fetches=2` when it is done.
+- Go back and wait ten seconds without opening anything. The post's entry is
+  garbage-collected and its *cached* mark disappears; the list itself stays.
+
+## The code
+
+Two option functions: the list with the client's defaults, and one post
+with a short `gcTime`, so an entry without readers is removed ten seconds
+after its last one left.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/basic/basic_screen.dart"
+  from="QueryObserverOptions<List<Post>> postsQuery(ShowcaseApi api) =>"
+  to="    );"
+/>
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/basic/basic_screen.dart"
+  from="QueryObserverOptions<Post> postQuery(ShowcaseApi api, int id) =>"
+  to="    );"
+/>
+
+The list reads through a `QueryBuilder`. Whether a row is cached is not part
+of the list's result, so the rows ask the client with `getQueryData` and
+rebuild on the cache's own events through the showcase's `CacheListener`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/basic/basic_screen.dart"
+  from="return QueryBuilder<List<Post>>("
+  to="    );"
+/>
+
+The detail is its own widget reading `context.query`, so going back
+unmounts the reader and the post's entry starts counting down its `gcTime`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/basic/basic_screen.dart"
+  from="final post = context.query(postQuery(api, id));"
+  end="    );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/basic/basic_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Quick start](../quick-start.md), [Queries](../guides/queries.md), [Caching](../guides/caching.md)
+- Upstream: TanStack's React [`basic`](https://github.com/TanStack/query/tree/main/examples/react/basic) example
+- Tested by `test/features/basic_test.dart` (widget) and `e2e/tests/basic.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/basic)

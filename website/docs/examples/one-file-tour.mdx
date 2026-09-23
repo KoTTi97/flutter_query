@@ -1,0 +1,83 @@
+---
+title: One-file tour
+description: The package's own example, a provider, one query read two ways and a mutation that invalidates it, in a single file with no server.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import tour from '@site/../packages/query_kit_flutter/example/lib/main.dart'
+
+The binding ships one example with the package, and it is the one pub.dev
+shows on its *Example* tab: a single `main.dart` of some 130 lines that you
+can paste into a fresh `flutter create` project and run. It has no server;
+the "API" is a list behind a delay. It is the whole loop of a screen that
+reads and writes remote data, small enough to hold in your head: a provider
+at the root, a list read in `build`, a refresh indicator in the app bar that
+reads the same cache entry through a builder, and an *add* button whose
+mutation invalidates the list when it succeeds.
+
+There is no live demo of this one; the showcase's
+[Simple](./simple.mdx) and [Mutations](./mutations.mdx) screens cover the same
+ground with more to look at.
+
+## Walking through it
+
+The stand-in for an HTTP client, and the query built on it: one key, one
+function, a stale time of 30 seconds.
+
+<DartSource
+  source={tour}
+  path="packages/query_kit_flutter/example/lib/main.dart"
+  from="class Api {"
+  end="    );"
+/>
+
+A second options object for the same key, reduced by `select`. Its reader
+shares the cache entry. It still rebuilds whenever the result changes (a
+refetch changes `isFetching`), which is exactly what a spinner wants.
+
+<DartSource
+  source={tour}
+  path="packages/query_kit_flutter/example/lib/main.dart"
+  from="QuerySelectOptions<List<String>, bool> fetchingQuery()"
+  end="    );"
+/>
+
+The client goes at the root, above `MaterialApp`, so every route can reach it.
+
+<DartSource
+  source={tour}
+  path="packages/query_kit_flutter/example/lib/main.dart"
+  from="void main() {"
+  end="}"
+/>
+
+The screen reads the list with `context.query`, takes the client in `build`
+(a mutation's callback can run after the widget that started it is gone, so
+it closes over the client rather than the `BuildContext`), and declares the
+*add* mutation with `context.mutation`. The app bar reads the select options
+through a `QuerySelectBuilder`; the body switches over the list's sealed
+result. These are two of the binding's four equal call styles, side by side
+on one key.
+
+<DartSource
+  source={tour}
+  path="packages/query_kit_flutter/example/lib/main.dart"
+  from="class TasksScreen extends StatelessWidget {"
+  end="}"
+/>
+
+## Running it
+
+```bash
+cd packages/query_kit_flutter/example && flutter run
+```
+
+Or copy the file into your own project as `lib/main.dart` after
+`flutter pub add query_kit_flutter`.
+
+## Related
+
+- [Installation](../installation.md) and [Quick start](../quick-start.md)
+- [Four ways to read a query](../guides/reading-queries-in-widgets.md)
+- [Mutations](../guides/mutations.md) and [Query invalidation](../guides/query-invalidation.md)
+- [View on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/packages/query_kit_flutter/example)

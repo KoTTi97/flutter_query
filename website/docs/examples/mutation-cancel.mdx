@@ -1,0 +1,81 @@
+---
+title: Mutation context and cancel
+description: An optimistic rename whose mutation function reads what onMutate kept and passes the cancel signal to its transport, and a Cancel button that fails the run so the rollback runs.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/mutation_cancel/mutation_cancel_screen.dart'
+
+An optimistic rename of the first todo that takes three seconds on the
+server, with a *Cancel* button to call it off. `onMutate` writes the new text
+into the cache and returns the old list; `mutationFnWithContext` reads that
+list back from its context to send the previous text along, and passes the
+context's cancel signal to the HTTP client. Cancelling is a failure: the run
+ends with a `CancelledError`, `onError` puts the old text back, and
+`onSettled` refetches the list, because nobody can know whether the server
+already took the write. This is the shape of a slow write a user may change
+their mind about: uploading a firmware setting to a device, renaming a shared
+folder, submitting a long form over a poor connection.
+
+<LiveDemo feature="mutation-cancel" />
+
+## What to try
+
+- Type into *New text* and press *Rename*. The first todo shows the new text
+  at once and the facts read `status=pending`, `text=` the new text, and
+  `from=` the old one, which is what the mutation function read from
+  `onMutate`'s result.
+- Wait the three seconds: `status=success`, `error=none`, `settles=1`, and
+  no rollback.
+- Rename again and press *Cancel* while it is pending. The text goes back at
+  once, `signalCancels=1` and `rollbacks=1`, then `status=error` with
+  `error=cancelled`, and the debug strip shows the list being refetched. A
+  notice under the list says the refetch is what found out what the server
+  holds.
+- Rename once more after a cancel: it goes through as usual.
+
+## The code
+
+The mutation function takes a second argument, the run's context. Its
+`onMutateResult` is typed by the options' third type argument, and its
+`signal` goes to the transport, the same way a query's does:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutation_cancel/mutation_cancel_screen.dart"
+  from="mutationFnWithContext: (rename, context) {"
+  end="      },"
+/>
+
+A cancelled run reaches `onError` like any other failure, so the ordinary
+rollback covers it:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutation_cancel/mutation_cancel_screen.dart"
+  from="// A cancelled run arrives here as any other failure does"
+  end="      },"
+/>
+
+The screen reads the mutation with `watchMutation` from `QueryMixin`, and
+the button calls `cancel` on what it returns, only while a run is pending:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutation_cancel/mutation_cancel_screen.dart"
+  from="// Enabled only while there is a run to call off"
+  end="                  ),"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/mutation_cancel/mutation_cancel_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Cancelling mutations](../guides/cancelling-mutations.md), [Optimistic updates](../guides/optimistic-updates.md), [Mutations](../guides/mutations.md)
+- Tested by `test/features/mutation_cancel_test.dart` (widget) and `e2e/tests/mutation_cancel.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/mutation_cancel)

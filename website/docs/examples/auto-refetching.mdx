@@ -1,0 +1,93 @@
+---
+title: Auto refetching
+description: A list polled on an interval that can be switched live between off, two fixed values and one computed from the data, with and without polling in the background.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart'
+
+A list of ticks, polled on an interval you switch while the query is live:
+`off`, 500 ms, 2 s, or a `dynamic` interval that looks at the data and stops
+polling once the list has three entries. Two writes, **Add tick** and
+**Clear ticks**, invalidate the list, so polling is not the only way it
+changes. Use this pattern for anything the server changes without being
+asked: a device's live status on a dashboard, an order moving through
+fulfilment, a job queue that stops needing a poll once every job has
+finished.
+
+<LiveDemo feature="auto-refetching" />
+
+## What to try
+
+- Pick `500 ms` under **Interval**: the *polling* pill flickers and the
+  `fetches` count on the debug strip keeps growing. Pick `off` and it stops.
+- With polling on, press **Add tick**: the new row is on screen by the next
+  poll at the latest. The button stays disabled until the invalidation's
+  refetch has landed.
+- Pick `dynamic` after pressing **Clear ticks**: it polls while the list has
+  fewer than three ticks. Add three and it stops by itself; clear them and it
+  starts again.
+- Press **Unfocus** with an interval on: the interval still fires, but
+  nothing is fetched until you switch on **Poll in the background**. The
+  binding normally moves focus from the app lifecycle; these buttons do it by
+  hand. Pressing **Focus** also refetches the stale list, which is
+  `refetchOnWindowFocus`, not the interval. Clicking outside the demo is a
+  real loss of focus too, so polling pauses while you read this page and
+  resumes when you click back in.
+
+## The code
+
+The query takes both knobs as plain options. A `dynamic` interval is a
+function of the query that returns a duration, or `null` to stop polling. It
+is a top-level function, because `RefetchInterval.dynamic` compares by the
+function's identity and an inline closure would be a new value on every
+build.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart"
+  from="/// The `dynamic` interval's rule, as a top-level function"
+  end="    );"
+/>
+
+Both writes invalidate the list from `onSuccess` and return the
+invalidation's future, so each mutation stays pending until the refetch has
+landed.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart"
+  from="/// Both writes invalidate the list."
+  end="    );"
+/>
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart"
+  from="MutationOptions<int, void, void> clearTicksMutation("
+  end="    );"
+/>
+
+The list is read with a `QueryBuilder`. A changed knob is a new
+`refetchInterval` on the next build, and the live observer picks it up.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart"
+  from="QueryBuilder<List<Tick>>("
+  end="        ),"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/auto_refetching/auto_refetching_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Polling](../guides/polling.md), [App focus refetching](../guides/window-focus-refetching.md), [Invalidations from mutations](../guides/invalidations-from-mutations.md)
+- Upstream: TanStack's React [`auto-refetching`](https://github.com/TanStack/query/tree/main/examples/react/auto-refetching) example
+- Tested by `test/features/auto_refetching_test.dart` (widget) and `e2e/tests/auto_refetching.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/auto_refetching)

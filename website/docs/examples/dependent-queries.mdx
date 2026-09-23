@@ -1,0 +1,78 @@
+---
+title: Dependent queries
+description: A query that holds back until another has data, with Enabled.when, and a switch that holds it back regardless with Enabled.no.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/dependent_queries/dependent_queries_screen.dart'
+
+Choosing a post starts its query; the post's comments have a query of their
+own that is `Enabled.when` the post has data, so it sits `pending` and `idle`
+until the post lands and only then sends its request. A *Pause comments* box
+switches the comments to `Enabled.no`, the other way to keep a query from
+running. The pattern fits wherever one request needs the answer of another:
+a user's profile before the projects it lists, a device's detail before the
+firmware channel it names, a selected order before its shipment tracking.
+
+<LiveDemo feature="dependent-queries" />
+
+## What to try
+
+- Before choosing, nothing is requested: the screen reads *Choose a post
+  first.* and there are no debug strips.
+- Press *Choose post 2*. While the post is fetching, the comments card shows
+  *waiting for the post* and `comments enabled=false`; once the post's title
+  appears, the comments turn to fetching and arrive with one request.
+- Tick *Pause comments* and choose another post. The post loads, but the
+  comments stay `status=pending`, `fetchStatus=idle` with a *paused* pill;
+  untick it and they are fetched once.
+- Switch to another post and back. Each choice re-keys both queries; the
+  post you return to shows its title and comments at once from the cache,
+  because the entries you left stayed there without a reader, and a
+  background refetch follows. *Clear choice* releases both readers.
+
+## The code
+
+The comments' options take their `enabled` from the caller, so the screen
+decides when they may run.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/dependent_queries/dependent_queries_screen.dart"
+  from="QueryObserverOptions<List<Comment>> commentsQuery("
+  end="    );"
+/>
+
+Both are read with `context.query` in one build. The predicate closes over
+this build's post result: when the post's data arrives the widget rebuilds,
+the predicate says yes, and the comments start.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/dependent_queries/dependent_queries_screen.dart"
+  from="final post = context.query(postQuery(api, id));"
+  to="    ));"
+/>
+
+A disabled query that has never fetched is `QueryPending` with
+`FetchStatus.idle`, so the switch tells "not started" apart from "loading".
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/dependent_queries/dependent_queries_screen.dart"
+  from="QueryPending(fetchStatus: FetchStatus.fetching) =>"
+  to="                  ),"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/dependent_queries/dependent_queries_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Dependent queries](../guides/dependent-queries.md), [Disabling queries](../guides/disabling-queries.md)
+- Tested by `test/features/dependent_queries_test.dart` (widget) and `e2e/tests/dependent_queries.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/dependent_queries)

@@ -1,0 +1,81 @@
+---
+title: Infinite query with max pages
+description: An infinite query that pages in both directions from the middle of the data and keeps a window of at most three pages.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/max_pages/max_pages_screen.dart'
+
+An infinite query that starts in the middle of a hundred projects, pages
+forward and backward, and holds at most three pages: `maxPages: 3` drops the
+page at the far end whenever a fourth comes in, so the window slides instead
+of growing. The page function is told which way each fetch extends the
+window. Use it where a list can be entered anywhere and scrolled both ways
+while memory stays bounded: a chat history opened at an unread message, a
+log viewer jumped to a timestamp, a long timeline of sensor readings.
+
+<LiveDemo feature="max-pages" />
+
+## What to try
+
+- The screen opens on the page at cursor 30: `pageParams=30`, and both
+  `hasPreviousPage` and `hasNextPage` are true.
+- Press *Load next* twice for `pageParams=30,40,50`, then once more: the
+  window slides to `40,50,60`, still `pages=3`, and *Project 30* is gone from
+  the rows. `lastPage` names the cursor and `forward`.
+- Press *Load previous*: a *loading previous* pill shows while
+  `isFetchingPreviousPage=true`, the window slides back to `30,40,50`, and
+  `lastPage` says `backward`.
+- Press *Refetch*: the pages in the window are fetched again, first to last,
+  and nothing outside it: `lastPage` ends on the window's last cursor with
+  `forward`, and each row's *fetched* time is renewed.
+- Keep paging one way: at cursor 90 `hasNextPage=false` and *Load next* is
+  disabled; at cursor 0 the same happens to *Load previous*.
+
+## The code
+
+Both directions read their cursor off the page the backend sent, and
+`maxPages` caps the window. The page function's context carries `pageParam`,
+`signal` and `direction`:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/max_pages/max_pages_screen.dart"
+  from="InfiniteQueryObserverOptions<ProjectSlice, int> projectsWindowQuery("
+  end="    );"
+/>
+
+The screen holds the query as an `InfiniteQueryController`, created in
+`initState` and disposed with the state, and rebuilds through a
+`ListenableBuilder`:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/max_pages/max_pages_screen.dart"
+  from="_window = InfiniteQueryController<ProjectSlice, int, ProjectWindow>("
+  end="    );"
+/>
+
+Which end is loading is on the controller, not on the sealed result, so the
+card's pill switches over both:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/max_pages/max_pages_screen.dart"
+  from="trailing: switch (result) {"
+  end="      },"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/max_pages/max_pages_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Infinite queries](../guides/infinite-queries.md)
+- Upstream: TanStack's React [`infinite-query-with-max-pages`](https://github.com/TanStack/query/tree/main/examples/react/infinite-query-with-max-pages) example
+- Tested by `test/features/max_pages_test.dart` (widget) and `e2e/tests/max_pages.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/max_pages)

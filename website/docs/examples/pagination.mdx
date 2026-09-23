@@ -1,0 +1,84 @@
+---
+title: Pagination
+description: Page-numbered results, one cache entry per page, the previous page kept on screen while the next loads, and the next page prefetched.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/pagination/pagination_screen.dart'
+
+A list of projects, ten to a page, with *Previous page* and *Next page*
+buttons. The page number is part of the query key, so every page is its own
+cache entry. `PlaceholderData.keepPrevious()` keeps the last page's rows on
+screen while a new page loads instead of dropping back to a skeleton, and
+as soon as a page has real data the next one is prefetched, so the usual
+press of *Next page* costs no request. This is the shape of any paged
+table backed by a `?page=` API: an order history, an admin list of users,
+search results with numbered pages.
+
+<LiveDemo feature="pagination" />
+
+## What to try
+
+- Watch the first load: `page-0` shows one fetch, and then the `page-1`
+  debug strip reads `status=success` with `observers=0`. The next page was
+  prefetched with nobody reading it.
+- Press *Next page* within five seconds of the load. Page 1's rows appear
+  at once with `isPlaceholderData=false` and no new request (after that the
+  prefetched page is stale and refetches in the background as it is shown), and the strip for page 2
+  shows its prefetch.
+- Press *Next page* twice in quick succession. For the moment the next
+  page's prefetch is still running, the previous page's rows stay on screen
+  with `isPlaceholderData=true`, a *loading* pill, and *Next page*
+  disabled, so nobody skips past a page they have not seen.
+- Press *Previous page* within five seconds: the cached page comes back with
+  no request. Wait longer and the cached rows still show at once, with a
+  background refetch because the page has gone stale.
+- Page through to `page=9`. `hasMore=false`, *Next page* is disabled, and
+  the `page-10` strip reads `status=absent`: nothing beyond the last page
+  is prefetched.
+
+## The code
+
+The read and the prefetch share a key and a `staleTime`, so a prefetched
+page counts as fresh when it is opened. The read's placeholder is the
+`const` `keepPrevious()`, which compares equal on every rebuild.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/pagination/pagination_screen.dart"
+  from="QueryObserverOptions<ProjectPage> projectsPageQuery("
+  end="    );"
+/>
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/pagination/pagination_screen.dart"
+  from="QueryOptions<ProjectPage> projectsPagePrefetch(ShowcaseApi api, int page) =>"
+  end="    );"
+/>
+
+The screen reads the current page with `context.query` under an `id`, so
+one observer follows the key from page to page and has the previous page's
+data to keep. Once the page has real data and there is more, it prefetches
+the next one, after the frame.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/pagination/pagination_screen.dart"
+  from="// The `id` is what lets the observer follow the key: without it a new"
+  end="    final canGoForward"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/pagination/pagination_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Paginated queries](../guides/paginated-queries.md), [Placeholder query data](../guides/placeholder-query-data.md), [Prefetching](../guides/prefetching.md)
+- Upstream: TanStack's React [`pagination`](https://github.com/TanStack/query/tree/main/examples/react/pagination) example
+- Tested by `test/features/pagination_test.dart` (widget) and `e2e/tests/pagination.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/pagination)

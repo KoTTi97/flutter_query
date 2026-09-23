@@ -1,0 +1,77 @@
+---
+title: Mutation state
+description: A badge that counts every running and failed write under one mutation key, read from the mutation cache by a widget that owns none of them.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/mutation_state/mutation_state_screen.dart'
+
+A "saving…" badge that knows about writes it did not start. The buttons fire
+mutations nobody on screen watches; the badge reads the mutation cache
+through a `MutationStateController`, which picks the mutations with
+`MutationFilters` and turns each into the value the badge needs with
+`select`. Two concurrent writes under one key stay two entries, so the badge
+can say `2`. Use it wherever the indicator and the writer live apart: a sync
+spinner in an app bar while list rows save themselves, an upload counter in a
+bottom bar, a "changes pending" hint on a settings screen whose fields each
+save on their own.
+
+<LiveDemo feature="mutation-state" />
+
+## What to try
+
+- Press *Add todo* twice in quick succession: the badge reads `saving=2`
+  with a spinner, then drops back to `saving=0` as both land, and the list's
+  `todos=` count goes up by two.
+- Press *Add, failing*: `saving=1` while it runs, then `saving=0` and
+  `failed=1`. A failed write is counted as an error, not as pending.
+- Watch `tracked`: it counts every run the cache still holds under the key,
+  settled ones included, until each is garbage-collected after its `gcTime`.
+- Watch `badge-builds`: it goes up only when the selected list of statuses
+  changes, not on every cache event.
+
+## The code
+
+Both buttons build the same options, with one `mutationKey` for the badge to
+filter on:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutation_state/mutation_state_screen.dart"
+  from="MutationOptions<Todo, String, void> _addOptions({bool fail = false}) =>"
+  end="      );"
+/>
+
+Each press runs an owned `MutationController` that nothing reads and that
+disposes itself once the run has settled:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutation_state/mutation_state_screen.dart"
+  from="/// Runs a mutation nobody watches"
+  end="  }"
+/>
+
+The badge's controller selects each matching mutation's status. The
+selection goes through structural sharing, so an event that leaves the list
+equal does not notify, and the badge rebuilds through a `ListenableBuilder`:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/mutation_state/mutation_state_screen.dart"
+  from="_statuses = MutationStateController<MutationStatus>("
+  end="    );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/mutation_state/mutation_state_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Mutation state](../guides/mutation-state.md), [Mutations](../guides/mutations.md), [Filters](../guides/filters.md)
+- Tested by `test/features/mutation_state_test.dart` (widget) and `e2e/tests/mutation_state.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/mutation_state)

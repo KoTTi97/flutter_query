@@ -1,0 +1,87 @@
+---
+title: Default query function
+description: Queries that are nothing but a key, fetched by one function registered as a default for a key prefix, and a mutation that gets its function the same way.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/default_query_function/default_query_function_screen.dart'
+
+None of the queries on this screen has a `queryFn`. One function, registered
+with `setQueryDefaults` for every key under `['api', …]`, reads the request
+path out of the key and fetches it, so a query is its key plus a `select` that
+parses the JSON. A mutation carrying only a `mutationKey` gets its function
+from `setMutationDefaults` in the same way. Reach for this when an app talks
+to one REST backend whose paths map cleanly onto keys, say a device list, a
+device's detail and its event log, and writing the same fetch for each of
+them would only repeat the path.
+
+<LiveDemo feature="default-query-function" />
+
+## What to try
+
+- Read the *Defaults on the client* card: while the screen is open it reports
+  `default queryFn=set` and `default mutationFn=set`.
+- Watch the three cards fill: the posts list, post #1 and its comments, each
+  fetched once through the default (`fetches=1` in the `posts`, `post-1` and
+  `comments-1` strips).
+- Press *Fetch a missing post*. The key `['api', '/posts/999']` goes through
+  the same default, the backend answers 404, and the card shows its *Post not
+  found* message at once: that query sets `retry: RetryPolicy.never`.
+- Press *Create a todo*. The mutation has nothing but a key; the default
+  `mutationFn` posts the todo and the card shows the new todo's id and text.
+
+## The code
+
+The defaults: the query function takes the path from the key's second part
+and returns the JSON untyped, because one function serves every key under the
+prefix; the mutation function is registered under the mutation's key.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/default_query_function/default_query_function_screen.dart"
+  from="QueryDefaults apiDefaults(ShowcaseApi api) => QueryDefaults("
+  to="    );"
+/>
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/default_query_function/default_query_function_screen.dart"
+  from="MutationDefaults createTodoDefaults(ShowcaseApi api) => MutationDefaults("
+  to="    );"
+/>
+
+The queries carry a key and a `select` and nothing else. The selectors are
+top-level functions, so options built on every build compare equal.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/default_query_function/default_query_function_screen.dart"
+  from="QuerySelectOptions<Object?, List<Post>> postsQuery() =>"
+  to="    MutationOptions<Todo, String, void>(mutationKey: createTodoKey);"
+/>
+
+The screen registers the defaults in `initState` and blanks them in
+`dispose`, so no other screen of the showcase sees them; in an app you would
+register them once, next to where the client is created. It reads the
+queries with `QueryMixin`'s `watchSelectQuery` and `watchMutation`.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/default_query_function/default_query_function_screen.dart"
+  from="  void initState() {"
+  to="    final create = watchMutation<Todo, String, void>(createTodoMutation());"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/default_query_function/default_query_function_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Default query function](../guides/default-query-function.md), [Query keys](../guides/query-keys.md)
+- Upstream: TanStack's React [`default-query-function`](https://github.com/TanStack/query/tree/main/examples/react/default-query-function) example
+- Tested by `test/features/default_query_function_test.dart` (widget) and `e2e/tests/default_query_function.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/default_query_function)

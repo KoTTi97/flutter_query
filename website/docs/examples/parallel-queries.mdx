@@ -1,0 +1,88 @@
+---
+title: Parallel queries
+description: Three independent queries in one screen, fetched at the same time, and the client's count of everything that is fetching.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/parallel_queries/parallel_queries_screen.dart'
+
+Three posts, each with a query of its own, all started when the screen
+opens, so the three requests run at the same time and the screen waits one
+latency, not three. A status line shows `client.isFetching()`, the number of
+queries fetching anywhere in the cache. When the number of queries is fixed,
+parallel is simply what you get by writing them side by side: a dashboard
+with a device's status, its alerts and its energy readings, or a checkout
+screen reading the cart, the addresses and the payment methods. When the
+number changes at runtime, see [Query collections](./query-collections.mdx).
+
+<LiveDemo feature="parallel-queries" />
+
+## What to try
+
+- Watch the screen open: all three cards show a *loading* pill at once, the
+  status line reads `fetching=3`, and all three titles arrive together.
+- Press *Refetch all*. The titles stay on screen with a *refreshing* pill
+  each, `fetching=3` drops back to `fetching=0`, and every strip counts
+  `fetches=2`.
+- Press *Refetch post 2*: only `post-2` fetches, and the count reads
+  `fetching=1`.
+- Turn on *Slow post 3*, then press *Refetch all*. Posts 1 and 2 settle while
+  post 3 keeps fetching for two more seconds with `fetching=1`. Turning the
+  switch on does not refetch by itself: it changes the query function, not
+  the key.
+
+## The code
+
+Each post has a `QueryController` of its own, created in `initState` and
+disposed in `dispose`. Each card listens to its own controller, and a
+`Listenable.merge` over the three lets the toolbar react to any of them.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/parallel_queries/parallel_queries_screen.dart"
+  from="late final ShowcaseApi _api;"
+  to="  }"
+/>
+
+*Refetch all* is one `refetch()` per controller. *Slow post 3* swaps the
+options on the existing controller with `setOptions`: same key, another query
+function, so the entry and its data are kept and nothing refetches until the
+next fetch is asked for.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/parallel_queries/parallel_queries_screen.dart"
+  from="void _refetchAll() {"
+  end="  }"
+/>
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/parallel_queries/parallel_queries_screen.dart"
+  from="void _setSlowPost3(bool slow) {"
+  to="  }"
+/>
+
+Each card reads its controller's `value` in a `ListenableBuilder` and picks
+its pill from `isLoading` (a first fetch) or `isRefetching` (a fetch over data
+already there).
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/parallel_queries/parallel_queries_screen.dart"
+  from="Widget build(BuildContext context) => ListenableBuilder("
+  end="      );"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/parallel_queries/parallel_queries_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Parallel queries](../guides/parallel-queries.md), [Background fetching indicators](../guides/background-fetching-indicators.md)
+- Tested by `test/features/parallel_queries_test.dart` (widget) and `e2e/tests/parallel_queries.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/parallel_queries)

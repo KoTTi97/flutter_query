@@ -1,0 +1,92 @@
+---
+title: Offline
+description: A query and a mutation under a connection you switch off and on, compared across the three network modes, with paused mutations resuming on reconnect.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/offline/offline_screen.dart'
+
+A todo list and an add-todo mutation, both running under the network mode
+you pick, and an **Online** switch that tells the client whether it has a
+connection. Offline, the query pauses instead of failing and the write
+waits with its request unsent. When the switch goes back on, the client
+resumes the paused mutations first and then continues the paused fetches,
+with nothing on the screen asking it to. This is the shape of any app used
+where the signal comes and goes: a field technician logging readings from a
+basement, a warehouse scanner, a settings change made on a train that
+should reach the server once the train leaves the tunnel.
+
+<LiveDemo feature="offline" />
+
+## What to try
+
+- Switch **Online** off and press **Refetch** under the `online` network
+  mode: `query fetchStatus=paused`, and no request goes out. Switch it back
+  on and the fetch continues, one request rather than two.
+- Offline, type a todo and press **Add todo**: `mutation isPaused=true`,
+  `mutations paused=1`, and a notice says the write is waiting. Go online
+  and it is sent by itself; the list refetches after it.
+- Add two todos while offline, then go online: both are sent, in the order
+  they were made.
+- Offline, press **Resume paused mutations**: nothing moves. A mutation under
+  `online` is skipped while the client is still offline.
+- Pick `always` as the network mode and refetch while offline: the request
+  goes out regardless. The switch only changes what the client believes, and
+  the demo's backend is always reachable, so here the request succeeds; with
+  a real outage it would fail like any other.
+- With nothing paused, flip **Online** off and on under each **On
+  reconnect** value: `ifStale` and `always` refetch the list on reconnect,
+  `never` leaves it alone.
+
+## The code
+
+The query takes the network mode and `refetchOnReconnect` as options. Its
+retry policy is written out, because `offlineFirst` is only visible through
+it: the first attempt runs offline, and the retry after it pauses.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/offline/offline_screen.dart"
+  from="/// The list, under the mode the screen is set to."
+  end="    );"
+/>
+
+The mutation runs under the same mode. Its `onSuccess` starts the
+invalidation without returning it, so the mutation reports success as soon
+as the write reaches the backend, not when the list comes back.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/offline/offline_screen.dart"
+  from="/// The write, under the same mode."
+  end="    );"
+/>
+
+The **Online** switch calls `client.onlineManager.setOnline`, and
+**Resume paused mutations** calls `client.resumePausedMutations()`. The
+facts come straight from the client:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/offline/offline_screen.dart"
+  from="final online = _client.onlineManager.isOnline();"
+  end="        .length;"
+/>
+
+In a real app you do not flip the switch by hand: pass `QueryClientProvider`
+an `onlineStatus` built with `OnlineStatus.stream` from the connectivity
+package you already use. The binding depends on none.
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/offline/offline_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Network mode](../guides/network-mode.md), [Connectivity](../guides/connectivity.md), [Mutations](../guides/mutations.md)
+- Upstream: TanStack's React [`offline`](https://github.com/TanStack/query/tree/main/examples/react/offline) example
+- Tested by `test/features/offline_test.dart` (widget) and `e2e/tests/offline.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/offline)

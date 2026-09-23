@@ -1,0 +1,86 @@
+---
+title: Stale time and garbage collection
+description: Every StaleTime and GcTime value on one cache entry, with a reader you can detach and attach to see when data refetches and when an unused entry is dropped.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/stale_and_gc/stale_and_gc_screen.dart'
+
+One cache entry, the server's clock, whose `serial` grows by one with every
+request, so each fetch shows as a new number. Two knobs set its `staleTime`
+(zero, 5 s, infinite, static, or a dynamic value computed from the data)
+and its `gcTime` (5 s or never). The reader is a `QueryController` the
+screen can detach and attach: attaching is a mount, which refetches only if
+the data is stale, and detaching leaves the entry with no observer, which
+starts its garbage-collection timer. These two settings are how you tune a
+real app: a country list or a product catalogue that barely changes can be
+fresh for a long time, a live device status wants `zero`, and a detail
+screen the user keeps coming back to wants a `gcTime` long enough to still
+be cached when they return.
+
+<LiveDemo feature="stale-and-gc" />
+
+## What to try
+
+- With *Stale time* on *zero*, the reader shows `isStale=true` the moment
+  the data arrives. Press *Detach reader*, then *Attach reader*: the mount
+  refetches and `serial` goes up by one.
+- Pick *5 s* and press *Refetch*. The reader shows `isStale=false`, and
+  detaching and attaching within five seconds sends nothing. After five
+  seconds it flips to `isStale=true` on its own, and the next attach
+  refetches.
+- Pick *static* and press *Invalidate*: nothing is fetched. Only the
+  *Refetch* button, the reader's own `refetch`, still fetches. With
+  *infinite*, an invalidation does refetch.
+- Set *GC time* to *5 s* and detach the reader. The `time` debug strip shows
+  `observers=0`, and five seconds later `status=absent`: the entry was
+  collected. Attaching again starts from a skeleton with no data.
+- Set *GC time* to *never*, detach, and the entry stays. An entry keeps the
+  longest gc time any reader gave it, so going back to *5 s* has no effect
+  until you press *Remove entry* (enabled while detached).
+
+## The code
+
+The query takes both values as options. `StaleTime.dynamic` computes the
+stale time from the query itself: here, fresh for five seconds after an odd
+serial and stale at once after an even one.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/stale_and_gc/stale_and_gc_screen.dart"
+  from="const StaleTime _fiveSeconds = StaleTime.duration(Duration(seconds: 5));"
+  end="    );"
+/>
+
+Detaching disposes the controller. With no observer left, the entry's gc
+timer starts.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/stale_and_gc/stale_and_gc_screen.dart"
+  from="  void _detach() {"
+  end="  }"
+/>
+
+A knob change reaches an attached reader through `setOptions`; a detached
+one picks it up when the next controller is created.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/stale_and_gc/stale_and_gc_screen.dart"
+  from="  void _applyOptions() {"
+  end="  }"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/stale_and_gc/stale_and_gc_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Caching](../guides/caching.md), [Query options](../guides/query-options.md)
+- Tested by `test/features/stale_and_gc_test.dart` (widget) and `e2e/tests/stale_and_gc.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/stale_and_gc)

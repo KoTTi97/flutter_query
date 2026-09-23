@@ -1,0 +1,77 @@
+---
+title: Diagnostics
+description: The errors the library raises for a read or write of the wrong type and for a mutation with no function, and the fix for each.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/diagnostics/diagnostics_screen.dart'
+
+A cache entry holds one exact type. A read or write that names another type
+throws `QueryDataTypeError` from the call itself, before any future exists,
+and the error names the type asked for and the type held. A mutation run with
+no `mutationFn` and no default registered for its key fails with
+`MissingMutationFunctionError` as its error state, and the message names the
+cure, `QueryClient.setMutationDefaults`. Both show up in real apps the same
+way: a product detail screen that reads the list entry as the wrong model
+class, or a mutation key whose default is registered in a setup function that
+has not run yet.
+
+<LiveDemo feature="diagnostics" />
+
+## What to try
+
+- Wait for the counter to load (`counter=` in the card header), then press
+  *Read as int*: `read=int` and the value.
+- Press *Read as String*: `read=QueryDataTypeError`, with `expected=String`
+  and `actual=int`.
+- Press *Write a String*: `write=QueryDataTypeError`, and the `counter` strip
+  still reads `updates=1`, because the refused write left the entry as it was.
+- Press *Mutate without a function*: the mutation ends in `status=error` with
+  `error=MissingMutationFunctionError`, and nothing is sent.
+- Press *Register a default mutationFn*, then *Mutate without a function*
+  again: the same mutation now runs the default and ends in `status=success`.
+
+## The code
+
+The counter is fetched as an `int`, and the mutation has a key and nothing
+else:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/diagnostics/diagnostics_screen.dart"
+  from="/// The counter, as an `int`"
+  end="    MutationOptions.simple<int, int>(mutationKey: noFunctionKey);"
+/>
+
+The wrong-type read throws synchronously, so an ordinary `try` catches it:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/diagnostics/diagnostics_screen.dart"
+  from="/// A read that names another type."
+  end="  }"
+/>
+
+The cure is a default for every mutation under the key. The mutation's reader
+applies its options again on the next build, and the default supplies the
+function:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/diagnostics/diagnostics_screen.dart"
+  from="/// The cure the error message names"
+  end="  }"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/diagnostics/diagnostics_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Type safety in Dart](../dart-type-safety.md), [Mutations](../guides/mutations.md), [Debugging](../guides/debugging.md)
+- Tested by `test/features/diagnostics_test.dart` (widget) and `e2e/tests/diagnostics.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/diagnostics)

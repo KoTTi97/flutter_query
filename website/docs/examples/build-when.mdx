@@ -1,0 +1,86 @@
+---
+title: Filtering rebuilds
+description: buildWhen on the eight keyless reads, each read twice over one entry, filtered and plain, with build counters side by side.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/build_when/build_when_screen.dart'
+
+Every keyless read in the binding, `watchQuery`, `context.query`, the two
+select reads, the two infinite reads and the two mutation reads, appears
+here twice over the same cache entry: once with a `buildWhen` predicate and
+once without. Each row counts its own builds, so the effect of the predicate
+is the gap between two numbers on one screen. A knob picks the predicate the
+filtered half passes: rebuild only when the data changed, never, or always.
+You would reach for `buildWhen` where a widget is expensive to build and has
+no use for the fetching flag: a chart over a sensor's readings that should
+not redraw when a background refetch starts, a large table of orders, a
+map with many markers.
+
+<LiveDemo feature="build-when" />
+
+## What to try
+
+- Press *Refetch the posts*. The backend answers the same posts, so the
+  data is unchanged: every *no buildWhen* row goes up by two (the switch to
+  fetching and the landing), and every *buildWhen data* row stays where it
+  was. The `posts` debug strip shows `fetches=2`.
+- Press *Drop a post*. It writes a shorter list straight into the cache, so
+  the data changed and all eight query rows go up by one, filtered ones
+  included; they read `posts=29` or `count=29`.
+- Press *Load next* in the infinite card. The plain rows go up by two, the
+  filtered rows by one: the fetch starting changes only `fetchStatus`, the
+  new page is a real change.
+- Press *Run the mutation*. The plain mutation rows go up by two (pending,
+  then success) and the filtered ones by one, since the pending result
+  carries no data.
+- Set the *buildWhen* knob to *never* and refetch: the filtered half stays
+  frozen. Set it to *always* and the two halves move together. Moving the
+  knob itself adds one build to every row, because a new widget from the
+  parent is not a notification a predicate can refuse.
+
+## The code
+
+The predicates are top-level functions, so each read receives the same
+function object on every build. A `BuildWhen<T>` takes the previous and the
+current result and returns whether to rebuild.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/build_when/build_when_screen.dart"
+  from="bool queryDataMoved<TData>("
+  end="    };"
+/>
+
+A read passes the predicate as `buildWhen`, or `null` for no filter. This
+is the `context.query` pair:
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/build_when/build_when_screen.dart"
+  from="final result = context.query<List<Post>>("
+  to="_builds += 1;"
+/>
+
+A mutation read takes the same parameter, typed over `MutationResult`. A
+mutation has no `select`, so the predicate is its only filter.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/build_when/build_when_screen.dart"
+  from="final controller = _controller = context.mutation<int, int, void>("
+  to="_builds += 1;"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/build_when/build_when_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [What rebuilds, and when](../guides/render-optimizations.md), [Four ways to read a query](../guides/reading-queries-in-widgets.md)
+- Tested by `test/features/build_when_test.dart` (widget) and `e2e/tests/build_when.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/build_when)

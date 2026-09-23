@@ -1,0 +1,17 @@
+/* The code block keeps its own margin; the GitHub link sits under it as a
+   caption, small and right-aligned, so the block reads as a figure. */
+
+.source {
+  margin-bottom: 1.5rem;
+}
+
+.source :global(.theme-code-block) {
+  margin-bottom: 0.35rem;
+}
+
+.link {
+  margin: 0;
+  text-align: right;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+}

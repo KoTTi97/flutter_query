@@ -1,0 +1,87 @@
+---
+title: Combine
+description: Three queries of three different types read as one sealed CombinedResult, with a retry for the failed sources only and a memo that skips the combiner when nothing changed.
+---
+
+import DartSource from '@site/src/components/DartSource'
+import screen from '@site/../examples/showcase/lib/features/combine/combine_screen.dart'
+
+A post, its comments and a counter: three queries of three types, a `Post`,
+a `List<Comment>` and an `int`, read side by side and then combined into one
+value with `(a, b, c).combine(...)` over a record of results. The screen
+switches once over the sealed `CombinedResult` instead of three times over
+three results: an error as soon as a source has failed with nothing to show,
+even while another is still loading; pending until every source has data;
+and data otherwise, with a failed background
+refresh reported beside the data it kept. Use it when a screen is only
+meaningful with all its parts, an order page that needs the order, its
+customer and the stock levels, or a device screen that needs the device, its
+settings and its firmware info.
+
+<LiveDemo feature="combine" />
+
+## What to try
+
+- Watch the first load: the `combined` facts read `state=pending` until all
+  three strips show `status=success`, then `state=data` with the title,
+  `comments=3` and the counter.
+- Set *The post read* to *is refused* and press *Refetch all*. The post's
+  refetch fails, but the combination stays `state=data` with every value;
+  `refetchError=Requested: 500` and a *Could not refresh* notice say what
+  went wrong.
+- With the post still refused, press *Reset*. The data is dropped, so the
+  refusal now has nothing to fall back on: `state=error`, with a *Retry*
+  button. Set the knob back to *answers* and press *Retry*: only the post is
+  fetched again, not the comments or the counter.
+- Press *Refetch all* with nothing changed at the backend: `builds` goes up,
+  `combines` does not, because every source kept the same data instance and
+  the memo skipped the combiner. *Increment counter* changes a source, and
+  `combines` goes up by one.
+
+## The code
+
+Each query says `RetryPolicy.never`, so a refused read is an error at once.
+The post's query function reads the knob when the request goes out, so a
+*Reset* or a *Retry* sees the knob as it is now.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/combine/combine_screen.dart"
+  from="QueryObserverOptions<Post> _postQuery(ShowcaseApi api) =>"
+  end="      );"
+/>
+
+The three reads are ordinary `context.query` calls in one record; `combine`
+hands the combiner their data, typed, once all three have some. The
+`CombineMemo` is a field of the `State`, one per call site.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/combine/combine_screen.dart"
+  from="final combined = ("
+  end="    );"
+/>
+
+The switch over the result is exhaustive. `retry()` on the error refetches
+the failed sources only, and `CombinedData` carries `refetchError` beside the
+data it kept.
+
+<DartSource
+  source={screen}
+  path="examples/showcase/lib/features/combine/combine_screen.dart"
+  from="CombinedError(:final error) => Column("
+  end="              },"
+/>
+
+<details>
+<summary>The whole screen</summary>
+
+<DartSource source={screen} path="examples/showcase/lib/features/combine/combine_screen.dart" />
+
+</details>
+
+## Related
+
+- Guides: [Combining queries](../guides/combining-queries.md), [Structural sharing](../guides/structural-sharing.md)
+- Tested by `test/features/combine_test.dart` (widget) and `e2e/tests/combine.spec.ts` (browser)
+- [View the feature on GitHub](https://github.com/KoTTi97/flutter_query/tree/main/examples/showcase/lib/features/combine)
