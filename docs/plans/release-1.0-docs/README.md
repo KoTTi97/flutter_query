@@ -24,12 +24,13 @@ starts once C3 has fixed the sidebar and slugs.
 | C8b | Dartdoc, binding | same for `query_kit_flutter` | 1 | done |
 | C9 | Test gaps | core/binding coverage gaps from `audits/audit-demos-tests.md` §B closed; value-class table tests; binding on `--platform chrome`; jargon guard in CI (D3) | 1 | done |
 | C3 | Site IA | new sidebar per `audits/audit-site.md` §2; existing content moved into the new slugs; internal history out; stub pages marked | 2 | done |
-| C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | C4a–c done; C4d in review |
+| C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | done |
 | C5 | Examples section | one page per showcase feature + task manager, live demo + source | 3 | done |
 | C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | done |
-| C7 | API reference pages, differences page, troubleshooting cleanup | | 3 | open |
+| C7 | API reference pages, differences page, troubleshooting cleanup | merged into C4d | 3 | done |
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | done |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
+| F1 | Follow-ups | B22, B25, B27, leftover ranking words; fresh re-check of C4d's reference fact edits (query-client, query-options, widgets-and-controllers) | 4 | open |
 | R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | open |
 | X | Independent review by a Codex agent | after E; needs the Codex CLI installed and logged in by the maintainer | 6 | blocked |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | open |
@@ -136,3 +137,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C6b | `9a6f2c8`, `1a7a6b5` | 10 recipes (state libs, offline persistence, DI, go_router, websockets, poll-until-confirmed, IoT disconnect, sign-out, key design, freezed); review fixed 2 P2 (`QueryController.create` with select, removeQueries recreation) + 7 P3 |
 | 2026-09-23 | C4a | `c898d32`, `fc28fec` | getting started + 10 queries guides at depth; review fixed B20, B21 and 11 more (gcTime longest wins, maps/sets not walked, Enabled.when re-ask per style) |
 | 2026-09-23 | C6a | `551ce17`, `ce2a092` | 10 recipes on one catalogue app; review fixed a P1 (token-refresh repeat through the queued interceptor could deadlock), 4 P2 (http base URL, timeout, cancellation fact, non-Dio refresh failure), tests for the claims; merge: one explicit 20-recipe sidebar list, dead generator/CSS removed |
+| 2026-09-23 | C4d | `d50cc98`, `f3b978a` | tools guides + 8 reference pages (C7 folded in); four sub-reviews: ~40 fixes (missing members, throw sites, 11 missing divergences, dio adapter signature, pumpAndSettle advice), TanStack column moved into descriptions, no table scrolls at 1440px; wave 3 fully merged, 97 LiveDemos on the site |
