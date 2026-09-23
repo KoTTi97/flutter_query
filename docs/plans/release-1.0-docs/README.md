@@ -106,6 +106,10 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B16 | C5 | `tool/build_demos.sh` can't read `baseUrl` since C1 made it a constant — CI demo build broken | fixed `617f9da` |
 | B17 | C5 | showcase sources shown on the site carry review IDs/issue links, one on screen ("since C49") | fixed `617f9da` |
 | B18 | C5 | stale showcase texts: "combine is not ported", missing spec reference, pagination/offline notices overpromise | fixed `617f9da` |
+| B19 | C4d | `guides/filters.md`: `isMutating(filters:)` counts only pending, ignores `filters.status`; `isFetching` ignores `fetchStatus` | open → C4c review |
+| B20 | C4d | `reading-queries-in-widgets.md`: implies `QueryMixin` throws for item-builder contexts (only `context.query`); ranking words "most explicit/predictable" (also `query_builder.dart:62`) | open → C4a review / F1 |
+| B21 | C4d | `connectivity.md` gaps (swapped clients, reset timing); `queries.md` paused ≠ network only, disabled/static never stale; `combining-queries.md` refetch cancels only sources with data | open → C4a/C4b reviews |
+| B22 | C4d | dartdoc: `resetQueries` "all four bulk operations" misleads about `removeQueries`; throwing `select` → `QueryError` undocumented; `CombinedResult.isPaused` covers app-hidden wait | open → F1 |
 
 ## Log
 
