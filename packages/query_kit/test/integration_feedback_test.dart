@@ -168,9 +168,14 @@ void main() {
       client.clear();
     });
 
-    test('a shareWith that returns stale data is an assertion in debug', () {
-      expect(() => replaceEqualDeep<_Stale>(_Stale(1), _Stale(2)),
-          throwsA(isA<AssertionError>()));
+    // Was "is an assertion in debug". Returning `previous` is also the one
+    // correct answer of an identity-equality class whose content did not
+    // change, and the walk cannot tell the two apart, so the assertion went
+    // (release review, 2026-09-23, V-C-4): the hook is taken at its word, and
+    // the contract is StructurallyShareable's dartdoc.
+    test('a shareWith that returns stale data is taken at its word', () {
+      final previous = _Stale(1);
+      expect(replaceEqualDeep<_Stale>(previous, _Stale(2)), same(previous));
     });
 
     test('a shareWith that throws or returns the wrong type is ignored', () {

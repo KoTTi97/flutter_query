@@ -67,7 +67,9 @@ class MutationStateObserver<TSelected> {
   /// in the filters, and `setOptions(filters: …)` alone dropped it while the
   /// casting select stayed: the next mutation of another type threw a
   /// `TypeError` out of `setOptions`, and then out of every cache event
-  /// (release review, 2026-09-23, L4-1).
+  /// (release review, 2026-09-23, L4-1). The type test runs first, so a
+  /// predicate in [filters] only ever sees mutations of the declared types
+  /// and may cast to them.
   static MutationStateObserver<TSelected> typed<TData, TVariables,
           TOnMutateResult, TSelected>(
     QueryClient client, {
@@ -132,10 +134,22 @@ class MutationStateObserver<TSelected> {
 
   void _update({bool notify = true}) {
     final typeTest = _typeTest;
-    var matching = _client.mutationCache.findAll(filters: _filters);
+    var filters = _filters;
     if (typeTest != null) {
-      matching = matching.where(typeTest).toList();
+      // The type test guards the caller's predicate, not the other way
+      // round: a predicate written for the declared type reads it, and run
+      // on a mutation of another type it threw out of the cache event
+      // (release review, 2026-09-23, V-C-2).
+      final predicate = filters.predicate;
+      filters = MutationFilters(
+        mutationKey: filters.mutationKey,
+        exact: filters.exact,
+        status: filters.status,
+        predicate: (mutation) =>
+            typeTest(mutation) && (predicate == null || predicate(mutation)),
+      );
     }
+    final matching = _client.mutationCache.findAll(filters: filters);
     final next = matching.map(_select).toList();
     final shared = replaceEqualDeep<List<TSelected>>(_result, next);
     if (identical(shared, _result)) return;

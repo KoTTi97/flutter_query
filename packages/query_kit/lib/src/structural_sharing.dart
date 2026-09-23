@@ -34,16 +34,28 @@ import 'infinite_query.dart';
 /// returns something that is not the caller's type, is ignored and the
 /// incoming value kept: sharing is best effort and never an error.
 ///
-/// Two ways to get it wrong, and only one is caught. Returning a value that is
-/// **not equal to `this`** — `previous`, by mistake — would put stale data in
-/// the cache; debug builds assert against `previous` itself, the one form of
-/// it the walk can tell apart from a correct result whatever the class's
-/// `==` is (a class with identity equality returns a new instance that is
-/// never `==` to `this`, and that is right). Returning an equal value that
-/// **shares nothing** — a plain copy — is correct and merely useless: nothing
-/// fails, and the saving is lost without a sound. Measure it once: after a
-/// refetch that changed one element, the others should be `identical` to the
-/// instances held before.
+/// Returning [previous] itself is right exactly when nothing changed: for a
+/// class without value equality, `previous` and `this` are never `==` even
+/// with the same content, so the walk asks, and handing `previous` back is
+/// the only way such a class keeps its instance across an unchanged refetch.
+///
+/// ```dart
+/// @override
+/// DeviceList shareWith(DeviceList previous) {
+///   final shared = replaceEqualDeep(previous.items, items);
+///   return identical(shared, previous.items) ? previous : DeviceList(shared);
+/// }
+/// ```
+///
+/// Nothing checks that contract, because nothing can: for a class whose `==`
+/// is not deep, the walk cannot tell a correct `previous` from a mistaken
+/// one. Two ways to get it wrong, both silent. Returning [previous] — or any
+/// value **not equal in content to `this`** — when something did change puts
+/// stale data in the cache. Returning an equal value that **shares nothing**
+/// — a plain copy — is correct and merely useless: the saving is lost
+/// without a sound. Measure it once: after a refetch that changed one
+/// element, the others should be `identical` to the instances held before,
+/// and after one that changed nothing, the whole value should be.
 abstract interface class StructurallyShareable<T> {
   /// This value, with every part that [previous] already holds an equal
   /// instance of swapped for that instance.
@@ -242,20 +254,14 @@ T replaceEqualDeep<T>(Object? previous, T next, [int depth = 0]) {
     } catch (_) {
       // Best effort: the incoming value stands.
     }
+    // Not asserted. `candidate == next` failed every correct `shareWith` of a
+    // class with identity equality (CORE-1), and `!identical(candidate,
+    // previous)` the one of them that keeps the instance when nothing
+    // changed (V-C-4) — each in debug builds only, as a failed fetch
+    // (release review, 2026-09-23). With an `==` that is not deep, the walk
+    // cannot tell a correct result from a stale one; the contract is on
+    // [StructurallyShareable].
     if (candidate != null) {
-      // Outside the `try`, so it is not swallowed with the rest: `previous`
-      // handed back is stale data on its way into the cache, and that is not
-      // a sharing failure to shrug at. Only that is asserted. Here `previous`
-      // is known not to be `==` to `next`, so returning it is always the
-      // mistake; `candidate == next` was asserted before, and a class with
-      // identity equality — or a shallow `==` over a list — can never meet
-      // it with a correct `shareWith`, which then failed the fetch in debug
-      // builds only (release review, 2026-09-23, CORE-1).
-      assert(
-          !identical(candidate, previous),
-          '${next.runtimeType}.shareWith returned `previous`, which is not '
-          'equal to the value it was called on. Return `this` with the parts '
-          '`previous` already holds swapped in — never `previous` itself.');
       return candidate as T;
     }
   }

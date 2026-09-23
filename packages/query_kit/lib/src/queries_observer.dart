@@ -159,8 +159,12 @@ class QueriesObserver<TQueryData, TData> {
       }
     } finally {
       _updating--;
+      // On the throw path too: the members before the throwing one took
+      // their new options with their notifications held back by `_updating`,
+      // and skipping this left `currentResult` behind theirs and the
+      // listeners untold (release review, 2026-09-23, V-C-5).
+      _collect();
     }
-    _collect();
   }
 
   void _collect() {
