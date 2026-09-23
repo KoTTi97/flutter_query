@@ -122,7 +122,9 @@ meets first:
   `onMutate` returned no longer reports `isPaused` while its function runs;
   `cancel()` on one restored `pending` from persistence fails it instead of
   doing nothing, and hands its scope on only if it held it — cancelling a
-  restored scope's tail leaves the head paused; offline, `resumePausedMutations()` no longer waits for an
+  restored scope's tail leaves the head paused, and a head cancelled and
+  removed from the cache (in either order) still hands on to its tail;
+  offline, `resumePausedMutations()` no longer waits for an
   `always` mutation queued behind an `online` scope-mate that cannot run; a
   second run whose `onMutate` threw no longer hands the first run's
   `onMutateResult` to its error callbacks.

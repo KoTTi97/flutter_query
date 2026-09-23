@@ -144,6 +144,15 @@ class MutationCache
   int _nextMutationId = 1;
   final Map<Object, Mutation<Object?, Object?, Object?>> _scopeOwners = {};
 
+  /// Mutations [remove] took out of the cache while they were the first
+  /// `pending` entry of an unclaimed scope *and* had a run still to settle —
+  /// a restored head cancelled and then removed. Out of the cache,
+  /// [onMutationSettled] can no longer see where in line such a run stood,
+  /// so what it was is written down while it still can be (release review
+  /// 2026-09-23, third pass, V3-3).
+  final Set<Mutation<Object?, Object?, Object?>> _removedRunningHeads =
+      Set<Mutation<Object?, Object?, Object?>>.identity();
+
   /// Every mutation in the cache, in submission order, as a copy: safe to
   /// iterate while removing. Upstream's `getAll`.
   List<Mutation<Object?, Object?, Object?>> get mutations =>
@@ -252,6 +261,11 @@ class MutationCache
     // for good (pre-release review, 2026-09-12, F6).
     final releasedScope =
         _isUnstartedScopeHead(mutation) ? _scopeOf(mutation) : null;
+    if (mutation.isRunning && _isUnclaimedScopeHead(mutation)) {
+      // Its run's `finally` releases the scope, and by then the entry is
+      // gone from the line it headed (V3-3).
+      _removedRunningHeads.add(mutation);
+    }
     if (_mutations.remove(mutation)) {
       mutation.destroy();
       if (releasedScope != null) {
@@ -266,10 +280,16 @@ class MutationCache
   /// Whether [mutation] is the first `pending` entry of its scope and has no
   /// run of its own — a restored head, whose removal is what releases the
   /// scope. A running head releases it from its own `finally`.
-  bool _isUnstartedScopeHead(Mutation<Object?, Object?, Object?> mutation) {
+  bool _isUnstartedScopeHead(Mutation<Object?, Object?, Object?> mutation) =>
+      !mutation.isRunning && _isUnclaimedScopeHead(mutation);
+
+  /// Whether [mutation] is the first `pending` entry of its scope while
+  /// nobody has claimed that scope — the one a release on its behalf would
+  /// rightly hand on from.
+  bool _isUnclaimedScopeHead(Mutation<Object?, Object?, Object?> mutation) {
     final scope = _scopeOf(mutation);
     if (scope == null ||
-        mutation.isRunning ||
+        _scopeOwners.containsKey(scope) ||
         mutation.state.status != MutationStatus.pending) {
       return false;
     }
@@ -299,6 +319,7 @@ class MutationCache
   void clear() {
     final removed = mutations;
     _mutations.clear();
+    _removedRunningHeads.clear();
     for (final mutation in removed) {
       mutation.destroy();
     }
@@ -462,7 +483,13 @@ class MutationCache
     // nothing, and handing the scope on would start that mate although
     // nobody resumed it (release review, 2026-09-23, V-C-3); the mate hands
     // on itself when it settles.
-    if (!_scopeOwners.containsKey(scope)) {
+    //
+    // Where it stood is read off the cache, so an entry already removed from
+    // it is judged by what [remove] wrote down: a head removed mid-run still
+    // hands on, as `cancel` alone and `remove` alone do (third pass, V3-3).
+    final removedHead = _removedRunningHeads.remove(mutation);
+    if (!_scopeOwners.containsKey(scope) && !removedHead) {
+      if (!_mutations.any((other) => identical(other, mutation))) return;
       for (final other in _mutations) {
         if (identical(other, mutation)) break;
         if (_scopeOf(other) == scope &&

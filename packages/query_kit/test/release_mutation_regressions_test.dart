@@ -540,6 +540,75 @@ void main() {
     client.clear();
   });
 
+  // Third pass (V3-3): the restored scope in L4-3 / V-C-3, with the head
+  // removed from the cache as well as cancelled.
+  Mutation<int, int, void> restoreV3(QueryClient client, int v, List<int> ran,
+          {void Function()? onError}) =>
+      client.mutationCache.build<int, int, void>(
+          client,
+          client.defaultMutationOptions(MutationOptions<int, int, void>(
+            scope: const MutationScope('s'),
+            onError: onError == null ? null : (_, __, ___, ____) => onError(),
+            mutationFn: (v) {
+              ran.add(v);
+              return v;
+            },
+          )),
+          state: MutationState<int, int, void>(
+              status: MutationStatus.pending,
+              variables: v,
+              hasVariables: true,
+              isPaused: true));
+
+  testFakeAsync(
+      'V3-3 a restored head cancelled and then removed still hands the scope '
+      'on', (time) async {
+    final client = testClient();
+    final ran = <int>[];
+    final head = restoreV3(client, 1, ran);
+    final tail = restoreV3(client, 2, ran);
+    head.cancel();
+    client.mutationCache.remove(head);
+    await time.flushMicrotasks();
+    expect(ran, [2]);
+    expect(tail.state.status, MutationStatus.success);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'V3-3 a restored head removed in the onError of its cancel still hands '
+      'the scope on', (time) async {
+    final client = testClient();
+    final ran = <int>[];
+    late Mutation<int, int, void> head;
+    head = restoreV3(client, 1, ran,
+        onError: () => client.mutationCache.remove(head));
+    final tail = restoreV3(client, 2, ran);
+    head.cancel();
+    await time.flushMicrotasks();
+    expect(ran, [2]);
+    expect(tail.state.status, MutationStatus.success);
+    client.clear();
+  });
+
+  testFakeAsync(
+      'V3-3 the tail of a restored scope cancelled and removed still starts '
+      'nothing', (time) async {
+    final client = testClient();
+    final ran = <int>[];
+    final head = restoreV3(client, 1, ran);
+    final tail = restoreV3(client, 2, ran);
+    tail.cancel();
+    client.mutationCache.remove(tail);
+    await time.flushMicrotasks();
+    expect(ran, isEmpty);
+    expect(head.state.isPaused, isTrue);
+    await client.resumePausedMutations();
+    await time.flushMicrotasks();
+    expect(ran, [1]);
+    client.clear();
+  });
+
   testFakeAsync(
       'L4-4 resumePausedMutations does not wait offline on a scope held by a '
       'network-paused mutation', (time) async {
