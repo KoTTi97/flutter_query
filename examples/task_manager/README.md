@@ -29,6 +29,22 @@ flutter run -d chrome                # web
 flutter run                          # iOS: pick the simulator when asked
 ```
 
+**Without a server** — how the documentation site embeds it as a live demo —
+build with `--dart-define=QK_BACKEND=inmemory`: every request is answered by
+[`lib/demo/in_memory_backend.dart`](lib/demo/in_memory_backend.dart) inside the
+app, as slow as the server's defaults (900 ms a list, 350 ms a task, 700 ms a
+write, 3 s for the reminder to confirm), with the same scripted failures. Its
+seed is three tasks, not the server's five (see the file).
+
+```bash
+flutter run -d chrome --dart-define=QK_BACKEND=inmemory
+```
+
+On the web, `?semantics=1` in the URL switches the semantics tree on from the
+first frame. `tool/build_demos.sh` at the repository root (`npm run demos` in
+`website/`) builds this app and the showcase that way into
+`website/static/demo/`, which is gitignored.
+
 On the **web** the app talks to the backend across origins, which works because
 the backend answers with `Access-Control-Allow-Origin: *` and allows the
 `x-demo-client` header the client sends. A Flutter web build has no dev-server
@@ -116,9 +132,10 @@ flutter test
 
 Sixteen widget tests — one per row of the MVP feature checklist, plus two
 regressions found by review — running the real app, with its own client
-defaults, against [`test/fake_backend.dart`](test/fake_backend.dart) — an
-in-memory stand-in for [`server/server.ts`](server/server.ts) wired in as a dio
-`HttpClientAdapter`. Only the transport is replaced: the app's own `TaskApi`,
+defaults, against [`test/fake_backend.dart`](test/fake_backend.dart) — the
+app's own [`lib/demo/in_memory_backend.dart`](lib/demo/in_memory_backend.dart),
+an in-memory stand-in for [`server/server.ts`](server/server.ts) wired in as a
+dio `HttpClientAdapter`, with its latencies at zero. Only the transport is replaced: the app's own `TaskApi`,
 its JSON, its error handling and its cancellation are all exercised. Pointing
 the same app at the express backend is then a smoke test rather than a leap of
 faith.

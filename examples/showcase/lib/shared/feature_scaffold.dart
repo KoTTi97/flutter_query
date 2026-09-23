@@ -1,5 +1,9 @@
 /// The frame around every feature screen: title, back button, the scenario
 /// this run lives in, and the catalogue's row as an intro.
+///
+/// Embedded in the documentation site (`?embed=1`) there is no back button —
+/// the frame holds one feature and nothing to go back to — and the scenario
+/// gives way to what [ShowcaseScope.backendLabel] says instead.
 library;
 
 import 'package:flutter/material.dart';
@@ -24,21 +28,24 @@ class FeatureScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scenario = ShowcaseScope.apiOf(context).scenario;
+    final scope = ShowcaseScope.of(context);
+    final label = scope.backendLabel;
     return Scaffold(
       appBar: AppBar(
         title: Text(feature.title),
+        automaticallyImplyLeading: !scope.embed,
         actions: <Widget>[
           ...actions,
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Center(
-              child: Text(
-                'scenario $scenario',
-                style: Theme.of(context).textTheme.labelSmall,
+          if (label != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Center(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               ),
             ),
-          ),
         ],
       ),
       body: Center(

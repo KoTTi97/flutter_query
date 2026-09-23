@@ -234,7 +234,7 @@ void main() {
     // the core stops only the retry loop and lets the request finish.
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('TanStack Query Showcase'), findsOneWidget);
+    expect(find.text('query_kit showcase'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();

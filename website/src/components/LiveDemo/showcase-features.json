@@ -1,0 +1,152 @@
+[
+  {
+    "id": "simple",
+    "title": "Simple",
+    "summary": "One query, its states, and a refetch."
+  },
+  {
+    "id": "basic",
+    "title": "Basic",
+    "summary": "A list, a detail, and what the cache already knows."
+  },
+  {
+    "id": "default-query-function",
+    "title": "Default query function",
+    "summary": "A query function derived from the key, set once as a default."
+  },
+  {
+    "id": "dependent-queries",
+    "title": "Dependent queries",
+    "summary": "A query that waits for another to have data."
+  },
+  {
+    "id": "parallel-queries",
+    "title": "Parallel queries",
+    "summary": "Several queries in one widget, and the global fetching count."
+  },
+  {
+    "id": "query-collections",
+    "title": "Query collections",
+    "summary": "A list of queries that grows, shrinks and reorders at runtime."
+  },
+  {
+    "id": "combine",
+    "title": "Combine",
+    "summary": "Three queries of three types, read as one result."
+  },
+  {
+    "id": "prefetching",
+    "title": "Prefetching",
+    "summary": "Warm the cache before the screen that needs it opens."
+  },
+  {
+    "id": "select-and-sharing",
+    "title": "Select and structural sharing",
+    "summary": "What a reader rebuilds on, and what it does not."
+  },
+  {
+    "id": "build-when",
+    "title": "Filtering rebuilds",
+    "summary": "buildWhen on the eight keyless reads, each beside its unfiltered twin."
+  },
+  {
+    "id": "initial-and-placeholder",
+    "title": "Initial and placeholder data",
+    "summary": "Data before the first fetch: written to the cache, or shown only."
+  },
+  {
+    "id": "stale-and-gc",
+    "title": "Stale time and garbage collection",
+    "summary": "When data goes stale, and when an unused entry is dropped."
+  },
+  {
+    "id": "pagination",
+    "title": "Pagination",
+    "summary": "Page by page, keeping the previous page on screen while the next loads."
+  },
+  {
+    "id": "load-more",
+    "title": "Load more and infinite scroll",
+    "summary": "An infinite query that appends pages as you scroll."
+  },
+  {
+    "id": "max-pages",
+    "title": "Infinite query with max pages",
+    "summary": "Pages in both directions, with a window of three."
+  },
+  {
+    "id": "mutations",
+    "title": "Mutations",
+    "summary": "mutate, mutateAsync, reset, callbacks, and scopes."
+  },
+  {
+    "id": "optimistic-updates",
+    "title": "Optimistic updates",
+    "summary": "Show the write before the server answers — two ways."
+  },
+  {
+    "id": "mutation-cancel",
+    "title": "Mutation context and cancel",
+    "summary": "A write that reads what onMutate kept, and can be called off."
+  },
+  {
+    "id": "mutation-state",
+    "title": "Mutation state",
+    "summary": "Every running mutation in the cache, read by a widget that owns none of them."
+  },
+  {
+    "id": "playground",
+    "title": "Playground",
+    "summary": "Todos with live knobs for stale time, gc time, latency and errors."
+  },
+  {
+    "id": "invalidation-and-filters",
+    "title": "Invalidation and filters",
+    "summary": "Invalidate, refetch, reset and remove, by prefix, type or predicate."
+  },
+  {
+    "id": "auto-refetching",
+    "title": "Auto refetching",
+    "summary": "Polling on an interval, in the foreground or not."
+  },
+  {
+    "id": "retry",
+    "title": "Retry",
+    "summary": "Retry policies and delays, and what the result shows meanwhile."
+  },
+  {
+    "id": "cancellation",
+    "title": "Cancellation",
+    "summary": "A query cancelled is a request aborted."
+  },
+  {
+    "id": "offline",
+    "title": "Offline",
+    "summary": "Network modes, paused mutations, and coming back online."
+  },
+  {
+    "id": "focus-refetch",
+    "title": "Focus refetch",
+    "summary": "What happens when the app comes back to the foreground."
+  },
+  {
+    "id": "four-call-styles",
+    "title": "Four call styles",
+    "summary": "The same query through context, builder, mixin and controller."
+  },
+  {
+    "id": "global-callbacks",
+    "title": "Global callbacks",
+    "summary": "Cache-level callbacks, and meta on its way through."
+  },
+  {
+    "id": "cache-inspector",
+    "title": "Cache inspector",
+    "summary": "Every entry and every event, live."
+  },
+  {
+    "id": "diagnostics",
+    "title": "Diagnostics",
+    "summary": "What the library throws, and when: the wrong type, the missing function."
+  }
+]

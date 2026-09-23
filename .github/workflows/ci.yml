@@ -107,16 +107,28 @@ jobs:
   # The documentation site. Nothing is deployed — this job exists because
   # `onBrokenLinks: 'throw'` turns a link to a page that does not exist into a
   # failed build, which is the only thing that keeps a docs site honest as the
-  # prose moves around.
+  # prose moves around. The live demos are built first, into static/demo/,
+  # so the site this job uploads is the site with its demos in it; the build
+  # itself also checks that every `<LiveDemo feature>` names a real screen.
   website:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.8
+          cache: true
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: website/package-lock.json
+      - run: flutter pub get
+      # Both example apps for the web against their in-memory backends
+      # (--dart-define=QK_BACKEND=inmemory), into website/static/demo/.
+      - name: live demos
+        run: tool/build_demos.sh
       - run: npm ci
         working-directory: website
       - name: typecheck
@@ -129,6 +141,44 @@ jobs:
         with:
           name: website
           path: website/build
+          retention-days: 7
+
+  # The built site in a real Chromium: the `<LiveDemo>` on a doc page loads
+  # on its click and its screen fetches from the in-memory backend, and every
+  # showcase feature — the list is the catalogue's own, so none can be
+  # missed — boots at its embed URL. Served as it ships, under /flutter_query/.
+  website-e2e:
+    needs: website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            website/package-lock.json
+            website/e2e/package-lock.json
+      - uses: actions/download-artifact@v7
+        with:
+          name: website
+          path: website/build
+      # For `docusaurus serve`, which serves build/ under the site's baseUrl.
+      - run: npm ci
+        working-directory: website
+      - name: playwright
+        run: npm ci && npx playwright install --with-deps chromium
+        working-directory: website/e2e
+      - name: end-to-end tests
+        run: npx playwright test
+        working-directory: website/e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report-website
+          path: |
+            website/e2e/playwright-report
+            website/e2e/test-results
           retention-days: 7
 
   # The end-to-end suites: each app's real web build in a real Chromium

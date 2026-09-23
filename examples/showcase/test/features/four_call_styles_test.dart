@@ -210,7 +210,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    expect(find.text('TanStack Query Showcase'), findsOneWidget);
+    expect(find.text('query_kit showcase'), findsOneWidget);
     // Including the hand-rolled one: its `dispose` unsubscribes *and*
     // destroys the observer, and only the destroy detaches it from the entry.
     for (final query in h.client.queryCache.findAll()) {

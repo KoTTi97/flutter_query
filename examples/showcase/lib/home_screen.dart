@@ -6,25 +6,30 @@ import 'package:flutter/material.dart';
 import 'routes.dart';
 import 'shared/scope.dart';
 
+/// The app's name: the home screen's title, the browser tab's, and what the
+/// widget tests look for to know they are back in the catalogue.
+const String showcaseTitle = 'query_kit showcase';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final scenario = ShowcaseScope.apiOf(context).scenario;
+    final label = ShowcaseScope.of(context).backendLabel;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TanStack Query Showcase'),
+        title: const Text(showcaseTitle),
         actions: <Widget>[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Center(
-              child: Text(
-                'scenario $scenario',
-                style: Theme.of(context).textTheme.labelSmall,
+          if (label != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Center(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               ),
             ),
-          ),
         ],
       ),
       body: Center(

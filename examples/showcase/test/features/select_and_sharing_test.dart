@@ -282,7 +282,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    expect(find.text('TanStack Query Showcase'), findsOneWidget);
+    expect(find.text('query_kit showcase'), findsOneWidget);
     expect(h.client.queryCache.queries.single.observersCount, 0);
   });
 }

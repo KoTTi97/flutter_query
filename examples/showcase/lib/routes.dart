@@ -116,3 +116,52 @@ Route<Object?> onGenerateRoute(RouteSettings settings) {
     builder: entry.builder,
   );
 }
+
+/// The route table of an embedded run (`?embed=1`): a feature's own route, and
+/// for every other name — `/` included — [UnknownDemoScreen], never the
+/// catalogue. The documentation site frames one feature at a time, and a
+/// reader who edits the hash or presses the browser's back button must not
+/// land in an index the frame has no room for.
+Route<Object?> onGenerateEmbeddedRoute(RouteSettings settings) {
+  final name = settings.name ?? '/';
+  final entry = featureEntries
+      .where((candidate) => candidate.feature.route == name)
+      .firstOrNull;
+  return MaterialPageRoute<Object?>(
+    settings: settings,
+    builder: entry?.builder ?? (_) => UnknownDemoScreen(route: name),
+  );
+}
+
+/// An embedded run's first and only route.
+///
+/// Flutter's default expansion of an initial route pushes `/` beneath
+/// `/optimistic-updates`, which would put the catalogue one "back" away from
+/// the embedded feature; this pushes the feature alone.
+List<Route<Object?>> onGenerateEmbeddedInitialRoutes(String initialRoute) =>
+    <Route<Object?>>[
+      onGenerateEmbeddedRoute(RouteSettings(name: initialRoute)),
+    ];
+
+/// What an embedded frame shows for a route that is not a feature: a stale
+/// `<LiveDemo feature>` id, or a hand-edited URL.
+class UnknownDemoScreen extends StatelessWidget {
+  const UnknownDemoScreen({super.key, required this.route});
+
+  final String route;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Unknown demo'),
+          automaticallyImplyLeading: false,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'There is no showcase feature at "$route". Every feature id is '
+            'listed in examples/showcase/lib/routes.dart.',
+          ),
+        ),
+      );
+}

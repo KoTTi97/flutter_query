@@ -12,13 +12,16 @@ environment:
 resolution: workspace
 
 dependencies:
+  # A normal dependency, not a dev one: `lib/demo/in_memory_backend.dart`
+  # stamps its log and its answers with `clock.now()`, which the widget tests'
+  # virtual time depends on, and the demo build ships it.
+  clock: ^1.1.1
   dio: ^5.7.0
   flutter:
     sdk: flutter
   query_kit_flutter: ^1.0.0
 
 dev_dependencies:
-  clock: ^1.1.1
   flutter_test:
     sdk: flutter
   lints: '>=5.1.1 <7.0.0'
@@ -28,3 +31,8 @@ flutter:
   # — the pubspec here was hand-written, and `flutter create` does not add this
   # to an existing one.
   uses-material-design: true
+
+  # The in-memory backend's seed, the very file the express server loads, so
+  # the demo build (`--dart-define=QK_BACKEND=inmemory`) holds the same data.
+  assets:
+    - server/seed.json

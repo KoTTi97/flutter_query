@@ -175,7 +175,7 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('TanStack Query Showcase'), findsOneWidget);
+    expect(find.text('query_kit showcase'), findsOneWidget);
 
     // Every entry lived on the screen's own client; the app's holds none of
     // them. That the test ends without a pending timer is the other half:

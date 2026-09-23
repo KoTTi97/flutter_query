@@ -14,12 +14,31 @@
 /// The catalogue is `routes.dart`; each feature lives in
 /// `lib/features/<feature>/` and says at the top what it shows and how it is
 /// proven.
+///
+/// **Without a server**, as the documentation site's live demos run it:
+///
+/// ```bash
+/// flutter run -d chrome --dart-define=QK_BACKEND=inmemory
+/// ```
+///
+/// The backend is then `lib/demo/in_memory_backend.dart` in the same tab, with
+/// the server's seed and its 300 ms latency. Two query parameters, before the
+/// `#/route`, change how the app presents itself on the web:
+///
+/// - `?embed=1` — one feature, alone: the route in the hash and nothing
+///   beneath it, no back button, no way into the catalogue. What the site's
+///   `<LiveDemo>` frame loads: `?embed=1&semantics=1#/optimistic-updates`.
+/// - `?semantics=1` — the semantics tree on from the first frame, as
+///   `--dart-define=E2E=true` does, so a screen reader and Playwright see the
+///   screen without a special build.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:query_kit_flutter/query_kit_flutter.dart';
 
+import 'demo/demo_mode.dart';
+import 'home_screen.dart';
 import 'routes.dart';
 import 'shared/api.dart';
 import 'shared/cache_stats.dart';
@@ -44,12 +63,20 @@ ThemeData _showcaseTheme() => ThemeData(
           const SnackBarThemeData(behavior: SnackBarBehavior.floating),
     );
 
-void main() {
-  if (_e2e) {
-    WidgetsFlutterBinding.ensureInitialized();
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final parameters = Uri.base.queryParameters;
+  if (_e2e || parameters['semantics'] == '1') {
     SemanticsBinding.instance.ensureSemantics();
   }
-  runApp(ShowcaseApp(api: ShowcaseApi(scenario: scenarioFromEnvironment())));
+  final api = inMemoryBackend
+      ? inMemoryApi(await loadSeed())
+      : ShowcaseApi(scenario: scenarioFromEnvironment());
+  runApp(ShowcaseApp(
+    api: api,
+    embed: parameters['embed'] == '1',
+    inMemory: inMemoryBackend,
+  ));
 }
 
 class ShowcaseApp extends StatefulWidget {
@@ -58,6 +85,8 @@ class ShowcaseApp extends StatefulWidget {
     required this.api,
     this.client,
     this.initialRoute,
+    this.embed = false,
+    this.inMemory = false,
   });
 
   final ShowcaseApi api;
@@ -68,6 +97,13 @@ class ShowcaseApp extends StatefulWidget {
   /// Where to start; the widget tests open a feature directly. On the web the
   /// URL's hash wins over this, which is how a deep link works.
   final String? initialRoute;
+
+  /// One feature alone, framed by the documentation site: see
+  /// [onGenerateEmbeddedRoute].
+  final bool embed;
+
+  /// [api] runs over the in-memory backend; the app bar says so.
+  final bool inMemory;
 
   @override
   State<ShowcaseApp> createState() => _ShowcaseAppState();
@@ -95,12 +131,17 @@ class _ShowcaseAppState extends State<ShowcaseApp> {
         child: ShowcaseScope(
           api: widget.api,
           stats: _stats,
+          embed: widget.embed,
+          inMemory: widget.inMemory,
           child: MaterialApp(
-            title: 'TanStack Query Showcase',
+            title: showcaseTitle,
             debugShowCheckedModeBanner: false,
             theme: _showcaseTheme(),
             initialRoute: widget.initialRoute ?? '/',
-            onGenerateRoute: onGenerateRoute,
+            onGenerateRoute:
+                widget.embed ? onGenerateEmbeddedRoute : onGenerateRoute,
+            onGenerateInitialRoutes:
+                widget.embed ? onGenerateEmbeddedInitialRoutes : null,
           ),
         ),
       );
