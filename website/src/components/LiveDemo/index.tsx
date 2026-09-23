@@ -1,4 +1,6 @@
 import useBaseUrl from '@docusaurus/useBaseUrl'
+import useIsBrowser from '@docusaurus/useIsBrowser'
+import { useColorMode } from '@docusaurus/theme-common'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import showcaseFeatures from './showcase-features.json'
 import styles from './styles.module.css'
@@ -64,6 +66,20 @@ export default function LiveDemo({ feature, app = 'showcase', height = 640 }: Li
   const frame = useRef<HTMLIFrameElement>(null)
   const fallback = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(fallback.current), [])
+  // The demo takes the site's colour scheme from its URL (`?theme=`), once,
+  // at boot. A toggle while it runs therefore restarts it in the new scheme:
+  // the frame is keyed on the mode, and the overlay covers the restart.
+  const { colorMode } = useColorMode()
+  const isBrowser = useIsBrowser()
+  const shownMode = useRef(colorMode)
+  useEffect(() => {
+    if (shownMode.current === colorMode) {
+      return
+    }
+    shownMode.current = colorMode
+    window.clearTimeout(fallback.current)
+    setPhase((current) => (current === 'running' ? 'loading' : current))
+  }, [colorMode])
   const root = useBaseUrl(`/demo/${app}/`)
   const demo = describe(app, feature)
 
@@ -81,8 +97,11 @@ export default function LiveDemo({ feature, app = 'showcase', height = 640 }: Li
   // The query string sits before the hash, so the app reads it however it
   // navigates. `semantics=1` switches Flutter's semantics tree on: a screen
   // reader can use the demo, and so can the site's end-to-end suite.
-  const embedded = `${root}?embed=1&semantics=1${demo.route}`
-  const fullScreen = `${root}${demo.route}`
+  // `theme` is the site's own light or dark mode, which the app follows.
+  const embedded = `${root}?embed=1&semantics=1&theme=${colorMode}${demo.route}`
+  // The server renders without knowing the reader's mode, so the link gains
+  // its `theme` once the page runs in a browser rather than hydrating a guess.
+  const fullScreen = isBrowser ? `${root}?theme=${colorMode}${demo.route}` : `${root}${demo.route}`
   const frameTitle = `Live demo: ${demo.title}`
 
   // `version.json` is written by every Flutter web build and names the app;
@@ -132,6 +151,7 @@ export default function LiveDemo({ feature, app = 'showcase', height = 640 }: Li
         {started ? (
           <>
             <iframe
+              key={colorMode}
               ref={frame}
               className={styles.iframe}
               src={embedded}

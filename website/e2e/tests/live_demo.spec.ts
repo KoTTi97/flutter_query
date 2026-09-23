@@ -32,7 +32,7 @@ test('its links go to the whole app and to the feature source', async ({ page })
   await page.goto(page_)
   await expect(page.getByRole('link', { name: 'Open full screen ↗' })).toHaveAttribute(
     'href',
-    `${BASE}demo/showcase/#/simple`,
+    `${BASE}demo/showcase/?theme=light#/simple`,
   )
   await expect(page.getByRole('link', { name: 'View source ↗' })).toHaveAttribute(
     'href',
@@ -54,4 +54,26 @@ test('full screen is the whole catalogue, the feature on top of it', async ({ pa
   await expect(page.getByText('Local development: setup guide')).toBeVisible()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(page.getByText('query_kit showcase', { exact: true })).toBeVisible()
+})
+
+test('the demo follows the site into dark mode, and back out of it', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto(page_)
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.getByRole('link', { name: 'Open full screen ↗' })).toHaveAttribute(
+    'href',
+    `${BASE}demo/showcase/?theme=dark#/simple`,
+  )
+
+  await page.getByRole('button', { name: 'Run live demo' }).click()
+  const iframe = page.locator('iframe[title="Live demo: Simple"]')
+  await expect(iframe).toHaveAttribute('src', /[?&]theme=dark#\/simple$/)
+  const frame = page.frameLocator('iframe[title="Live demo: Simple"]')
+  await expect(frame.getByText('Local development: setup guide')).toBeVisible()
+
+  // The navbar's toggle: the frame restarts in the site's new mode.
+  await page.getByRole('button', { name: /Switch between dark and light mode/ }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(iframe).toHaveAttribute('src', /[?&]theme=light#\/simple$/)
+  await expect(frame.getByText('Local development: setup guide')).toBeVisible()
 })

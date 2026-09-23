@@ -7,6 +7,7 @@
 library;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart' show Brightness;
 
 import '../src/api.dart';
 import 'in_memory_backend.dart';
@@ -34,3 +35,14 @@ TaskApi inMemoryTaskApi() => TaskApi(
           confirmAfter: const Duration(seconds: 3),
         ),
     );
+
+/// The brightness a URL asks for: `?theme=dark` or `?theme=light`, which the
+/// documentation site's `<LiveDemo>` passes so an embedded demo follows the
+/// site's own light or dark mode. Anything else is `null`: the app stays
+/// light, as it always was.
+Brightness? brightnessFrom(Map<String, String> parameters) =>
+    switch (parameters['theme']) {
+      'dark' => Brightness.dark,
+      'light' => Brightness.light,
+      _ => null,
+    };

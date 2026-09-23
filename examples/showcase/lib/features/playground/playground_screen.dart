@@ -13,8 +13,9 @@
 /// to every reader on the screen — verified by the widget tests, no
 /// re-keying needed. The screen snapshots the defaults on entry and restores
 /// them in `dispose`. Latency and error rate go to the **backend's** scenario
-/// through `configureScenario`; the scenario is this run's own world, so no
-/// other screen sees them, and both are reset to zero in `dispose`. The
+/// through `configureScenario`. Every screen of one run shares that
+/// scenario, so the screen reads both knobs on entry and puts them back as it
+/// found them in `dispose`. The
 /// `backend` facts show the values the backend has acknowledged, which is
 /// what a test waits for before it relies on them.
 ///
@@ -45,7 +46,7 @@
 /// entry, `fetches` +1 on both; adding, renaming and completing a todo
 /// reaches the list at one `GET /api/todos` per invalidation with one `POST`
 /// or `PATCH` each; and leaving the screen restores the client's defaults
-/// and the scenario's latency and error rate.
+/// and the latency and error rate the scenario had before it.
 library;
 
 import 'dart:async';
@@ -200,6 +201,11 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
   late final QueryClient _client;
   DefaultOptions? _snapshot;
 
+  /// The backend's two knobs as they were before this screen turned them,
+  /// which `dispose` puts back: the screen is one of many in the app, and the
+  /// others run at the backend's own latency.
+  ({Duration latency, double errorRate})? _before;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -208,8 +214,23 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
       _client = queryClient;
       _snapshot = _client.getDefaultOptions();
       _applyDefaults();
-      unawaited(_pushScenario());
+      unawaited(_start());
     }
+  }
+
+  /// Reads the knobs as they are — a config request with nothing in it
+  /// changes nothing and answers the config — then applies this screen's.
+  Future<void> _start() async {
+    try {
+      final config = await _api.configureScenario();
+      _before = (
+        latency: Duration(milliseconds: (config['latency']! as num).toInt()),
+        errorRate: (config['errorRate']! as num).toDouble(),
+      );
+    } on Object {
+      // Unknown, so nothing to restore beyond the zeros below.
+    }
+    await _pushScenario();
   }
 
   @override
@@ -217,7 +238,13 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> with QueryMixin {
     final snapshot = _snapshot;
     if (snapshot != null) {
       _client.setDefaultOptions(snapshot);
-      _api.configureScenario(latency: Duration.zero, errorRate: 0).ignore();
+      final before = _before;
+      _api
+          .configureScenario(
+            latency: before?.latency ?? Duration.zero,
+            errorRate: before?.errorRate ?? 0,
+          )
+          .ignore();
     }
     _newTodo.dispose();
     super.dispose();

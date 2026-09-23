@@ -31,6 +31,8 @@
 /// - `?semantics=1` — the semantics tree on from the first frame, as
 ///   `--dart-define=E2E=true` does, so a screen reader and Playwright see the
 ///   screen without a special build.
+/// - `?theme=dark` or `?theme=light` — the colour scheme, so a demo framed in
+///   the site follows the site's own mode. Without it the app is light.
 library;
 
 import 'package:flutter/material.dart';
@@ -56,8 +58,11 @@ const bool _e2e = bool.fromEnvironment('E2E');
 /// the [MaterialApp] below — and a module in `shared/` is something more than
 /// one feature calls (#69). What *is* shared is the theme given a shape, and
 /// that is `shared/chrome.dart`.
-ThemeData _showcaseTheme() => ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B5FFF)),
+ThemeData _showcaseTheme(Brightness brightness) => ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF0B5FFF),
+        brightness: brightness,
+      ),
       useMaterial3: true,
       snackBarTheme:
           const SnackBarThemeData(behavior: SnackBarBehavior.floating),
@@ -76,6 +81,7 @@ Future<void> main() async {
     api: api,
     embed: parameters['embed'] == '1',
     inMemory: inMemoryBackend,
+    themeMode: themeModeFrom(parameters) ?? ThemeMode.light,
   ));
 }
 
@@ -87,6 +93,7 @@ class ShowcaseApp extends StatefulWidget {
     this.initialRoute,
     this.embed = false,
     this.inMemory = false,
+    this.themeMode = ThemeMode.light,
   });
 
   final ShowcaseApi api;
@@ -104,6 +111,9 @@ class ShowcaseApp extends StatefulWidget {
 
   /// [api] runs over the in-memory backend; the app bar says so.
   final bool inMemory;
+
+  /// Light unless the URL asks otherwise: see [themeModeFrom].
+  final ThemeMode themeMode;
 
   @override
   State<ShowcaseApp> createState() => _ShowcaseAppState();
@@ -136,7 +146,9 @@ class _ShowcaseAppState extends State<ShowcaseApp> {
           child: MaterialApp(
             title: showcaseTitle,
             debugShowCheckedModeBanner: false,
-            theme: _showcaseTheme(),
+            theme: _showcaseTheme(Brightness.light),
+            darkTheme: _showcaseTheme(Brightness.dark),
+            themeMode: widget.themeMode,
             initialRoute: widget.initialRoute ?? '/',
             onGenerateRoute:
                 widget.embed ? onGenerateEmbeddedRoute : onGenerateRoute,

@@ -10,6 +10,7 @@ library;
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/services.dart';
 
 import '../shared/api.dart';
@@ -47,3 +48,16 @@ const String seedAsset = 'server/seed.json';
 Future<Map<String, Object?>> loadSeed([AssetBundle? bundle]) async =>
     jsonDecode(await (bundle ?? rootBundle).loadString(seedAsset))
         as Map<String, Object?>;
+
+/// The colour scheme a URL asks for: `?theme=dark` or `?theme=light`, which
+/// the documentation site's `<LiveDemo>` passes so an embedded demo follows
+/// the site's own light or dark mode.
+///
+/// Anything else — no parameter, or a value this does not know — is `null`,
+/// and the app keeps its light theme.
+ThemeMode? themeModeFrom(Map<String, String> parameters) =>
+    switch (parameters['theme']) {
+      'dark' => ThemeMode.dark,
+      'light' => ThemeMode.light,
+      _ => null,
+    };

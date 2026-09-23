@@ -18,7 +18,14 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 site="$root/website"
 
-base_url="${SITE_BASE_URL:-$(sed -En "s/^[[:space:]]*baseUrl:[[:space:]]*['\"]([^'\"]*)['\"].*/\1/p" "$site/docusaurus.config.ts" | head -n 1)}"
+config="$site/docusaurus.config.ts"
+base_url="${SITE_BASE_URL:-$(sed -En "s/^[[:space:]]*baseUrl:[[:space:]]*['\"]([^'\"]*)['\"].*/\1/p" "$config" | head -n 1)}"
+# The config may build it instead: `const repository = 'x'` and
+# ``const baseUrl = `/${repository}/` ``.
+if [[ -z "$base_url" ]] && grep -Fq 'const baseUrl = `/${repository}/`' "$config"; then
+  repository="$(sed -En "s/^const repository = ['\"]([^'\"]*)['\"].*/\1/p" "$config" | head -n 1)"
+  [[ -n "$repository" ]] && base_url="/$repository/"
+fi
 if [[ -z "$base_url" || "$base_url" != /*/ ]]; then
   echo "build_demos: could not read baseUrl from website/docusaurus.config.ts (got '$base_url')" >&2
   exit 1

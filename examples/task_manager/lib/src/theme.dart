@@ -7,19 +7,99 @@ library;
 
 import 'package:flutter/material.dart';
 
+/// One set of the app's colour tokens. [light] is the app as it has always
+/// looked; [dark] is the same restraint on a dark ground, for a demo framed
+/// in the documentation site's dark mode.
+final class AppPalette {
+  const AppPalette({
+    required this.brightness,
+    required this.ground,
+    required this.card,
+    required this.border,
+    required this.text,
+    required this.muted,
+    required this.accent,
+    required this.accentSoft,
+    required this.onAccent,
+    required this.warning,
+    required this.warningSoft,
+    required this.danger,
+    required this.dangerSoft,
+    required this.skeleton,
+  });
+
+  final Brightness brightness;
+  final Color ground;
+  final Color card;
+  final Color border;
+  final Color text;
+  final Color muted;
+  final Color accent;
+  final Color accentSoft;
+
+  /// Text and spinners on a filled [accent] button.
+  final Color onAccent;
+  final Color warning;
+  final Color warningSoft;
+  final Color danger;
+  final Color dangerSoft;
+  final Color skeleton;
+
+  static const AppPalette light = AppPalette(
+    brightness: Brightness.light,
+    ground: Color(0xFFF6F7F9),
+    card: Colors.white,
+    border: Color(0xFFE4E7EC),
+    text: Color(0xFF101828),
+    muted: Color(0xFF667085),
+    accent: Color(0xFF0D9488),
+    accentSoft: Color(0xFFECFDF5),
+    onAccent: Colors.white,
+    warning: Color(0xFFB54708),
+    warningSoft: Color(0xFFFFFAEB),
+    danger: Color(0xFFB42318),
+    dangerSoft: Color(0xFFFEF3F2),
+    skeleton: Color(0xFFEDF0F3),
+  );
+
+  static const AppPalette dark = AppPalette(
+    brightness: Brightness.dark,
+    ground: Color(0xFF121316),
+    card: Color(0xFF1B1D21),
+    border: Color(0xFF2E3137),
+    text: Color(0xFFECEAE6),
+    muted: Color(0xFF9A9EA6),
+    accent: Color(0xFF2DD4BF),
+    accentSoft: Color(0xFF12302D),
+    onAccent: Color(0xFF042F2B),
+    warning: Color(0xFFF5A454),
+    warningSoft: Color(0xFF33261A),
+    danger: Color(0xFFF97066),
+    dangerSoft: Color(0xFF3A1D1B),
+    skeleton: Color(0xFF26292E),
+  );
+}
+
+/// The palette in use, chosen once before `runApp`: light, unless the web
+/// build was opened with `?theme=dark` (see `main.dart`). Read through
+/// getters rather than per widget, because the choice never changes while
+/// the app runs.
 abstract final class AppColors {
-  static const Color ground = Color(0xFFF6F7F9);
-  static const Color card = Colors.white;
-  static const Color border = Color(0xFFE4E7EC);
-  static const Color text = Color(0xFF101828);
-  static const Color muted = Color(0xFF667085);
-  static const Color accent = Color(0xFF0D9488);
-  static const Color accentSoft = Color(0xFFECFDF5);
-  static const Color warning = Color(0xFFB54708);
-  static const Color warningSoft = Color(0xFFFFFAEB);
-  static const Color danger = Color(0xFFB42318);
-  static const Color dangerSoft = Color(0xFFFEF3F2);
-  static const Color skeleton = Color(0xFFEDF0F3);
+  static AppPalette palette = AppPalette.light;
+
+  static Color get ground => palette.ground;
+  static Color get card => palette.card;
+  static Color get border => palette.border;
+  static Color get text => palette.text;
+  static Color get muted => palette.muted;
+  static Color get accent => palette.accent;
+  static Color get accentSoft => palette.accentSoft;
+  static Color get onAccent => palette.onAccent;
+  static Color get warning => palette.warning;
+  static Color get warningSoft => palette.warningSoft;
+  static Color get danger => palette.danger;
+  static Color get dangerSoft => palette.dangerSoft;
+  static Color get skeleton => palette.skeleton;
 }
 
 ThemeData buildAppTheme() {
@@ -27,6 +107,7 @@ ThemeData buildAppTheme() {
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,
+      brightness: AppColors.palette.brightness,
       surface: AppColors.card,
     ).copyWith(
       error: AppColors.danger,
@@ -40,7 +121,7 @@ ThemeData buildAppTheme() {
       bodyColor: AppColors.text,
       displayColor: AppColors.text,
     ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: AppColors.card,
       surfaceTintColor: Colors.transparent,
       foregroundColor: AppColors.text,
@@ -59,7 +140,7 @@ ThemeData buildAppTheme() {
       fillColor: AppColors.card,
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      hintStyle: const TextStyle(color: AppColors.muted, fontSize: 14),
+      hintStyle: TextStyle(color: AppColors.muted, fontSize: 14),
       border: _inputBorder(AppColors.border),
       enabledBorder: _inputBorder(AppColors.border),
       focusedBorder: _inputBorder(AppColors.accent, width: 1.4),
@@ -67,7 +148,7 @@ ThemeData buildAppTheme() {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.accent,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.onAccent,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -80,7 +161,7 @@ ThemeData buildAppTheme() {
         highlightColor: AppColors.ground,
       ),
     ),
-    dividerTheme: const DividerThemeData(
+    dividerTheme: DividerThemeData(
       color: AppColors.border,
       thickness: 1,
       space: 1,
@@ -95,7 +176,7 @@ OutlineInputBorder _inputBorder(Color color, {double width = 1}) =>
     );
 
 /// Body text one step quieter than the title above it.
-const TextStyle mutedText = TextStyle(
+final TextStyle mutedText = TextStyle(
   color: AppColors.muted,
   fontSize: 13,
   height: 1.35,
@@ -143,48 +224,55 @@ class StatusPill extends StatelessWidget {
   const StatusPill({
     super.key,
     required this.label,
-    this.color = AppColors.muted,
-    this.background = AppColors.ground,
+    this.color,
+    this.background,
     this.dot = false,
   });
 
   final String label;
-  final Color color;
-  final Color background;
+
+  /// [AppColors.muted] when not given.
+  final Color? color;
+
+  /// [AppColors.ground] when not given.
+  final Color? background;
 
   /// A leading dot, for a state that is in motion.
   final bool dot;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.18)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            if (dot) ...<Widget>[
-              Container(
-                height: 6,
-                width: 6,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+  Widget build(BuildContext context) {
+    final color = this.color ?? AppColors.muted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: background ?? AppColors.ground,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (dot) ...<Widget>[
+            Container(
+              height: 6,
+              width: 6,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
+            const SizedBox(width: 6),
           ],
-        ),
-      );
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// An inline failure the user should see but not be blocked by — a rejected
@@ -205,12 +293,12 @@ class Notice extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
+            Icon(Icons.error_outline, size: 18, color: AppColors.danger),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(fontSize: 13, color: AppColors.danger),
+                style: TextStyle(fontSize: 13, color: AppColors.danger),
               ),
             ),
           ],

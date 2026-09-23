@@ -98,7 +98,7 @@ class _TaskOverviewState extends State<TaskOverview> {
               ),
             ),
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(20, 6, 20, 0),
             child: Text(
               'Tasks on the demo backend. It is deliberately slow — about '
@@ -135,7 +135,7 @@ class _TaskOverviewState extends State<TaskOverview> {
                       tooltip: 'Reload',
                       onPressed: fetching ? null : () => _list!.refetch(),
                       icon: fetching
-                          ? const SizedBox(
+                          ? SizedBox(
                               height: 16,
                               width: 16,
                               child: CircularProgressIndicator(
@@ -194,7 +194,7 @@ class _RoomFilter extends StatelessWidget {
             isDense: true,
             borderRadius: BorderRadius.circular(10),
             icon: const Icon(Icons.expand_more, size: 18),
-            style: const TextStyle(fontSize: 14, color: AppColors.text),
+            style: TextStyle(fontSize: 14, color: AppColors.text),
             onChanged: (project) => onChanged(project ?? 'all'),
             items: <DropdownMenuItem<String>>[
               for (final project in projects)
@@ -300,7 +300,7 @@ class TaskRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           if (task.reminderPending)
-            const StatusPill(
+            StatusPill(
               label: 'confirming',
               color: AppColors.warning,
               background: AppColors.warningSoft,
@@ -309,7 +309,7 @@ class TaskRow extends StatelessWidget {
           else if (!task.synced)
             const StatusPill(label: 'not synced')
           else if (task.displayedReminder)
-            const StatusPill(
+            StatusPill(
               label: 'reminder',
               color: AppColors.accent,
               background: AppColors.accentSoft,
@@ -384,7 +384,7 @@ class _CreateTaskButton extends StatelessWidget {
                     priority: null,
                   )),
           icon: create.value.isPending
-              ? const SizedBox(
+              ? SizedBox(
                   height: 16,
                   width: 16,
                   child: CircularProgressIndicator(
@@ -437,7 +437,7 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -464,7 +464,7 @@ class _ErrorPanel extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const Icon(Icons.cloud_off, size: 26, color: AppColors.danger),
+                Icon(Icons.cloud_off, size: 26, color: AppColors.danger),
                 const SizedBox(height: 12),
                 Text(
                   '$error',
@@ -472,7 +472,7 @@ class _ErrorPanel extends StatelessWidget {
                   style: titleText,
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Is the backend running on port 5174?',
                   style: mutedText,
                 ),

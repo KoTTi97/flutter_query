@@ -277,4 +277,24 @@ void main() {
     expect(h.backend.latency, Duration.zero);
     expect(h.backend.errorRate, 0);
   });
+
+  showcaseTest('leaving the screen puts back the latency it found, not zero',
+      (tester, h) async {
+    // The rest of the app runs at the backend's own latency; the playground
+    // turning its knob to 0 must not leave every other screen instant.
+    h.backend.latency = const Duration(milliseconds: 120);
+    tester.view.physicalSize = const Size(900, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await h.open(tester, '/playground');
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(h.backend.latency, Duration.zero);
+    expect(reader('backend', 'latency=0ms'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(h.backend.latency, const Duration(milliseconds: 120));
+    expect(h.backend.errorRate, 0);
+  });
 }
