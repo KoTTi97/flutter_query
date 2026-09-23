@@ -24,9 +24,9 @@ starts once C3 has fixed the sidebar and slugs.
 | C8b | Dartdoc, binding | same for `query_kit_flutter` | 1 | done |
 | C9 | Test gaps | core/binding coverage gaps from `audits/audit-demos-tests.md` §B closed; value-class table tests; binding on `--platform chrome`; jargon guard in CI (D3) | 1 | done |
 | C3 | Site IA | new sidebar per `audits/audit-site.md` §2; existing content moved into the new slugs; internal history out; stub pages marked | 2 | done |
-| C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | C4b, C4c done; C4a, C4d in review |
+| C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | C4a–c done; C4d in review |
 | C5 | Examples section | one page per showcase feature + task manager, live demo + source | 3 | done |
-| C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | C6b done; C6a in review |
+| C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | done |
 | C7 | API reference pages, differences page, troubleshooting cleanup | | 3 | open |
 | C10 | Landing page | editorial, AI notice, a live demo | 4 | done |
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
@@ -109,8 +109,8 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B17 | C5 | showcase sources shown on the site carry review IDs/issue links, one on screen ("since C49") | fixed `617f9da` |
 | B18 | C5 | stale showcase texts: "combine is not ported", missing spec reference, pagination/offline notices overpromise | fixed `617f9da` |
 | B19 | C4d | `guides/filters.md`: `isMutating(filters:)` counts only pending, ignores `filters.status`; `isFetching` ignores `fetchStatus` | fixed `33b2662` |
-| B20 | C4d | `reading-queries-in-widgets.md`: implies `QueryMixin` throws for item-builder contexts (only `context.query`); ranking words "most explicit/predictable" (also `query_builder.dart:62`) | open → C4a review / F1 |
-| B21 | C4d | `connectivity.md` gaps (swapped clients, reset timing); `queries.md` paused ≠ network only, disabled/static never stale; `combining-queries.md` refetch cancels only sources with data | connectivity checked `80e6dfa`; rest open → C4a review |
+| B20 | C4d | `reading-queries-in-widgets.md`: implies `QueryMixin` throws for item-builder contexts (only `context.query`); ranking words "most explicit/predictable" (also `query_builder.dart:62`) | fixed `fc28fec` |
+| B21 | C4d | `connectivity.md` gaps (swapped clients, reset timing); `queries.md` paused ≠ network only, disabled/static never stale; `combining-queries.md` refetch cancels only sources with data | fixed `80e6dfa`, `fc28fec` |
 | B22 | C4d | dartdoc: `resetQueries` "all four bulk operations" misleads about `removeQueries`; throwing `select` → `QueryError` undocumented; `CombinedResult.isPaused` covers app-hidden wait | open → F1 |
 | B23 | C5 review | `examples/index` renamed to .mdx broke 11 links (build failed); GitHub source links pinned to `main` instead of the built commit | fixed `4d6a791` |
 | B24 | C5 review | 6 P2 + 7 P3 "what to try" bullets promised what the screens don't show | fixed `4d6a791` |
@@ -134,3 +134,5 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C4c | `711fd24`, `33b2662` | 16 mutation and cache guide pages at depth; review fixed B19 and 3 more (caching rebuild claim, prefetching demo steps, sharing counts) |
 | 2026-09-23 | C10 | `98fb761`, `8344491` | editorial landing with live demo and D2 notice; demos follow site theme; task_manager dark palette; review fixed 5 P3; build_demos.sh conflict resolved to C11's parser |
 | 2026-09-23 | C6b | `9a6f2c8`, `1a7a6b5` | 10 recipes (state libs, offline persistence, DI, go_router, websockets, poll-until-confirmed, IoT disconnect, sign-out, key design, freezed); review fixed 2 P2 (`QueryController.create` with select, removeQueries recreation) + 7 P3 |
+| 2026-09-23 | C4a | `c898d32`, `fc28fec` | getting started + 10 queries guides at depth; review fixed B20, B21 and 11 more (gcTime longest wins, maps/sets not walked, Enabled.when re-ask per style) |
+| 2026-09-23 | C6a | `551ce17`, `ce2a092` | 10 recipes on one catalogue app; review fixed a P1 (token-refresh repeat through the queued interceptor could deadlock), 4 P2 (http base URL, timeout, cancellation fact, non-Dio refresh failure), tests for the claims; merge: one explicit 20-recipe sidebar list, dead generator/CSS removed |
