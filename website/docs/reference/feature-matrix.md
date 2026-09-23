@@ -1,10 +1,14 @@
 ---
 title: Feature matrix
-sidebar_position: 2
-description: What is here, what is deliberately not, and where the reason for each omission is recorded.
+description: What is here, and what is deliberately not in 1.0.
 ---
 
+{/* depth: todo */}
+
 # Feature matrix
+
+Every feature of TanStack Query's core, and where to find it — or why it is
+not here.
 
 ## Here
 
@@ -19,7 +23,7 @@ description: What is here, what is deliberately not, and where the reason for ea
 | Mutation scopes (serialised writes) | `MutationScope` |
 | Infinite queries, both directions, `maxPages` | `InfiniteQueryOptions` |
 | `initialData` and `placeholderData` | including `keepPrevious` |
-| `select` and structural sharing | `QuerySelectOptions`, a second options shape with `select` required ([ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md)); plus `buildWhen` on the builders and the keyless reads |
+| `select` and structural sharing | `QuerySelectOptions`, a second options shape with `select` required; plus `buildWhen` on the builders and the keyless reads |
 | `select` from a shared options factory | `withSelect(select)` keeps every other field |
 | A list of queries | `QueriesObserver` / `QueriesBuilder` |
 | Combining results of different types | `(a, b).combine(…)` over a record, `combine` over a `List`, `combineWith`, `optional()`, `CombineMemo` |
@@ -36,11 +40,7 @@ description: What is here, what is deliberately not, and where the reason for ea
 
 ## Deliberately not in 1.0
 
-Every row is recorded, with its reason, in
-[`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md).
-No omission is silent.
-
-| Upstream | Here |
+| TanStack Query | Here |
 |---|---|
 | Persistence and hydration (`hydrate`, `dehydrate`, `persister`, `isRestoring`) | not in 1.0; `Query.setState` is the door a persister would use |
 | `notifyOnChangeProps`, `trackResult` | `select`, plus `buildWhen` on the builders and the keyless reads, mutations included |
@@ -53,32 +53,13 @@ No omission is silent.
 | `select` on `fetchQuery` | map the future |
 | `initialDataUpdatedAt` as a function | `initialDataUpdatedAtCompute`, a `DateTime? Function()` evaluated only when the data is actually seeded |
 | SSR: `isServer`, `environmentManager`, `timeoutManager` | not ported |
-| `MutationFunctionContext` | `mutationFn` takes its variables only; `mutationFnWithContext: (variables, context)` is the two-argument form. Its context adds the typed `onMutateResult` and a `signal` to upstream's `client`, `meta`, `mutationKey` — and `cancel()` on a mutation, which upstream does not have, cancels it |
+| `MutationFunctionContext` | `mutationFn` takes its variables only; `mutationFnWithContext: (variables, context)` is the two-argument form. Its context adds the typed `onMutateResult` and a `signal` to `client`, `meta` and `mutationKey` — and `cancel()` on a mutation, which TanStack Query does not have, cancels it |
 | Callbacks in `setMutationDefaults` | not ported |
-| Devtools | none — the showcase's `cache-inspector` screen is the stand-in |
+| Devtools | none — see [debugging](../guides/debugging.md) |
 
-## The divergences
+## The differences
 
-Where the port deliberately behaves differently rather than not at all, the
-divergence table at the end of PORTING_NOTES has the list and names the ticket
-that decided each one. The ones you are most likely to notice:
-
-- **Rebuilds are compared whole**, not per touched field — see [what
-  rebuilds](../guides/rebuilds.md#why-not-upstreams-trick).
-- **One key, one exact type**, where upstream casts blindly — see [the query
-  client](../guides/the-query-client.md#reading-and-writing-the-cache).
-- **`refetchMinBackgroundDuration`** suppresses a focus refetch after an
-  absence too short to matter. Upstream always refetches; the default here is
-  upstream's behaviour.
-- **Two options shapes, not one.** `QueryObserverOptions<TData>` has no
-  `select` and one type slot; `QuerySelectOptions<TQueryData, TData>` has a
-  required one. This removes the otherwise unanchored selected-data type
-  argument. A literal without a query function or an expected type still
-  needs an explicit type argument to avoid `dynamic` —
-  [ADR-0001](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md).
-- **Every filter parameter is a named `filters:`.**
-- **A `Set` of listeners does not port.** Dart tear-offs compare equal
-  (`watcher.onEvent == watcher.onEvent` is `true`, which is never true in JS),
-  so upstream's `Set<TListener>` would silently drop a second subscription.
-  Listeners are a `List` here, and one ported upstream assertion is flipped
-  because of it — recorded, with the reasoning, in the notes.
+Where query_kit behaves differently rather than not at all — one key, one
+exact type; whole-result comparison with `buildWhen`; two options shapes;
+named `filters:` — see [differences from TanStack
+Query](differences-from-tanstack.md).

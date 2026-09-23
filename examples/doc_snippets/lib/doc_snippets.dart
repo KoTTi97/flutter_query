@@ -66,6 +66,9 @@ class Api {
   Future<List<Task>> listTasks({QueryCancelToken? signal}) async =>
       const <Task>[];
 
+  Future<List<Task>> search(String needle, {QueryCancelToken? signal}) async =>
+      const <Task>[];
+
   Future<Task> getTask(String id, {QueryCancelToken? signal}) async =>
       const Task(id: '1', name: 'Draft the changelog', done: true);
 
@@ -82,17 +85,17 @@ class Api {
 
 final Api api = Api();
 
-// >>> getting-started/first-query.md#key
+// >>> quick-start.md#key
 final QueryKey tasksKey = QueryKey(<Object?>['tasks']);
 // <<<
 
 QueryKey taskKey(String id) => QueryKey(<Object?>['tasks', id]);
 
 // ---------------------------------------------------------------------------
-// getting-started/first-query.md
+// quick-start.md
 // ---------------------------------------------------------------------------
 
-// >>> getting-started/first-query.md#options
+// >>> quick-start.md#options
 QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
@@ -100,7 +103,7 @@ QueryObserverOptions<List<Task>> tasksQuery() => QueryObserverOptions(
     );
 // <<<
 
-// >>> guides/options.md#plain
+// >>> guides/query-options.md#plain
 QueryObserverOptions<Task> taskQuery(String id) => QueryObserverOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
@@ -122,7 +125,7 @@ QueryObserverOptions<Task> taskQuery(String id) => QueryObserverOptions(
 /// *expression* a reader drops into their own tree, and a list element is
 /// the one place a bare widget expression is also valid Dart.
 List<Widget> lifecycleProviders(QueryClient client, bool online) => <Widget>[
-      // >>> guides/lifecycle-and-connectivity.md#own-focus-source
+      // >>> guides/window-focus-refetching.md#own-focus-source
       QueryClientProvider(
         client: client,
         // The lifecycle listener and a setEventListener adapter are two sources
@@ -131,7 +134,7 @@ List<Widget> lifecycleProviders(QueryClient client, bool online) => <Widget>[
         child: const MyApp(),
       ),
       // <<<
-      // >>> guides/lifecycle-and-connectivity.md#fixed-online-status
+      // >>> guides/connectivity.md#fixed-online-status
       QueryClientProvider(
         client: client,
         onlineStatus: OnlineStatus.fixed(online),
@@ -140,7 +143,7 @@ List<Widget> lifecycleProviders(QueryClient client, bool online) => <Widget>[
       // <<<
     ];
 
-// >>> getting-started/first-query.md#screen
+// >>> quick-start.md#screen
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
 
@@ -167,7 +170,7 @@ class TasksScreen extends StatelessWidget {
 class AddTaskButton extends StatelessWidget {
   const AddTaskButton({super.key});
 
-  // >>> getting-started/first-query.md#mutation
+  // >>> quick-start.md#mutation
   @override
   Widget build(BuildContext context) {
     // Take the client here, in build — not inside the callback. A mutation
@@ -194,10 +197,10 @@ class AddTaskButton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// guides/reading-a-query.md — the four call styles
+// guides/reading-queries-in-widgets.md — the four call styles
 // ---------------------------------------------------------------------------
 
-// >>> guides/reading-a-query.md#context-query
+// >>> guides/reading-queries-in-widgets.md#context-query
 class TaskScreen extends StatelessWidget {
   const TaskScreen(this.id, {super.key});
 
@@ -216,7 +219,7 @@ class TaskScreen extends StatelessWidget {
 }
 // <<<
 
-// >>> guides/reading-a-query.md#builder
+// >>> guides/reading-queries-in-widgets.md#builder
 Widget taskScreenBuilder(String id) => QueryBuilder<Task>(
       options: taskQuery(id),
       builder: (context, result) => switch (result) {
@@ -237,7 +240,7 @@ class TaskScreenMixin extends StatefulWidget {
   State<TaskScreenMixin> createState() => _TaskScreenMixinState();
 }
 
-// >>> guides/reading-a-query.md#mixin
+// >>> guides/reading-queries-in-widgets.md#mixin
 class _TaskScreenMixinState extends State<TaskScreenMixin> with QueryMixin {
   @override
   Widget build(BuildContext context) {
@@ -271,7 +274,7 @@ class PagedReader extends StatefulWidget {
 class _PagedReaderState extends State<PagedReader> with QueryMixin {
   @override
   Widget build(BuildContext context) {
-    // >>> guides/reading-a-query.md#switched-key
+    // >>> guides/reading-queries-in-widgets.md#switched-key
     // With an id, the observer follows the key — so keepPrevious has a previous.
     final page = watchQuery(pageQuery(widget.page), id: 'page');
     // <<<
@@ -286,7 +289,7 @@ QueryObserverOptions<List<Post>> pageQuery(int page) => QueryObserverOptions(
     );
 
 void controllerStyle(QueryClient client, String id) {
-  // >>> guides/reading-a-query.md#controller
+  // >>> guides/reading-queries-in-widgets.md#controller
   final task = QueryController.create(client, taskQuery(id));
   // … task.value, task.addListener, task.refetch() …
   task.dispose();
@@ -294,11 +297,11 @@ void controllerStyle(QueryClient client, String id) {
 }
 
 // ---------------------------------------------------------------------------
-// guides/options.md
+// guides/query-options.md, dependent-queries.md, polling.md, structural-sharing.md
 // ---------------------------------------------------------------------------
 
 /// The two shapes side by side; `taskQuery` above is the plain one.
-// >>> guides/options.md#select
+// >>> guides/query-options.md#select
 QuerySelectOptions<Task, String> taskNameQuery(String id) => QuerySelectOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id, signal: context.signal),
@@ -306,7 +309,7 @@ QuerySelectOptions<Task, String> taskNameQuery(String id) => QuerySelectOptions(
     );
 // <<<
 
-// >>> guides/options.md#enabled
+// >>> guides/dependent-queries.md#enabled
 QueryObserverOptions<List<Comment>> commentsQuery(
   String? postId,
 ) =>
@@ -321,16 +324,16 @@ QueryObserverOptions<Task> withoutStructuralSharing(String id) =>
     QueryObserverOptions(
       queryKey: taskKey(id),
       queryFn: (context) => api.getTask(id),
-      // >>> guides/options.md#structural-sharing
-      structuralSharing: noStructuralSharing(), // upstream's `false`
+      // >>> guides/structural-sharing.md#structural-sharing
+      structuralSharing: noStructuralSharing(), // `false` in TanStack Query
       // <<<
     );
 
 // ---------------------------------------------------------------------------
-// guides/mutations.md — the function's context, and cancelling
+// guides/cancelling-mutations.md — the function's context, and cancelling
 // ---------------------------------------------------------------------------
 
-// >>> guides/mutations.md#function-context
+// >>> guides/cancelling-mutations.md#function-context
 MutationOptions<Task, String, Task> renameWithContext(
         QueryClient client, String id) =>
     MutationOptions(
@@ -356,7 +359,7 @@ MutationOptions<Task, String, Task> renameWithContext(
     );
 // <<<
 
-// >>> guides/options.md#structurally-shareable
+// >>> guides/structural-sharing.md#structurally-shareable
 @immutable
 class TaskList implements StructurallyShareable<TaskList> {
   const TaskList(this.items);
@@ -378,7 +381,7 @@ class TaskList implements StructurallyShareable<TaskList> {
 }
 // <<<
 
-// >>> guides/options.md#share-with-previous
+// >>> guides/structural-sharing.md#share-with-previous
 // No value equality: two TaskFeeds are never ==, so the walk always asks.
 class TaskFeed implements StructurallyShareable<TaskFeed> {
   TaskFeed(this.items);
@@ -393,7 +396,7 @@ class TaskFeed implements StructurallyShareable<TaskFeed> {
 }
 // <<<
 
-// >>> guides/collections-and-side-effects.md#combine-optional-and-lists
+// >>> guides/combining-queries.md#combine-optional-and-lists
 CombinedResult<String> taskWithOptionalComments(
   QueryResult<Task> task,
   QueryResult<List<Comment>> comments,
@@ -410,7 +413,7 @@ CombinedResult<int> doneCount(List<QueryResult<Task>> tasks) =>
     tasks.combine((tasks) => tasks.where((task) => task.done).length);
 // <<<
 
-// >>> guides/collections-and-side-effects.md#combine-with
+// >>> guides/combining-queries.md#combine-with
 CombinedResult<List<Comment>> allComments(
   QueryResult<List<Post>> feed,
   List<QueryResult<List<Comment>>> perPost,
@@ -423,14 +426,14 @@ CombinedResult<List<Comment>> allComments(
     );
 // <<<
 
-// >>> guides/options.md#stop-polling-after-failures
+// >>> guides/polling.md#stop-polling-after-failures
 const RefetchInterval giveUpAfterFive = RefetchInterval.dynamic(_untilFiveFail);
 
 Duration? _untilFiveFail(Query<Object?> query) =>
     query.state.consecutiveErrorCount >= 5 ? null : const Duration(seconds: 1);
 // <<<
 
-// >>> guides/mutations.md#typed-mutation-state
+// >>> guides/mutation-state.md#typed-mutation-state
 MutationStateController<String> pendingRenames(QueryClient client) =>
     MutationStateController.typed(
       client,
@@ -468,10 +471,10 @@ void disconnect(QueryClient client, QueryKey deviceKey) {
 // <<<
 
 // ---------------------------------------------------------------------------
-// guides/rebuilds.md
+// guides/render-optimizations.md
 // ---------------------------------------------------------------------------
 
-// >>> guides/rebuilds.md#select
+// >>> guides/render-optimizations.md#select
 QuerySelectOptions<List<Task>, int> doneCountQuery() => QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
@@ -485,7 +488,7 @@ QuerySelectOptions<List<Task>, ({int done, int total})> doneRecordQuery() =>
     QuerySelectOptions(
       queryKey: tasksKey,
       queryFn: (context) => api.listTasks(signal: context.signal),
-      // >>> guides/rebuilds.md#record-select
+      // >>> guides/render-optimizations.md#record-select
       select: (data) => (
         done: data.where((s) => s.done).length,
         total: data.length,
@@ -493,7 +496,7 @@ QuerySelectOptions<List<Task>, ({int done, int total})> doneRecordQuery() =>
       // <<<
     );
 
-// >>> guides/rebuilds.md#build-when-builder
+// >>> guides/render-optimizations.md#build-when-builder
 Widget buildWhenSample(String id) => QueryBuilder<Task>(
       options: taskQuery(id),
       buildWhen: (previous, current) =>
@@ -506,7 +509,7 @@ Widget buildWhenSample(String id) => QueryBuilder<Task>(
 /// places that take one (C49, https://github.com/KoTTi97/flutter_query/issues/55,
 /// and its mutation follow-on, https://github.com/KoTTi97/flutter_query/issues/67).
 QueryResult<Task> keylessBuildWhenSample(BuildContext context, String id) {
-  // >>> guides/rebuilds.md#build-when-keyless
+  // >>> guides/render-optimizations.md#build-when-keyless
   final task = context.query(
     taskQuery(id),
     buildWhen: (previous, current) => previous.dataOrNull != current.dataOrNull,
@@ -516,7 +519,7 @@ QueryResult<Task> keylessBuildWhenSample(BuildContext context, String id) {
 }
 
 // ---------------------------------------------------------------------------
-// guides/mutations.md
+// guides/mutations.md, optimistic-updates.md, mutation-scopes.md, mutation-state.md
 // ---------------------------------------------------------------------------
 
 MutationOptions<void, String, void> renameTask(String id) =>
@@ -542,7 +545,7 @@ void readAMutation(BuildContext context, QueryClient client) {
 
 /// The optimistic shape: `onMutate` snapshots and patches, and what it returns
 /// is the rollback handle `onError` and `onSettled` receive.
-// >>> guides/mutations.md#optimistic
+// >>> guides/optimistic-updates.md#optimistic
 MutationOptions<Task, String, Task?> renameOptimistically(
   QueryClient client,
   String id,
@@ -575,7 +578,7 @@ MutationController<void, String, void> mutationBuildWhenSample(
   BuildContext context,
   String id,
 ) {
-  // >>> guides/rebuilds.md#build-when-mutation
+  // >>> guides/render-optimizations.md#build-when-mutation
   final rename = context.mutation(
     renameTask(id),
     // A retrying run moves `failureCount` while it stays pending; a spinner
@@ -600,7 +603,7 @@ void mutateWithPerCallCallbacks(
   // <<<
 }
 
-// >>> guides/mutations.md#scope
+// >>> guides/mutation-scopes.md#scope
 MutationOptions<void, String, void> serialisedWrite(String id) =>
     MutationOptions.simple(
       mutationFn: (String name) => api.rename(id, name),
@@ -691,11 +694,12 @@ mixin LoadMoreOnScroll<T extends StatefulWidget> on State<T> {
 }
 
 // ---------------------------------------------------------------------------
-// guides/the-query-client.md
+// guides/prefetching.md, filters.md, updates-from-mutation-responses.md,
+// default-query-function.md and important-defaults.md
 // ---------------------------------------------------------------------------
 
 Future<List<Task>> fetchImperatively(QueryClient client) async {
-  // >>> guides/the-query-client.md#imperative
+  // >>> guides/prefetching.md#imperative
   final tasks = await client.query<List<Task>>(
     QueryOptions<List<Task>>(
       queryKey: tasksKey,
@@ -707,7 +711,7 @@ Future<List<Task>> fetchImperatively(QueryClient client) async {
 }
 
 void filterSamples(QueryClient client) {
-  // >>> guides/the-query-client.md#filters
+  // >>> guides/filters.md#filters
   client.invalidateQueries(filters: QueryFilters(queryKey: tasksKey)).ignore();
   client.removeQueries(
     filters: QueryFilters(queryKey: tasksKey, exact: true),
@@ -723,7 +727,7 @@ void filterSamples(QueryClient client) {
 }
 
 void cacheWriteSamples(QueryClient client, String id, Task task) {
-  // >>> guides/the-query-client.md#cache-writes
+  // >>> guides/updates-from-mutation-responses.md#cache-writes
   client.getQueryData<List<Task>>(tasksKey);
   client.setQueryData<Task>(taskKey(id), task);
   client.updateQueryData<Task>(
@@ -738,7 +742,7 @@ void cacheWriteSamples(QueryClient client, String id, Task task) {
 }
 
 QueryClient clientWithDefaults() {
-  // >>> guides/the-query-client.md#defaults
+  // >>> guides/default-query-function.md#defaults
   final client = QueryClient(
     defaultOptions: DefaultOptions(
       queries: QueryDefaults(
@@ -760,7 +764,7 @@ QueryClient clientWithDefaults() {
 /// The page's last sample: the three calls whose timing is yours, not the
 /// provider's.
 void theMountContract(QueryClient client) {
-  // >>> guides/the-query-client.md#mount-contract
+  // >>> important-defaults.md#mount-contract
   client.mount(); // once, at start-up
   client.unmount(); // to balance your own mount()
   client.clear(); // at the end: drop the caches and their timers
@@ -768,10 +772,10 @@ void theMountContract(QueryClient client) {
 }
 
 // ---------------------------------------------------------------------------
-// guides/collections-and-side-effects.md
+// guides/parallel-queries.md, combining-queries.md, side-effects.md, mutation-state.md
 // ---------------------------------------------------------------------------
 
-// >>> guides/collections-and-side-effects.md#combine
+// >>> guides/combining-queries.md#combine
 class TaskWithComments extends StatelessWidget {
   const TaskWithComments(this.id, {super.key});
 
@@ -798,7 +802,7 @@ class TaskWithComments extends StatelessWidget {
 }
 // <<<
 
-// >>> guides/collections-and-side-effects.md#queries-builder
+// >>> guides/parallel-queries.md#queries-builder
 Widget queriesBuilderSample(List<String> visibleIds) =>
     QueriesBuilder<Task, String>(
       queries: <QuerySelectOptions<Task, String>>[
@@ -817,7 +821,7 @@ Widget queriesBuilderSample(List<String> visibleIds) =>
     );
 // <<<
 
-// >>> guides/collections-and-side-effects.md#listener
+// >>> guides/side-effects.md#listener
 Widget queryListenerSample(QueryController<Task, Task> task) =>
     QueryListener<Task, Task>(
       controller: task,
@@ -830,7 +834,7 @@ Widget queryListenerSample(QueryController<Task, Task> task) =>
 // <<<
 
 MutationStateController<int> writesInFlight(QueryClient client) {
-  // >>> guides/collections-and-side-effects.md#mutation-state
+  // >>> guides/mutation-state.md#mutation-state
   final saving = MutationStateController<int>(
     client,
     filters: const MutationFilters(status: MutationStatus.pending),

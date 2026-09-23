@@ -50,7 +50,7 @@ cd website && npm ci && npm start
 ```
 
 Coming from React Query? The
-[name map](website/docs/reference/coming-from-react-query.md) takes the
+[name map](website/docs/coming-from-react-query.md) takes the
 JavaScript names to the Dart ones — `useQuery` to the four call styles,
 `fetchQuery` to `QueryClient.query`, `staleTime: Infinity` to
 `StaleTime.infinite`, and the rest.

@@ -1,8 +1,9 @@
 ---
 title: Testing
-sidebar_position: 9
-description: The teardown every widget test needs, the harness both examples wrap, and the pump rules that fake timers impose.
+description: The teardown every widget test needs, a harness that wraps it, a client without retries, and the pump rules that fake timers impose.
 ---
+
+{/* depth: todo */}
 
 # Testing
 
@@ -47,14 +48,12 @@ re-creates the query it names — gc timer included.
 
 Nothing here is exported by the package. `flutter_test` is a dev dependency
 of `query_kit_flutter`, not a regular one, so nothing a test needs sits in
-your app's dependency graph and the package page shows every platform it
-runs on; the reasoning is
-[ADR-0002](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0002-widget-test-teardown-is-a-documented-snippet.md).
-The samples on this page are the cases of
+your app's dependency graph. Copy the steps, or the harness below, into your
+own test folder. The samples on this page are the cases of
 [`examples/doc_snippets/test/teardown_snippet_test.dart`](https://github.com/KoTTi97/flutter_query/blob/main/examples/doc_snippets/test/teardown_snippet_test.dart),
 which CI runs, so they cannot rot.
 
-## The harness both examples wrap
+## A harness
 
 Written once per test suite, so no case repeats the steps:
 
@@ -95,16 +94,46 @@ queryWidgetTest('the list loads', (tester, client) async {
 });
 ```
 
-Both example apps wrap this shape with their own fixture, in the same
-teardown order: `showcaseTest` in `examples/showcase/test/harness.dart`,
+Both example apps wrap this shape with a fixture of their own, in the same
+teardown order: `showcaseTest` in
+[`examples/showcase/test/harness.dart`](https://github.com/KoTTi97/flutter_query/blob/main/examples/showcase/test/harness.dart),
 which also brings a fresh fake backend and opens the app on one route, and
-`demoTest` in `examples/task_manager/test/acceptance_test.dart`. The
-binding's own suite has the fuller version in
-`packages/query_kit_flutter/test/harness.dart` — a second client adopted for
-the teardown, the provider wired with lifecycle observation off, the app
-lifecycle put back to `resumed` when a case faked it. They are worth reading
-before writing your own harness; the showcase's README lists the rules that
-cost someone a debugging session, in the order they bite.
+`demoTest` in
+[`examples/task_manager/test/acceptance_test.dart`](https://github.com/KoTTi97/flutter_query/blob/main/examples/task_manager/test/acceptance_test.dart).
+The binding's own suite has the fuller version in
+[`packages/query_kit_flutter/test/harness.dart`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit_flutter/test/harness.dart)
+— a second client adopted for the teardown, the provider wired with lifecycle
+observation off, the app lifecycle put back to `resumed` when a case faked
+it. None of them is importable; they are worth reading before you write your
+own.
+
+## A client for tests
+
+The default retries — three, with backoff — make a failing query take seven
+seconds to fail. A test's client turns them off:
+
+```dart snippet="guides/testing.md#no-retries"
+QueryClient testClient() => QueryClient(
+      defaultOptions: const DefaultOptions(
+        queries: QueryDefaults(retry: RetryPolicy.never),
+      ),
+    );
+```
+
+Pass it as the harness's `createClient: testClient`. Mutations already default
+to no retries. Build a **new client per test**: a shared one carries cached
+data from one case into the next.
+
+## Faking the backend
+
+Fake the transport, not the library. The query functions under test call
+your API client; hand them one that answers from memory — an interface with a
+fake implementation, or your HTTP client's own mocking adapter. The cache
+then behaves exactly as it does in the app: retries, staleness, structural
+sharing and all.
+
+Give the fake a latency (a `Future.delayed`) when a test is about the loading
+state, and step it as below.
 
 ## The pump rules
 
@@ -134,13 +163,14 @@ The whole library reads time through `package:clock`, and `testWidgets` binds
 data past its `staleTime` and fires `gcTime` timers — no `withClock`, no
 sleeping, no flake.
 
-That is the same property the core's own suite relies on; there, tests use
-`testFakeAsync` from `test/test_utils.dart` rather than bare `fakeAsync`,
-because `FakeAsync.elapse` cannot be called re-entrantly.
+Outside `testWidgets`, `fakeAsync` from `package:fake_async` does the same
+for the core: `clock` follows its fake time, and `async.elapse(duration)`
+fires the timers.
 
 ## Testing without widgets
 
 A `QueryController` is a plain `ValueListenable`, and the core's
 `QueryObserver` is a plain object with `subscribe`. Both are testable with
-`package:test` alone, no binding required — which is often the faster way to
-pin a cache behaviour down.
+plain `test()` cases, no `WidgetTester` required — a `QueryController` under
+`flutter test`, a `QueryObserver` even under `dart test` — which is often the
+faster way to pin a cache behaviour down.

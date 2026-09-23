@@ -5,10 +5,8 @@ description: Symptom first — what you see, why it happens, and what to do inst
 
 # Troubleshooting
 
-Symptom first. Most of these are upstream TanStack Query behaviour that this
-port keeps on purpose, so the mechanism is worth knowing even once the fix is
-in. The first entries come from the library's first integration into a real
-app (2026-09-19); each says where it was learned.
+Symptom first. Most of these are TanStack Query behaviour that query_kit keeps
+on purpose, so the mechanism is worth knowing even once the fix is in.
 
 ## My polling never resumes after I paused it in a callback
 
@@ -54,20 +52,17 @@ polling once the job reports `done`".
 The rebuild is enough in every call style: `context.query`, `watchQuery`,
 the builders and a controller's `setOptions` all hand the options over again,
 and the observer compares against what it last committed — so an invalidation
-or a write that lands between the flip and the rebuild no longer hides it. A
+or a write that lands between the flip and the rebuild does not hide it. A
 `StaleTime.dynamic` over outside state is re-evaluated the same way, and a
 shortened stale time takes effect on the next rebuild. What stays true:
 *something* has to rebuild when the outside state flips.
 
-Upstream differs here. It compares the old and the new `enabled` *at the same
-instant*, so there even a rebuild does not help an `enabled` callback over
-outside state: both sides see the same world. And one consequence runs the
-other way: a predicate over the query itself whose answer changes between two
-rebuilds refetches on the next rebuild if the data is stale, which upstream
-does not.
-
-*Learned in: the BR64 integration, where polling paused for a write never came
-back.*
+TanStack Query differs here. It compares the old and the new `enabled` *at
+the same instant*, so there even a rebuild does not help an `enabled`
+callback over outside state: both sides see the same world. And one
+consequence runs the other way: a predicate over the query itself whose
+answer changes between two rebuilds refetches on the next rebuild if the data
+is stale, which TanStack Query does not.
 
 ## I removed a device's queries and it is being fetched again
 
@@ -76,8 +71,8 @@ entries are back and requests go out to a device that is gone.
 
 **Mechanism.** An observer owns a **key**, not an entry. While a widget that
 reads the key is still mounted, its next options update, poll tick or an
-optimistic rollback builds the entry again and fetches. Upstream does exactly
-this.
+optimistic rollback builds the entry again and fetches. TanStack Query does
+exactly this.
 
 **Fix.** Remove the readers before the entries: take the device's screens out
 of the tree (or give their queries `Enabled.no`) and *then* cancel and remove.
@@ -94,8 +89,6 @@ If the order cannot be guaranteed, make the transport refuse: an API object
 that is closed and throws an error your `retry` policy does not retry costs
 one failed fetch instead of a request on the wire.
 
-*Learned in: the BR64 integration's disconnect path.*
-
 ## The first of two writes lost its state and its callbacks
 
 **Symptom.** Two `mutate` calls on one `MutationController`. The first one's
@@ -106,7 +99,7 @@ never show up.
 `mutate` moves it on, and per-call callbacks only fire for the run the
 controller is still watching — also when the controller was disposed in
 between. Callbacks on the **options** always run; they belong to the
-mutation, not to who watches it. Upstream's `useMutation` is the same.
+mutation, not to who watches it. `useMutation` is the same.
 
 **Fix.** Side effects that must happen go in the options' callbacks. Feedback
 for one particular write comes from awaiting `mutateAsync`. To show every
@@ -115,15 +108,15 @@ write in flight, not just the last, read the cache with a
 
 ## `QueryDataTypeError` for a list that "is" the right type
 
-**Symptom.** A key holds a `List<Ingress>`; something reads it as
-`List<EnOceanDeviceDto>`, or as a supertype's list, and gets a
-`QueryDataTypeError` rather than data.
+**Symptom.** A key holds a `List<Device>`; something reads it as
+`List<Object>`, or as a subtype's list, and gets a `QueryDataTypeError`
+rather than data.
 
 **Mechanism.** One key, one exact data type. The cache checks the type it is
 asked for against what it holds instead of casting blindly, and a
 `List<Sub>` is not accepted where the entry was created as `List<Base>` (or
-the reverse) — see
-[one type slot per query](https://github.com/KoTTi97/flutter_query/blob/main/docs/adr/0001-one-type-slot-for-plain-queries.md).
+the reverse) — see [type safety in
+Dart](../dart-type-safety.md#one-key-one-exact-type).
 
 **Fix.** Give each type its own key, or store a wrapper type that says what
 the entry is. `updateQueriesData` over a prefix that spans entries of
@@ -138,8 +131,8 @@ lenient, as `setQueryData`'s is. Filter narrowly.
 other.mutateAsync(...)` — and `other` has the **same scope**. Both hang.
 
 **Mechanism.** A scope runs its mutations one at a time. The inner one queues
-behind the outer one, which is waiting for the inner one. By design, upstream
-included, and there is no warning.
+behind the outer one, which is waiting for the inner one. By design, as in
+TanStack Query, and there is no warning.
 
 **Fix.** Give the inner mutation no scope (or a different one), or do the
 inner work as a plain call inside the outer mutation function.
@@ -150,8 +143,8 @@ inner work as a plain call inside the outer mutation function.
 defaults — the app talks to a device on the local network — but mutations
 still pause when the platform reports offline.
 
-**Mechanism.** Queries and mutations have **separate** client defaults, as
-upstream has. Each resolves option → its own client default → `online`.
+**Mechanism.** Queries and mutations have **separate** client defaults, as in
+TanStack Query. Each resolves option → its own client default → `online`.
 
 **Fix.** Set `networkMode` in the mutation defaults as well.
 
@@ -170,8 +163,6 @@ success resets it.
 **Fix.** Key the "gave up" UI on `result.consecutiveErrorCount` — every
 `QueryResult` carries it — not on the result being a `QueryError`.
 
-*Learned in: the release review (2026-09-23).*
-
 ## My optimistic rollback restored the wrong list
 
 **Symptom.** Two writes in one `MutationScope`. The second one fails, its
@@ -185,7 +176,7 @@ mutation's `onSettled` future completes — `client.isMutating()` still counts
 it inside its own `onSettled` — and a queued run reports `isPaused`.
 
 **Fix.** Roll back the row this mutation changed, not a whole-list snapshot.
-See [serialising writes](../guides/mutations.md#serialising-writes-mutationscope).
+See [mutation scopes](../guides/mutation-scopes.md).
 
 ## `client.query` right after my write returned the old data
 
@@ -195,7 +186,7 @@ with data from before it.
 **Mechanism.** `client.query` joins a fetch already in flight for the key —
 one that may have started before your write — rather than starting another,
 and a cancelled fetch that reverts resolves it with the reverted data.
-Upstream's `fetchQuery` does the same.
+`fetchQuery` does the same.
 
 **Fix.** `await client.refetchQueries(filters: QueryFilters(queryKey: key))`,
 whose `cancelRefetch` defaults to `true`, then read the cache.
@@ -208,7 +199,7 @@ either.
 
 **Mechanism.** The options a call hands in become the query's options, as an
 observer's do: the cache entry is shared and refetches with what it was last
-given. Upstream's `fetchQuery` is the same. Only the no-retry default of a
+given. `fetchQuery` is the same. Only the no-retry default of a
 call that configured nothing is limited to that one fetch.
 
 **Fix.** Leave `retry` out of the imperative call when it should not stick,
@@ -251,8 +242,8 @@ or when it goes. For an `itemBuilder` reading through a `LayoutBuilder`'s
 *own* `context`, a scroll is no builder run: what it stops reading goes at
 the `LayoutBuilder`'s next builder run — new constraints, a notification
 from one of its reads, its parent rebuilding it — or when it unmounts. The
-trade is deliberate: an earlier rule that released per run dropped the
-subscriptions of data still on screen.
+trade is deliberate: releasing per run would drop the subscriptions of data
+still on screen.
 
 **Fix.** The same: a row widget — a `TaskTile(id)` — that reads its own
 query, so its reads come and go with it.
@@ -320,8 +311,7 @@ fetches anew.
 **Mechanism.** A record compares its fields with their own `==`, and a
 `List`'s `==` is identity, so the key is new every time. Lists and maps as key
 *parts* are compared deeply; inside a record they are not. `DateTime` parts
-compare by instant — UTC and local of one moment are one key, as upstream's
-JSON hash makes them — but a `DateTime` used as a map *key* inside a part
+compare by instant — UTC and local of one moment are one key — but a `DateTime` used as a map *key* inside a part
 still compares with its own `==`.
 
 **Fix.** Put the list in the key directly, or use a value class with deep

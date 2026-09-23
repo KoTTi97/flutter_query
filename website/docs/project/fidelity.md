@@ -1,7 +1,6 @@
 ---
 title: How fidelity is proven
-sidebar_position: 1
-description: Upstream's suite ported case for case, what porting found, what nine reviews found, and where every omission is written down.
+description: TanStack Query's suite ported case by case, what porting found, what review and real use found, and where every omission is written down.
 ---
 
 # How fidelity is proven
@@ -29,8 +28,8 @@ Three rules keep that honest:
    [`PORTING_NOTES.md`](https://github.com/KoTTi97/flutter_query/blob/main/packages/query_kit/test/PORTING_NOTES.md),
    with its reason.
 
-Upstream is pinned at **`50680b98c`**. The revision is load-bearing: test
-counts and line references drift otherwise.
+The port follows one fixed revision of TanStack Query, **`50680b98c`**, {/* jargon-ok */}
+so the ported tests and the behaviour they check describe the same version.
 
 ## What is ported
 
@@ -61,9 +60,11 @@ because each is a behaviour you only know to check if you know the original:
 
 ## What review found
 
-Nine rounds of external deep-dive review found roughly **100 more** — again, none caught
-by a ported case, because a ported case tests the port against upstream and
-these were about Dart and Flutter:
+Repeated rounds of external deep-dive review — each by a fresh reviewer with
+no memory of the decisions, and each followed by a fresh review of its fixes
+— found **more than 150** more. None was caught by a ported case, because a
+ported case tests the port against upstream and these were about Dart and
+Flutter:
 
 - a `Set` of listeners silently dropping a subscription, because Dart tear-offs
   compare equal and JavaScript closures never do;
@@ -79,9 +80,10 @@ Every one of them has a regression test —
 `review_regressions_test.dart` in the binding — and PORTING_NOTES' "regressions
 found by review" section says what each was.
 
-**Six reported findings could not be reproduced** — four from the earlier
-rounds, two from the ninth, one of those plausible on a later SDK. They are written down too,
-with the disproof, because an unreproduced report is worth knowing about — and
+**Every finding is reproduced before anything is changed**, and the reviews
+of the fixes found defects the fixes had introduced, round after round — which
+is why every fix gets a review of its own. Several reported findings could not
+be reproduced at all. They are written down too, with the disproof, because an unreproduced report is worth knowing about — and
 because "we checked, and here is what we found instead" is the only way that
 information survives.
 
@@ -95,39 +97,37 @@ the library's own suite before anything was changed.
 
 That is what [the examples](examples.md) are for.
 
+## What real use found
+
+The first integration into a production Flutter app reported fourteen
+findings. One was a defect — structural sharing handed an unmodifiable list
+back growable — and was fixed with its regression tests. The rest were
+behaviour the library shares with TanStack Query, or requests beyond it; the
+ones that were built are `combine`, `mutationFnWithContext` and cancelling a
+mutation, `consecutiveErrorCount`, typed mutation state and
+`StructurallyShareable`, and the traps it hit opened the
+[troubleshooting](../reference/troubleshooting.md) page.
+
 ## The numbers
 
-Measured by running each suite, not by counting `test(` in the sources — which
-is the same rule the landing page follows, and the reason these two agree. The
-core row was re-measured on 2026-09-12 after the pre-release deep-dive review,
-its final review and the bounded confidence assessment; the rows below it were measured earlier
-the same day and only the task manager's has moved since.
+Measured by running each suite, not by counting `test(` in the sources.
 
 | | |
 |---|---|
-| core | **783** Dart VM tests; **779** also compiled to JavaScript (four barrel checks are VM-only). Of those, 414 are ported upstream cases; the rest are the port-only files, the review regressions and 33 bounded confidence sequences |
-| binding | **144** tests, widget tests behind one harness |
-| showcase | **222** widget tests + **177** Playwright tests in Chromium |
-| task manager | **16** widget tests + **9** Playwright tests |
-| contract | **40** cases — 25 in the showcase, 15 in the task manager — each run against the fake backend *and* the real server |
-| doc snippets | **9** tests — six that hold the site's fences level with their compiled twins, three that run the testing guide's teardown as code |
-
-The showcase's `flutter test` reports 247: the 222 above plus the contract's
-25, which run against the fake in every checkout and against the real server
-only in the `e2e` job. The task manager's works the same way and now reports
-**32 passing with 14 skipped** — the skipped ones are the contract cases that
-wait for `TASK_MANAGER_SERVER`, which the `e2e` job sets.
+| core | **826** Dart VM tests; **822** also compiled to JavaScript (a few barrel checks are VM-only). 414 of them are ported upstream cases; the rest are the port-only files, the review regressions and the integration regressions |
+| binding | **287** tests, widget tests behind one harness |
+| examples | a widget test per showcase screen and per task-manager checklist row, Playwright end-to-end tests in Chromium against each example's real server, and contract cases run against both the fake backend and the real server |
+| documentation | every Dart sample on this site is compiled, and held equal to its compiled twin by a test |
 
 Every push runs all of it, plus the analyzer at `--fatal-infos`, the formatter,
 `dart doc --validate-links`, both publish dry-runs, a web build of each example
 — and the whole suite again on the declared Flutter floor, because a floor
-nobody tests is a guess. That job has already caught three dependency pins and
-a `foundation` export that current stable hides.
+nobody tests is a guess.
 
 ## Divergences
 
 Closeness to upstream is a **tiebreaker, not a goal**. Where a Dart or Flutter
-idiom is better, the port diverges and writes down why; the table of
-divergences is at the end of PORTING_NOTES, and each row names the ticket that
-decided it. [The feature matrix](../reference/feature-matrix.md) lists the ones
-you are most likely to notice.
+idiom is better, the port diverges and writes down why; the full table is at
+the end of PORTING_NOTES, and [differences from TanStack
+Query](../reference/differences-from-tanstack.md) lists the ones you can
+notice, in user terms.

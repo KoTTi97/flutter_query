@@ -1,12 +1,13 @@
 ---
-title: Examples
-sidebar_position: 2
-description: The showcase — every feature as a screen against a real backend — and the acceptance demo, one whole small app.
+title: How the examples are built
+description: How the examples are built and tested — the one-file tour, the showcase against a real backend, and the acceptance demo.
 ---
 
-# Examples
+# How the examples are built
 
-Three, of increasing size.
+Three, of increasing size. [Examples](../examples/index.md) lists what each
+showcase screen shows and which guide it belongs to; this page is about how
+they are built and proven.
 
 ## The one-file tour
 
@@ -30,7 +31,7 @@ cd examples/showcase && flutter run -d chrome
 ```
 
 Each feature lives in `lib/features/<id>/`, imports only the package and
-`lib/shared/`, and says at the top of its file what it shows, which upstream
+`lib/shared/`, and says at the top of its file what it shows, which TanStack Query
 example it mirrors, and how it is proven.
 
 | Reading | Paging | Writing | Runtime |
@@ -41,6 +42,7 @@ example it mirrors, and how it is proven.
 | `dependent-queries` | | `playground` | `offline` |
 | `parallel-queries` | | `invalidation-and-filters` | `focus-refetch` |
 | `query-collections` | | `global-callbacks` | `four-call-styles` |
+| `combine` | | `mutation-cancel` | |
 | `prefetching` | | | `cache-inspector` |
 | `select-and-sharing` | | | `diagnostics` |
 | `build-when` | | | |
@@ -70,12 +72,8 @@ tests read the **semantics tree** — the same tree a screen reader gets.
 
 ### What building it found
 
-Two bugs in the library that no ported upstream test could reach, because
-neither is visible without a real widget: a read whose key changed lost
-`keepPreviousData` in `QueryMixin` and `context.query`, and `structuralSharing`
-was invisible to every reader because the observer re-shared the cache's data
-against its own last result. Both were reproduced in the library's own suite
-before anything was changed.
+Two library bugs that no ported test could reach; see [how fidelity is
+proven](fidelity.md#what-the-examples-found).
 
 ## The acceptance demo
 
@@ -87,7 +85,7 @@ for.
 
 Where the showcase is a catalogue — one screen per feature, so you can look a
 feature up — this is the other kind of example: one ordinary app that needs six
-of them at once, so you can see how they compose. It was also the port's
+of them at once, so you can see how they compose. It was also the library's
 acceptance bar, and that checklist is in the app's README, one widget test per
 row.
 
