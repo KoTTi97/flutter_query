@@ -1,9 +1,7 @@
 ---
 title: Infinite queries
-description: pageFn, getNextPageParam, maxPages — and why paging lives on the controller rather than in the result.
+description: A list of pages behind one key — pageFn, getNextPageParam and maxPages, why paging lives on the controller, and a scrolling list with load-on-scroll and pull-to-refresh.
 ---
-
-{/* demo: load-more, max-pages */}
 
 # Infinite queries
 
@@ -114,6 +112,158 @@ void onScroll() {
 }
 ```
 
+## A device's activity log, start to end
+
+A device's detail screen ends with its activity log: switched on, switched
+off, firmware updated — thousands of entries over its life, fetched twenty
+at a time, newest first. The server answers each page with the offset of the
+next one, or none at the end:
+
+```dart snippet="guides/infinite-queries.md#activity-query"
+InfiniteQueryObserverOptions<ActivityPage, int> activityQuery(String id) =>
+    InfiniteQueryObserverOptions<ActivityPage, int>(
+      queryKey: DeviceKeys.activity(id),
+      pageFn: (context) => deviceRepository.activity(
+        id,
+        offset: context.pageParam,
+        signal: context.signal,
+      ),
+      initialPageParam: 0,
+      getNextPageParam: (page, pages, offset, offsets) => page.nextOffset,
+    );
+```
+
+The screen puts the pieces together — the scroll trigger from above, a
+footer that says what the end of the list is doing, and pull-to-refresh.
+Here it is with a controller; `context.infiniteQuery`, `watchInfiniteQuery`
+and `InfiniteQueryBuilder` hand back the same controller surface, and the
+body of `build` is the same with any of them:
+
+```dart snippet="guides/infinite-queries.md#activity-log"
+class _ActivityLogState extends State<ActivityLog> {
+  late final InfiniteQueryController<ActivityPage, int,
+      InfiniteData<ActivityPage, int>> _log = InfiniteQueryController(
+    QueryClientProvider.read(context),
+    activityQuery(widget.deviceId),
+  );
+  final ScrollController _scroll = ScrollController();
+  double? _askedAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final position = _scroll.position;
+    if (position.extentAfter < 400 &&
+        position.pixels != _askedAt &&
+        _log.hasNextPage &&
+        !_log.isFetchingNextPage) {
+      _askedAt = position.pixels;
+      _log.fetchNextPage().ignore();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _log.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: _log,
+        builder: (context, _) {
+          final result = _log.value;
+          if (result is QueryPending) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (result case QueryError(hasStaleData: false, :final error)) {
+            return Center(child: Text('No activity: $error'));
+          }
+          final entries = <ActivityEntry>[
+            for (final page in result.dataOrNull?.pages ?? <ActivityPage>[])
+              ...page.entries,
+          ];
+          return RefreshIndicator(
+            // Refetches every page held, first to last.
+            onRefresh: _log.refetch,
+            child: ListView.builder(
+              controller: _scroll,
+              // Pull-to-refresh needs a list that scrolls when it is short.
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: entries.length + 1,
+              // A widget per row: the row reads nothing through this context.
+              itemBuilder: (context, index) => index < entries.length
+                  ? ActivityTile(entries[index])
+                  : _footer(),
+            ),
+          );
+        },
+      );
+
+  Widget _footer() {
+    if (_log.isFetchingNextPage) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_log.isFetchNextPageError) {
+      return TextButton(
+        onPressed: _log.fetchNextPage,
+        child: const Text('Could not load older entries. Try again'),
+      );
+    }
+    return _log.hasNextPage
+        ? const SizedBox(height: 64)
+        : const ListTile(title: Text('No older activity'));
+  }
+}
+```
+
+What each part is for:
+
+- **The footer row** is one more item than there are entries. It shows a
+  spinner while the next page loads, a retry button when that load failed
+  (`isFetchNextPageError` — the entries already shown stay), and the end of
+  the log when `hasNextPage` is `false`.
+- **`RefreshIndicator`** calls `refetch`, which refetches every page held,
+  first to last, each from the page parameter the previous one returns — so a
+  new entry at the top shifts the pages correctly instead of leaving a gap or
+  a duplicate. The indicator spins until the returned future completes.
+- **`AlwaysScrollableScrollPhysics`** lets a log shorter than the screen be
+  pulled down at all.
+- **A widget per row.** `ActivityTile` receives its entry; it reads nothing.
+  A row that needs a query of its own — the user who triggered the entry,
+  say — is its own widget that reads it in its own `build`. A read through
+  the `itemBuilder`'s `context` is refused in debug builds, because that
+  context belongs to the list, and every row ever built would pile onto it.
+
+Pulling to refresh a log of fifty pages makes fifty requests. To start over
+with one page instead, reset the query:
+`client.resetQueries(filters: QueryFilters(queryKey: DeviceKeys.activity(id)))`
+drops the pages it held and fetches the first one again. `maxPages` bounds
+the same cost ahead of time.
+
+Try it: scroll to the bottom of the list below, or press *Load more*, and
+`pages=` grows by one each time until *Nothing more to load* shows. Press
+*Go to about* and then *Back to list*: the rows are back at once, from the
+cache.
+
+<LiveDemo feature="load-more" />
+
+And with `maxPages: 3`, starting in the middle of the data: press *Load
+next* twice and `pageParams=` reads `30,40,50`; a third time slides the
+window to `40,50,60` — still three pages, the first one dropped. *Load
+previous* slides it back, fetching `30` again, and *Refetch* requests exactly
+the three pages held.
+
+<LiveDemo feature="max-pages" />
+
 ## Related
 
 - [Scroll restoration](scroll-restoration.md) — why a list comes back where
@@ -121,8 +271,10 @@ void onScroll() {
 - [Paginated queries](paginated-queries.md) — the page-numbered shape, one
   page at a time.
 
-## See it running
-
-`load-more` (append on scroll, and cache survival across navigation) and
-`max-pages` (both directions with `maxPages: 3`) in the
-[examples](../examples/index.md).
+:::note[In React Query]
+`useInfiniteQuery` returns `fetchNextPage`, `hasNextPage` and the
+direction flags on its result; here they live on the controller every call
+style hands back, and the result stays the same sealed type a plain query
+has. `queryFn` for pages is `pageFn`, with a typed page context. See
+[differences from TanStack Query](../reference/differences-from-tanstack.md).
+:::
