@@ -3,7 +3,8 @@ title: Mutations
 description: The four ways to read a mutation, MutationResult, mutate and mutateAsync, per-call callbacks, identity, and mutation defaults.
 ---
 
-{/* demo: mutations */}
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 # Mutations
 
@@ -57,6 +58,142 @@ add.mutate(
   ),
 );
 ```
+
+A mutation does not retry unless you ask: its `retry` defaults to
+`RetryPolicy.never`, because repeating a write is rarely safe. Pass a policy
+when the endpoint is idempotent.
+
+The showcase's `mutations` screen walks through all of this on one counter.
+Press *Increment (mutate)* and *Increment (mutateAsync)* and watch the status
+go `pending`, then `success`; tick *Fail next* for an error after exactly one
+request; *Run with callbacks* logs the callbacks in the order they run.
+
+<LiveDemo feature="mutations" />
+
+## In an app
+
+A mutation's options belong next to the queries it affects — a
+`lib/data/device_mutations.dart` beside `device_queries.dart` — as a function
+of what it needs. Here, the power switch of one device in a smart-home app:
+the server answers with the device as it now is, which goes straight into
+the cache, and the room lists refresh behind it.
+
+```dart snippet="guides/mutations.md#set-power"
+// lib/data/device_mutations.dart
+MutationOptions<Device, bool, void> setPowerMutation(
+  QueryClient client,
+  String id,
+) =>
+    MutationOptions.simple(
+      mutationFn: (bool on) => devices.setPower(id, on: on),
+      onSuccess: (device, _, __) {
+        client.setQueryData<Device>(DeviceKeys.detail(id), device);
+        client
+            .invalidateQueries(
+              filters: QueryFilters(queryKey: DeviceKeys.lists),
+            )
+            .ignore();
+      },
+    );
+```
+
+The switch reads the mutation in any of the four call styles. They hand you
+the same controller — `value` for the state, `mutate` to start a run — and
+behave the same; pick the one your widget already uses.
+
+<Tabs groupId="call-style">
+<TabItem value="context" label="context.mutation">
+
+```dart snippet="guides/mutations.md#switch-context"
+class PowerSwitch extends StatelessWidget {
+  const PowerSwitch({super.key, required this.device});
+
+  final Device device;
+
+  @override
+  Widget build(BuildContext context) {
+    final client = QueryClientProvider.of(context);
+    final power = context.mutation(setPowerMutation(client, device.id));
+    final result = power.value;
+    return Switch(
+      // While the write is out, show what was asked for.
+      value: result.isPending ? result.variables! : device.isOn,
+      onChanged: result.isPending ? null : power.mutate,
+    );
+  }
+}
+```
+
+</TabItem>
+<TabItem value="builder" label="MutationBuilder">
+
+```dart snippet="guides/mutations.md#switch-builder"
+Widget powerSwitch(QueryClient client, Device device) => MutationBuilder(
+      options: setPowerMutation(client, device.id),
+      builder: (context, power) {
+        final result = power.value;
+        return Switch(
+          value: result.isPending ? result.variables! : device.isOn,
+          onChanged: result.isPending ? null : power.mutate,
+        );
+      },
+    );
+```
+
+</TabItem>
+<TabItem value="mixin" label="QueryMixin">
+
+```dart snippet="guides/mutations.md#switch-mixin"
+class _MixinPowerSwitchState extends State<MixinPowerSwitch> with QueryMixin {
+  @override
+  Widget build(BuildContext context) {
+    final device = widget.device;
+    final power = watchMutation(setPowerMutation(queryClient, device.id));
+    final result = power.value;
+    return Switch(
+      value: result.isPending ? result.variables! : device.isOn,
+      onChanged: result.isPending ? null : power.mutate,
+    );
+  }
+}
+```
+
+</TabItem>
+<TabItem value="controller" label="MutationController">
+
+```dart snippet="guides/mutations.md#switch-controller"
+class _ControllerPowerSwitchState extends State<ControllerPowerSwitch> {
+  late final QueryClient _client = QueryClientProvider.read(context);
+  late final MutationController<Device, bool, void> _power =
+      MutationController(_client, setPowerMutation(_client, widget.device.id));
+
+  @override
+  void dispose() {
+    _power.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<MutationResult<Device, bool>>(
+        valueListenable: _power,
+        builder: (context, result, _) => Switch(
+          value: result.isPending ? result.variables! : widget.device.isOn,
+          onChanged: result.isPending ? null : _power.mutate,
+        ),
+      );
+}
+```
+
+</TabItem>
+</Tabs>
+
+While the write is out, the switch shows the value it was asked for — the
+mutation's `variables` — and is disabled; if the write fails, it falls back to
+what the cache says. That is an [optimistic update](optimistic-updates.md) in
+its simplest form. In a list, give each row's widget a `ValueKey` of the
+device's id, so a row's mutation stays with its device when the list
+reorders.
 
 ## A mutation outlives its widget
 
@@ -134,6 +271,14 @@ Query](../reference/differences-from-tanstack.md).
 A mutation with neither a `mutationFn` nor a `mutationFnWithContext` anywhere
 fails with
 `MissingMutationFunctionError`, and is never retried.
+
+:::note[In React Query]
+This page is `useMutation`. `mutate` and `mutateAsync` behave as they do
+there, and so does the order of the callbacks. Two things differ: a mutation
+has four call styles here rather than one hook, and `setMutationDefaults`
+takes no callbacks. See [differences from TanStack
+Query](../reference/differences-from-tanstack.md).
+:::
 
 ## Where next
 

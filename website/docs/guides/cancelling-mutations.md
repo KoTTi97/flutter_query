@@ -3,9 +3,12 @@ title: Cancelling mutations
 description: mutationFnWithContext, the signal cancel() cancels, and why cancelling a write fails it rather than reverting it.
 ---
 
-{/* demo: mutation-cancel */}
-
 # Cancelling mutations
+
+A firmware upload takes a minute; the user picks the wrong file and wants to
+stop it. A long export should stop when the user closes its dialog. A write
+can be cancelled — but what cancelling a write *means* is different from what
+it means for a query, and this page is about that difference.
 
 `mutationFn` takes the variables and nothing else. When the function needs to
 know about its run — to abort its request, or to read what `onMutate` kept —
@@ -72,3 +75,100 @@ One function per mutation — both at once fails an assertion at the options
 literal in a debug build, and is an `ArgumentError` when the client resolves
 them in a release build — and a
 function registered with `setMutationDefaults` has no context form.
+
+## A firmware update, cancellable
+
+The button starts the upload, turns into *Cancel update* while it runs, and
+after a cancel offers to try again. The mutation passes its signal on to the
+repository:
+
+```dart snippet="guides/cancelling-mutations.md#upload"
+MutationOptions<Device, Uint8List, void> firmwareUploadMutation(
+  QueryClient client,
+  String id,
+) =>
+    MutationOptions.simple(
+      mutationFnWithContext: (image, context) =>
+          devices.uploadFirmware(id, image, signal: context.signal),
+      // Cancelled or not, ask the device what it is running now.
+      onSettled: (_, __, ___, ____, _____) => client.invalidateQueries(
+        filters: QueryFilters(queryKey: DeviceKeys.detail(id)),
+      ),
+    );
+
+class FirmwareUpdateButton extends StatelessWidget {
+  const FirmwareUpdateButton({
+    super.key,
+    required this.deviceId,
+    required this.image,
+  });
+
+  final String deviceId;
+  final Uint8List image;
+
+  @override
+  Widget build(BuildContext context) {
+    final client = QueryClientProvider.of(context);
+    final upload = context.mutation(firmwareUploadMutation(client, deviceId));
+    return switch (upload.value) {
+      MutationPending() => OutlinedButton(
+          onPressed: upload.cancel,
+          child: const Text('Cancel update'),
+        ),
+      MutationError(error: CancelledError()) => FilledButton(
+          onPressed: () => upload.mutate(image),
+          child: const Text('Update cancelled — try again'),
+        ),
+      _ => FilledButton(
+          onPressed: () => upload.mutate(image),
+          child: const Text('Install update'),
+        ),
+    };
+  }
+}
+```
+
+Cancelling fails the run, so `onSettled` still invalidates the device's
+detail — the device may have received half an image and rebooted, or all of
+it, and only asking it tells you which. The `CancelledError` in the result is
+what lets the button tell "the user stopped it" from "it failed".
+
+The repository hands the signal to its HTTP client. With dio, a `CancelToken`
+bridges the two:
+
+```dart snippet="prose-only: needs dio, which the docs package does not depend on"
+// lib/data/device_repository.dart
+Future<Device> uploadFirmware(
+  String id,
+  Uint8List image, {
+  required QueryCancelToken signal,
+}) async {
+  final token = CancelToken();
+  signal.onCancel(token.cancel);
+  final response = await dio.put<Map<String, Object?>>(
+    '/devices/$id/firmware',
+    data: Stream.fromIterable([image]),
+    options: Options(headers: {Headers.contentLengthHeader: image.length}),
+    cancelToken: token,
+  );
+  return Device.fromJson(response.data!);
+}
+```
+
+With the `http` package, send an `AbortableRequest` whose `abortTrigger`
+completes from `signal.onCancel`. A repository that ignores the signal still works: its
+request runs on unobserved, and whatever it returns is discarded.
+
+The `mutation-cancel` screen holds each rename on the server for three
+seconds. Type a new title, press *Rename*, then *Cancel* before the three
+seconds are up: the result reads `error=cancelled`, the optimistic title
+rolls back to the old one, and the refetch shows what the server kept.
+
+<LiveDemo feature="mutation-cancel" />
+
+:::note[In React Query]
+TanStack Query cannot cancel a mutation: `useMutation` has no `cancel`, and
+its `mutationFn` receives no signal. `mutationFnWithContext` and `cancel()`
+are additions of this library, built so that a cancel runs the error path you
+already wrote.
+:::

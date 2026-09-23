@@ -3,8 +3,6 @@ title: What rebuilds, and when
 description: select narrows what a widget reads; buildWhen narrows when it rebuilds. They are not the same tool.
 ---
 
-{/* demo: select-and-sharing, build-when */}
-
 # What rebuilds, and when
 
 The rule is TanStack Query's: **a widget rebuilds whenever its result changes** — and
@@ -146,6 +144,49 @@ which. A reader who wants per-query filtering has it already, by reading each qu
 guarantee: the collection notifies only when a result in it actually moved,
 compared element by element.
 
+## In an app
+
+A lamp badge on each room tab shows how many lights are on. It reads the
+room's device list — the same options the room screen reads, so one request
+serves both — selects a count, and rebuilds only when the count moves:
+
+```dart snippet="guides/render-optimizations.md#room-badge"
+class RoomBadge extends StatelessWidget {
+  const RoomBadge({super.key, required this.room});
+
+  final String room;
+
+  @override
+  Widget build(BuildContext context) {
+    // Reads the room's list, keeps a count. A device renamed, or a refetch
+    // that changes nothing, leaves the count — and this badge — alone.
+    final on = context.selectQuery(
+      roomDevicesQuery(room).withSelect(_countOn),
+      buildWhen: (previous, current) =>
+          previous.dataOrNull != current.dataOrNull,
+    );
+    return Badge(
+      label: Text('${on.dataOrNull ?? 0}'),
+      child: const Icon(Icons.lightbulb_outline),
+    );
+  }
+}
+
+// Top-level, so the options compare equal from one build to the next.
+int _countOn(List<Device> list) => list.where((device) => device.isOn).length;
+```
+
+`withSelect` turns the room's plain options into select options without
+restating the key and the function. The `select` alone keeps `data` the same
+`int` across a rename or a refetch that changes nothing; the `buildWhen` also
+ignores the `fetchStatus` and `dataUpdatedAt` that every refetch moves. The
+room screen next to it, which shows those names, rebuilds on a rename; the
+badge does not.
+
+Pass a top-level function or a static method as `select`, not a closure
+written inline: a new closure each build is a new option, and the observer
+runs the new `select` again over data it has already selected.
+
 ## Why not track which fields were read
 
 React Query tracks which fields of the result a component touched during a
@@ -167,16 +208,31 @@ That covers the frame's build phase and the app's very first build, which
 
 ## Seeing it
 
-The `select-and-sharing` screen in the [examples](../examples/index.md) puts a build counter next to each
-reader and lets you refetch with equal or changed data, so the difference
-between "the fetch happened" and "the widget rebuilt" is on screen rather than
-in your head.
+The `select-and-sharing` screen reads one entry five times, with a different
+`select` each, and counts every reader's builds and its *data builds* — the
+builds whose selected value changed. Press *Refetch*: the data comes back
+equal, every reader's *data builds* stays put, and only the builder with a
+`buildWhen` does not rebuild at all. *Toggle todo 1* changes what some
+selections see and not others. Tick *Structural sharing off* and refetch: the
+readers whose selection is a new list each time now count a data change for
+equal data.
 
-Its `build-when` screen is this page's other half: each of the eight keyless
+<LiveDemo feature="select-and-sharing" />
+
+The `build-when` screen is this page's other half: each of the eight keyless
 reads is made twice over one entry — once with a predicate, once without — so
-what the predicate costs and saves is the difference between two counters
-rather than a claim. A knob swaps the predicate for `(_, __) => false` and for
-`(_, __) => true`, which freezes the filtered half and then makes it its twin
-again.
+what the predicate costs and saves is the difference between two counters.
+Press *Refetch the posts* and watch the unfiltered counters move while the
+filtered ones stay; set the *buildWhen* knob to *never* to freeze the filtered
+half, and to *always* to make it its twin again.
+
+<LiveDemo feature="build-when" />
 
 What `select` keeps depends on [structural sharing](structural-sharing.md).
+
+:::note[In React Query]
+`select` is the same option. `notifyOnChangeProps` and tracked properties
+decide there which result fields re-render a component; `buildWhen` is that
+decision written as a function of the previous and the current result, on
+every builder and every keyless read.
+:::
