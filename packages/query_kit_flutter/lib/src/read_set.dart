@@ -66,14 +66,29 @@ typedef _Entry = ReadEntry<Object?>;
 /// **Only the reader's own build opens a generation.** A read can also come
 /// from a callback that runs *later* with the reader's context — a nested
 /// `ValueListenableBuilder`, `LayoutBuilder` or `AnimatedBuilder` using the
-/// outer `context` or `watchQuery`, or a `ListView.builder`'s `itemBuilder`,
-/// whose `context` is the sliver's element shared by every item. Such a
-/// callback re-runs without the reader's `build`, and a generation opened by
-/// it alone released everything `build` had read (release review
-/// 2026-09-23, BIND-1/BIND-2). So a read made outside the reader's own build
-/// is *additive*: it joins whatever the reader holds and releases nothing,
-/// and what such a callback stops reading is released at the reader's own
-/// next build or unmount. [beginBuild] tells the two apart.
+/// outer `context` or `watchQuery`. Such a callback re-runs without the
+/// reader's `build`, and a generation opened by it alone released everything
+/// `build` had read (release review 2026-09-23, BIND-1). So a read made
+/// outside the reader's own build is *additive*: it joins whatever the
+/// reader holds and releases nothing, and what such a callback stops reading
+/// is released at the reader's own next build or unmount. [beginBuild] tells
+/// the two apart.
+///
+/// "Own build" is a `ComponentElement`'s notion — a `StatelessWidget`'s or a
+/// `State`'s `build`. A reader that is not one runs its callback wholesale
+/// instead: a `LayoutBuilder`'s element (an `OrientationBuilder` hands its
+/// builder the `LayoutBuilder`'s context too) calls its builder during
+/// layout, never while dirty, so every run of it is that reader's build and
+/// opens the frame's generation — what it stopped reading goes after the
+/// frame (second pass, V-B-1). The exception is an element that builds its
+/// children *piecemeal*: a `ListView.builder`'s sliver, a grid's, a
+/// `PageView`'s, a `ListWheelScrollView`'s, a two-dimensional viewport's.
+/// Its item builder runs for the rows scrolling in, not for the rows still
+/// shown, so neither rule is right for it — per frame releases the visible
+/// rows, additive holds every row ever built. Reading through that context
+/// is a debug-mode error that names the fix, a widget per row
+/// ([debugCheckReader]); release builds keep the per-frame rule, which is
+/// bounded (second pass, V-B-2).
 class ReadSet {
   /// [rebuild] is how this reader is told its controllers moved; [who] names
   /// it in the two debug messages ("This State", "This widget").
@@ -110,6 +125,16 @@ class ReadSet {
   Set<Object> _seen = <Object>{};
   int _seenIn = -1;
 
+  /// The mutations the reader's own build read in the frame [_seenIn] names,
+  /// with the functions the first read of each ran — what the debug
+  /// ambiguity check compares a repeat against. Only written in debug
+  /// builds.
+  Map<Object, (Object?, Object?)> _mutationsRead =
+      <Object, (Object?, Object?)>{};
+
+  /// The element the last [beginBuild] was for.
+  Element? _reader;
+
   /// The widget the reader's element had when a generation was last opened.
   /// A parent handing it a new one rebuilds it with `Element.dirty` false.
   Widget? _builtFor;
@@ -117,8 +142,8 @@ class ReadSet {
   /// Opens [generation] if it is not open already *and* [reader] is building
   /// itself: what earlier builds held becomes provisional, and whatever this
   /// build does not read again is released by [sweep]. A read from anywhere
-  /// else — a nested builder or an `itemBuilder` running with [reader]'s
-  /// context — is additive and opens nothing (see the class doc).
+  /// else — a nested builder running with [reader]'s context — is additive
+  /// and opens nothing (see the class doc).
   ///
   /// "Building itself" is Flutter's own bookkeeping, the same in every build
   /// mode: `Element.dirty` stays true for the whole of a `build()` that
@@ -127,7 +152,9 @@ class ReadSet {
   /// builder, are built. The one own build that does not start dirty is a
   /// parent handing the element a new widget (`update` forces the rebuild),
   /// and that one is told apart by the widget having changed since the last
-  /// generation opened. A nested callback sees neither.
+  /// generation opened. A nested callback sees neither. A [reader] that is
+  /// no `ComponentElement` has no `build` to tell apart from its callbacks:
+  /// every read through it is its own build (V-B-1).
   ///
   /// Without the release a screen that switches from one key to another
   /// would stay subscribed to the key it no longer shows.
@@ -135,9 +162,13 @@ class ReadSet {
     if (_seenIn != generation) {
       _seenIn = generation;
       _seen = <Object>{};
+      _mutationsRead = <Object, (Object?, Object?)>{};
     }
+    _reader = reader;
     final widget = reader.widget;
-    final ownBuild = reader.dirty || !identical(widget, _builtFor);
+    final ownBuild = reader is! ComponentElement ||
+        reader.dirty ||
+        !identical(widget, _builtFor);
     if (!ownBuild || _generation == generation) {
       return;
     }
@@ -145,6 +176,43 @@ class ReadSet {
     _generation = generation;
     _pending = <Object>{..._pending, ..._current};
     _current = <Object>{};
+  }
+
+  /// Throws, in debug builds, when [reader] builds its children piecemeal —
+  /// the `context` a `ListView.builder`, `GridView.builder`,
+  /// `PageView.builder`, `ListWheelScrollView.useDelegate` or a
+  /// two-dimensional scroll view hands its item builder. That context is the
+  /// whole list's, not the row's, and no rule over it both keeps the rows on
+  /// screen and lets go of the ones scrolled away (see the class doc).
+  /// [call] names the read in the message. Called before anything is
+  /// recorded. Release builds skip it and treat every read as the list's own
+  /// build: bounded, but a row still on screen can lose its subscription
+  /// when others scroll in.
+  static void debugCheckReader(Element reader, String call) {
+    assert(() {
+      if (reader is SliverMultiBoxAdaptorElement ||
+          reader is ListWheelElement ||
+          reader is TwoDimensionalChildManager) {
+        throw FlutterError.fromParts([
+          ErrorSummary(
+            '$call was called with the context an item builder was given.',
+          ),
+          ErrorDescription(
+            'That context belongs to ${reader.widget.runtimeType}, which '
+            'builds its rows piecemeal as they scroll in: it is the whole '
+            'list, not the row, and cannot tell which row a read belongs to. '
+            'Its reads would either be released while their row is still '
+            'shown or never be released at all.',
+          ),
+          ErrorHint(
+            'Give each row a widget of its own and read inside its build — '
+            '`itemBuilder: (_, i) => TaskTile(ids[i])` with the read in '
+            "`TaskTile.build`. Each row's reads then live and go with it.",
+          ),
+        ]);
+      }
+      return true;
+    }());
   }
 
   /// Creates or reuses this reader's observer for [options] and returns its
@@ -240,17 +308,37 @@ class ReadSet {
       // different mutations under `['todos']` are ordinary there (release
       // review 2026-09-23, B1-1). Distinct keys still tell two reads apart;
       // only an `id` names one.
-      if (id == null && _seen.contains(identity)) {
-        final key = options.mutationKey;
-        throw FlutterError(
-          '$who read two mutations of the shape '
-          '${(TData, TVariables, TOnMutateResult)}'
-          '${key == null ? '' : ' and the mutationKey $key'} in one build. '
-          'They would share one controller, and whichever was read last '
-          'would run for both. A mutationKey is a category, not a name: give '
-          'each read an `id:` (or read the mutation once and share the '
-          'controller).',
-        );
+      //
+      // What is *not* ambiguous (second pass, V-B-4): a read outside the
+      // reader's own build — a nested builder re-reading what `build` read
+      // — is the same call site's controller handed on, and a repeat whose
+      // mutation function is the same (`==`: one stored options object, a
+      // tear-off, a top-level function, or none at all when
+      // `setMutationDefaults` supplies it) runs the same thing whichever
+      // read wins. A function literal is a new object every time it is
+      // evaluated, so a getter building one per read looks exactly like two
+      // different mutations and still asserts.
+      final reader = _reader;
+      final ownBuild = reader is! ComponentElement || reader.debugDoingBuild;
+      if (id == null && ownBuild) {
+        final fns = (options.mutationFn, options.mutationFnWithContext);
+        final first = _mutationsRead[identity];
+        if (first == null) {
+          _mutationsRead[identity] = fns;
+        } else if (first != fns) {
+          final key = options.mutationKey;
+          throw FlutterError(
+            '$who read two mutations of the shape '
+            '${(TData, TVariables, TOnMutateResult)}'
+            '${key == null ? '' : ' and the mutationKey $key'} with different '
+            'mutation functions in one build. They would share one '
+            'controller, and whichever was read last would run for both. A '
+            'mutationKey is a category, not a name: give each read an `id:`. '
+            'If both reads are one mutation, read it once and share the '
+            'controller, or keep its options (or its function) in a field — '
+            'a function literal is a new function every time it is built.',
+          );
+        }
       }
       return true;
     }());

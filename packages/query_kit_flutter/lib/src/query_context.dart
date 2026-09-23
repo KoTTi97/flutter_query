@@ -34,16 +34,24 @@
 ///
 /// **Whose build.** The reads belong to the element `context` names, and
 /// "build" means *its* build. A callback that runs later with that context —
-/// the outer `context` inside a nested `ValueListenableBuilder` or
-/// `LayoutBuilder`, or the `context` a `ListView.builder` hands its
-/// `itemBuilder`, which is the list's sliver, shared by every item — makes
-/// *additive* reads: they release nothing the element's own build read, and
-/// a key such a callback stops reading (an item scrolled away) stays
-/// subscribed until that element's own next build or unmount (release
-/// review 2026-09-23, BIND-1/BIND-2). For a list, give each item a widget of
-/// its own — `itemBuilder: (_, i) => TaskTile(ids[i])` with the
-/// `context.query` inside `TaskTile.build` — and each item's reads live and
-/// go with it.
+/// the outer `context` inside a nested `ValueListenableBuilder`,
+/// `AnimatedBuilder` or `LayoutBuilder` — makes *additive* reads: they
+/// release nothing the element's own build read, and a key such a callback
+/// stops reading stays subscribed until that element's own next build or
+/// unmount (release review 2026-09-23, BIND-1). A `LayoutBuilder`'s or
+/// `OrientationBuilder`'s *own* `context` is different: its builder is its
+/// build, so a key it stops reading — the wide layout's, after a resize — is
+/// released after that frame.
+///
+/// **Not through a list's item-builder context.** The `context` a
+/// `ListView.builder`, `GridView.builder`, `PageView.builder` or another
+/// lazily built list hands its `itemBuilder` is the whole list's, not the
+/// row's: it builds rows piecemeal as they scroll in, and cannot tell which
+/// row a read belongs to. Reading through it is an error in debug builds
+/// (in release, a row still on screen can lose its subscription when others
+/// scroll in). Give each row a widget of its own —
+/// `itemBuilder: (_, i) => TaskTile(ids[i])` with the `context.query` inside
+/// `TaskTile.build` — and each row's reads live and go with it.
 ///
 /// **Only in `build`.** The read is reconciled against what the widget read
 /// in its last build; a `context.query` from a tap handler creates an observer
@@ -117,7 +125,7 @@ extension QueryContext on BuildContext {
   ) {
     final element = _scopeElement(this);
     final result = element
-        .readsFor(this as Element)
+        .readsFor(this as Element, 'context.query')
         .readQuery<TQueryData, TData>(element.client, options, id,
             buildWhen: buildWhen);
     dependOnInheritedWidgetOfExactType<QueryScope>();
@@ -145,7 +153,7 @@ extension QueryContext on BuildContext {
   }) {
     final element = _scopeElement(this);
     final controller = element
-        .readsFor(this as Element)
+        .readsFor(this as Element, 'context.infiniteQuery')
         .readInfiniteQuery<TPageData, TPageParam, TData>(
             element.client, options, id,
             buildWhen: buildWhen);
@@ -161,8 +169,14 @@ extension QueryContext on BuildContext {
   /// with its three types; without either, by the types alone — so pass [id]
   /// when one widget runs two mutations of the same shape. A `mutationKey`
   /// is a category, as upstream's is, not a name: two mutations under one key
-  /// with the same types would share a controller, so reading them in one
-  /// build without [id] is a debug assertion.
+  /// with the same types would share a controller, so two reads of one
+  /// identity in one build with *different* mutation functions, without
+  /// [id], are a debug assertion. The same function read twice — one stored
+  /// options object, a tear-off, a top-level function — is one mutation, and
+  /// so is a nested builder re-reading what `build` read; a function literal
+  /// is a new function each time it is built, so keep it in a field or read
+  /// once. Through a lazily built list's item-builder context, any read is a
+  /// debug error (see the library doc).
   ///
   /// [buildWhen] narrows *when* this widget rebuilds, the same predicate
   /// [MutationBuilder.buildWhen] takes: given the result the last build
@@ -179,7 +193,7 @@ extension QueryContext on BuildContext {
   }) {
     final element = _scopeElement(this);
     final controller = element
-        .readsFor(this as Element)
+        .readsFor(this as Element, 'context.mutation')
         .readMutation<TData, TVariables, TOnMutateResult>(
             element.client, options, id,
             buildWhen: buildWhen);
@@ -273,8 +287,11 @@ class QueryScopeElement extends InheritedElement {
   /// is not open already, and the sweep that ends it is booked.
   ///
   /// Public to the library only — `context.query` and its two siblings call
-  /// it, then read through the set it returns.
-  ReadSet readsFor(Element reader) {
+  /// it, naming themselves as [call], then read through the set it returns.
+  /// A list's item-builder context is refused here, in debug builds, before
+  /// a set is made for it ([ReadSet.debugCheckReader], V-B-2).
+  ReadSet readsFor(Element reader, String call) {
+    ReadSet.debugCheckReader(reader, call);
     final reads = _readers.putIfAbsent(
       reader,
       () => ReadSet(

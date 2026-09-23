@@ -93,6 +93,9 @@ class QueryClientProvider extends StatefulWidget {
   /// online — and that is where it goes back to when a status is taken away
   /// on a later build, or when the provider leaves the tree: nothing is left
   /// to revise an offline verdict then (release review 2026-09-23, BIND-4).
+  /// Only the *last* provider with a status for that client does this: a
+  /// replacement mounted before the old one is disposed — a new key, a move
+  /// to another parent — keeps its own verdict (V-B-3).
   /// [OnlineStatus.initial] is applied whenever a client is given this
   /// status: at mount, to a client that arrives on a later build, and on
   /// any later build that changes the status — with one exception, one stream
@@ -223,6 +226,9 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
     _mountClient(widget.client);
     // Initial focus can resume restored mutations synchronously. It must
     // already see the connectivity snapshot supplied by the provider.
+    if (widget.onlineStatus != null) {
+      _speakForOnline(widget.client);
+    }
     _applyOnlineStatus(widget.client);
     if (widget.observeAppLifecycle) {
       _observeLifecycle(widget.client);
@@ -376,12 +382,42 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
   /// status last said would otherwise stay, and an offline verdict with no
   /// source left to revise it pins paused queries and mutations for good
   /// (release review 2026-09-23, BIND-4). A client that leaves this provider
-  /// for another client is left as it was.
-  static void _releaseOnline(QueryClient client) {
-    if (!client.onlineManager.isOnline()) {
-      client.onlineManager.setOnline(true);
+  /// for another client is left as it was ([reset] false).
+  ///
+  /// Only when *no* provider speaks for it any more. One client can be under
+  /// two providers at once, and a replacement's `initState` runs before the
+  /// old one's `dispose` — a new key, a move to another parent without a
+  /// `GlobalKey`. The old one putting the client back online then overrode
+  /// the new one's verdict, for good with an [OnlineStatus.fixed] (second
+  /// pass, V-B-3). So the speakers are counted per [OnlineManager], the way
+  /// [_schedulerInstallations] counts the scheduler's installations, and the
+  /// last one to stop is the one that resets.
+  static void _releaseOnline(QueryClient client, {bool reset = true}) {
+    final manager = client.onlineManager;
+    final speakers = _onlineSpeakers[manager];
+    if (speakers == null) {
+      return;
+    }
+    if (speakers > 1) {
+      _onlineSpeakers[manager] = speakers - 1;
+      return;
+    }
+    _onlineSpeakers.remove(manager);
+    if (reset && !manager.isOnline()) {
+      manager.setOnline(true);
     }
   }
+
+  /// Counts this provider as speaking for [client]'s connectivity until
+  /// [_releaseOnline].
+  static void _speakForOnline(QueryClient client) {
+    final manager = client.onlineManager;
+    _onlineSpeakers[manager] = (_onlineSpeakers[manager] ?? 0) + 1;
+  }
+
+  /// How many mounted providers currently have an `onlineStatus` for a client
+  /// on one [OnlineManager] — see [_releaseOnline].
+  static final Map<OnlineManager, int> _onlineSpeakers = <OnlineManager, int>{};
 
   /// Tells [client] what the current [QueryClientProvider.onlineStatus] says,
   /// before [_follow]'s stream has said anything. `null` tells it nothing —
@@ -551,9 +587,19 @@ class _QueryClientProviderState extends State<QueryClientProvider> {
       // Changing only `initial` does not replace the source or its latest
       // event. A single-subscription stream cannot be listened to again.
       if (!sameStream) _follow(widget.onlineStatus);
-      if (!clientChanged &&
-          oldWidget.onlineStatus != null &&
-          widget.onlineStatus == null) {
+    }
+    // Who speaks for which client's connectivity, counted (V-B-3): a client
+    // left for another is left as it was; a status taken away from the same
+    // client lets it go back online once nobody else speaks for it.
+    final spoke = oldWidget.onlineStatus != null;
+    final speaks = widget.onlineStatus != null;
+    if (clientChanged) {
+      if (spoke) _releaseOnline(oldWidget.client, reset: false);
+      if (speaks) _speakForOnline(widget.client);
+    } else if (spoke != speaks) {
+      if (speaks) {
+        _speakForOnline(widget.client);
+      } else {
         _releaseOnline(widget.client);
       }
     }

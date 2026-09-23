@@ -658,13 +658,14 @@ void main() {
       // The first notification is the run going pending, delivered on the
       // spot. Until the release review of 2026-09-23 (B2-2) the fixture let a
       // run settle while the observer was detached, so that the next
-      // subscribe notified from inside `subscribe`; a run now holds its
-      // observer attached until it settles, so no mutation settles detached
-      // and that path is unreachable for a mutation controller. The
-      // re-entrancy guard is `ControllerLifetime`'s and is pinned for it by
-      // the query case above; this one pins that a listener added inside a
-      // notification is still one subscription, which the run's own hold
-      // must not mask once it lets go.
+      // subscribe notified from inside `subscribe`; a run started through
+      // the controller now holds its observer attached until it settles, so
+      // it no longer settles detached. The original fixture still reaches
+      // that path through `controller.observer.mutateAsync`, which bypasses
+      // the hold — it is kept as its own case below (second pass, V-B-5).
+      // This one pins that a listener added inside a notification is still
+      // one subscription, which the run's own hold must not mask once it
+      // lets go.
       void nested() {}
       late VoidCallback listener;
       listener = () {
@@ -713,6 +714,52 @@ void main() {
         await tester.pump();
       }
     });
+
+    // The original C50 mutation fixture, on the path it still reaches: a
+    // run through `controller.observer`, which the controller's run hold
+    // does not cover, settles while the observer is detached, so the next
+    // subscribe notifies from inside `subscribe` (second pass, V-B-5).
+    for (final leave in [false, true]) {
+      testWidgets(
+          'a mutation settled detached through controller.observer: a '
+          'listener that ${leave ? 'leaves' : 'subscribes another'} inside '
+          'its first notification', (tester) async {
+        final client = newClient()
+          ..notifyManager.setScheduler((callback) => callback());
+        final settle = Completer<int>();
+        final controller = MutationController<int, int, void>(
+          client,
+          MutationOptions(mutationFn: (_) => settle.future),
+        );
+        void noop() {}
+        controller.addListener(noop);
+        final run = controller.observer.mutateAsync(1);
+        await tester.pump();
+        controller.removeListener(noop);
+        settle.complete(7);
+        await run;
+
+        void nested() {}
+        late VoidCallback listener;
+        try {
+          if (leave) {
+            listener = () => controller.removeListener(listener);
+            controller.addListener(listener);
+          } else {
+            listener = () => controller.addListener(nested);
+            controller.addListener(listener);
+            controller
+              ..removeListener(listener)
+              ..removeListener(nested);
+          }
+          expect(client.mutationCache.mutations.single.observers, isEmpty);
+        } finally {
+          controller.dispose();
+          client.clear();
+          await tester.pump();
+        }
+      });
+    }
   });
 
   group('F10 initial lifecycle state', () {
@@ -3030,6 +3077,64 @@ class _RrKeyedMutationsState extends State<_RrKeyedMutations> with QueryMixin {
   }
 }
 
+// Release review 2026-09-23, second pass (verification of the fixes).
+
+int _rrObservers(QueryClient client, String name) =>
+    client.queryCache.get<String>(QueryKey(<Object?>[name]))?.observersCount ??
+    -1;
+
+/// One list row as its own widget: the shape the V-B-2 error points to.
+class _RrRow extends StatelessWidget {
+  const _RrRow(this.name);
+  final String name;
+  @override
+  Widget build(BuildContext context) =>
+      Text('$name=${context.query(_rr(name)).dataOrNull}');
+}
+
+Future<String> _rrSave(int v) async => 'saved $v';
+
+/// Reads one keyed mutation twice in one frame through a getter (V-B-4).
+/// [shape] says how the getter builds its options: `field` hands out one
+/// stored object, `tearOff` builds new options around a function that
+/// compares equal every time, `closure` builds new options around a new
+/// function literal every time.
+class _RrMutationTwice extends StatefulWidget {
+  const _RrMutationTwice(this.shape, {this.nested = false});
+  final String shape;
+
+  /// Read once in `build` and once in a nested builder instead.
+  final bool nested;
+  @override
+  State<_RrMutationTwice> createState() => _RrMutationTwiceState();
+}
+
+class _RrMutationTwiceState extends State<_RrMutationTwice> with QueryMixin {
+  static final _key = QueryKey(const <Object?>['save']);
+  final _field = MutationOptions<String, int, Object?>(
+      mutationKey: _key, mutationFn: _rrSave);
+
+  MutationController<String, int, Object?> get _save =>
+      watchMutation(switch (widget.shape) {
+        'field' => _field,
+        'tearOff' => MutationOptions<String, int, Object?>(
+            mutationKey: _key, mutationFn: _rrSave),
+        _ => MutationOptions<String, int, Object?>(
+            mutationKey: _key, mutationFn: (v) async => 'ok$v'),
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final a = _save;
+    if (widget.nested) {
+      return Builder(
+          builder: (_) => Text('${a.value.status} ${identical(a, _save)}'));
+    }
+    final b = _save;
+    return Text('${a.value.status} ${identical(a, b)}');
+  }
+}
+
 void _releaseReview20260923() {
   group('Release review 2026-09-23', () {
     for (final mixin in [true, false]) {
@@ -3067,8 +3172,11 @@ void _releaseReview20260923() {
       });
     }
 
+    // Reading through the itemBuilder's own context is a debug error since
+    // the second pass (V-B-2, below); the row widget it points to is what
+    // keeps a visible item after a scroll.
     queryWidgetTest(
-        'BIND-2: context.query in a ListView.builder itemBuilder keeps a '
+        'BIND-2: a ListView.builder row reading context.query keeps a '
         'visible item after a scroll', (tester, client) async {
       for (var i = 0; i < 50; i++) {
         client.setQueryData<String>(QueryKey(<Object?>['item$i']), 'item$i-0');
@@ -3078,8 +3186,7 @@ void _releaseReview20260923() {
         ListView.builder(
           itemExtent: 100,
           itemCount: 50,
-          itemBuilder: (context, i) =>
-              Text('item$i=${context.query(_rr('item$i')).dataOrNull}'),
+          itemBuilder: (_, i) => _RrRow('item$i'),
         ),
       ));
       await tester.pump();
@@ -3395,6 +3502,254 @@ void _releaseReview20260923() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       expect(fetches, 1);
+    });
+
+    // Second pass (verification of the fixes above).
+
+    queryWidgetTest(
+        'V-B-1: a LayoutBuilder reading through its own context releases the '
+        'key it stopped reading', (tester, client) async {
+      final width = ValueNotifier<double>(800);
+      addTearDown(width.dispose);
+      await tester.pumpWidget(app(
+        client,
+        ValueListenableBuilder<double>(
+          valueListenable: width,
+          // Passed as `child`: the LayoutBuilder keeps its widget, and only
+          // its constraints change.
+          child: LayoutBuilder(
+            builder: (context, c) => Text(c.maxWidth > 600
+                ? 'wide=${context.query(_rr('wide')).dataOrNull}'
+                : 'narrow=${context.query(_rr('narrow')).dataOrNull}'),
+          ),
+          builder: (_, w, child) =>
+              Center(child: SizedBox(width: w, height: 100, child: child)),
+        ),
+      ));
+      await tester.pump();
+      expect(_rrObservers(client, 'wide'), 1);
+
+      width.value = 300;
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('narrow=narrow-0'), findsOneWidget);
+      expect(_rrObservers(client, 'narrow'), 1);
+      expect(_rrObservers(client, 'wide'), 0);
+
+      // Frames that do not re-run the builder keep what it read.
+      client.setQueryData<String>(QueryKey(const <Object?>['narrow']), 'n1');
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('narrow=n1'), findsOneWidget);
+      expect(_rrObservers(client, 'narrow'), 1);
+    });
+
+    queryWidgetTest(
+        'V-B-1: an OrientationBuilder releases the key of the orientation it '
+        'left', (tester, client) async {
+      final width = ValueNotifier<double>(800);
+      addTearDown(width.dispose);
+      await tester.pumpWidget(app(
+        client,
+        ValueListenableBuilder<double>(
+          valueListenable: width,
+          child: OrientationBuilder(
+            builder: (context, o) => Text(o == Orientation.landscape
+                ? 'l=${context.query(_rr('land')).dataOrNull}'
+                : 'p=${context.query(_rr('port')).dataOrNull}'),
+          ),
+          builder: (_, w, child) =>
+              Center(child: SizedBox(width: w, height: 500, child: child)),
+        ),
+      ));
+      await tester.pump();
+      expect(_rrObservers(client, 'land'), 1);
+      width.value = 300;
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('p=port-0'), findsOneWidget);
+      expect(_rrObservers(client, 'land'), 0);
+    });
+
+    for (final (kind, read) in [
+      ('ListView.builder', 'query'),
+      ('ListView.builder', 'mutation'),
+      ('GridView.builder', 'query'),
+      ('PageView.builder', 'query'),
+    ]) {
+      queryWidgetTest(
+          'V-B-2: context.$read through a $kind itemBuilder\'s own context '
+          'is a debug error that names the fix', (tester, client) async {
+        Widget item(BuildContext context, int i) => Text(read == 'query'
+            ? '${context.query(_rr('item$i')).dataOrNull}'
+            : '${context.mutation(MutationOptions<String, int, void>(mutationFn: (v) async => '$v')).value.status}');
+        await tester.pumpWidget(app(
+          client,
+          switch (kind) {
+            'GridView.builder' => GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 1),
+                itemCount: 1,
+                itemBuilder: item),
+            'PageView.builder' =>
+              PageView.builder(itemCount: 1, itemBuilder: item),
+            _ => ListView.builder(itemCount: 1, itemBuilder: item),
+          },
+        ));
+        final error = tester.takeException();
+        expect(error, isA<FlutterError>());
+        expect('$error', contains('widget of its own'));
+        expect(_rrObservers(client, 'item0'), -1);
+      });
+    }
+
+    queryWidgetTest(
+        'V-B-2: a list whose rows are widgets of their own keeps the visible '
+        'rows and releases the ones scrolled away', (tester, client) async {
+      for (var i = 0; i < 200; i++) {
+        client.setQueryData<String>(QueryKey(<Object?>['it$i']), 'v');
+      }
+      await tester.pumpWidget(app(
+        client,
+        ListView.builder(
+          itemExtent: 100,
+          itemCount: 200,
+          itemBuilder: (_, i) => _RrRow('it$i'),
+        ),
+      ));
+      await tester.pump();
+      for (var k = 0; k < 20; k++) {
+        await tester.drag(find.byType(ListView), const Offset(0, -900));
+        await tester.pump();
+      }
+      await tester.pump();
+      final visible = [
+        for (var i = 0; i < 200; i++)
+          if (find.text('it$i=v').evaluate().isNotEmpty) i
+      ];
+      expect(visible, isNotEmpty);
+      final shown = visible.first;
+      client.setQueryData<String>(QueryKey(<Object?>['it$shown']), 'w');
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('it$shown=w'), findsOneWidget);
+      var held = 0;
+      for (var i = 0; i < 200; i++) {
+        if (_rrObservers(client, 'it$i') > 0) held++;
+      }
+      expect(held, lessThan(40), reason: 'held=$held');
+    });
+
+    queryWidgetTest(
+        'V-B-3: a replacement provider on the same client keeps its offline '
+        'verdict when the old one is disposed after it',
+        (tester, client) async {
+      Widget tree(Key k) => QueryClientProvider(
+            key: k,
+            client: client,
+            observeAppLifecycle: false,
+            onlineStatus: const OnlineStatus.fixed(false),
+            child: const SizedBox(),
+          );
+      await tester.pumpWidget(tree(const ValueKey(1)));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(tree(const ValueKey(2)));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    queryWidgetTest(
+        'V-B-3: a provider moved to another parent keeps its offline verdict',
+        (tester, client) async {
+      Widget tree({required bool padded}) {
+        // No GlobalKey: a new parent type is a new provider element.
+        final child = QueryClientProvider(
+          client: client,
+          observeAppLifecycle: false,
+          onlineStatus: const OnlineStatus.fixed(false),
+          child: const SizedBox(),
+        );
+        return padded
+            ? Padding(padding: EdgeInsets.zero, child: child)
+            : Center(child: child);
+      }
+
+      await tester.pumpWidget(tree(padded: false));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(tree(padded: true));
+      expect(client.onlineManager.isOnline(), isFalse);
+    });
+
+    queryWidgetTest(
+        'V-B-3: of two providers speaking for one client, the last to leave '
+        'puts it back online', (tester, client) async {
+      Widget provider({OnlineStatus? status}) => QueryClientProvider(
+            client: client,
+            observeAppLifecycle: false,
+            onlineStatus: status,
+            child: const SizedBox(),
+          );
+      await tester.pumpWidget(Column(children: [
+        provider(status: const OnlineStatus.fixed(false)),
+        provider(status: const OnlineStatus.fixed(false)),
+      ]));
+      expect(client.onlineManager.isOnline(), isFalse);
+      // One stops speaking on a later build; one is still there.
+      await tester.pumpWidget(Column(children: [
+        provider(status: const OnlineStatus.fixed(false)),
+        provider(),
+      ]));
+      expect(client.onlineManager.isOnline(), isFalse);
+      await tester.pumpWidget(Column(children: [provider()]));
+      expect(client.onlineManager.isOnline(), isTrue);
+    });
+
+    for (final shape in ['field', 'tearOff']) {
+      queryWidgetTest(
+          'V-B-4: one keyed mutation read twice in one build through a '
+          'getter ($shape) is no ambiguity', (tester, client) async {
+        await tester.pumpApp(client, _RrMutationTwice(shape));
+        expect(tester.takeException(), isNull);
+        expect(find.text('${MutationStatus.idle} true'), findsOneWidget);
+      });
+    }
+
+    queryWidgetTest(
+        'V-B-4: the same keyed mutation read in build and again in a nested '
+        'builder is no ambiguity', (tester, client) async {
+      await tester.pumpApp(
+          client, const _RrMutationTwice('closure', nested: true));
+      expect(tester.takeException(), isNull);
+      expect(find.text('${MutationStatus.idle} true'), findsOneWidget);
+    });
+
+    queryWidgetTest(
+        'V-B-4: a getter building a new function literal per read is still '
+        'two mutations to the binding', (tester, client) async {
+      await tester.pumpApp(client, const _RrMutationTwice('closure'));
+      final error = tester.takeException();
+      expect(error, isA<FlutterError>());
+      expect('$error', contains('read it once'));
+    });
+
+    queryWidgetTest(
+        'V-B-5: controller.observer.mutateAsync on an unlistened controller '
+        'follows the core and skips the per-call callbacks',
+        (tester, client) async {
+      var calls = 0;
+      final m = MutationController<int, int, void>(
+          client, MutationOptions(mutationFn: (v) async => v));
+      addTearDown(m.dispose);
+      await m.observer.mutateAsync(1,
+          callbacks: MutateCallbacks(onSuccess: (_, __, ___) => calls++));
+      await tester.pump();
+      expect(calls, 0);
+      // The controller's own mutateAsync is what holds the run.
+      await m.mutateAsync(2,
+          callbacks: MutateCallbacks(onSuccess: (_, __, ___) => calls++));
+      await tester.pump();
+      expect(calls, 1);
     });
   });
 }

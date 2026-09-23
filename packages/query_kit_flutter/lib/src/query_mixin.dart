@@ -23,8 +23,10 @@
 /// callback re-runs on its own, so its reads are *additive*: they release
 /// nothing `build` read, and a key the callback stops reading stays
 /// subscribed until this `State`'s own next build or disposal (release
-/// review 2026-09-23, BIND-1). Where that matters, give the nested part a
-/// widget of its own.
+/// review 2026-09-23, BIND-1). A `ListView.builder`'s `itemBuilder` is such
+/// a callback too: rows scrolled away stay subscribed until this `State`
+/// builds again. Where that matters — a long list above all — give the
+/// nested part, or each row, a widget of its own.
 library;
 
 import 'package:flutter/scheduler.dart';
@@ -148,9 +150,14 @@ mixin QueryMixin<T extends StatefulWidget> on State<T> {
   /// together with its three types; without either, by the types alone — so
   /// pass [id] when one widget runs two mutations of the same shape. A
   /// `mutationKey` is a category, as upstream's is, not a name: two mutations
-  /// under one key with the same types would share a controller, so reading
-  /// them in one build without [id] is a debug assertion. Released after the
-  /// frame once a build stops reading it, the way a query is.
+  /// under one key with the same types would share a controller, so two
+  /// reads of one identity in one build with *different* mutation
+  /// functions, without [id], are a debug assertion. The same function read
+  /// twice — one stored options object, a tear-off, a top-level function —
+  /// is one mutation, and so is a nested builder re-reading what `build`
+  /// read; a function literal is a new function each time it is built, so
+  /// keep it in a field or read once. Released after the frame once a build
+  /// stops reading it, the way a query is.
   ///
   /// [buildWhen] narrows *when* this `State` rebuilds, the same predicate
   /// [MutationBuilder.buildWhen] takes: given the result the last build
