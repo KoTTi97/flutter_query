@@ -467,7 +467,7 @@ workflow_disabled=0
 restore_workflow() {
   if (( workflow_disabled )); then
     printf '\n'
-    warn "re-enabling $PUBLISH_WORKFLOW…"
+    warn "re-enabling ${PUBLISH_WORKFLOW}…"
     if gh workflow enable "$PUBLISH_WORKFLOW" --repo "$REPO" >/dev/null 2>&1 \
        && [[ "$(workflow_state)" == "active" ]]; then
       ok "$PUBLISH_WORKFLOW is enabled again"
