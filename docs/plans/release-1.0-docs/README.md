@@ -20,7 +20,7 @@ starts once C3 has fixed the sidebar and slugs.
 | A | Audits | three reports in `audits/` | 0 | done |
 | C1 | Name, AI disclosure, READMEs, CHANGELOGs, pubspecs | D1/D2 everywhere listed; package READMEs install-first, no maintainer history (D3); CHANGELOG 1.0.0 is a feature summary; `coverage/` ignored | 1 | done |
 | C2 | Live-demo infrastructure | in-memory backend in `lib/` of both examples behind a define; embed mode; `tool/build_demos.sh`; `<LiveDemo>`; CI builds demos into the site; Playwright over the embedded demos; Pages workflow prepared (D5, D7) | 1 | open |
-| C8a | Dartdoc, core | no internal history in any `///`; src-level rules moved onto public symbols; categories; examples on entry points; library doc with quick start and D2 notice | 1 | open |
+| C8a | Dartdoc, core | no internal history in any `///`; src-level rules moved onto public symbols; categories; examples on entry points; library doc with quick start and D2 notice | 1 | done |
 | C8b | Dartdoc, binding | same for `query_kit_flutter` | 1 | open |
 | C9 | Test gaps | core/binding coverage gaps from `audits/audit-demos-tests.md` §B closed; value-class table tests; binding on `--platform chrome`; jargon guard in CI (D3) | 1 | open |
 | C3 | Site IA | new sidebar per `audits/audit-site.md` §2; existing content moved into the new slugs; internal history out; stub pages marked | 2 | open |
@@ -92,9 +92,12 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B3 | C1 review | core README: pure-Dart client reacts to focus/connectivity by itself | fixed `68ae3f1` |
 | B4 | C1 review | binding README lost the connectivity section its dartdoc points to | fixed `68ae3f1` |
 | B5 | C1 review | five P3 overstatements/jargon in READMEs and binding CHANGELOG | fixed `68ae3f1` |
+| B6 | C8a review | 4 P2 wrong docs: `failureReason` lifetime, `CancelledError` cases, paused work resumes only on a mounted client, `RetryPolicy.times(n)` = n retries | fixed `9c590c9` |
+| B7 | C8a review | 12 P3 imprecise docs (cancelRefetch, setDefaultOptions, onSettled skip, filters type, …) | fixed `9c590c9` |
 
 ## Log
 
 | Date | Chunk | Commit | Note |
 |---|---|---|---|
 | 2026-09-23 | C1 | `37938ca`, `68ae3f1` | name, AI notice, READMEs, CHANGELOGs; binding `example/README.md` dropped so pub.dev's Example tab shows code |
+| 2026-09-23 | C8a | `3564b9a`, `9c590c9` | core dartdoc: jargon 249→1 (the D2 notice), 70 examples, 15 categories |
