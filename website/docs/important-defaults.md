@@ -43,8 +43,8 @@ anybody, however many screens read it. Three values do more than a duration:
   own, but an [invalidation](guides/query-invalidation.md) still does. For
   data only your own writes change — the invalidation after the write is then
   the only refresh.
-- **`StaleTime.static`** — never stale and, while a widget reads it, never
-  refetched by any trigger, invalidation included; only an explicit
+- **`StaleTime.static`** — never stale once it has data and, while a widget
+  reads it, never refetched by any trigger, invalidation included; only an explicit
   `refetch()` or a `refetchInterval` fetches it. For data that cannot change
   while the app runs: a feature-flag set fetched at start-up, reference
   tables.
@@ -110,9 +110,10 @@ default `true`). See [query retries](guides/query-retries.md).
 After a refetch, the new data is compared with the cached data and every part
 that is deep-equal keeps the **cached instance** — `replaceEqualDeep`. A
 refetch that brings back the same list hands every reader the identical
-object, so nothing rebuilds for it. Lists, maps and sets are walked; your own
-classes are compared with their `==`, so give model classes value equality
-(by hand, `equatable` or `freezed`) or each refetch renews them. Switch it off
+object, so nothing rebuilds for it. Lists are walked element by element;
+maps and sets are compared deeply and kept whole when equal; your own classes
+are compared with their `==`, so give model classes value equality (by hand,
+`equatable` or `freezed`) or each refetch renews them. Switch it off
 per query with `structuralSharing: noStructuralSharing()`. See [structural
 sharing](guides/structural-sharing.md).
 
@@ -220,8 +221,12 @@ QueryObserverOptions<Firmware> firmwareQuery(String deviceId) =>
     );
 ```
 
-`client.setDefaultOptions(...)` replaces the client-wide defaults later; the
-next build of each reader picks them up. The showcase's *playground* screen
+`client.setDefaultOptions(...)` replaces the client-wide defaults later. They
+take effect wherever options are resolved next: a new reader, or an existing
+one the next time its options are applied — every build for `context.query`
+and `watchQuery`, a rebuild by its parent for a builder widget, a
+`setOptions` for a controller. A query already fetching keeps what it
+started with. The showcase's *playground* screen
 does exactly that — its *Stale time* and *GC time* knobs call
 `setDefaultOptions`. Set *Error rate* to `100 %` and press the refresh icon
 on *Todos* to watch `failureCount` climb through the retries, or pick *Stale

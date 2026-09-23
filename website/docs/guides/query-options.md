@@ -153,8 +153,9 @@ refetches. See [prefetching](prefetching.md).
 ## Traps
 
 - **A literal per widget.** Two widgets that build their own options for one
-  key share an entry, but whichever mounted last set its `gcTime`, and each
-  refetches by its own `staleTime`. One function per query ends that.
+  key share an entry, but the longest `gcTime` any of them asked for wins,
+  and each refetches by its own `staleTime`. One function per query ends
+  that.
 - **The same key with two data types.** A projection of a key's data is a
   `select`, not a second options function that fetches into the same key
   with another type — that one throws `QueryDataTypeError`.

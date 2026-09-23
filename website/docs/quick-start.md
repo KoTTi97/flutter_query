@@ -157,6 +157,15 @@ need `mutate` as well as the state: `add.value` is the `MutationResult`,
 refetches it while it is on screen. See [mutations](guides/mutations.md) and
 [invalidation from mutations](guides/invalidations-from-mutations.md).
 
+:::note[In React Query]
+The same four steps as TanStack Query's quick start: `QueryClientProvider`
+at the root, `useQuery` (here `context.query`, or one of the other three
+call styles), `useMutation` (here `context.mutation`, which returns a
+controller) and `invalidateQueries` in `onSuccess`. The options are a value
+you name and reuse rather than an object literal at the call site. See
+[differences from TanStack Query](reference/differences-from-tanstack.md).
+:::
+
 ## What you just got
 
 Without writing any of it:

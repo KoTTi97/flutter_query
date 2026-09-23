@@ -145,8 +145,9 @@ Widget build(BuildContext context) {
 ```
 
 A per-call callback — `mutate(name, onSuccess: …)` — does the same for one
-call, and is skipped once nothing listens to the mutation any more: when the
-widget that made the call is gone by the time it settles. See
+call, and is skipped once nothing listens to the mutation any more — when the
+widget that made the call is gone by the time it settles — and once a later
+`mutate` of the same controller has replaced it. See
 [mutations](mutations.md) for both, and [updates from mutation
 responses](updates-from-mutation-responses.md) for what to write into the
 cache.
@@ -176,7 +177,8 @@ cache's callbacks and the options' callbacks in the order they run, and
   refetch that changed nothing. Compare the part you react to, as the samples
   above do.
 - **A cache write in a per-call `onSuccess`.** It is skipped when the user
-  leaves the screen before the write settles, and the cache stays stale.
+  leaves the screen before the write settles, or presses again before it
+  does, and the cache stays stale.
   Writes to the cache go in the options' callbacks.
 
 :::note[In React Query]

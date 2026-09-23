@@ -157,9 +157,11 @@ says *Paused: no request until the box is unticked.*
 
 `Enabled.yes` and `Enabled.no` are constants, not constructors. A predicate
 given to `Enabled.when` is asked often; keep it cheap and free of side
-effects. It is asked again on every rebuild of the reader, so it may read
-state outside the query — a setting, a feature flag — and the next build picks
-up the change.
+effects. It is asked again each time the reader's options are applied —
+every build for `context.query` and `watchQuery`, a rebuild by its parent for
+a builder widget, a `setOptions` for a controller — so it may read state
+outside the query, a setting or a feature flag, and that is when a change is
+picked up.
 
 A disabled query that already has data keeps it and stays `success`. See
 [disabling queries](disabling-queries.md) for everything a disabled query

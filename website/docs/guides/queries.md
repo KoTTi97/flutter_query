@@ -137,8 +137,12 @@ axis, `fetchStatus`:
 
 - **`FetchStatus.fetching`** — the function is running (a first load, a
   retry, or a background refetch).
-- **`FetchStatus.paused`** — it wanted to fetch but is waiting for the
-  network. See [network mode](network-mode.md).
+- **`FetchStatus.paused`** — it wanted to fetch but may not go on yet. A
+  fetch under the default network mode that finds the client offline waits
+  before its first attempt. A fetch that failed and is due for a retry
+  waits between attempts while the client is offline, and also while the app
+  is in the background — a retry resumes when the app is back in the
+  foreground. See [network mode](network-mode.md).
 - **`FetchStatus.idle`** — nothing is running.
 
 Any status combines with any fetch status. The flags on every result name the
@@ -171,16 +175,19 @@ Widget taskTitle(QueryResult<Task> task) => switch (task) {
 
 - `dataUpdatedAt` and `errorUpdatedAt` — when the data or the error arrived.
 - `isStale` — whether the data is older than its `staleTime`, or was
-  invalidated.
+  invalidated, and `true` while there is no data yet. A **disabled** query
+  is never stale, and neither is a `StaleTime.static` query that has data —
+  invalidation included.
 - `failureCount` and `failureReason` — how many attempts of the current fetch
   have failed, while it retries. See [retries](query-retries.md).
 - `consecutiveErrorCount` — fetches in a row that ended in an error. See
   [polling](polling.md).
 - `isPlaceholderData` — the data is a placeholder, not in the cache. See
   [placeholder data](placeholder-query-data.md).
-- `refetch()` — fetch again now. Its future completes with the new result;
-  pass `cancelRefetch: false` to join a fetch already running instead of
-  replacing it.
+- `refetch()` — fetch again now. Its future completes with the new result.
+  A fetch already running over data is cancelled and replaced; pass
+  `cancelRefetch: false` to join it instead. A first load, with no data
+  yet, is always joined.
 
 ## Traps
 
@@ -190,7 +197,7 @@ Widget taskTitle(QueryResult<Task> task) => switch (task) {
   cache every time.
 - **`isLoading` is not "a spinner is needed".** It is false during a
   background refetch, when the data is on screen — which is what you want —
-  and also false for a pending query that is *paused* offline. Match
+  and also false for a pending query that is *paused*. Match
   `QueryPending(isPaused: true)` if that deserves its own message.
 - **An error does not clear the data.** Match `QueryError(:final staleData?)`
   before `QueryError()`, or the screen blanks on the first failed refresh.

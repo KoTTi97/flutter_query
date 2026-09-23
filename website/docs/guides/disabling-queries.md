@@ -119,8 +119,10 @@ unticked.*; untick it and the request goes out:
 - It **serves cached data**. Without data it is `pending` with `fetchStatus:
   idle`; with data it stays `success`.
 - **`refetch()` still fetches**, as above.
-- **`invalidateQueries` marks it stale** but does not refetch it while a
-  disabled observer holds it. `refetchQueries` skips it too.
+- **`invalidateQueries` marks it invalidated** but does not refetch it
+  while a disabled observer holds it — and its result's `isStale` stays
+  `false`, because a disabled query is never stale. Once it is enabled, the
+  invalidation counts. `refetchQueries` skips it too.
 - Once **nothing observes** a query that has fetched before,
   `refetchQueries` and `invalidateQueries(refetchType: RefetchType.all)`
   refetch it whatever `enabled` its last observer had.

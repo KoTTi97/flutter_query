@@ -59,9 +59,9 @@ mixin _QueryBuilderWidget<TQueryData, TData>
 ///
 /// One of the four equal ways to read a query; the others are
 /// [QueryContext], [QueryMixin] and the controllers such as
-/// [QueryController]. This one is the most explicit: nothing happens that is
-/// not visible in the tree, a change rebuilds exactly this widget's subtree,
-/// and it is a natural fit inside a list or a sliver.
+/// [QueryController]. This one is a widget in the tree: a change rebuilds
+/// exactly this widget's subtree, and returned from an `itemBuilder` it is a
+/// row with reads of its own.
 ///
 /// ```dart
 /// QueryBuilder<Task>(

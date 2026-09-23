@@ -114,11 +114,14 @@ combiner. A `CombinedResult` is deliberately not a source, so two combinations
 do not nest. Controllers combine the same way under a `ListenableBuilder` over
 `Listenable.merge([a, b])`.
 
-Two combinations that share a source each refetch it: `refetch()` and
-`retry()` cancel a fetch in flight and start their own, as an observer's
-`refetch()` does. To refresh several combinations at once without fetching a
-shared source twice, pass `refetch(cancelRefetch: false)` — the second call
-then joins the fetch the first one started.
+`refetch()` and `retry()` call each source's own `refetch()`, with the same
+`cancelRefetch` (default `true`). So they cancel a fetch in flight and start
+again **only for a source that already has data**; a source still on its
+first load, with nothing cached, joins the fetch that is running instead of
+restarting it. Two combinations that share a source therefore each refetch
+it once it has data. To refresh several combinations at once without
+fetching a shared source twice, pass `refetch(cancelRefetch: false)` — the
+second call then joins the fetch the first one started.
 
 The combiner runs on every call — every build. For a constructor call that is
 nothing; for a join over long lists, keep a `CombineMemo<R>` next to the reads

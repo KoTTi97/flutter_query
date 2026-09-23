@@ -217,8 +217,8 @@ one-off snapshot.
   first's data — see [dependent queries](dependent-queries.md) — and a
   needless wait when it does not.
 - **A hand-written list of reads for a data-driven set.** When which queries
-  run comes from data, give each item its own widget — see [a row per
-  item](reading-queries-in-widgets.md) — or use `QueriesBuilder`, so the set
+  run comes from data, give each item its own widget — see [a widget per
+  row](reading-queries-in-widgets.md#a-widget-per-row) — or use `QueriesBuilder`, so the set
   of observers follows the list as it changes.
 
 :::note[In React Query]
