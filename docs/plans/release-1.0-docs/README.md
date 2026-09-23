@@ -32,7 +32,7 @@ starts once C3 has fixed the sidebar and slugs.
 | C11 | Examples source cleanup | D3 in `examples/*/lib` (shown on the site), stale screen texts, `build_demos.sh` baseUrl, jargon guard covers example sources | 3 | done |
 | F1 | Follow-ups | B22, B25, B27, leftover ranking words; fresh re-check of C4d's reference fact edits (query-client, query-options, widgets-and-controllers) | 4 | done |
 | R | Repo URLs after the rename | every `KoTTi97/flutter_query` URL and `/flutter_query/` base path → `query_kit`, except historical records | 4 | done |
-| X | Independent review by a Codex agent | after E; `codex exec -m gpt-6-sol -s read-only` (maintainer's model choice), findings reproduced before fixing | 6 | open |
+| X | Independent review by a Codex agent | after E; `codex exec -m gpt-6-sol -s read-only` (maintainer's model choice), findings reproduced before fixing | 6 | done |
 | E | Final end-to-end pass | all gates green, site read in a browser, clean pass | 5 | done |
 
 ## Decisions
@@ -128,6 +128,10 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B30 | E | website e2e red (31/69): examples spec expected the full-screen link without `?theme=` | fixed `9cd13ed` |
 | B31 | E review of F1 | a mutation in flight keeps `retry`/`retryDelay`/`networkMode`/`scope`; select keeps `data`'s instance only with sharing on; placeholder shows again on refetch after error; `pages` count replaced by any observer | fixed `8404745` |
 | B32 | E | root README/CONTRIBUTING still said "case for case" | fixed `9ee6e5b` |
+| B33 | X (Codex) | `connectivity.md` reachability sample: stale probe could report online after the link dropped; then (Codex re-passes) overlapping rechecks, resubscribe, hung/throwing probe | fixed `1c735ca`, `e27ede6`, `ff8c249`, `753ab95` |
+| B34 | X (Codex) | `query-cancellation.md`: `refetch()` said to throw `CancelledError` (it never throws) | fixed `1c735ca` |
+| B35 | X (Codex) | announcement bar not D2 verbatim | fixed `1c735ca` |
+| B36 | X (Codex) | typed-data hash test compared a call with itself | fixed `1c735ca` |
 | B27 | C6a | `QueryCancelToken` dartdoc says package:http has no cancellation; http ≥1.5 has `AbortableRequest` | fixed `d29456b` |
 
 ## Log
@@ -153,3 +157,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | F1 | `d29456b` | B22/B25/B27; fresh re-check of three reference pages found 2 P1 wrong statements (select notifications, inline queryFn) + P2s, fixed in dartdoc and site; core 1157, binding 299 |
 | 2026-09-23 | R2 | — | repo transferred to `dualmeta-gmbh/query_kit` (Pages carried over); every URL, site `url`/`organizationName`, wizard `REPO` updated; verified publisher dualmeta.io: wizard stage 7 + `docs/releasing.md` section. LICENSE holder still `KoTTi97` — maintainer's call |
 | 2026-09-23 | E | `4ea460e`…`9ee6e5b` | clean pass: core 1157 VM/1153 Chrome, binding 299/298, showcase 256 + contract 50 + Playwright 177, task_manager 34 + contract 29 + Playwright 10, doc_snippets 42, site e2e 69, coverage 99.83/99.77 %, dry-runs and dart doc 0 warnings; browser read light/dark/375px clean; floors job (Flutter 3.27.4) not run locally |
+| 2026-09-23 | X | `1c735ca`…`753ab95` | Codex (gpt-6-sol, read-only) over the whole branch: 1 P1, 1 P2, 2 P3, all reproduced and fixed; three further Codex passes over the fix converged (last finding was contract wording). Work complete; branch `release/1.0-docs` not pushed |
