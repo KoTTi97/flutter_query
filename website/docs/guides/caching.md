@@ -25,7 +25,9 @@ Take a room screen that reads the kitchen's devices, with the defaults —
 3. **A second reader.** A kitchen badge on the home tab reads the same
    options. It gets the cached list on its first frame — no spinner — and,
    because the data is stale, a refetch runs behind it. It is one request for
-   both readers; both rebuild when it lands, and only if the list changed.
+   both readers, and both get its answer when it lands — the same list
+   instance as before if nothing in it changed (see [structural
+   sharing](structural-sharing.md)).
 4. **The readers go.** The user leaves the room screen and the home tab. The
    entry has no observers any more, so it becomes **inactive** and its
    **garbage-collection timer** starts: five minutes.

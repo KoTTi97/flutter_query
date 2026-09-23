@@ -42,6 +42,9 @@ Every field given must match; a field left out matches anything. The
 operations that take them: `invalidateQueries`, `refetchQueries`,
 `resetQueries`, `removeQueries`, `cancelQueries`, `isFetching`,
 `getQueriesData`, `updateQueriesData`, and the query cache's `findAll`.
+`isFetching` is the one exception to "every field given must match": it
+always counts queries that are fetching right now, so a `fetchStatus` passed
+to it is ignored rather than combined.
 
 In an app, the key factory does most of the work, and the other fields cut
 the set down:
@@ -117,9 +120,13 @@ bulk operation when you mean one key.
 
 The same idea over the mutation cache: `mutationKey` (a prefix unless
 `exact`), `exact`, `status` and `predicate`.
-`client.isMutating(filters: …)` counts the mutations they match,
-`mutationCache.findAll(filters: …)` returns them, and [mutation
-state](mutation-state.md) reads them as a listenable:
+`mutationCache.findAll(filters: …)` returns the mutations they match, and
+[mutation state](mutation-state.md) reads them as a listenable.
+`client.isMutating(filters: …)` counts only the matching mutations that are
+pending: a `status` passed to it is ignored, as `isFetching` ignores
+`fetchStatus`.
+
+
 
 ```dart snippet="guides/filters.md#mutation-filters"
 // Adds still out in any room — `['add-device']` is a prefix.

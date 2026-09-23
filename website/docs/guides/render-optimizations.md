@@ -214,8 +214,8 @@ builds whose selected value changed. Press *Refetch*: the data comes back
 equal, every reader's *data builds* stays put, and only the builder with a
 `buildWhen` does not rebuild at all. *Toggle todo 1* changes what some
 selections see and not others. Tick *Structural sharing off* and refetch: the
-readers whose selection is a new list each time now count a data change for
-equal data.
+reader without a `select` and the one whose selection is a new list each
+time now count a data change for equal data.
 
 <LiveDemo feature="select-and-sharing" />
 

@@ -184,8 +184,9 @@ The `select-and-sharing` screen reads one todo list five times and counts
 each reader's builds. Press *Refetch*: the list comes back equal, the cached
 instances are kept, and no reader counts a data change. Tick *Structural
 sharing off* and press *Refetch* again: the list in the cache is a new
-instance each time, and the readers that select a list count a change for
-the same content.
+instance each time, so the reader without a `select` and the one whose
+`select` builds a list count a change for the same content, while the ones
+selecting a number, a string or a record do not.
 
 <LiveDemo feature="select-and-sharing" />
 

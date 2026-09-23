@@ -173,11 +173,14 @@ answer now and wants the cache to catch up — it fails only when nothing is
 cached and the fetch fails.
 
 The `prefetching` screen prefetches from a button on each row rather than
-on hover, so it works the same with a mouse and a finger. Press a row's prefetch button (tooltip *Prefetch post N*): the row gets
-a *prefetched* pill; open it, and the title is there without a request. The
-last card contrasts the imperative reads: press *Increment on the server*,
-then *Read (revalidateIfStale)* — it shows the old value at once and the new
-one lands behind it — and *Read (await)*, which waits for the new one.
+on hover, so it works the same with a mouse and a finger. Press a row's
+prefetch button (tooltip *Prefetch post N*): the row gets a *prefetched*
+pill; open it, and the title is there without a request. The last card
+contrasts the imperative reads of a counter: press *Read (await)* once so a
+value is cached, then *Increment on the server* and *Read
+(revalidateIfStale)* — it shows the old value at once and the new one lands
+behind it. *Read (await)* waits for a fresh value instead, and *Read
+(static)* returns whatever is cached without a request.
 
 <LiveDemo feature="prefetching" />
 
