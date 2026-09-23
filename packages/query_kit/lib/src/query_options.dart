@@ -739,7 +739,8 @@ sealed class QueryObserverOptionsBase<TQueryData, TData>
   });
 
   /// Narrows the data the observer reports: while the selection stays equal,
-  /// the reported `data` keeps its instance. The rest of the result
+  /// the reported `data` keeps its instance (unless `structuralSharing` is
+  /// switched off). The rest of the result
   /// (`fetchStatus`, `dataUpdatedAt`, …) still changes, and listeners are
   /// told of that. No default: `null` on a [QueryObserverOptions], never on a
   /// [QuerySelectOptions].
@@ -995,11 +996,11 @@ final class QueryObserverOptions<TData>
 ///
 /// The observer runs [select] on the cached data and reports the result as
 /// its `data`. While the selection stays equal, that `data` keeps its
-/// instance: a widget showing a task's name sees the same name when only
-/// the task's due date changed. The rest of the result still moves —
-/// the write updates `dataUpdatedAt`, a refetch passes through `fetching` —
-/// and listeners are told of that; a `buildWhen` over the data is what
-/// skips those rebuilds.
+/// instance (unless `structuralSharing` is switched off): a widget showing a
+/// task's name sees the same name when only the task's due date changed.
+/// The rest of the result still moves — the write updates `dataUpdatedAt`,
+/// a refetch passes through `fetching` — and listeners are told of that; a
+/// `buildWhen` over the data is what skips those rebuilds.
 /// Existing plain options gain a select with
 /// [QueryObserverOptions.withSelect].
 ///

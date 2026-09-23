@@ -382,7 +382,7 @@ Each `mutate` builds a new `Mutation`; the observer follows the newest.
 | `hasListeners` | `bool` | Whether anyone is subscribed. Per-call callbacks only run while this is true. |
 | `currentResult` | `MutationResult<TData, TVariables>` | Idle until the first `mutate`, then the observed mutation's state. TanStack: `getCurrentResult()`. |
 | `options` | `DefaultedMutationOptions<TData, TVariables, TOnMutateResult>` | The options in force, resolved. |
-| `setOptions` | `void setOptions(MutationOptions<TData, TVariables, TOnMutateResult> options)` | Replaces the options. A changed `mutationKey` resets the observer; otherwise a mutation still in flight takes the new options. |
+| `setOptions` | `void setOptions(MutationOptions<TData, TVariables, TOnMutateResult> options)` | Replaces the options. A changed `mutationKey` resets the observer; otherwise a mutation still in flight takes the new callbacks, `meta` and `gcTime`, and a retry calls the new mutation function, but it keeps the `retry`, `retryDelay`, `networkMode` and `scope` it started with. |
 | [`mutate`](https://pub.dev/documentation/query_kit/latest/query_kit/MutationObserver/mutate.html) | `void mutate(TVariables variables, {MutateCallbacks<TData, TVariables, TOnMutateResult>? callbacks})` | Starts a run and returns at once. Errors reach the callbacks and the result, never the zone. |
 | `mutateAsync` | `Future<TData> mutateAsync(TVariables variables, {MutateCallbacks<…>? callbacks})` | Starts a run; completes with the data or throws the error, after the callbacks ran. TanStack: `mutate`, which returns a promise. |
 | `cancel` | `void cancel()` | Cancels the run this observer shows — see `Mutation.cancel`. No TanStack counterpart. |

@@ -190,7 +190,7 @@ is told with `id:`.
   queries and `Enabled`.
 - [Query cancellation](../guides/query-cancellation.md) — what a cancel does
   to the entry, and what the signal adds.
-- [Placeholder query data](../guides/placeholder-query-data.md#keeping-the-previous-page)
+- [Placeholder query data](../guides/placeholder-query-data.md#keeping-the-previous-keys-data)
   — `keepPrevious` and `isPlaceholderData`.
 - [Reading queries in widgets](../guides/reading-queries-in-widgets.md) — the
   four call styles and what `id:` does.

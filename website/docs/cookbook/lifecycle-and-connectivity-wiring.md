@@ -228,7 +228,7 @@ online side is one argument.
 ## See also
 
 - [Connectivity](../guides/connectivity.md) — `OnlineStatus` and its rules.
-- [App focus refetching](../guides/window-focus-refetching.md#suppressing-pointless-refetches)
+- [App focus refetching](../guides/window-focus-refetching.md#skipping-refetches-after-a-short-absence)
   — the lifecycle mapping and `refetchMinBackgroundDuration`.
 - [Network mode](../guides/network-mode.md) — what a paused query and a paused
   mutation do, and how they resume.

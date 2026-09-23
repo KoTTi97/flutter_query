@@ -507,8 +507,14 @@ class MutationController<TData, TVariables, TOnMutateResult>
   @override
   MutationResult<TData, TVariables> get value => _observer.currentResult;
 
-  /// Replaces the options the next run uses. Does not notify: the result
-  /// has not changed — see [QueryController.setOptions].
+  /// Replaces the options the next run uses. A run still in flight takes the
+  /// new callbacks, `meta` and `gcTime`, and a retry calls the new mutation
+  /// function; its `retry`, `retryDelay`, `networkMode` and `scope` stay as
+  /// they were when it started (see [MutationObserver.setOptions]).
+  ///
+  /// Does not notify by itself, since the result has not changed — except
+  /// that a different `mutationKey` (both set) resets the controller to
+  /// idle, which listeners hear like any other change.
   void setOptions(
     MutationOptions<TData, TVariables, TOnMutateResult> options,
   ) =>
