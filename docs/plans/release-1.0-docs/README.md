@@ -23,7 +23,7 @@ starts once C3 has fixed the sidebar and slugs.
 | C8a | Dartdoc, core | no internal history in any `///`; src-level rules moved onto public symbols; categories; examples on entry points; library doc with quick start and D2 notice | 1 | done |
 | C8b | Dartdoc, binding | same for `query_kit_flutter` | 1 | done |
 | C9 | Test gaps | core/binding coverage gaps from `audits/audit-demos-tests.md` §B closed; value-class table tests; binding on `--platform chrome`; jargon guard in CI (D3) | 1 | done |
-| C3 | Site IA | new sidebar per `audits/audit-site.md` §2; existing content moved into the new slugs; internal history out; stub pages marked | 2 | open |
+| C3 | Site IA | new sidebar per `audits/audit-site.md` §2; existing content moved into the new slugs; internal history out; stub pages marked | 2 | done |
 | C4a–d | Guides & concepts content | every guide page complete, a live demo each where one exists, samples fenced (D6) | 3 | open |
 | C5 | Examples section | one page per showcase feature + task manager, live demo + source | 3 | open |
 | C6a–b | Cookbook R1–R20 | one recipe page each, compiled code | 3 | open |
@@ -99,6 +99,9 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | B10 | C2 review | LiveDemo overlay vanished before Flutter's first frame (blank box for seconds); overlay not announced; pages.yml permissions too broad | fixed `99b99a7` |
 | B11 | C2 review | embedded demos stay light inside the dark site theme | open (P3) |
 | B12 | C2 review | playground screen resets backend latency to 0 for the whole full-screen app (pre-existing, real server too) | open (P3) |
+| B13 | C3 review | every titled admonition rendered as plain `:::danger` text (Docusaurus v4 syntax) — AI notice box included | fixed `3b4eb53` |
+| B14 | C3 review | `/docs/` 404; see-through mobile menu; 8 wrong facts in moved/new pages (StaleTime.static vs invalidation, cancelRefetch, NetworkMode is an enum, …) | fixed `3b4eb53` |
+| B15 | C3 review | landing page shows stale test counts / bug count | open → C10 |
 
 ## Log
 
@@ -109,3 +112,4 @@ C3 must create exactly these under `/docs/`: `overview`, `quick-start`,
 | 2026-09-23 | C8b | `fa87b12`, `b78b8e3` | binding dartdoc: jargon 112→0 lines, 46 examples, 7 categories with pages |
 | 2026-09-23 | C9 | `cb03ef8`, `ab84027` | +331 core, +12 binding tests; coverage 90.0→99.8 % / 97.4→99.8 %; binding on Chrome; coverage floors + jargon guard (non-blocking) in CI |
 | 2026-09-23 | C2 | `bc0f72f`, `99b99a7` | in-memory backends, embed mode, `tool/build_demos.sh`, `<LiveDemo>`, website-e2e (36 specs), pages.yml (tag/manual only) |
+| 2026-09-23 | C3 | `2c7a472`, `3b4eb53` | TanStack-style IA: 6 getting-started, 42 guides, examples/cookbook index, reference, project; `/docs` redirect; LiveDemo now on quick-start |

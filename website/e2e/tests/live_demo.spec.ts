@@ -3,7 +3,7 @@
 // against the in-memory backend, in this tab — as it does against the server.
 import { BASE, expect, factIn, test } from './fixtures'
 
-const page_ = `${BASE}docs/getting-started/first-query`
+const page_ = `${BASE}docs/quick-start`
 
 test('the demo loads on the click, fetches, and refetches', async ({ page }) => {
   await page.goto(page_)
