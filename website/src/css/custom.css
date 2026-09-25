@@ -509,8 +509,35 @@ h4 {
   overflow: hidden;
 }
 
-/* The block's background is the prism theme's own (`src/prismThemes.ts`),
-   which is set inline and is the site's code surface in either mode. */
+/* The prism theme (`src/prismThemes.ts`) names these variables rather than
+   colours, so a block is drawn in the page's mode from the first paint, not
+   only after hydration. */
+
+:root {
+  --qk-code-background: #f8f9fb;
+  --qk-code-plain: #171717;
+  --qk-code-comment: #8f8f8f;
+  --qk-code-keyword: #c41562;
+  --qk-code-type: #005ff2;
+  --qk-code-call: #7d00cc;
+  --qk-code-string: #107d32;
+  --qk-code-number: #005ff2;
+  --qk-code-annotation: #a35200;
+  --qk-code-punctuation: #6f6f6f;
+}
+
+[data-theme='dark'] {
+  --qk-code-background: #0d1016;
+  --qk-code-plain: #ededed;
+  --qk-code-comment: #7c7c7c;
+  --qk-code-keyword: #ff4d8d;
+  --qk-code-type: #47a8ff;
+  --qk-code-call: #c472fb;
+  --qk-code-string: #62c073;
+  --qk-code-number: #47a8ff;
+  --qk-code-annotation: #ffb224;
+  --qk-code-punctuation: #a1a1a1;
+}
 
 .theme-code-block pre code {
   padding: 1rem 1.15rem;

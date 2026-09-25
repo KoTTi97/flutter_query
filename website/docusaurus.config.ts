@@ -3,7 +3,7 @@ import type { Config } from '@docusaurus/types'
 import { execSync } from 'node:child_process'
 import dartSource from './plugins/dart-source'
 import llmsTxt, { type LlmsTxtOptions } from './plugins/llms-txt'
-import { geistDark, geistLight } from './src/prismThemes'
+import { geist } from './src/prismThemes'
 
 // Nothing is deployed yet. The url/baseUrl below are the GitHub Pages
 // coordinates the repository would use, so that `onBrokenLinks: 'throw'` has
@@ -198,10 +198,11 @@ Install with \`flutter pub add query_kit_flutter\` in a Flutter app, or \`dart p
       copyright: `${aiNotice} A port of TanStack Query, published with thanks under its MIT licence. Not affiliated with, endorsed by, or connected to Tanner Linsley, the TanStack team or the TanStack organisation.`,
     },
     prism: {
-      // Geist-style colours (`src/prismThemes.ts`): near-monochrome, a few
-      // strong accents, on the site's own code surface.
-      theme: geistLight,
-      darkTheme: geistDark,
+      // Geist-style colours (`src/prismThemes.ts`). One theme for both
+      // modes: it names CSS variables, and `custom.css` sets them per mode,
+      // so a dark page's code is dark before hydration too.
+      theme: geist,
+      darkTheme: geist,
       additionalLanguages: ['dart', 'bash', 'yaml', 'json'],
     },
   } satisfies Preset.ThemeConfig,
