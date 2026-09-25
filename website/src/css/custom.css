@@ -178,6 +178,16 @@ h4 {
   text-decoration-color: currentColor;
 }
 
+.theme-announcement-bar button[class*='announcementBarClose'] {
+  color: var(--qk-muted);
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+.theme-announcement-bar button[class*='announcementBarClose']:hover {
+  opacity: 1;
+}
+
 /* --- Navbar ------------------------------------------------------------- */
 
 .navbar {
@@ -499,24 +509,8 @@ h4 {
   overflow: hidden;
 }
 
-/* The prism theme's own background is set inline on the <pre>, so both it and
-   the container variable have to be replaced for the block to be one colour
-   with its title bar. */
-[data-theme='light'] .theme-code-block {
-  --prism-background-color: #f8f9fb !important;
-}
-
-[data-theme='light'] .theme-code-block pre {
-  background-color: #f8f9fb !important;
-}
-
-[data-theme='dark'] .theme-code-block {
-  --prism-background-color: #0d1016 !important;
-}
-
-[data-theme='dark'] .theme-code-block pre {
-  background-color: #0d1016 !important;
-}
+/* The block's background is the prism theme's own (`src/prismThemes.ts`),
+   which is set inline and is the site's code surface in either mode. */
 
 .theme-code-block pre code {
   padding: 1rem 1.15rem;

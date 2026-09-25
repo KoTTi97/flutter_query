@@ -51,6 +51,33 @@ cd e2e && npm ci && npx playwright install chromium && npx playwright test
 points at a page that does not exist fails `npm run build`. That is the point
 of building it in CI.
 
+## For AI agents
+
+`plugins/llms-txt.ts` writes the docs into the build as Markdown, the way
+most documentation sites now offer them:
+
+- every doc page at its URL plus `.md` (`/docs/quick-start.md`), named by the
+  page's `<link rel="alternate" type="text/markdown">`;
+- `llms.txt` ([llmstxt.org](https://llmstxt.org)): every page in sidebar
+  order, linked to its Markdown with its description, the Project pages under
+  `## Optional`;
+- `llms-full.txt`: all of them in one file.
+
+The Markdown comes from the page's source, not its HTML. What only the site
+can run is turned into Markdown: a `<DartSource>` becomes the code it shows,
+through the same `excerpt()` (`src/components/DartSource/excerpt.ts`), so the
+page and its Markdown cannot differ; a `<LiveDemo>` becomes a link to the
+running demo, an `<ExampleGrid>` a list, tabs labelled sections, an
+admonition a quote, and a link to another page a link to its Markdown. A new
+component used in `docs/` needs a case there too; `e2e/tests/llms.spec.ts`
+fails on a page that still carries one.
+
+Each doc page has a **Copy page** button (`src/components/CopyPage`, placed
+by wrapping `DocBreadcrumbs`) whose menu also opens the Markdown, a Claude or
+ChatGPT chat asked to read it, and the two indexes. `npm start` builds no
+Markdown, so there the copy reports that it failed; `npm run build && npm run
+serve` has it all.
+
 ## Conventions
 
 - **The package name reaches this directory through

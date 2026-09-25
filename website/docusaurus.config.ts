@@ -1,8 +1,9 @@
 import type * as Preset from '@docusaurus/preset-classic'
 import type { Config } from '@docusaurus/types'
-import { themes as prismThemes } from 'prism-react-renderer'
 import { execSync } from 'node:child_process'
 import dartSource from './plugins/dart-source'
+import llmsTxt, { type LlmsTxtOptions } from './plugins/llms-txt'
+import { geistDark, geistLight } from './src/prismThemes'
 
 // Nothing is deployed yet. The url/baseUrl below are the GitHub Pages
 // coordinates the repository would use, so that `onBrokenLinks: 'throw'` has
@@ -14,6 +15,7 @@ import dartSource from './plugins/dart-source'
 // repository is one edit here (plus its GitHub URLs).
 const repository = 'query_kit'
 const baseUrl = `/${repository}/`
+const siteUrl = 'https://dualmeta-gmbh.github.io'
 
 // The project's AI disclosure, in the one wording used everywhere a reader
 // can land first.
@@ -37,7 +39,7 @@ const config: Config = {
   tagline: 'TanStack Query for Dart and Flutter, ported test for test',
   favicon: 'img/favicon.svg',
 
-  url: 'https://dualmeta-gmbh.github.io',
+  url: siteUrl,
   baseUrl,
   organizationName: 'dualmeta-gmbh',
   projectName: repository,
@@ -70,6 +72,12 @@ const config: Config = {
         crossorigin: 'anonymous',
       },
     },
+    // The site's index for AI agents (`plugins/llms-txt.ts`). It lives under
+    // the base path, not at the host's root, so a page says where it is.
+    {
+      tagName: 'link',
+      attributes: { rel: 'alternate', type: 'text/plain', title: 'llms.txt', href: `${baseUrl}llms.txt` },
+    },
   ],
   stylesheets: [
     'https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap',
@@ -99,6 +107,18 @@ const config: Config = {
     // `.dart` files importable as strings: the examples pages show the
     // compiled source itself (`src/components/DartSource`).
     dartSource,
+    // Every doc page as Markdown at its URL plus `.md`, and `llms.txt` /
+    // `llms-full.txt` over all of them, written into the build.
+    [
+      llmsTxt,
+      {
+        summary: `TanStack Query for Dart and Flutter, ported test for test. ${aiNotice} A community port, not affiliated with or endorsed by TanStack.`,
+        details: `query_kit is a port of TanStack Query's \`query-core\` to Dart (the package \`query_kit\`, pure Dart) with a Flutter binding on top (\`query_kit_flutter\`), both on pub.dev. It caches server state per query key, deduplicates and retries fetches, refetches stale data on focus, on reconnect or on an interval, and covers mutations, optimistic updates and infinite queries. Its behaviour follows TanStack Query's, proven by porting upstream's test suite; where it differs is listed on the "Differences from TanStack Query" page below.
+
+Install with \`flutter pub add query_kit_flutter\` in a Flutter app, or \`dart pub add query_kit\` in pure Dart. Every page below is Markdown at its own URL with \`.md\` appended, and all of them together are ${siteUrl}${baseUrl}llms-full.txt. Source: https://github.com/dualmeta-gmbh/query_kit`,
+        optional: ['Project'],
+      } satisfies LlmsTxtOptions,
+    ],
     [
       '@docusaurus/plugin-client-redirects',
       { redirects: [{ from: '/docs', to: '/docs/overview' }] },
@@ -107,14 +127,17 @@ const config: Config = {
 
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
-    // Always on, not dismissible: two things about this project should reach
-    // a reader before anything else does. Its colours are in `custom.css`,
-    // because `backgroundColor` here lands as an inline style that no
-    // stylesheet — and so no dark-mode rule — can override.
+    // Dismissible: a reader who has read it once can close it, and
+    // Docusaurus keeps that in localStorage under this `id` (change the id
+    // to show a reworded notice to everyone again). The same disclosure stays
+    // in the landing page's hero and in the footer, so closing the bar hides
+    // nothing for good. Its colours are in `custom.css`, because
+    // `backgroundColor` here lands as an inline style that no stylesheet —
+    // and so no dark-mode rule — can override.
     announcementBar: {
       id: 'unaffiliated-and-ai-coded',
       content: `${aiNotice} It is a community port of TanStack Query, <b>not affiliated with or endorsed by TanStack</b>. <a href="${baseUrl}docs/project/credits">What that means</a>.`,
-      isCloseable: false,
+      isCloseable: true,
     },
     navbar: {
       title: 'query_kit',
@@ -156,6 +179,15 @@ const config: Config = {
           ],
         },
         {
+          // Built by `plugins/llms-txt.ts`; `pathname://` because they are
+          // files of the build, not pages the router knows.
+          title: 'For AI agents',
+          items: [
+            { label: 'llms.txt', href: 'pathname:///llms.txt' },
+            { label: 'llms-full.txt', href: 'pathname:///llms-full.txt' },
+          ],
+        },
+        {
           title: 'Elsewhere',
           items: [
             { label: 'GitHub', href: 'https://github.com/dualmeta-gmbh/query_kit' },
@@ -166,10 +198,10 @@ const config: Config = {
       copyright: `${aiNotice} A port of TanStack Query, published with thanks under its MIT licence. Not affiliated with, endorsed by, or connected to Tanner Linsley, the TanStack team or the TanStack organisation.`,
     },
     prism: {
-      theme: prismThemes.github,
-      // oneDark over dracula: dracula's pinks and purples are louder than
-      // anything else on the page.
-      darkTheme: prismThemes.oneDark,
+      // Geist-style colours (`src/prismThemes.ts`): near-monochrome, a few
+      // strong accents, on the site's own code surface.
+      theme: geistLight,
+      darkTheme: geistDark,
       additionalLanguages: ['dart', 'bash', 'yaml', 'json'],
     },
   } satisfies Preset.ThemeConfig,
