@@ -1,76 +1,132 @@
-/* The page is set like a document: one measure, hairline rules doing the
-   separating, monospace for labels and figures. No cards, no glow. */
+/* The landing page: a hero with the sample in a window, then sections that
+   each lead with one large sentence. Panels are rounded and bordered; colour
+   is the accent gradient, used in the headline and in the glow behind it. */
+
+/* --- Hero --------------------------------------------------------------- */
 
 .hero {
-  padding: 4.5rem 1.5rem 4rem;
-  background: var(--qk-surface);
+  position: relative;
+  overflow: hidden;
+  padding: 5.5rem 1.5rem 4rem;
   border-bottom: 1px solid var(--qk-rule);
+  isolation: isolate;
+}
+
+/* A dotted grid fading out from the top, and two soft blue glows under the
+   headline and the sample. Decoration only; it sits behind everything. */
+.heroBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 26rem at 78% 30%, rgb(19 185 253 / 16%), transparent 70%),
+    radial-gradient(36rem 24rem at 12% 8%, rgb(4 104 200 / 12%), transparent 70%);
+}
+
+.heroBackdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, var(--qk-rule-strong) 1px, transparent 0);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 30%, transparent 75%);
+  opacity: 0.7;
+}
+
+[data-theme='dark'] .heroBackdrop {
+  background:
+    radial-gradient(40rem 26rem at 78% 30%, rgb(86 184 255 / 14%), transparent 70%),
+    radial-gradient(36rem 24rem at 12% 8%, rgb(94 234 212 / 7%), transparent 70%);
 }
 
 .heroInner {
-  max-width: 1140px;
+  max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 3rem;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 3.5rem;
   align-items: center;
 }
 
 .eyebrow {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.85rem;
-  margin: 0 0 1.4rem;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
+  gap: 0.55rem;
+  margin: 0 0 1.5rem;
+  padding: 0.3rem 0.85rem 0.3rem 0.7rem;
+  border: 1px solid var(--qk-rule);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--qk-surface) 80%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 0.8rem;
   font-weight: 500;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
   color: var(--qk-muted);
+  box-shadow: var(--qk-shadow-sm);
 }
 
-/* The product's name keeps its own spelling inside the capitals. */
+.eyebrowDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--qk-gradient);
+  box-shadow: 0 0 0 3px var(--qk-accent-soft);
+}
+
+.eyebrowSep {
+  width: 1px;
+  height: 0.85rem;
+  background: var(--qk-rule-strong);
+}
+
+/* The product's name keeps its own spelling, in code type. */
 .name {
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-
-.eyebrow::before {
-  content: '';
-  width: 1.75rem;
-  height: 1px;
-  background: var(--qk-accent);
-  flex: none;
+  font-family: var(--ifm-font-family-monospace);
+  font-weight: 500;
+  color: var(--qk-ink);
 }
 
 .title {
-  font-size: clamp(2.15rem, 4.2vw, 3.05rem);
-  line-height: 1.08;
-  letter-spacing: -0.033em;
-  font-weight: 600;
-  margin: 0 0 1.15rem;
+  font-size: clamp(2.5rem, 5.2vw, 4rem);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  font-weight: 700;
+  margin: 0 0 1.35rem;
   text-wrap: balance;
 }
 
+.titleAccent {
+  background: var(--qk-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .subtitle {
-  font-size: 1.05rem;
+  font-size: 1.125rem;
   line-height: 1.65;
   color: var(--qk-muted);
-  margin: 0 0 2.25rem;
-  max-width: 33rem;
+  margin: 0 0 2.1rem;
+  max-width: 34rem;
+  text-wrap: pretty;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1.75rem;
+  gap: 0.75rem 0.75rem;
+}
+
+.actions .textAction {
+  margin-left: 0.75rem;
 }
 
 /* The one link style used everywhere on this page: a text link with an arrow
    that steps forward on hover. */
 .textAction {
-  font-size: 0.94rem;
+  font-size: 0.95rem;
   font-weight: 550;
   white-space: nowrap;
 }
@@ -88,138 +144,223 @@
   transform: translateX(3px);
 }
 
-/* The sample is documentation as much as decoration: let it keep its own
-   scrollbar rather than widening the page on a narrow screen. */
-.heroCode > div {
+/* --- The install line --------------------------------------------------- */
+
+.install {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.75rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.9rem;
+  max-width: 100%;
+  border: 1px solid var(--qk-rule);
+  border-radius: 10px;
+  background: var(--qk-sunken);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+}
+
+.installPrompt {
+  color: var(--qk-accent);
+  user-select: none;
+}
+
+.installCode {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.installCopy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--qk-muted);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.installCopy:hover {
+  color: var(--qk-ink);
+  background: var(--qk-surface);
+  border-color: var(--qk-rule);
+}
+
+.installCopy svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* --- The sample in a window --------------------------------------------- */
+
+.heroCode {
+  position: relative;
+}
+
+.heroCode::before {
+  content: '';
+  position: absolute;
+  inset: 8% -4% -6% 6%;
+  z-index: -1;
+  border-radius: 32px;
+  background: var(--qk-gradient);
+  filter: blur(48px);
+  opacity: 0.22;
+}
+
+.window {
+  border-radius: 16px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--qk-surface) 60%, transparent);
+  border: 1px solid var(--qk-rule);
+  box-shadow: var(--qk-shadow-lg);
+  backdrop-filter: blur(8px);
+}
+
+.window > div {
   margin-bottom: 0;
+  border-radius: 11px;
+  box-shadow: none !important;
+}
+
+/* Three window dots before the file name. */
+.window div[class^='codeBlockTitle'] {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.window div[class^='codeBlockTitle']::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 2.2rem;
+  border-radius: 999px;
+  background: #ff5f57;
+  box-shadow: 16px 0 0 #febc2e, 32px 0 0 #28c840;
 }
 
 /* Small enough that the sample's longest line fits the column on a desk;
    on a phone it keeps its own horizontal scroll. */
 .heroCode pre code {
   font-size: 0.8rem;
-}
-
-.section {
-  max-width: 1140px;
-  margin: 4.5rem auto 0;
-  padding: 0 1.5rem;
-}
-
-.sectionLabel {
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  margin: 0 0 1.75rem;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--qk-muted);
-}
-
-.sectionLabel::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--qk-rule);
-}
-
-/* --- The colophon ------------------------------------------------------- */
-
-.colophon {
-  max-width: 42rem;
-  padding-left: 1.4rem;
-  border-left: 2px solid var(--qk-accent);
-}
-
-.colophon p {
-  color: var(--qk-muted);
-  font-size: 0.96rem;
-  line-height: 1.72;
-}
-
-.colophon strong {
-  color: var(--qk-ink);
-  font-weight: 600;
-}
-
-.colophon p:last-child {
-  margin-bottom: 0;
-}
-
-/* The last section is the last thing on the page; give it room before the
-   footer. */
-.section:last-of-type {
-  margin-bottom: 5.5rem;
+  line-height: 1.65;
 }
 
 /* --- The disclosure -----------------------------------------------------
    In the hero, not the footer: the first thing under the fold line on a
-   phone and beside the sample's foot on a desk. A rule and a label, no box
-   colour — it is a statement, not a warning. */
+   phone and under the sample on a desk. A quiet panel with an info mark —
+   a statement, not a warning. */
 
 .disclosure {
-  max-width: 1140px;
-  margin: 3rem auto 0;
-  padding: 1.25rem 0 0;
-  border-top: 1px solid var(--qk-rule-strong);
+  max-width: 1200px;
+  margin: 3.5rem auto 0;
+  display: flex;
+  gap: 1rem;
+  padding: 1.1rem 1.35rem;
+  border: 1px solid var(--qk-rule);
+  border-radius: var(--qk-radius-lg);
+  background: color-mix(in srgb, var(--qk-surface) 75%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.disclosureIcon {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.15rem;
+  color: var(--qk-accent);
+}
+
+.disclosureBody {
   display: grid;
-  grid-template-columns: 11rem minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: 2.5rem;
-  row-gap: 0.6rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  column-gap: 2rem;
+  row-gap: 0.35rem;
 }
 
 .disclosureLabel {
+  grid-column: 1 / -1;
   margin: 0;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--qk-accent);
-  padding-top: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--qk-ink);
 }
 
 .disclosureText {
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.62;
-  color: var(--qk-ink);
-}
-
-.disclosureText + .disclosureText {
+  font-size: 0.875rem;
+  line-height: 1.6;
   color: var(--qk-muted);
 }
 
-/* --- The problem, and the fidelity note ---------------------------------
-   A lede on the left, set large, and the argument in a reading measure on
-   the right. */
+/* --- Sections ----------------------------------------------------------- */
+
+.section {
+  max-width: 1200px;
+  margin: 6.5rem auto 0;
+  padding: 0 1.5rem;
+}
+
+/* The section's name, set as a small accent label above its sentence. */
+.sectionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--qk-accent);
+}
+
+.sectionLabel::before {
+  content: '';
+  width: 1rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--qk-gradient);
+}
 
 .problem {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  column-gap: 3.5rem;
-  row-gap: 1rem;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  column-gap: 4rem;
+  row-gap: 1.25rem;
   align-items: start;
 }
 
 .lede {
   margin: 0;
-  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
-  line-height: 1.25;
-  font-weight: 600;
-  letter-spacing: -0.024em;
+  font-size: clamp(1.75rem, 3.2vw, 2.4rem);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.035em;
   text-wrap: balance;
   color: var(--qk-ink);
 }
 
+.ledeWide {
+  max-width: 40rem;
+  margin-bottom: 2.5rem;
+}
+
 .prose {
   color: var(--qk-muted);
-  font-size: 1rem;
+  font-size: 1.05rem;
   line-height: 1.72;
-  max-width: 38rem;
+  max-width: 40rem;
 }
 
 .prose code {
@@ -241,17 +382,17 @@
 .demo {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  column-gap: 3.5rem;
+  column-gap: 4rem;
   align-items: start;
 }
 
 .demoIntro .prose {
-  margin: 1rem 0 0;
+  margin: 1.25rem 0 0;
 }
 
 .demo em {
   font-style: normal;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--qk-ink);
 }
 
@@ -261,48 +402,138 @@
   margin: 0;
 }
 
-/* --- The feature list ---------------------------------------------------
-   A definition list on a three-column grid, each term a link. Hairlines on
-   top only, so the grid reads as rows of a table rather than a wall of
-   cards. */
+/* --- The feature grid ---------------------------------------------------
+   Cards with an icon tile; the title's link covers the whole card. */
 
 .features {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 2.5rem;
+  gap: 1rem;
   margin: 0;
 }
 
 .feature {
-  padding: 1.15rem 0 1.4rem;
-  border-top: 1px solid var(--qk-rule);
+  position: relative;
+  padding: 1.4rem 1.4rem 1.5rem;
+  border: 1px solid var(--qk-rule);
+  border-radius: var(--qk-radius-lg);
+  background: var(--qk-surface);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.feature:hover {
+  border-color: var(--qk-accent-ring);
+  box-shadow: var(--qk-shadow-md);
+  transform: translateY(-2px);
+}
+
+.featureIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  color: var(--qk-accent);
+  background: var(--qk-accent-soft);
+  border: 1px solid var(--qk-accent-ring);
+}
+
+.featureIcon svg {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .featureTitle {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.012em;
+  margin: 0 0 0.4rem;
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
 }
 
 .featureTitle a {
   color: var(--qk-ink);
 }
 
+/* The whole card is the link's hit area. */
+.featureTitle a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
 .featureTitle a:hover {
-  color: var(--ifm-color-primary);
   text-decoration: none;
+}
+
+.feature:hover .featureTitle a {
+  color: var(--ifm-color-primary);
 }
 
 .featureBody {
   margin: 0;
   color: var(--qk-muted);
-  font-size: 0.92rem;
-  line-height: 1.62;
+  font-size: 0.925rem;
+  line-height: 1.6;
 }
 
 .featureBody code {
   color: var(--qk-ink);
+  font-size: 0.82em;
+}
+
+/* --- Fidelity ------------------------------------------------------------
+   The one claim the project stands on, in a panel with a gradient edge. */
+
+.fidelity {
+  position: relative;
+  padding: 3rem clamp(1.5rem, 4vw, 3.5rem);
+  border-radius: 20px;
+  background:
+    radial-gradient(30rem 16rem at 100% 0%, var(--qk-accent-soft), transparent 70%),
+    var(--qk-sunken);
+  border: 1px solid var(--qk-rule);
+}
+
+.fidelity::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--qk-accent-ring), transparent 40%, transparent 60%, var(--qk-accent-ring));
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+
+/* --- The colophon ------------------------------------------------------- */
+
+.colophon {
+  max-width: 48rem;
+  padding: 1.5rem 1.75rem;
+  border: 1px solid var(--qk-rule);
+  border-radius: var(--qk-radius-lg);
+  background: var(--qk-surface);
+}
+
+.colophon p {
+  color: var(--qk-muted);
+  font-size: 0.98rem;
+  line-height: 1.72;
+}
+
+.colophon strong {
+  color: var(--qk-ink);
+  font-weight: 600;
+}
+
+.colophon p:last-child {
+  margin-bottom: 0;
 }
 
 /* --- Where next --------------------------------------------------------- */
@@ -310,50 +541,40 @@
 .next {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid var(--qk-rule-strong);
-  border-bottom: 1px solid var(--qk-rule-strong);
-  padding: 0;
-}
-
-.section.next {
-  padding: 0;
-  margin-left: max(1.5rem, calc((100% - 1140px) / 2 + 1.5rem));
-  margin-right: max(1.5rem, calc((100% - 1140px) / 2 + 1.5rem));
-  max-width: none;
+  gap: 1rem;
+  margin-bottom: 6.5rem;
 }
 
 .nextLink {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
   padding: 1.4rem 1.5rem 1.5rem;
-  border-left: 1px solid var(--qk-rule);
+  border: 1px solid var(--qk-rule);
+  border-radius: var(--qk-radius-lg);
+  background: var(--qk-surface);
   color: var(--qk-ink);
-}
-
-.nextLink:first-child {
-  padding-left: 0;
-  border-left: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .nextLink:hover {
   text-decoration: none;
   color: var(--ifm-color-primary);
+  border-color: var(--qk-accent-ring);
+  box-shadow: var(--qk-shadow-md);
+  transform: translateY(-2px);
 }
 
 .nextKicker {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
   color: var(--qk-muted);
 }
 
 .nextTitle {
-  font-size: 1.3rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
 }
 
 .nextTitle span {
@@ -367,22 +588,25 @@
 
 @media (max-width: 996px) {
   .hero {
-    padding: 3rem 1.25rem 2.5rem;
+    padding: 3.5rem 1rem 2.75rem;
   }
 
   .heroInner {
     grid-template-columns: minmax(0, 1fr);
-    gap: 2.25rem;
+    gap: 2.75rem;
   }
 
   .disclosure {
-    margin-top: 2.25rem;
+    margin-top: 2.5rem;
+  }
+
+  .disclosureBody {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .section {
-    margin-top: 3.25rem;
-    padding: 0 1.25rem;
+    margin-top: 4.5rem;
+    padding: 0 1rem;
   }
 
   .problem,
@@ -391,36 +615,41 @@
   }
 
   .demoIntro {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
   }
 
   .features {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 2rem;
   }
 
-  .section.next {
-    margin-left: 1.25rem;
-    margin-right: 1.25rem;
+  .next {
+    margin-bottom: 4.5rem;
   }
 }
 
 @media (max-width: 600px) {
-  .features {
-    grid-template-columns: minmax(0, 1fr);
+  .title {
+    font-size: 2.35rem;
   }
 
+  .actions .textAction {
+    margin-left: 0.25rem;
+  }
+
+  .install {
+    display: flex;
+  }
+
+  .features,
   .next {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .nextLink,
-  .nextLink:first-child {
-    padding: 1.1rem 0;
-    border-left: none;
+  .fidelity {
+    padding: 2rem 1.25rem;
   }
 
-  .nextLink + .nextLink {
-    border-top: 1px solid var(--qk-rule);
+  .colophon {
+    padding: 1.25rem;
   }
 }

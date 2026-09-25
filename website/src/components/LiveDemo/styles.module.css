@@ -10,9 +10,13 @@
   position: relative;
   height: min(var(--live-demo-height, 640px), 85vh);
   min-height: 320px;
-  border: 1px solid var(--qk-rule-strong);
-  border-radius: var(--ifm-global-radius);
-  background: var(--qk-sunken);
+  border: 1px solid var(--qk-rule);
+  border-radius: 14px;
+  background:
+    radial-gradient(28rem 18rem at 85% 0%, var(--qk-accent-soft), transparent 70%),
+    radial-gradient(circle at 1px 1px, var(--qk-rule) 1px, transparent 0) 0 0 / 20px 20px,
+    var(--qk-sunken);
+  box-shadow: var(--qk-shadow-md);
   overflow: hidden;
 }
 
@@ -27,18 +31,30 @@
 }
 
 .kicker {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--qk-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--qk-accent-ring);
+  border-radius: 999px;
+  background: var(--qk-accent-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--qk-accent);
+}
+
+.kicker::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .title {
-  font-size: 1.35rem;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1.3;
 }
 
@@ -91,9 +107,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 1.5rem;
-  margin-top: 0.55rem;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.78rem;
+  margin-top: 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 /* Specific enough to win over the prose rule that underlines every link in

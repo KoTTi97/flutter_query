@@ -54,7 +54,7 @@ const config: Config = {
 
   customFields: { sourceRevision: sourceRevision() },
 
-  // IBM Plex Sans and Plex Mono. `custom.css` falls back to the system stack,
+  // Geist and Geist Mono. `custom.css` falls back to the system stack,
   // so a blocked or slow font request costs the face and nothing else — and
   // the build never reaches for the network, only the rendered page does.
   headTags: [
@@ -72,7 +72,7 @@ const config: Config = {
     },
   ],
   stylesheets: [
-    'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap',
+    'https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap',
   ],
 
   i18n: { defaultLocale: 'en', locales: ['en'] },
@@ -134,7 +134,7 @@ const config: Config = {
       ],
     },
     footer: {
-      style: 'dark',
+      style: 'light',
       links: [
         {
           title: 'Docs',
